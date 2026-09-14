@@ -73,13 +73,13 @@ The package identity expects certificate subject
 - `FASTFILL_CERTIFICATE_PASSWORD`: PFX password.
 
 The Windows workflow always uploads a signed sideload package under
-`FastFill-msix`. With both secrets present, it uses that certificate. Without
-them, it creates a temporary self-signed certificate and includes
-`FastFill.cer` in the artifact. Trust that certificate in the target machine's
-Local Machine `Trusted People` store before opening the development MSIX.
+`FastFill-msix`. It fails if either secret is missing. The artifact includes
+`FastFill.cer` beside `Install.ps1`; trust it in the target machine's Local
+Machine `Trusted People` store before opening the development MSIX.
 
-Temporary certificates differ between workflow runs. Configure the secrets
-for a stable development certificate. Replace the development publisher and
+Reuse the development certificate across builds so test machines need to trust
+it only once. Keep its PFX and password outside Git, and rotate it before
+expiry or after suspected compromise. Replace the development publisher and
 certificate before production distribution.
 
 ## Minimal SP6 gate

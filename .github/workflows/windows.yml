@@ -8,9 +8,6 @@ on:
 jobs:
   build:
     runs-on: windows-2025
-    env:
-      CERTIFICATE_BASE64: ${{ secrets.FASTFILL_CERTIFICATE_BASE64 }}
-      CERTIFICATE_PASSWORD: ${{ secrets.FASTFILL_CERTIFICATE_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -29,63 +26,6 @@ jobs:
           -c Release --no-restore
           -p:Platform=x64
           -p:AppxPackageSigningEnabled=false
-      - name: Prepare signing certificate
-        shell: pwsh
-        run: |
-          $pfx = Join-Path $env:RUNNER_TEMP "FastFill.pfx"
-          $cer = Join-Path $env:RUNNER_TEMP "FastFill.cer"
-          if ($env:CERTIFICATE_BASE64) {
-            $bytes = [Convert]::FromBase64String(
-              $env:CERTIFICATE_BASE64)
-            [IO.File]::WriteAllBytes($pfx, $bytes)
-            $password = $env:CERTIFICATE_PASSWORD
-            $securePassword = ConvertTo-SecureString `
-              -String $password `
-              -AsPlainText `
-              -Force
-            $importArgs = @{
-              FilePath = $pfx
-              Password = $securePassword
-              CertStoreLocation = "Cert:\CurrentUser\My"
-            }
-            $certificate = Import-PfxCertificate @importArgs
-          } else {
-            $password = [Guid]::NewGuid().ToString("N")
-            $securePassword = ConvertTo-SecureString `
-              -String $password `
-              -AsPlainText `
-              -Force
-            $certificateArgs = @{
-              Type = "Custom"
-              Subject = "CN=FastFill Development"
-              FriendlyName = "FastFill CI development certificate"
-              CertStoreLocation = "Cert:\CurrentUser\My"
-              KeyUsage = "DigitalSignature"
-              KeyExportPolicy = "Exportable"
-              HashAlgorithm = "SHA256"
-              NotAfter = [DateTime]::Now.AddDays(30)
-              TextExtension = @(
-                "2.5.29.37={text}1.3.6.1.5.5.7.3.3"
-                "2.5.29.19={text}"
-              )
-            }
-            $certificate = New-SelfSignedCertificate @certificateArgs
-            $pfxArgs = @{
-              Cert = $certificate
-              FilePath = $pfx
-              Password = $securePassword
-            }
-            Export-PfxCertificate @pfxArgs | Out-Null
-          }
-          Export-Certificate `
-            -Cert $certificate `
-            -FilePath $cer | Out-Null
-          "CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" |
-            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-          "PACKAGE_CERTIFICATE_PATH=$pfx" |
-            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-          "PACKAGE_CERTIFICATE_PASSWORD=$password" |
-            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Build MSIX
         shell: pwsh
         run: |
@@ -104,54 +44,89 @@ jobs:
           & msbuild @arguments
       - name: Sign MSIX
         shell: pwsh
+        env:
+          CERTIFICATE_BASE64: >-
+            ${{ secrets.FASTFILL_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: >-
+            ${{ secrets.FASTFILL_CERTIFICATE_PASSWORD }}
         run: |
-          $kitRoot = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
-          $signTool = Get-ChildItem `
-              $kitRoot `
-              -Filter "signtool.exe" `
-              -Recurse |
-            Where-Object FullName -Match "\\x64\\" |
-            Sort-Object FullName -Descending |
-            Select-Object -First 1
-          if (-not $signTool) {
-            throw "Windows SDK SignTool was not found."
+          $missingCertificate = -not $env:CERTIFICATE_BASE64 -or
+            -not $env:CERTIFICATE_PASSWORD
+          if ($missingCertificate) {
+            throw "FastFill signing certificate secrets are required."
           }
-          $packages = Get-ChildItem `
-            "$env:RUNNER_TEMP\FastFillPackages" `
-            -Filter "FastFill.App_*.msix" `
-            -Recurse
-          if (-not $packages) {
-            throw "MSIX package was not created."
-          }
-          foreach ($package in $packages) {
-            & $signTool.FullName sign `
-              /fd SHA256 `
-              /f $env:PACKAGE_CERTIFICATE_PATH `
-              /p $env:PACKAGE_CERTIFICATE_PASSWORD `
-              $package.FullName
-            if ($LASTEXITCODE -ne 0) {
-              throw "SignTool failed for $($package.Name)."
+
+          $pfx = Join-Path $env:RUNNER_TEMP "FastFill.pfx"
+          $cer = Join-Path $env:RUNNER_TEMP "FastFill.cer"
+          $certificate = $null
+          try {
+            try {
+              $bytes = [Convert]::FromBase64String(
+                $env:CERTIFICATE_BASE64)
+            } catch {
+              throw "FASTFILL_CERTIFICATE_BASE64 is invalid."
             }
-          }
-      - name: Remove signing certificate
-        if: always()
-        shell: pwsh
-        run: |
-          if ($env:PACKAGE_CERTIFICATE_PATH) {
-            Remove-Item `
-              $env:PACKAGE_CERTIFICATE_PATH `
-              -ErrorAction Ignore
-          }
-          if ($env:CERTIFICATE_THUMBPRINT) {
-            Remove-Item `
-              "Cert:\CurrentUser\My\$env:CERTIFICATE_THUMBPRINT" `
-              -ErrorAction Ignore
+            [IO.File]::WriteAllBytes($pfx, $bytes)
+            $securePassword = ConvertTo-SecureString `
+              -String $env:CERTIFICATE_PASSWORD `
+              -AsPlainText `
+              -Force
+            $importArgs = @{
+              FilePath = $pfx
+              Password = $securePassword
+              CertStoreLocation = "Cert:\CurrentUser\My"
+            }
+            $certificate = Import-PfxCertificate @importArgs
+            if ($certificate.Subject -ne "CN=FastFill Development") {
+              throw "Signing certificate has the wrong subject."
+            }
+            Export-Certificate `
+              -Cert $certificate `
+              -FilePath $cer | Out-Null
+
+            $kitRoot = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+            $signTool = Get-ChildItem `
+                $kitRoot `
+                -Filter "signtool.exe" `
+                -Recurse |
+              Where-Object FullName -Match "\\x64\\" |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1
+            if (-not $signTool) {
+              throw "Windows SDK SignTool was not found."
+            }
+            $packages = Get-ChildItem `
+              "$env:RUNNER_TEMP\FastFillPackages" `
+              -Filter "FastFill.App_*.msix" `
+              -Recurse
+            if (-not $packages) {
+              throw "MSIX package was not created."
+            }
+            foreach ($package in $packages) {
+              & $signTool.FullName sign `
+                /fd SHA256 `
+                /f $pfx `
+                /p $env:CERTIFICATE_PASSWORD `
+                $package.FullName
+              if ($LASTEXITCODE -ne 0) {
+                throw "SignTool failed for $($package.Name)."
+              }
+              Copy-Item `
+                $cer `
+                (Join-Path $package.DirectoryName "FastFill.cer") `
+                -Force
+            }
+          } finally {
+            Remove-Item $pfx -ErrorAction Ignore
+            if ($certificate) {
+              Remove-Item `
+                "Cert:\CurrentUser\My\$($certificate.Thumbprint)" `
+                -ErrorAction Ignore
+            }
           }
       - name: Upload installable package
         uses: actions/upload-artifact@v7
         with:
           name: FastFill-msix
-          path: |
-            ${{ runner.temp }}/FastFillPackages/**
-            ${{ runner.temp }}/FastFill.cer
+          path: ${{ runner.temp }}/FastFillPackages/**
           if-no-files-found: error
