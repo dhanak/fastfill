@@ -118,7 +118,7 @@ jobs:
           }
           $packages = Get-ChildItem `
             "$env:RUNNER_TEMP\FastFillPackages" `
-            -Filter "*.msix" `
+            -Filter "FastFill.App_*.msix" `
             -Recurse
           if (-not $packages) {
             throw "MSIX package was not created."
