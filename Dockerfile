@@ -10,6 +10,8 @@ RUN dotnet restore src/FastFill.Checks/FastFill.Checks.csproj
 COPY src/FastFill.Core/ src/FastFill.Core/
 COPY src/FastFill.Checks/ src/FastFill.Checks/
 COPY tests/ tests/
+RUN dotnet build src/FastFill.Checks/FastFill.Checks.csproj \
+  -c Release --no-restore
 
-ENTRYPOINT ["dotnet", "run", "--project", \
-  "src/FastFill.Checks/FastFill.Checks.csproj", "-c", "Release", "--"]
+ENTRYPOINT ["dotnet", \
+  "src/FastFill.Checks/bin/Release/net10.0/FastFill.Checks.dll"]

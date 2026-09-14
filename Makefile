@@ -2,25 +2,27 @@
 
 IMAGE := fastfill-checks
 ROOT := $(CURDIR)
+RUN := docker run --rm
 
 check:
 	docker build --load -t $(IMAGE) .
-	docker run --rm \
-		-v "$(ROOT)/artifacts:/work/artifacts" \
-		$(IMAGE)
+	$(RUN) $(IMAGE)
 
 preview: check
+	$(RUN) \
+		-v "$(ROOT)/artifacts:/work/artifacts" \
+		$(IMAGE)
 	@echo "Preview files: artifacts/preview"
 
 update-goldens:
 	docker build --load -t $(IMAGE) .
-	docker run --rm \
+	$(RUN) \
 		-v "$(ROOT)/artifacts:/work/artifacts" \
 		-v "$(ROOT)/tests:/work/tests" \
 		$(IMAGE) --update-goldens
 
 assets:
 	docker build --load -t $(IMAGE) .
-	docker run --rm \
+	$(RUN) \
 		-v "$(ROOT)/src/FastFill.App/Assets:/assets" \
 		$(IMAGE) --make-assets /assets
