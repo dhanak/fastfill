@@ -86,11 +86,9 @@ jobs:
             Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "PACKAGE_CERTIFICATE_PASSWORD=$password" |
             Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-      - name: Build signed MSIX
+      - name: Build MSIX
         shell: pwsh
         run: |
-          $passwordArgument = "/p:PackageCertificatePassword=" + `
-            $env:PACKAGE_CERTIFICATE_PASSWORD
           $arguments = @(
             "src/FastFill.App/FastFill.App.csproj"
             "/restore"
@@ -99,13 +97,42 @@ jobs:
             "/p:GenerateAppxPackageOnBuild=true"
             "/p:AppxBundle=Never"
             "/p:UapAppxPackageBuildMode=SideloadOnly"
-            "/p:AppxPackageSigningEnabled=true"
+            "/p:AppxPackageSigningEnabled=false"
             "/p:GenerateAppInstallerFile=false"
             "/p:AppxPackageDir=$env:RUNNER_TEMP\FastFillPackages\"
-            "/p:PackageCertificateKeyFile=$env:PACKAGE_CERTIFICATE_PATH"
-            $passwordArgument
           )
           & msbuild @arguments
+      - name: Sign MSIX
+        shell: pwsh
+        run: |
+          $kitRoot = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+          $signTool = Get-ChildItem `
+              $kitRoot `
+              -Filter "signtool.exe" `
+              -Recurse |
+            Where-Object FullName -Match "\\x64\\" |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signTool) {
+            throw "Windows SDK SignTool was not found."
+          }
+          $packages = Get-ChildItem `
+            "$env:RUNNER_TEMP\FastFillPackages" `
+            -Filter "*.msix" `
+            -Recurse
+          if (-not $packages) {
+            throw "MSIX package was not created."
+          }
+          foreach ($package in $packages) {
+            & $signTool.FullName sign `
+              /fd SHA256 `
+              /f $env:PACKAGE_CERTIFICATE_PATH `
+              /p $env:PACKAGE_CERTIFICATE_PASSWORD `
+              $package.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "SignTool failed for $($package.Name)."
+            }
+          }
       - name: Remove signing certificate
         if: always()
         shell: pwsh
