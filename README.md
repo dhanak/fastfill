@@ -64,17 +64,20 @@ Run `FastFill.App` from Visual Studio for camera and interactive UI work. Use
 JPEG/PNG import for deterministic editor iteration; it exercises the same
 review, correction, annotation, project, and export paths as camera capture.
 
-## Signed MSIX
+## Portable Windows build
 
-The package identity expects certificate subject
-`CN=FastFill Development`. Configure repository secrets:
+The Windows workflow publishes FastFill as an unpackaged, self-contained x64
+folder. It needs no installation, certificate, developer license, .NET
+runtime, or Windows App SDK runtime. Extract the ZIP anywhere and run
+`FastFill\FastFill.exe`. Keep the other extracted files beside the executable.
 
-- `FASTFILL_CERTIFICATE_BASE64`: base64-encoded PFX.
-- `FASTFILL_CERTIFICATE_PASSWORD`: PFX password.
+Windows SmartScreen may warn because the development executable is unsigned.
+Use **More info**, then **Run anyway**, only when it came from this repository.
 
-The Windows workflow always compiles unsigned. With both secrets present it
-also uploads a signed sideload MSIX artifact. Replace the development
-publisher and certificate before production distribution.
+Successful `master` builds replace the public `dev` prerelease. Download the
+current portable ZIP without signing in:
+
+<https://github.com/dhanak/fastfill/releases/download/dev/FastFill-portable.zip>
 
 ## Minimal SP6 gate
 

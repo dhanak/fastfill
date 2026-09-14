@@ -86,7 +86,8 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         _workspaceRoot = Path.Combine(
-            ApplicationData.Current.LocalFolder.Path,
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData),
             "FastFill",
             "workspaces");
         Directory.CreateDirectory(_workspaceRoot);
@@ -1417,7 +1418,7 @@ public sealed partial class MainWindow : Window
         try
         {
             var path = Path.Combine(
-                ApplicationData.Current.TemporaryFolder.Path,
+                Path.GetTempPath(),
                 "FastFill-share.pdf");
             await ExportPdfAsync(path);
             _shareFile = await StorageFile.GetFileFromPathAsync(path);

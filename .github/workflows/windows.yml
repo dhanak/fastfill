@@ -5,15 +5,19 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-2025
-    env:
-      CERTIFICATE_BASE64: ${{ secrets.FASTFILL_CERTIFICATE_BASE64 }}
-      CERTIFICATE_PASSWORD: ${{ secrets.FASTFILL_CERTIFICATE_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
       - name: Restore
@@ -22,44 +26,63 @@ jobs:
         run: >-
           dotnet run --project src/FastFill.Checks
           -c Release --no-restore
-      - name: Compile WinUI app
-        run: >-
-          dotnet build src/FastFill.App
-          -c Release --no-restore
-          -p:Platform=x64
-          -p:AppxPackageSigningEnabled=false
-      - name: Decode signing certificate
-        if: env.CERTIFICATE_BASE64 != ''
-        shell: pwsh
-        run: >-
-          [IO.File]::WriteAllBytes(
-          "$env:RUNNER_TEMP\FastFill.pfx",
-          [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
-      - name: Build signed MSIX
-        if: env.CERTIFICATE_BASE64 != ''
+      - name: Publish portable app
         shell: pwsh
         run: |
-          $arguments = @(
-            "src/FastFill.App/FastFill.App.csproj"
-            "/restore"
-            "/p:Configuration=Release"
-            "/p:Platform=x64"
-            "/p:GenerateAppxPackageOnBuild=true"
-            "/p:AppxBundle=Never"
-            "/p:UapAppxPackageBuildMode=SideloadOnly"
-            "/p:AppxPackageSigningEnabled=true"
-            "/p:PackageCertificateKeyFile=$env:RUNNER_TEMP\FastFill.pfx"
-            "/p:PackageCertificatePassword=$env:CERTIFICATE_PASSWORD"
-          )
-          & msbuild @arguments
-      - name: Remove signing certificate
-        if: always() && env.CERTIFICATE_BASE64 != ''
-        shell: pwsh
-        run: Remove-Item "$env:RUNNER_TEMP\FastFill.pfx" -ErrorAction Ignore
-      - name: Upload signed package
-        if: env.CERTIFICATE_BASE64 != ''
-        uses: actions/upload-artifact@v4
+          $output = Join-Path $env:RUNNER_TEMP "FastFill"
+          dotnet publish src/FastFill.App `
+            -c Release `
+            --no-restore `
+            -p:Platform=x64 `
+            -o $output
+          if ($LASTEXITCODE -ne 0) {
+            throw "Portable publish failed."
+          }
+          $executable = Join-Path $output "FastFill.exe"
+          if (-not (Test-Path $executable)) {
+            throw "Portable executable was not created."
+          }
+      - name: Upload portable app
+        uses: actions/upload-artifact@v7
         with:
-          name: FastFill-msix
-          path: src/FastFill.App/AppPackages/**
+          name: FastFill-portable
+          path: ${{ runner.temp }}/FastFill/**
           if-no-files-found: error
+
+  publish:
+    if: >-
+      github.ref == 'refs/heads/master' &&
+      github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download portable app
+        uses: actions/download-artifact@v8
+        with:
+          name: FastFill-portable
+          path: FastFill
+      - name: Create portable archive
+        run: zip -rq FastFill-portable.zip FastFill
+      - name: Publish public development build
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view dev >/dev/null 2>&1; then
+            gh api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/git/refs/tags/dev" \
+              -f "sha=${GITHUB_SHA}" \
+              -F force=true >/dev/null
+            gh release upload dev FastFill-portable.zip --clobber
+            gh release delete-asset dev FastFill.exe --yes || true
+            gh release delete-asset dev FastFill-msix.zip --yes || true
+          else
+            gh release create dev FastFill-portable.zip \
+              --prerelease \
+              --target "${GITHUB_SHA}" \
+              --title "FastFill development build" \
+              --notes "Latest successful master build."
+          fi
