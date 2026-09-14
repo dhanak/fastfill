@@ -1,0 +1,12 @@
+artifacts/*
+!artifacts/.gitkeep
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.pfx
+*.cer
+AppPackages/
+TestResults/
+
