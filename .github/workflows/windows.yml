@@ -1,0 +1,65 @@
+name: Windows
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2025
+    env:
+      CERTIFICATE_BASE64: ${{ secrets.FASTFILL_CERTIFICATE_BASE64 }}
+      CERTIFICATE_PASSWORD: ${{ secrets.FASTFILL_CERTIFICATE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore
+        run: dotnet restore FastFill.slnx
+      - name: Run portable checks
+        run: >-
+          dotnet run --project src/FastFill.Checks
+          -c Release --no-restore
+      - name: Compile WinUI app
+        run: >-
+          dotnet build src/FastFill.App
+          -c Release --no-restore
+          -p:Platform=x64
+          -p:AppxPackageSigningEnabled=false
+      - name: Decode signing certificate
+        if: env.CERTIFICATE_BASE64 != ''
+        shell: pwsh
+        run: >-
+          [IO.File]::WriteAllBytes(
+          "$env:RUNNER_TEMP\FastFill.pfx",
+          [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
+      - name: Build signed MSIX
+        if: env.CERTIFICATE_BASE64 != ''
+        shell: pwsh
+        run: |
+          $arguments = @(
+            "src/FastFill.App/FastFill.App.csproj"
+            "/restore"
+            "/p:Configuration=Release"
+            "/p:Platform=x64"
+            "/p:GenerateAppxPackageOnBuild=true"
+            "/p:AppxBundle=Never"
+            "/p:UapAppxPackageBuildMode=SideloadOnly"
+            "/p:AppxPackageSigningEnabled=true"
+            "/p:PackageCertificateKeyFile=$env:RUNNER_TEMP\FastFill.pfx"
+            "/p:PackageCertificatePassword=$env:CERTIFICATE_PASSWORD"
+          )
+          & msbuild @arguments
+      - name: Remove signing certificate
+        if: always() && env.CERTIFICATE_BASE64 != ''
+        shell: pwsh
+        run: Remove-Item "$env:RUNNER_TEMP\FastFill.pfx" -ErrorAction Ignore
+      - name: Upload signed package
+        if: env.CERTIFICATE_BASE64 != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: FastFill-msix
+          path: src/FastFill.App/AppPackages/**
+          if-no-files-found: error

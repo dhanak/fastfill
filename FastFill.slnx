@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="src/FastFill.Core/FastFill.Core.csproj" />
+  <Project Path="src/FastFill.App/FastFill.App.csproj" />
+  <Project Path="src/FastFill.Checks/FastFill.Checks.csproj" />
+</Solution>
+

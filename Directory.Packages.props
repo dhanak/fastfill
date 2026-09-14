@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.WindowsAppSDK"
+                    Version="2.4.0" />
+    <PackageVersion Include="OpenCvSharp4"
+                    Version="4.13.0.20260627" />
+    <PackageVersion Include="OpenCvSharp4.official.runtime.linux-x64.slim"
+                    Version="4.13.0.20260627" />
+    <PackageVersion Include="OpenCvSharp4.runtime.win.slim"
+                    Version="4.13.0.20260627" />
+    <PackageVersion Include="SkiaSharp" Version="4.152.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies"
+                    Version="4.152.0" />
+    <PackageVersion Include="SkiaSharp.Views.WinUI" Version="4.152.0" />
+  </ItemGroup>
+</Project>
+
