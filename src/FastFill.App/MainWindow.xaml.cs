@@ -67,7 +67,6 @@ public sealed partial class MainWindow : Window
     private ToolMode _tool = ToolMode.Select;
     private uint _toolColor = 0xff111827;
     private NormalizedPoint? _pointerStart;
-    private List<NormalizedPoint>? _draftPoints;
     private Guid? _selectedAnnotationId;
     private AffineTransform? _dragStartTransform;
     private Guid? _draftAnnotationId;
@@ -1554,7 +1553,7 @@ public sealed partial class MainWindow : Window
             Key = key,
             Modifiers = modifiers,
         };
-        shortcut.Invoked += (_, args) =>
+        shortcut.Invoked += (sender, args) =>
         {
             args.Handled = true;
             _ = action();
@@ -1689,7 +1688,7 @@ public sealed partial class MainWindow : Window
         return true;
     }
 
-    private NormalizedPoint ReviewPoint(NormalizedPoint point) => new(
+    private SKPoint ReviewPoint(NormalizedPoint point) => new(
         _reviewImageRect.Left + point.X * _reviewImageRect.Width,
         _reviewImageRect.Top + point.Y * _reviewImageRect.Height);
 
