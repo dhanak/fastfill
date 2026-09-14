@@ -243,10 +243,11 @@ internal sealed class CameraFrameSource : IFrameSource
         });
     }
 
-    private static CameraPosition ToPosition(Panel? panel) => panel switch
+    private static CameraPosition ToPosition(
+        Windows.Devices.Enumeration.Panel? panel) => panel switch
     {
-        Panel.Front => CameraPosition.Front,
-        Panel.Back => CameraPosition.Back,
+        Windows.Devices.Enumeration.Panel.Front => CameraPosition.Front,
+        Windows.Devices.Enumeration.Panel.Back => CameraPosition.Back,
         _ => CameraPosition.Unknown,
     };
 

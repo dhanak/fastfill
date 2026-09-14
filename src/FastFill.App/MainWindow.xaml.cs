@@ -9,7 +9,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using SkiaSharp;
-using SkiaSharp.Views.Desktop;
+using SkiaSharp.Views.Windows;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Storage;
