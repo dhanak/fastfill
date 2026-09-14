@@ -72,9 +72,15 @@ The package identity expects certificate subject
 - `FASTFILL_CERTIFICATE_BASE64`: base64-encoded PFX.
 - `FASTFILL_CERTIFICATE_PASSWORD`: PFX password.
 
-The Windows workflow always compiles unsigned. With both secrets present it
-also uploads a signed sideload MSIX artifact. Replace the development
-publisher and certificate before production distribution.
+The Windows workflow always uploads a signed sideload package under
+`FastFill-msix`. With both secrets present, it uses that certificate. Without
+them, it creates a temporary self-signed certificate and includes
+`FastFill.cer` in the artifact. Trust that certificate in the target machine's
+Local Machine `Trusted People` store before opening the development MSIX.
+
+Temporary certificates differ between workflow runs. Configure the secrets
+for a stable development certificate. Replace the development publisher and
+certificate before production distribution.
 
 ## Minimal SP6 gate
 
