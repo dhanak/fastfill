@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -20,6 +21,10 @@ using WinRT;
 
 namespace FastFill.App;
 
+[SuppressMessage(
+    "Design",
+    "CA1001:Types that own disposable fields should be disposable",
+    Justification = "WinUI owns Window lifetime; Closed releases resources.")]
 public sealed partial class MainWindow : Window
 {
     private static readonly Guid DataTransferManagerId = new(
@@ -1600,6 +1605,8 @@ public sealed partial class MainWindow : Window
         _reviewSource?.Dispose();
         _reviewProcessed?.Dispose();
         _editorBackground?.Dispose();
+        _renderCancellation?.Dispose();
+        _autosaveCancellation?.Dispose();
         if (_dataTransferManager is not null)
         {
             _dataTransferManager.DataRequested -= DataTransfer_DataRequested;
