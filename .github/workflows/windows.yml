@@ -32,8 +32,6 @@ jobs:
       - name: Prepare signing certificate
         shell: pwsh
         run: |
-          using namespace System.Security.Cryptography.X509Certificates
-
           $pfx = Join-Path $env:RUNNER_TEMP "FastFill.pfx"
           $cer = Join-Path $env:RUNNER_TEMP "FastFill.cer"
           if ($env:CERTIFICATE_BASE64) {
@@ -41,15 +39,16 @@ jobs:
               $env:CERTIFICATE_BASE64)
             [IO.File]::WriteAllBytes($pfx, $bytes)
             $password = $env:CERTIFICATE_PASSWORD
-            $flags = [X509KeyStorageFlags]::EphemeralKeySet
-            $certificate = [X509Certificate2]::new(
-              $pfx,
-              $password,
-              $flags)
-            $publicBytes = $certificate.Export(
-              [X509ContentType]::Cert)
-            [IO.File]::WriteAllBytes($cer, $publicBytes)
-            $certificate.Dispose()
+            $securePassword = ConvertTo-SecureString `
+              -String $password `
+              -AsPlainText `
+              -Force
+            $importArgs = @{
+              FilePath = $pfx
+              Password = $securePassword
+              CertStoreLocation = "Cert:\CurrentUser\My"
+            }
+            $certificate = Import-PfxCertificate @importArgs
           } else {
             $password = [Guid]::NewGuid().ToString("N")
             $securePassword = ConvertTo-SecureString `
@@ -77,12 +76,12 @@ jobs:
               Password = $securePassword
             }
             Export-PfxCertificate @pfxArgs | Out-Null
-            Export-Certificate `
-              -Cert $certificate `
-              -FilePath $cer | Out-Null
-            "CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" |
-              Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           }
+          Export-Certificate `
+            -Cert $certificate `
+            -FilePath $cer | Out-Null
+          "CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "PACKAGE_CERTIFICATE_PATH=$pfx" |
             Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           "PACKAGE_CERTIFICATE_PASSWORD=$password" |
@@ -111,7 +110,11 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          Remove-Item $env:PACKAGE_CERTIFICATE_PATH -ErrorAction Ignore
+          if ($env:PACKAGE_CERTIFICATE_PATH) {
+            Remove-Item `
+              $env:PACKAGE_CERTIFICATE_PATH `
+              -ErrorAction Ignore
+          }
           if ($env:CERTIFICATE_THUMBPRINT) {
             Remove-Item `
               "Cert:\CurrentUser\My\$env:CERTIFICATE_THUMBPRINT" `
