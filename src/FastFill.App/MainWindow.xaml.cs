@@ -1838,7 +1838,11 @@ public sealed partial class MainWindow : Window
         NavigationBar.Visibility = _tool == ToolMode.Navigate
             ? Visibility.Visible
             : Visibility.Collapsed;
-        TransformPanel.IsEnabled = selected is not null;
+        foreach (var button in TransformPanel.Children.OfType<Button>())
+        {
+            button.IsEnabled = selected is not null;
+        }
+
         DeleteObjectButton.IsEnabled = selected is not null;
         _updatingToolOptions = false;
     }
