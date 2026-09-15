@@ -67,9 +67,21 @@ internal static class Program
             detection.Corners!.MaximumCornerDistance(ExpectedCrop()) < 0.04,
             "Detected corners are outside tolerance.");
 
+        var distracted = DocumentDetector.DetectEncoded(
+            CreateDistractedDocument());
+        Assert(
+            distracted.Corners is not null
+                && distracted.Corners.MaximumCornerDistance(
+                    ExpectedDistractedCrop()) < 0.02,
+            "Background lines displaced the detected document corners.");
+        Assert(
+            !DocumentDetector.DetectEncoded(
+                CreateFormWithoutVisibleBoundary()).Found,
+            "Printed form lines were mistaken for a document boundary.");
+
         var processed = ImageProcessor.Process(
             source,
-            detection.Corners,
+            ExpectedCrop(),
             0,
             new PageFilterSettings
             {
@@ -179,6 +191,97 @@ internal static class Program
         new(0.821f, 0.894f),
         new(0.11f, 0.844f));
 
+    private static byte[] CreateDistractedDocument()
+    {
+        using var image = new Mat(
+            720,
+            1280,
+            MatType.CV_8UC3,
+            new Scalar(35, 45, 55));
+        Point[] corners =
+        [
+            new(303, 59),
+            new(923, 59),
+            new(923, 678),
+            new(303, 669),
+        ];
+        Cv2.FillConvexPoly(image, corners, new Scalar(240, 240, 235));
+        Cv2.Polylines(
+            image,
+            [corners],
+            true,
+            new Scalar(210, 210, 210),
+            5);
+        Cv2.PutText(
+            image,
+            "DOCUMENT",
+            new Point(430, 340),
+            HersheyFonts.HersheySimplex,
+            2,
+            new Scalar(40, 40, 40),
+            5);
+
+        // These lines can form a larger false quad with three document edges.
+        Cv2.Line(
+            image,
+            corners[1],
+            new Point(1041, 59),
+            new Scalar(225, 225, 225),
+            6);
+        Cv2.Line(
+            image,
+            new Point(1041, 59),
+            new Point(1220, 681),
+            new Scalar(225, 225, 225),
+            6);
+        Cv2.Line(
+            image,
+            corners[2],
+            new Point(1220, 681),
+            new Scalar(225, 225, 225),
+            6);
+
+        Assert(
+            Cv2.ImEncode(".jpg", image, out var encoded),
+            "Distracted image encoding failed.");
+        return encoded;
+    }
+
+    private static CropQuad ExpectedDistractedCrop() => new(
+        new(303f / 1279, 59f / 719),
+        new(923f / 1279, 59f / 719),
+        new(923f / 1279, 678f / 719),
+        new(303f / 1279, 669f / 719));
+
+    private static byte[] CreateFormWithoutVisibleBoundary()
+    {
+        using var image = new Mat(
+            720,
+            1280,
+            MatType.CV_8UC3,
+            new Scalar(235, 235, 230));
+        var ink = new Scalar(55, 55, 55);
+        Cv2.Rectangle(image, new Rect(45, 210, 1190, 330), ink, 4);
+        Cv2.Line(image, new Point(640, 210), new Point(640, 540), ink, 4);
+        foreach (var y in new[] { 275, 340, 405, 470 })
+        {
+            Cv2.Line(image, new Point(45, y), new Point(1235, y), ink, 3);
+        }
+
+        Cv2.PutText(
+            image,
+            "FORM CONTENT",
+            new Point(410, 120),
+            HersheyFonts.HersheySimplex,
+            1.5,
+            ink,
+            4);
+        Assert(
+            Cv2.ImEncode(".jpg", image, out var encoded),
+            "Boundary-free form encoding failed.");
+        return encoded;
+    }
+
     private static FastFillProject CreateProject()
     {
         var page = new DocumentPage
@@ -272,7 +375,7 @@ internal static class Program
         var start = DateTimeOffset.UtcNow;
         var stable = detection with
         {
-            Confidence = 0.65,
+            Confidence = 0.8,
             AreaRatio = 0.2,
             Sharpness = 200,
         };

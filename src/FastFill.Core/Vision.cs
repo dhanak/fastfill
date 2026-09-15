@@ -14,6 +14,7 @@ public sealed record DocumentDetection(
 public static class DocumentDetector
 {
     private const int MaximumDetectionEdge = 1280;
+    private const double MinimumDetectionConfidence = 0.7;
 
     public static DocumentDetection Detect(FramePacket frame)
     {
@@ -157,7 +158,8 @@ public static class DocumentDetector
             var scored = ScoreCandidate(
                 polygon,
                 scaled.Size(),
-                imageArea);
+                imageArea,
+                paperMask);
             if (scored is null || scored.Value.Score <= bestScore)
             {
                 continue;
@@ -172,7 +174,7 @@ public static class DocumentDetector
         Cv2.Laplacian(gray, laplacian, MatType.CV_64F);
         Cv2.MeanStdDev(laplacian, out _, out var deviation);
         var sharpness = deviation.Val0 * deviation.Val0;
-        if (best is null)
+        if (best is null || bestScore < MinimumDetectionConfidence)
         {
             return new(null, 0, 0, sharpness);
         }
@@ -213,7 +215,8 @@ public static class DocumentDetector
     private static (double Score, double AreaRatio)? ScoreCandidate(
         Point[] polygon,
         Size imageSize,
-        double imageArea)
+        double imageArea,
+        Mat paperMask)
     {
         var area = Math.Abs(Cv2.ContourArea(polygon));
         var areaRatio = area / imageArea;
@@ -239,21 +242,92 @@ public static class DocumentDetector
         }
 
         var rectangularity = Math.Min(1, area / rectangleArea);
-        var areaScore = Math.Min(1, areaRatio / 0.55);
+        // More area stops helping once a document occupies 40% of the frame.
+        // This prevents unrelated lines from inflating a good document quad.
+        var areaScore = Math.Min(1, areaRatio / 0.4);
         var border = Math.Min(imageSize.Width, imageSize.Height) * 0.02;
         var borderCorners = polygon.Count(point =>
             point.X <= border
             || point.Y <= border
             || point.X >= imageSize.Width - border
             || point.Y >= imageSize.Height - border);
-        var borderPenalty = areaRatio >= 0.85
-            ? 0
-            : borderCorners * 0.12;
-        var score = (areaScore * 0.65)
-            + (rectangularity * 0.35)
-            - borderPenalty;
+        var borderPenalty = borderCorners * 0.12;
+        var geometryScore = (areaScore * 0.45)
+            + (rectangularity * 0.55);
+        var score = (geometryScore * 0.6) - borderPenalty;
+        if (score + 0.4 < MinimumDetectionConfidence)
+        {
+            return (score, areaRatio);
+        }
+
+        score += PaperBoundaryScore(polygon, paperMask) * 0.4;
         return (score, areaRatio);
     }
+
+    private static double PaperBoundaryScore(
+        Point[] polygon,
+        Mat paperMask)
+    {
+        const int samplesPerSide = 20;
+        var corners = OrderCorners(polygon);
+        var offset = Math.Max(
+            2,
+            Math.Min(paperMask.Width, paperMask.Height) * 0.0125);
+        var insidePaper = 0;
+        var outsidePaper = 0;
+        var sampleCount = 0;
+        for (var side = 0; side < corners.Length; side++)
+        {
+            var first = corners[side];
+            var second = corners[(side + 1) % corners.Length];
+            var dx = second.X - first.X;
+            var dy = second.Y - first.Y;
+            var length = Math.Sqrt((dx * dx) + (dy * dy));
+            if (length < 1)
+            {
+                continue;
+            }
+
+            // Ordered image coordinates are clockwise; right normal is inward.
+            var normalX = -dy / length;
+            var normalY = dx / length;
+            for (var sample = 0; sample < samplesPerSide; sample++)
+            {
+                var position = (sample + 0.5) / samplesPerSide;
+                var x = first.X + (dx * position);
+                var y = first.Y + (dy * position);
+                var insideX = (int)Math.Round(x + (normalX * offset));
+                var insideY = (int)Math.Round(y + (normalY * offset));
+                var outsideX = (int)Math.Round(x - (normalX * offset));
+                var outsideY = (int)Math.Round(y - (normalY * offset));
+                if (!Contains(paperMask.Size(), insideX, insideY)
+                    || !Contains(paperMask.Size(), outsideX, outsideY))
+                {
+                    continue;
+                }
+
+                insidePaper += paperMask.At<byte>(insideY, insideX) > 0
+                    ? 1
+                    : 0;
+                outsidePaper += paperMask.At<byte>(outsideY, outsideX) > 0
+                    ? 1
+                    : 0;
+                sampleCount++;
+            }
+        }
+
+        if (sampleCount == 0)
+        {
+            return 0;
+        }
+
+        var contrast = (insidePaper - outsidePaper)
+            / (double)sampleCount;
+        return Math.Clamp(contrast / 0.6, 0, 1);
+    }
+
+    private static bool Contains(Size size, int x, int y) =>
+        x >= 0 && x < size.Width && y >= 0 && y < size.Height;
 
     private static IEnumerable<Point[]> FindLineQuadrilaterals(Mat edges)
     {
@@ -646,7 +720,7 @@ public sealed class AutoCaptureGate
         double minimumSharpness = 80)
     {
         if (!detection.Found
-            || detection.Confidence < 0.55
+            || detection.Confidence < 0.7
             || detection.AreaRatio < 0.1
             || detection.Sharpness < minimumSharpness)
         {
