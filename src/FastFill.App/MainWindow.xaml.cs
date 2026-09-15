@@ -2930,7 +2930,7 @@ public sealed partial class MainWindow : Window
     {
         var border = new Border
         {
-            Padding = new Thickness(10, 8),
+            Padding = new Thickness(10, 8, 10, 8),
             BorderBrush = new SolidColorBrush(
                 Windows.UI.Color.FromArgb(48, 127, 127, 127)),
             BorderThickness = new Thickness(0, 0, 0, 1),
