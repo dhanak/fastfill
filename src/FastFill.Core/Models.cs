@@ -169,6 +169,9 @@ public sealed record TextAnnotation : Annotation
     public float FontSize { get; init; } = 14;
     public string FontFamily { get; init; } = "Segoe UI";
     public float MaximumWidth { get; init; } = 0.4f;
+    public bool IsBold { get; init; }
+    public bool IsItalic { get; init; }
+    public bool IsUnderlined { get; init; }
 }
 
 public sealed record ShapeAnnotation : Annotation

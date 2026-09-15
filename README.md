@@ -41,8 +41,9 @@ unrecognized-app warning, select **More info**, then **Run anyway**.
 - Manual four-corner perspective correction, page rotation, contrast,
   enhanced color, grayscale, and black-and-white filters.
 - JPEG, PNG, and multi-page PDF import using Windows' built-in PDF renderer.
-- Inline editable text, pen, highlighter, lines, arrows, boxes, ovals,
-  checkmarks, X marks, and filled shapes.
+- Inline editable text with bold, italic, and underline styles; pen,
+  highlighter, lines, arrows, boxes, ovals, checkmarks, X marks, and filled
+  shapes.
 - Move, resize, rotate, recolor, reorder, or delete annotations after placing
   them. Multi-selection, undo, and redo are supported.
 - Drag page reordering for projects containing up to five pages.

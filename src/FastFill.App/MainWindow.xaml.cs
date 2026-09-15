@@ -1607,6 +1607,12 @@ public sealed partial class MainWindow : Window
         InlineTextEditor.FontSize = SelectedFontSize()
             * _editorImageRect.Width
             / Math.Max(widthPoints, 1);
+        InlineTextEditor.FontWeight = BoldTextToggle.IsChecked == true
+            ? FontWeights.Bold
+            : FontWeights.Normal;
+        InlineTextEditor.FontStyle = ItalicTextToggle.IsChecked == true
+            ? FontStyle.Italic
+            : FontStyle.Normal;
         InlineTextEditor.Foreground = new SolidColorBrush(
             ToWindowsColor(SelectedTextColor()));
     }
@@ -1635,6 +1641,9 @@ public sealed partial class MainWindow : Window
                 FontFamily = SelectedFontFamily(),
                 FontSize = SelectedFontSize(),
                 MaximumWidth = _textEditMaximumWidth,
+                IsBold = BoldTextToggle.IsChecked == true,
+                IsItalic = ItalicTextToggle.IsChecked == true,
+                IsUnderlined = UnderlineTextToggle.IsChecked == true,
             },
             EditorPageWidthPoints(),
             EditorPageHeightPoints());
@@ -1703,6 +1712,9 @@ public sealed partial class MainWindow : Window
         _history.Checkpoint(_project);
         var fontFamily = SelectedFontFamily();
         var fontSize = SelectedFontSize();
+        var isBold = BoldTextToggle.IsChecked == true;
+        var isItalic = ItalicTextToggle.IsChecked == true;
+        var isUnderlined = UnderlineTextToggle.IsChecked == true;
         Guid annotationId;
         if (_textEditAnnotationId is Guid existingId
             && CurrentPage.Annotations.FirstOrDefault(
@@ -1717,6 +1729,9 @@ public sealed partial class MainWindow : Window
                     FontFamily = fontFamily,
                     FontSize = fontSize,
                     MaximumWidth = _textEditMaximumWidth,
+                    IsBold = isBold,
+                    IsItalic = isItalic,
+                    IsUnderlined = isUnderlined,
                 },
                 EditorPageWidthPoints(),
                 EditorPageHeightPoints());
@@ -1735,6 +1750,9 @@ public sealed partial class MainWindow : Window
                     FontFamily = fontFamily,
                     FontSize = fontSize,
                     MaximumWidth = _textEditMaximumWidth,
+                    IsBold = isBold,
+                    IsItalic = isItalic,
+                    IsUnderlined = isUnderlined,
                 },
                 EditorPageWidthPoints(),
                 EditorPageHeightPoints());
@@ -2344,6 +2362,44 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void TextStyleToggle_Click(
+        object sender,
+        RoutedEventArgs args)
+    {
+        if (!_controlsReady || _updatingToolOptions)
+        {
+            return;
+        }
+
+        var isBold = BoldTextToggle.IsChecked == true;
+        var isItalic = ItalicTextToggle.IsChecked == true;
+        var isUnderlined = UnderlineTextToggle.IsChecked == true;
+        _toolSettings[ToolMode.Text] = _toolSettings[ToolMode.Text] with
+        {
+            IsBold = isBold,
+            IsItalic = isItalic,
+            IsUnderlined = isUnderlined,
+        };
+        if (InlineTextEditor.Visibility == Visibility.Visible)
+        {
+            UpdateInlineTextBounds();
+            PositionInlineTextEditor(EditorPageWidthPoints());
+            return;
+        }
+
+        ChangeSelected(annotation => annotation is TextAnnotation text
+            ? PageRenderer.FitTextBounds(
+                text with
+                {
+                    IsBold = isBold,
+                    IsItalic = isItalic,
+                    IsUnderlined = isUnderlined,
+                },
+                EditorPageWidthPoints(),
+                EditorPageHeightPoints())
+            : annotation);
+    }
+
     private void ApplyToolOptions()
     {
         if (!_controlsReady)
@@ -2365,6 +2421,9 @@ public sealed partial class MainWindow : Window
         FilledToggle.IsOn = settings.Filled;
         SelectComboItem(FontFamilyPicker, settings.FontFamily);
         FontSizePicker.Value = settings.FontSize;
+        BoldTextToggle.IsChecked = settings.IsBold;
+        ItalicTextToggle.IsChecked = settings.IsItalic;
+        UnderlineTextToggle.IsChecked = settings.IsUnderlined;
         UpdateColorSelection(settings.Color);
 
         var supportsThickness = hasSelection
@@ -3674,7 +3733,10 @@ public sealed partial class MainWindow : Window
         float Thickness,
         bool Filled,
         string FontFamily = "Segoe UI",
-        float FontSize = 18)
+        float FontSize = 18,
+        bool IsBold = false,
+        bool IsItalic = false,
+        bool IsUnderlined = false)
     {
         public static ToolSettings FromAnnotation(Annotation annotation) =>
             annotation switch
@@ -3684,7 +3746,10 @@ public sealed partial class MainWindow : Window
                     text.StrokeWidth,
                     false,
                     text.FontFamily,
-                    text.FontSize),
+                    text.FontSize,
+                    text.IsBold,
+                    text.IsItalic,
+                    text.IsUnderlined),
                 FreehandAnnotation ink => new(
                     ink.ColorArgb,
                     ink.StrokeWidth,

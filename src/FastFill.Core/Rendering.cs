@@ -25,7 +25,8 @@ public static class PageRenderer
         ArgumentOutOfRangeException.ThrowIfLessThan(pageWidth, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(pageHeight, 1);
         using var typeface = SKTypeface.FromFamilyName(
-            annotation.FontFamily);
+            annotation.FontFamily,
+            TextFontStyle(annotation));
         using var font = new SKFont(
             typeface ?? SKTypeface.Default,
             annotation.FontSize);
@@ -230,10 +231,20 @@ public static class PageRenderer
     {
         paint.Style = SKPaintStyle.Fill;
         using var typeface = SKTypeface.FromFamilyName(
-            annotation.FontFamily);
+            annotation.FontFamily,
+            TextFontStyle(annotation));
         using var font = new SKFont(
             typeface ?? SKTypeface.Default,
             annotation.FontSize);
+        using var underline = annotation.IsUnderlined
+            ? new SKPaint
+            {
+                Color = paint.Color,
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = Math.Max(1, font.Size / 16),
+            }
+            : null;
         var lineHeight = font.Size * 1.25f;
         var bounds = ToSkia(annotation.Bounds, options);
         var y = bounds.Top + font.Size;
@@ -251,9 +262,32 @@ public static class PageRenderer
                 SKTextAlign.Left,
                 font,
                 paint);
+            if (underline is not null && line.Length > 0)
+            {
+                var underlineWidth = Math.Min(
+                    bounds.Width,
+                    MeasureText(line, font));
+                var underlineY = y + font.Size * 0.08f;
+                canvas.DrawLine(
+                    bounds.Left,
+                    underlineY,
+                    bounds.Left + underlineWidth,
+                    underlineY,
+                    underline);
+            }
+
             y += lineHeight;
         }
     }
+
+    private static SKFontStyle TextFontStyle(TextAnnotation annotation) =>
+        (annotation.IsBold, annotation.IsItalic) switch
+        {
+            (true, true) => SKFontStyle.BoldItalic,
+            (true, false) => SKFontStyle.Bold,
+            (false, true) => SKFontStyle.Italic,
+            _ => SKFontStyle.Normal,
+        };
 
     private static IEnumerable<string> WrapText(
         string text,

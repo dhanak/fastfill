@@ -673,6 +673,7 @@
                 <StackPanel x:Name="FontPanel" Spacing="4">
                   <ComboBox x:Name="FontFamilyPicker"
                             Header="Typeface"
+                            HorizontalAlignment="Stretch"
                             SelectedIndex="0"
                             SelectionChanged="FontFamily_SelectionChanged">
                     <ComboBoxItem Content="Segoe UI" />
@@ -689,6 +690,37 @@
                              SpinButtonPlacementMode="Inline"
                              PreviewKeyDown="FontSizePicker_PreviewKeyDown"
                              ValueChanged="FontSize_ValueChanged" />
+                  <Grid ColumnSpacing="4">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ToggleButton x:Name="BoldTextToggle"
+                                  Click="TextStyleToggle_Click"
+                                  AutomationProperties.Name="Bold"
+                                  ToolTipService.ToolTip="Bold"
+                                  Style="{StaticResource ToolToggleStyle}">
+                      <TextBlock Text="B" FontWeight="Bold" />
+                    </ToggleButton>
+                    <ToggleButton x:Name="ItalicTextToggle"
+                                  Grid.Column="1"
+                                  Click="TextStyleToggle_Click"
+                                  AutomationProperties.Name="Italic"
+                                  ToolTipService.ToolTip="Italic"
+                                  Style="{StaticResource ToolToggleStyle}">
+                      <TextBlock Text="I" FontStyle="Italic" />
+                    </ToggleButton>
+                    <ToggleButton x:Name="UnderlineTextToggle"
+                                  Grid.Column="2"
+                                  Click="TextStyleToggle_Click"
+                                  AutomationProperties.Name="Underline"
+                                  ToolTipService.ToolTip="Underline"
+                                  Style="{StaticResource ToolToggleStyle}">
+                      <TextBlock Text="U"
+                                 TextDecorations="Underline" />
+                    </ToggleButton>
+                  </Grid>
                 </StackPanel>
                 <Grid x:Name="TransformPanel" Margin="0,6,0,0">
                   <Grid.ColumnDefinitions>

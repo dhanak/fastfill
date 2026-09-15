@@ -360,6 +360,9 @@ internal static class Program
                     Bounds = new(0.22f, 0.25f, 0.48f, 0.12f),
                     ColorArgb = 0xff111827,
                     FontSize = 18,
+                    IsBold = true,
+                    IsItalic = true,
+                    IsUnderlined = true,
                 },
             ],
         };
@@ -585,6 +588,15 @@ internal static class Program
         var loaded = await ProjectArchive.LoadAsync(archivePath, loadedPath);
         Assert(loaded.Project.Title == project.Title, "Project title changed.");
         Assert(loaded.Project.Pages.Count == 1, "Project page was lost.");
+        Assert(
+            loaded.Project.Pages[0].Annotations.OfType<TextAnnotation>()
+                .Single() is
+                {
+                    IsBold: true,
+                    IsItalic: true,
+                    IsUnderlined: true,
+                },
+            "Text styles were not preserved.");
     }
 
     private static async Task CheckUnsafeArchiveAsync()
