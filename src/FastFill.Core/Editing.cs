@@ -374,6 +374,17 @@ public static class AnnotationGeometry
     public static NormalizedPoint[] BoundsCorners(Annotation annotation) =>
         BoundsCorners(Bounds(annotation));
 
+    public static NormalizedPoint[] ResizeHandles(Annotation annotation) =>
+        annotation switch
+        {
+            TextAnnotation => [],
+            ShapeAnnotation
+            {
+                Shape: ShapeKind.Line or ShapeKind.Arrow,
+            } line => [line.Start, line.End],
+            _ => BoundsCorners(annotation),
+        };
+
     public static NormalizedPoint[] BoundsCorners(NormalizedRect bounds) =>
     [
         new(bounds.X, bounds.Y),
@@ -414,20 +425,21 @@ public static class AnnotationGeometry
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(pageWidth, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(pageHeight, 1);
-        var corners = BoundsCorners(annotation);
+        var handles = ResizeHandles(annotation);
         ArgumentOutOfRangeException.ThrowIfNegative(cornerIndex);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(
             cornerIndex,
-            corners.Length);
+            handles.Length);
 
         if (annotation is ShapeAnnotation
             {
                 Shape: ShapeKind.Line or ShapeKind.Arrow,
             } line)
         {
-            return ResizeLine(line, corners[cornerIndex], newCorner);
+            return ResizeLine(line, handles[cornerIndex], newCorner);
         }
 
+        var corners = BoundsCorners(annotation);
         var opposite = corners[(cornerIndex + 2) % corners.Length];
         if (annotation is ShapeAnnotation
             {
@@ -451,6 +463,11 @@ public static class AnnotationGeometry
         float factor)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(factor);
+        if (annotation is TextAnnotation)
+        {
+            return annotation;
+        }
+
         var bounds = Bounds(annotation);
         var centerX = bounds.X + bounds.Width / 2;
         var centerY = bounds.Y + bounds.Height / 2;

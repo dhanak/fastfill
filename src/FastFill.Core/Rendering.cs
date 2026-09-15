@@ -16,6 +16,48 @@ public static class PageRenderer
 {
     public const float RotationHandleOffset = 24;
 
+    public static TextAnnotation FitTextBounds(
+        TextAnnotation annotation,
+        float pageWidth,
+        float pageHeight)
+    {
+        ArgumentNullException.ThrowIfNull(annotation);
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageWidth, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageHeight, 1);
+        using var typeface = SKTypeface.FromFamilyName(
+            annotation.FontFamily);
+        using var font = new SKFont(
+            typeface ?? SKTypeface.Default,
+            annotation.FontSize);
+        var maximumWidth = Math.Clamp(
+            annotation.MaximumWidth * pageWidth,
+            font.Size,
+            pageWidth);
+        var lines = WrapText(annotation.Text, font, maximumWidth).ToArray();
+        var contentWidth = lines.Length == 0
+            ? font.Size
+            : Math.Max(
+                font.Size,
+                lines.Max(line => MeasureText(line, font)) + 2);
+        var width = Math.Min(maximumWidth, contentWidth) / pageWidth;
+        var height = Math.Max(1, lines.Length)
+            * font.Size
+            * 1.25f
+            / pageHeight;
+        var x = Math.Clamp(
+            annotation.Bounds.X,
+            0,
+            Math.Max(0, 1 - width));
+        var y = Math.Clamp(
+            annotation.Bounds.Y,
+            0,
+            Math.Max(0, 1 - height));
+        return annotation with
+        {
+            Bounds = new NormalizedRect(x, y, width, height),
+        };
+    }
+
     public static void Draw(
         SKCanvas canvas,
         SKImage background,
@@ -225,7 +267,7 @@ public static class PageRenderer
             {
                 var candidate = line.Length == 0 ? word : $"{line} {word}";
                 if (line.Length > 0
-                    && font.MeasureText(candidate) > width)
+                    && MeasureText(candidate, font) > width)
                 {
                     yield return line;
                     line = word;
@@ -238,6 +280,15 @@ public static class PageRenderer
 
             yield return line;
         }
+    }
+
+    private static float MeasureText(string text, SKFont font)
+    {
+        var measured = font.MeasureText(text);
+        // Headless build images can lack fonts. Keep wrapping deterministic.
+        return measured > 0 || text.Length == 0
+            ? measured
+            : text.Length * font.Size * 0.55f;
     }
 
     private static void DrawShape(
@@ -388,7 +439,7 @@ public static class PageRenderer
             IsAntialias = true,
             Style = SKPaintStyle.Fill,
         };
-        foreach (var point in AnnotationGeometry.BoundsCorners(bounds))
+        foreach (var point in AnnotationGeometry.ResizeHandles(annotation))
         {
             var center = ToSkia(point, options);
             var handle = new SKRect(

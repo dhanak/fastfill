@@ -11,19 +11,19 @@ corrected pages and annotations at 300 DPI.
 
 - Front/back camera capture. Stable-document auto capture is enabled by
   default, with a visible countdown; manual capture remains available.
-- OpenCV corner detection, manual four-corner correction, rotation, enhanced
-  color, grayscale, black-and-white, and contrast.
+- OpenCV live corner framing, manual four-corner correction, rotation,
+  enhanced color, grayscale, black-and-white, and contrast.
 - JPEG/PNG and multi-page PDF import. PDF pages use Windows' built-in renderer
   at 300 DPI and follow the five-page project limit.
-- Inline editable text, pen, highlighter, lines, arrows, boxes, ovals,
-  checkmarks, and X marks.
+- Inline editable, content-sized text; pen; highlighter; lines; arrows; boxes;
+  ovals; checkmarks; and X marks.
 - Marquee/Ctrl multi-selection, geometry-aware resize, drag rotation, bulk
   styling/deletion, undo, redo, drag page reorder, pinch zoom, and
   two-finger pan.
 - Five-page projects, autosave recovery, editable `.docscan` files.
 - Flattened PDF, file picker export to local/USB storage, Windows share sheet.
 
-No OCR, PDF import, cloud sync, SMTP client, or at-rest encryption in v1.
+No OCR, cloud sync, SMTP client, or at-rest encryption in v1.
 
 ## Fast Linux loop
 

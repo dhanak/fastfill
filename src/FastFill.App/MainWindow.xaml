@@ -147,7 +147,7 @@
           <Polygon x:Name="DetectionPolygon"
                    Stroke="#FF00D4FF"
                    StrokeThickness="4"
-                   Fill="#1800D4FF" />
+                   Fill="#5000D4FF" />
         </Canvas>
         <Border HorizontalAlignment="Stretch"
                 VerticalAlignment="Top"
@@ -342,7 +342,12 @@
                         AllowDrop="True"
                         CanDragItems="True"
                         CanReorderItems="True"
+                        IsSwipeEnabled="False"
                         ReorderMode="Enabled"
+                        ScrollViewer.HorizontalScrollMode="Disabled"
+                        ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                        ScrollViewer.VerticalScrollMode="Disabled"
+                        ScrollViewer.VerticalScrollBarVisibility="Disabled"
                         DragItemsStarting="PageList_DragItemsStarting"
                         DragItemsCompleted="PageList_DragItemsCompleted"
                         SelectionChanged="PageList_SelectionChanged" />
@@ -401,6 +406,7 @@
                          Foreground="#FF111827"
                          Padding="3,0"
                          LostFocus="InlineTextEditor_LostFocus"
+                         TextChanged="InlineTextEditor_TextChanged"
                          KeyDown="InlineTextEditor_KeyDown" />
               </Canvas>
               <Border x:Name="NavigationBar"
@@ -661,19 +667,22 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                   </Grid.ColumnDefinitions>
-                  <Button Click="RotateObjectButton_Click"
+                  <Button x:Name="RotateObjectButton"
+                          Click="RotateObjectButton_Click"
                           Content="↻ 15°"
                           AutomationProperties.Name="Rotate selected"
                           ToolTipService.ToolTip="Rotate selected"
                           Padding="4"
                           Style="{StaticResource TouchButtonStyle}" />
-                  <Button Grid.Column="1"
+                  <Button x:Name="SmallerObjectButton"
+                          Grid.Column="1"
                           Content="−"
                           Click="SmallerObjectButton_Click"
                           AutomationProperties.Name="Make selected smaller"
                           ToolTipService.ToolTip="Make selected smaller"
                           Style="{StaticResource TouchButtonStyle}" />
-                  <Button Grid.Column="2"
+                  <Button x:Name="LargerObjectButton"
+                          Grid.Column="2"
                           Content="+"
                           Click="LargerObjectButton_Click"
                           AutomationProperties.Name="Make selected larger"

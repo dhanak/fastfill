@@ -394,18 +394,48 @@ internal static class Program
             Math.Abs(resized.StrokeWidth - rectangle.StrokeWidth) < 0.001,
             "Annotation resize changed line thickness.");
 
+        var line = new ShapeAnnotation
+        {
+            Shape = ShapeKind.Arrow,
+            Start = new(0.2f, 0.3f),
+            End = new(0.6f, 0.5f),
+        };
+        var lineHandles = AnnotationGeometry.ResizeHandles(line);
+        Assert(
+            lineHandles.SequenceEqual([line.Start, line.End]),
+            "Line resize handles are not its endpoints.");
+        var resizedLine = (ShapeAnnotation)
+            AnnotationGeometry.ResizeFromCorner(
+                line,
+                0,
+                new NormalizedPoint(0.1f, 0.2f),
+                600,
+                800);
+        Assert(
+            resizedLine.Start == new NormalizedPoint(0.1f, 0.2f)
+                && resizedLine.End == line.End,
+            "Line endpoint resize moved the wrong point.");
+
         var text = new TextAnnotation
         {
-            Text = "Resize me",
+            Text = "Resize this complete text around several words",
             Bounds = new(0.2f, 0.2f, 0.2f, 0.05f),
             FontSize = 18,
+            MaximumWidth = 0.15f,
         };
         var resizedText = (TextAnnotation)AnnotationGeometry.ResizeByFactor(
             text,
             1.5f);
         Assert(
-            Math.Abs(resizedText.FontSize - text.FontSize) < 0.001,
-            "Text box resize changed font size.");
+            resizedText.Bounds == text.Bounds,
+            "Text box should not expose manual resize.");
+        var fittedText = PageRenderer.FitTextBounds(text, 600, 800);
+        Assert(
+            fittedText.Bounds.Width <= text.MaximumWidth + 0.001f,
+            $"Text width exceeded its limit: {fittedText.Bounds.Width}.");
+        Assert(
+            fittedText.Bounds.Height > text.Bounds.Height,
+            $"Text bounds did not grow: {fittedText.Bounds.Height}.");
 
         var center = new Vector2(0.5f, 0.5f);
         var rotation = AnnotationGeometry.PageRotation(
@@ -427,7 +457,7 @@ internal static class Program
         {
             Confidence = 0.8,
             AreaRatio = 0.2,
-            Sharpness = 200,
+            Sharpness = 50,
         };
         Assert(
             gate.Evaluate(stable, start) == AutoCaptureState.HoldSteady,

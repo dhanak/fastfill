@@ -142,6 +142,11 @@ public static class ProjectValidator
                     || text.FontFamily.Length > 100:
                     throw new InvalidDataException(
                         "Text annotation font family is invalid.");
+                case TextAnnotation text
+                    when !float.IsFinite(text.MaximumWidth)
+                    || text.MaximumWidth is <= 0 or > 1:
+                    throw new InvalidDataException(
+                        "Text annotation maximum width is invalid.");
             }
         }
     }

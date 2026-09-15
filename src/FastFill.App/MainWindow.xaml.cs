@@ -94,6 +94,7 @@ public sealed partial class MainWindow : Window
     private Guid? _draftAnnotationId;
     private Guid? _textEditAnnotationId;
     private NormalizedRect _textEditBounds;
+    private float _textEditMaximumWidth = 0.4f;
     private AffineTransform _textEditTransform = AffineTransform.Identity;
     private bool _closingTextEditor;
     private float _zoom = 1;
@@ -580,7 +581,8 @@ public sealed partial class MainWindow : Window
         FramePacket frame,
         DocumentDetection detection)
     {
-        if (detection.Corners is null)
+        var corners = detection.OverlayCorners;
+        if (corners is null)
         {
             DetectionPolygon.Points.Clear();
             return;
@@ -593,8 +595,9 @@ public sealed partial class MainWindow : Window
         var contentHeight = frame.Height * scale;
         var offsetX = (width - contentWidth) / 2;
         var offsetY = (height - contentHeight) / 2;
+        DetectionPolygon.Opacity = detection.Found ? 1 : 0.55;
         DetectionPolygon.Points.Clear();
-        foreach (var corner in detection.Corners.Points)
+        foreach (var corner in corners.Points)
         {
             var x = frame.Mirrored ? 1 - corner.X : corner.X;
             DetectionPolygon.Points.Add(new Point(
@@ -1100,6 +1103,11 @@ public sealed partial class MainWindow : Window
         object sender,
         PointerRoutedEventArgs args)
     {
+        if (InlineTextEditor.Visibility == Visibility.Visible)
+        {
+            CommitInlineTextEdit();
+        }
+
         if (HandleNavigationPressed(args))
         {
             return;
@@ -1216,6 +1224,7 @@ public sealed partial class MainWindow : Window
                     text.Id,
                     text.Text,
                     text.Bounds,
+                    text.MaximumWidth,
                     text.Transform);
                 return;
             }
@@ -1431,20 +1440,22 @@ public sealed partial class MainWindow : Window
         NormalizedPoint start,
         NormalizedPoint end)
     {
-        var bounds = NormalizedRect.FromPoints(start, end);
-        if (bounds.Width < 0.08f || bounds.Height < 0.04f)
-        {
-            bounds = new NormalizedRect(
-                start.X,
-                start.Y,
-                Math.Min(0.24f, 1 - start.X),
-                Math.Min(0.07f, 1 - start.Y));
-        }
+        var draggedWidth = Math.Abs(end.X - start.X);
+        var maximumWidth = PageDistancePixels(start, end) >= 8
+            ? Math.Clamp(draggedWidth, 0.16f, 0.6f)
+            : 0.4f;
+        maximumWidth = Math.Min(maximumWidth, Math.Max(0.05f, 1 - start.X));
+        var bounds = new NormalizedRect(
+            start.X,
+            start.Y,
+            maximumWidth,
+            0.04f);
 
         BeginInlineTextEdit(
             null,
             string.Empty,
             bounds,
+            maximumWidth,
             AffineTransform.Identity);
     }
 
@@ -1480,6 +1491,7 @@ public sealed partial class MainWindow : Window
             text.Id,
             text.Text,
             text.Bounds,
+            text.MaximumWidth,
             text.Transform);
         args.Handled = true;
     }
@@ -1488,14 +1500,17 @@ public sealed partial class MainWindow : Window
         Guid? annotationId,
         string text,
         NormalizedRect bounds,
+        float maximumWidth,
         AffineTransform transform)
     {
-        CancelInlineTextEdit();
+        CommitInlineTextEdit();
         _textEditAnnotationId = annotationId;
         _textEditBounds = bounds;
+        _textEditMaximumWidth = maximumWidth;
         _textEditTransform = transform;
         InlineTextEditor.Text = text;
         InlineTextEditor.Visibility = Visibility.Visible;
+        UpdateInlineTextBounds();
         PositionInlineTextEditor(EditorPageWidthPoints());
         EditorCanvas.Invalidate();
         DispatcherQueue.TryEnqueue(() =>
@@ -1539,13 +1554,51 @@ public sealed partial class MainWindow : Window
             ToWindowsColor(SelectedTextColor()));
     }
 
+    private void InlineTextEditor_TextChanged(
+        object sender,
+        TextChangedEventArgs args)
+    {
+        if (InlineTextEditor.Visibility != Visibility.Visible
+            || _closingTextEditor)
+        {
+            return;
+        }
+
+        UpdateInlineTextBounds();
+        PositionInlineTextEditor(EditorPageWidthPoints());
+    }
+
+    private void UpdateInlineTextBounds()
+    {
+        var layout = PageRenderer.FitTextBounds(
+            new TextAnnotation
+            {
+                Text = InlineTextEditor.Text,
+                Bounds = _textEditBounds,
+                FontFamily = SelectedFontFamily(),
+                FontSize = SelectedFontSize(),
+                MaximumWidth = _textEditMaximumWidth,
+            },
+            EditorPageWidthPoints(),
+            EditorPageHeightPoints());
+        _textEditBounds = layout.Bounds;
+    }
+
     private void InlineTextEditor_LostFocus(
         object sender,
         RoutedEventArgs args)
     {
         if (!_closingTextEditor)
         {
-            CommitInlineTextEdit();
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (InlineTextEditor.Visibility == Visibility.Visible
+                    && InlineTextEditor.FocusState
+                        == FocusState.Unfocused)
+                {
+                    CommitInlineTextEdit();
+                }
+            });
         }
     }
 
@@ -1557,8 +1610,11 @@ public sealed partial class MainWindow : Window
             && !IsKeyDown(VirtualKey.Shift))
         {
             args.Handled = true;
-            CommitInlineTextEdit();
-            EditorCanvas.Focus(FocusState.Programmatic);
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                CommitInlineTextEdit();
+                EditorCanvas.Focus(FocusState.Programmatic);
+            });
             return;
         }
 
@@ -1597,25 +1653,34 @@ public sealed partial class MainWindow : Window
                 is TextAnnotation existing)
         {
             annotationId = existingId;
-            ReplaceAnnotation(existingId, annotation => existing with
-            {
-                Text = text,
-                FontFamily = fontFamily,
-                FontSize = fontSize,
-            });
+            var updated = PageRenderer.FitTextBounds(
+                existing with
+                {
+                    Text = text,
+                    FontFamily = fontFamily,
+                    FontSize = fontSize,
+                    MaximumWidth = _textEditMaximumWidth,
+                },
+                EditorPageWidthPoints(),
+                EditorPageHeightPoints());
+            ReplaceAnnotation(existingId, _ => updated);
         }
         else
         {
             var settings = _toolSettings[ToolMode.Text];
-            var annotation = new TextAnnotation
-            {
-                ColorArgb = settings.Color,
-                StrokeWidth = 3,
-                Text = text,
-                Bounds = _textEditBounds,
-                FontFamily = fontFamily,
-                FontSize = fontSize,
-            };
+            var annotation = PageRenderer.FitTextBounds(
+                new TextAnnotation
+                {
+                    ColorArgb = settings.Color,
+                    StrokeWidth = 3,
+                    Text = text,
+                    Bounds = _textEditBounds,
+                    FontFamily = fontFamily,
+                    FontSize = fontSize,
+                    MaximumWidth = _textEditMaximumWidth,
+                },
+                EditorPageWidthPoints(),
+                EditorPageHeightPoints());
             CurrentPage.Annotations.Add(annotation);
             annotationId = annotation.Id;
         }
@@ -1658,10 +1723,15 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
-        var corners = AnnotationGeometry.BoundsCorners(selected)
+        var handles = AnnotationGeometry.ResizeHandles(selected)
             .Select(selected.Transform.Apply)
             .ToArray();
-        var closest = corners
+        if (handles.Length == 0)
+        {
+            return false;
+        }
+
+        var closest = handles
             .Select((corner, index) => new
             {
                 Index = index,
@@ -2093,11 +2163,16 @@ public sealed partial class MainWindow : Window
         if (InlineTextEditor.Visibility == Visibility.Visible)
         {
             InlineTextEditor.FontFamily = new FontFamily(family);
+            UpdateInlineTextBounds();
+            PositionInlineTextEditor(EditorPageWidthPoints());
             return;
         }
 
         ChangeSelected(annotation => annotation is TextAnnotation text
-            ? text with { FontFamily = family }
+            ? PageRenderer.FitTextBounds(
+                text with { FontFamily = family },
+                EditorPageWidthPoints(),
+                EditorPageHeightPoints())
             : annotation);
     }
 
@@ -2117,12 +2192,16 @@ public sealed partial class MainWindow : Window
         };
         if (InlineTextEditor.Visibility == Visibility.Visible)
         {
+            UpdateInlineTextBounds();
             PositionInlineTextEditor(EditorPageWidthPoints());
             return;
         }
 
         ChangeSelected(annotation => annotation is TextAnnotation text
-            ? text with { FontSize = size }
+            ? PageRenderer.FitTextBounds(
+                text with { FontSize = size },
+                EditorPageWidthPoints(),
+                EditorPageHeightPoints())
             : annotation);
     }
 
@@ -2180,10 +2259,11 @@ public sealed partial class MainWindow : Window
         NavigationBar.Visibility = _tool == ToolMode.Navigate
             ? Visibility.Visible
             : Visibility.Collapsed;
-        foreach (var button in TransformPanel.Children.OfType<Button>())
-        {
-            button.IsEnabled = hasSelection;
-        }
+        RotateObjectButton.IsEnabled = hasSelection;
+        var hasResizableSelection = selections.Any(
+            annotation => annotation is not TextAnnotation);
+        SmallerObjectButton.IsEnabled = hasResizableSelection;
+        LargerObjectButton.IsEnabled = hasResizableSelection;
 
         DeleteObjectButton.IsEnabled = hasSelection;
         DeleteAllObjectsButton.IsEnabled = _project.Pages.Count > 0

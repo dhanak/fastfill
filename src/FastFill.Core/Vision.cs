@@ -9,6 +9,8 @@ public sealed record DocumentDetection(
     double Sharpness)
 {
     public bool Found => Corners is not null;
+    public CropQuad? CandidateCorners { get; init; }
+    public CropQuad? OverlayCorners => Corners ?? CandidateCorners;
 }
 
 public static class DocumentDetector
@@ -174,7 +176,7 @@ public static class DocumentDetector
         Cv2.Laplacian(gray, laplacian, MatType.CV_64F);
         Cv2.MeanStdDev(laplacian, out _, out var deviation);
         var sharpness = deviation.Val0 * deviation.Val0;
-        if (best is null || bestScore < MinimumDetectionConfidence)
+        if (best is null)
         {
             return new(null, 0, 0, sharpness);
         }
@@ -185,6 +187,18 @@ public static class DocumentDetector
             Normalize(ordered[1], scaled.Size()),
             Normalize(ordered[2], scaled.Size()),
             Normalize(ordered[3], scaled.Size()));
+        if (bestScore < MinimumDetectionConfidence)
+        {
+            return new(
+                null,
+                Math.Clamp(bestScore, 0, 1),
+                bestAreaRatio,
+                sharpness)
+            {
+                CandidateCorners = quad,
+            };
+        }
+
         return new(
             quad,
             Math.Clamp(bestScore, 0, 1),
@@ -717,7 +731,7 @@ public sealed class AutoCaptureGate
     public AutoCaptureState Evaluate(
         DocumentDetection detection,
         DateTimeOffset timestamp,
-        double minimumSharpness = 80)
+        double minimumSharpness = 45)
     {
         if (!detection.Found
             || detection.Confidence < 0.7
@@ -736,7 +750,7 @@ public sealed class AutoCaptureGate
 
         var corners = detection.Corners!;
         if (_lastCorners is null
-            || corners.MaximumCornerDistance(_lastCorners) > 0.025f)
+            || corners.MaximumCornerDistance(_lastCorners) > 0.04f)
         {
             _stableSince = timestamp;
             _lastCorners = corners;
