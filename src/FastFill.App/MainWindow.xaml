@@ -532,7 +532,11 @@
                                 ToolTipService.ToolTip="Box"
                                 AutomationProperties.Name="Box"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <TextBlock Text="□" FontSize="24" />
+                    <Rectangle Width="22"
+                               Height="18"
+                               StrokeThickness="2"
+                               Stroke=
+                                 "{ThemeResource TextFillColorPrimaryBrush}" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="2"
                                 Grid.Column="2"
