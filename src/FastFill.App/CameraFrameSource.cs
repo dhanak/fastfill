@@ -8,6 +8,7 @@ using Windows.Media.Capture;
 using Windows.Media.Capture.Frames;
 using Windows.Media.MediaProperties;
 using Windows.Storage.Streams;
+using WinRT;
 
 namespace FastFill.App;
 
@@ -283,7 +284,7 @@ internal sealed class CameraFrameSource : IFrameSource
     {
         using var buffer = bitmap.LockBuffer(BitmapBufferAccessMode.Read);
         using var reference = buffer.CreateReference();
-        var access = (IMemoryBufferByteAccess)reference;
+        var access = reference.As<IMemoryBufferByteAccess>();
         access.GetBuffer(out var data, out _);
         var description = buffer.GetPlaneDescription(0);
         var stride = checked(bitmap.PixelWidth * 4);
