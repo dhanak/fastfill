@@ -1611,8 +1611,8 @@ public sealed partial class MainWindow : Window
             ? FontWeights.Bold
             : FontWeights.Normal;
         InlineTextEditor.FontStyle = ItalicTextToggle.IsChecked == true
-            ? FontStyle.Italic
-            : FontStyle.Normal;
+            ? Windows.UI.Text.FontStyle.Italic
+            : Windows.UI.Text.FontStyle.Normal;
         InlineTextEditor.Foreground = new SolidColorBrush(
             ToWindowsColor(SelectedTextColor()));
     }
