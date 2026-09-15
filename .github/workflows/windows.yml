@@ -42,6 +42,88 @@ jobs:
           if (-not (Test-Path $executable)) {
             throw "Portable executable was not created."
           }
+      - name: Sign portable app
+        if: >-
+          github.ref == 'refs/heads/master' &&
+          github.event_name != 'pull_request'
+        shell: pwsh
+        env:
+          CERTIFICATE_BASE64: >-
+            ${{ secrets.FASTFILL_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: >-
+            ${{ secrets.FASTFILL_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:CERTIFICATE_BASE64) {
+            throw "FASTFILL_CERTIFICATE_BASE64 is not configured."
+          }
+          if (-not $env:CERTIFICATE_PASSWORD) {
+            throw "FASTFILL_CERTIFICATE_PASSWORD is not configured."
+          }
+
+          $output = Join-Path $env:RUNNER_TEMP "FastFill"
+          $executable = Join-Path $output "FastFill.exe"
+          $pfxPath = Join-Path $env:RUNNER_TEMP "FastFill.pfx"
+          $cerPath = Join-Path $output "FastFill.cer"
+          $pfxBytes = [Convert]::FromBase64String(
+            $env:CERTIFICATE_BASE64)
+          [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
+
+          $certificate = $null
+          $trustedCertificate = $null
+          try {
+            $certType =
+              [Security.Cryptography.X509Certificates.X509Certificate2]
+            $keyFlags =
+              [Security.Cryptography.X509Certificates.X509KeyStorageFlags]
+            $certificate = $certType::new(
+              $pfxPath,
+              $env:CERTIFICATE_PASSWORD,
+              $keyFlags::EphemeralKeySet)
+            $contentType =
+              [Security.Cryptography.X509Certificates.X509ContentType]
+            $cerBytes = $certificate.Export($contentType::Cert)
+            [IO.File]::WriteAllBytes($cerPath, $cerBytes)
+
+            $sdkBin = Join-Path `
+              ${env:ProgramFiles(x86)} "Windows Kits\10\bin"
+            $signTool = Get-ChildItem `
+              (Join-Path $sdkBin "*\x64\signtool.exe") |
+              Sort-Object { [version]$_.Directory.Parent.Name } |
+              Select-Object -Last 1
+            if (-not $signTool) {
+              throw "SignTool was not found."
+            }
+
+            & $signTool.FullName sign `
+              /fd SHA256 `
+              /f $pfxPath `
+              /p $env:CERTIFICATE_PASSWORD `
+              /tr http://timestamp.digicert.com `
+              /td SHA256 `
+              $executable
+            if ($LASTEXITCODE -ne 0) {
+              throw "Authenticode signing failed."
+            }
+
+            $trustedCertificate = Import-Certificate `
+              -FilePath $cerPath `
+              -CertStoreLocation Cert:\CurrentUser\Root
+            & $signTool.FullName verify /pa /v $executable
+            if ($LASTEXITCODE -ne 0) {
+              throw "Authenticode verification failed."
+            }
+          }
+          finally {
+            if ($trustedCertificate) {
+              $trustedPath = "Cert:\CurrentUser\Root\" +
+                $trustedCertificate.Thumbprint
+              Remove-Item $trustedPath -Force
+            }
+            if ($certificate) {
+              $certificate.Dispose()
+            }
+            Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
+          }
       - name: Upload portable app
         uses: actions/upload-artifact@v7
         with:

@@ -67,12 +67,22 @@ review, correction, annotation, project, and export paths as camera capture.
 ## Portable Windows build
 
 The Windows workflow publishes FastFill as an unpackaged, self-contained x64
-folder. It needs no installation, certificate, developer license, .NET
-runtime, or Windows App SDK runtime. Extract the ZIP anywhere and run
+folder. It needs no application installation, developer license, .NET runtime,
+or Windows App SDK runtime. Extract the ZIP anywhere and run
 `FastFill\FastFill.exe`. Keep the other extracted files beside the executable.
 
-Windows SmartScreen may warn because the development executable is unsigned.
-Use **More info**, then **Run anyway**, only when it came from this repository.
+Master builds are Authenticode-signed with FastFill's persistent self-signed
+development certificate. Trust it once on each test account:
+
+1. Open `FastFill\FastFill.cer` and select **Install Certificate**.
+2. Select **Current User**, then place it in **Trusted Root Certification
+   Authorities**.
+3. Finish the import and run `FastFill.exe`.
+
+Only trust the certificate downloaded from this repository. Self-signing does
+not create public SmartScreen reputation, so Windows may still show an
+unrecognized-app warning for a downloaded build. If it does, use **More info**,
+then **Run anyway**.
 
 Successful `master` builds replace the public `dev` prerelease. Download the
 current portable ZIP without signing in:
