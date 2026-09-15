@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
 using FastFill.Core;
@@ -99,6 +100,7 @@ internal static class Program
                 is ShapeAnnotation { Shape: ShapeKind.Cross },
             "X mark hit test failed.");
         CheckUndo(project);
+        CheckViewportNavigation();
 
         var preview = PageRenderer.RenderPng(processed, page);
         var previewPath = Path.Combine(
@@ -313,6 +315,28 @@ internal static class Program
             history.TryRedo(undone, out var redone)
             && redone.Title == "Changed",
             "Redo failed.");
+    }
+
+    private static void CheckViewportNavigation()
+    {
+        var pan = ViewportNavigation.PinchPan(
+            new Vector2(1000, 800),
+            new Vector2(500, 400),
+            new Vector2(550, 430),
+            Vector2.Zero,
+            1,
+            2);
+        Assert(
+            Vector2.Distance(pan, new Vector2(50, 30)) < 0.01f,
+            "Pinch focal-point pan changed.");
+        var clamped = ViewportNavigation.ClampPan(
+            new Vector2(200, -500),
+            new Vector2(1000, 800),
+            new Vector2(600, 800),
+            2);
+        Assert(
+            Vector2.Distance(clamped, new Vector2(100, -400)) < 0.01f,
+            "Viewport pan bounds changed.");
     }
 
     private static async Task CheckStorageAndPdfAsync(

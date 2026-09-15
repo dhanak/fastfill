@@ -75,6 +75,42 @@ public sealed class UndoBuffer<T>
     }
 }
 
+public static class ViewportNavigation
+{
+    public static Vector2 PinchPan(
+        Vector2 viewportSize,
+        Vector2 startCenter,
+        Vector2 currentCenter,
+        Vector2 startPan,
+        float startZoom,
+        float currentZoom)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(startZoom);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(currentZoom);
+        var viewportCenter = viewportSize / 2;
+        var focus = (startCenter - viewportCenter - startPan) / startZoom;
+        return currentCenter - viewportCenter - focus * currentZoom;
+    }
+
+    public static Vector2 ClampPan(
+        Vector2 pan,
+        Vector2 viewportSize,
+        Vector2 fullViewSize,
+        float zoom)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(zoom);
+        if (zoom <= 1)
+        {
+            return Vector2.Zero;
+        }
+
+        var maximum = Vector2.Max(
+            Vector2.Zero,
+            (fullViewSize * zoom - viewportSize) / 2);
+        return Vector2.Clamp(pan, -maximum, maximum);
+    }
+}
+
 public static class AnnotationHitTester
 {
     public static Annotation? HitTest(

@@ -380,6 +380,7 @@
                                  PointerPressed="EditorCanvas_PointerPressed"
                                  PointerMoved="EditorCanvas_PointerMoved"
                                  PointerReleased="EditorCanvas_PointerReleased"
+                                 PointerCanceled="EditorCanvas_PointerCanceled"
                                  DoubleTapped="EditorCanvas_DoubleTapped" />
               <Canvas x:Name="EditorOverlay">
                 <TextBox x:Name="InlineTextEditor"
@@ -395,6 +396,37 @@
                          LostFocus="InlineTextEditor_LostFocus"
                          KeyDown="InlineTextEditor_KeyDown" />
               </Canvas>
+              <Border HorizontalAlignment="Center"
+                      VerticalAlignment="Bottom"
+                      Margin="16"
+                      Padding="4"
+                      CornerRadius="10"
+                      Background=
+                        "{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                  <Button Content="−"
+                          AutomationProperties.Name="Zoom out"
+                          ToolTipService.ToolTip="Zoom out"
+                          Click="ZoomOutButton_Click"
+                          Style="{StaticResource TouchButtonStyle}" />
+                  <Button Content="+"
+                          AutomationProperties.Name="Zoom in"
+                          ToolTipService.ToolTip="Zoom in"
+                          Click="ZoomInButton_Click"
+                          Style="{StaticResource TouchButtonStyle}" />
+                  <Button Content="1:1"
+                          AutomationProperties.Name="Actual size"
+                          ToolTipService.ToolTip="Actual size"
+                          Click="ActualSizeButton_Click"
+                          Style="{StaticResource TouchButtonStyle}" />
+                  <Button AutomationProperties.Name="Full view"
+                          ToolTipService.ToolTip="Full view"
+                          Click="FitButton_Click"
+                          Style="{StaticResource TouchButtonStyle}">
+                    <FontIcon Glyph="&#xE9A6;" />
+                  </Button>
+                </StackPanel>
+              </Border>
             </Grid>
           </Border>
 
@@ -627,27 +659,6 @@
                         IsEnabled="False"
                         Click="DeleteObjectButton_Click"
                         Style="{StaticResource RailButtonStyle}" />
-                <TextBlock Text="Zoom" Margin="4,8,4,0" />
-                <Grid>
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                  </Grid.ColumnDefinitions>
-                  <Button Content="−"
-                          AutomationProperties.Name="Zoom out"
-                          Click="ZoomOutButton_Click"
-                          Style="{StaticResource TouchButtonStyle}" />
-                  <Button Grid.Column="1"
-                          Content="Fit"
-                          Click="FitButton_Click"
-                          Style="{StaticResource TouchButtonStyle}" />
-                  <Button Grid.Column="2"
-                          Content="+"
-                          AutomationProperties.Name="Zoom in"
-                          Click="ZoomInButton_Click"
-                          Style="{StaticResource TouchButtonStyle}" />
-                </Grid>
               </StackPanel>
             </ScrollViewer>
           </Border>

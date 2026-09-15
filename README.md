@@ -16,7 +16,7 @@ corrected pages and annotations at 300 DPI.
 - Inline editable text, pen, highlighter, lines, arrows, boxes, ovals,
   checkmarks, and X marks.
 - Selection, drag move/resize, rotate, recolor, fill, thickness, delete,
-  undo, redo, and drag page reorder.
+  undo, redo, drag page reorder, pinch zoom, and two-finger pan.
 - Five-page projects, autosave recovery, editable `.docscan` files.
 - Flattened PDF, file picker export to local/USB storage, Windows share sheet.
 

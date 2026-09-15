@@ -82,13 +82,21 @@ public sealed partial class MainWindow : Window
     private float _resizeStartDistance;
     private bool _resizingSelection;
     private bool _pointerMoved;
-    private bool _interactionCheckpointed;
+    private FastFillProject? _interactionSnapshot;
     private Guid? _draftAnnotationId;
     private Guid? _textEditAnnotationId;
     private NormalizedRect _textEditBounds;
     private AffineTransform _textEditTransform = AffineTransform.Identity;
     private bool _closingTextEditor;
     private float _zoom = 1;
+    private Vector2 _pan;
+    private Vector2 _editorViewportSize;
+    private readonly Dictionary<uint, Point> _touchPoints = [];
+    private bool _touchGesture;
+    private double _gestureStartDistance;
+    private Point _gestureStartCenter;
+    private float _gestureStartZoom;
+    private Vector2 _gestureStartPan;
     private bool _dirty;
     private bool _updatingPageList;
     private bool _reorderingPages;
@@ -907,12 +915,21 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _editorImageRect = FitRect(
+        _editorViewportSize = new Vector2(
+            args.Info.Width,
+            args.Info.Height);
+        ClampPan();
+        var imageRect = FitRect(
             args.Info.Width,
             args.Info.Height,
             _editorBackground.Width,
             _editorBackground.Height,
             _zoom);
+        _editorImageRect = new SKRect(
+            imageRect.Left + _pan.X,
+            imageRect.Top + _pan.Y,
+            imageRect.Right + _pan.X,
+            imageRect.Bottom + _pan.Y);
         var widthPoints = _processedPage is null
             ? 612
             : _processedPage.Width / PdfExporter.DotsPerInch * 72;
@@ -937,6 +954,11 @@ public sealed partial class MainWindow : Window
         object sender,
         PointerRoutedEventArgs args)
     {
+        if (HandleTouchPressed(args))
+        {
+            return;
+        }
+
         if (!TryGetPagePoint(args, out var point))
         {
             return;
@@ -944,7 +966,7 @@ public sealed partial class MainWindow : Window
 
         _pointerStart = point;
         _pointerMoved = false;
-        _interactionCheckpointed = false;
+        _interactionSnapshot = null;
         _resizingSelection = false;
         if (_tool == ToolMode.Select)
         {
@@ -989,7 +1011,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _history.Checkpoint(_project);
+        CheckpointInteraction();
         var settings = _toolSettings[_tool];
         Annotation annotation = _tool switch
         {
@@ -1024,6 +1046,11 @@ public sealed partial class MainWindow : Window
         object sender,
         PointerRoutedEventArgs args)
     {
+        if (HandleTouchMoved(args))
+        {
+            return;
+        }
+
         if (_pointerStart is null
             || !TryGetPagePoint(args, out var point))
         {
@@ -1097,6 +1124,11 @@ public sealed partial class MainWindow : Window
         object sender,
         PointerRoutedEventArgs args)
     {
+        if (HandleTouchReleased(args))
+        {
+            return;
+        }
+
         if (_pointerStart is null)
         {
             return;
@@ -1120,7 +1152,12 @@ public sealed partial class MainWindow : Window
         _resizingSelection = false;
         if (changed)
         {
+            CommitInteractionHistory();
             MarkChanged();
+        }
+        else
+        {
+            _interactionSnapshot = null;
         }
 
         ApplyToolOptions();
@@ -1359,13 +1396,153 @@ public sealed partial class MainWindow : Window
 
     private void CheckpointInteraction()
     {
-        if (_interactionCheckpointed)
+        if (_interactionSnapshot is not null)
         {
             return;
         }
 
-        _history.Checkpoint(_project);
-        _interactionCheckpointed = true;
+        _interactionSnapshot = ProjectJson.Clone(_project);
+    }
+
+    private void CommitInteractionHistory()
+    {
+        if (_interactionSnapshot is null)
+        {
+            return;
+        }
+
+        _history.Checkpoint(_interactionSnapshot);
+        _interactionSnapshot = null;
+    }
+
+    private void CancelEditorInteraction()
+    {
+        if (_interactionSnapshot is not null)
+        {
+            _project = _interactionSnapshot;
+            _interactionSnapshot = null;
+        }
+
+        _pointerStart = null;
+        _draftAnnotationId = null;
+        _dragStartTransform = null;
+        _resizeStartTransform = null;
+        _resizingSelection = false;
+        _pointerMoved = false;
+        if (_selectedAnnotationId is Guid id
+            && CurrentPage.Annotations.All(
+                annotation => annotation.Id != id))
+        {
+            _selectedAnnotationId = null;
+        }
+
+        ApplyToolOptions();
+        EditorCanvas.Invalidate();
+    }
+
+    private bool HandleTouchPressed(PointerRoutedEventArgs args)
+    {
+        if (args.Pointer.PointerDeviceType != PointerDeviceType.Touch)
+        {
+            return false;
+        }
+
+        _touchPoints[args.Pointer.PointerId] =
+            args.GetCurrentPoint(EditorCanvas).Position;
+        if (_touchPoints.Count < 2)
+        {
+            return _touchGesture;
+        }
+
+        if (!_touchGesture)
+        {
+            CancelEditorInteraction();
+            var points = _touchPoints.Values.Take(2).ToArray();
+            _gestureStartDistance = PointDistance(points[0], points[1]);
+            _gestureStartCenter = PointMidpoint(points[0], points[1]);
+            _gestureStartZoom = _zoom;
+            _gestureStartPan = _pan;
+            _touchGesture = true;
+        }
+
+        EditorCanvas.CapturePointer(args.Pointer);
+        args.Handled = true;
+        return true;
+    }
+
+    private bool HandleTouchMoved(PointerRoutedEventArgs args)
+    {
+        if (args.Pointer.PointerDeviceType != PointerDeviceType.Touch)
+        {
+            return false;
+        }
+
+        _touchPoints[args.Pointer.PointerId] =
+            args.GetCurrentPoint(EditorCanvas).Position;
+        if (!_touchGesture)
+        {
+            return false;
+        }
+
+        if (_touchPoints.Count >= 2)
+        {
+            var points = _touchPoints.Values.Take(2).ToArray();
+            var distance = PointDistance(points[0], points[1]);
+            var scale = distance
+                / Math.Max(_gestureStartDistance, 1);
+            var zoom = Math.Clamp(
+                _gestureStartZoom * (float)scale,
+                1,
+                8);
+            var center = PointMidpoint(points[0], points[1]);
+            _zoom = zoom;
+            _pan = ViewportNavigation.PinchPan(
+                _editorViewportSize,
+                ToVector(_gestureStartCenter),
+                ToVector(center),
+                _gestureStartPan,
+                _gestureStartZoom,
+                _zoom);
+            ClampPan();
+            EditorCanvas.Invalidate();
+        }
+
+        args.Handled = true;
+        return true;
+    }
+
+    private bool HandleTouchReleased(PointerRoutedEventArgs args)
+    {
+        if (args.Pointer.PointerDeviceType != PointerDeviceType.Touch)
+        {
+            return false;
+        }
+
+        var wasGesture = _touchGesture;
+        _touchPoints.Remove(args.Pointer.PointerId);
+        if (_touchPoints.Count == 0)
+        {
+            _touchGesture = false;
+        }
+
+        if (wasGesture)
+        {
+            EditorCanvas.ReleasePointerCapture(args.Pointer);
+            args.Handled = true;
+        }
+
+        return wasGesture;
+    }
+
+    private void EditorCanvas_PointerCanceled(
+        object sender,
+        PointerRoutedEventArgs args)
+    {
+        _touchPoints.Clear();
+        _touchGesture = false;
+        CancelEditorInteraction();
+        EditorCanvas.ReleasePointerCapture(args.Pointer);
+        args.Handled = true;
     }
 
     private void CompleteDraftAnnotation()
@@ -1743,21 +1920,56 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs args)
     {
-        _zoom = Math.Max(0.5f, _zoom / 1.25f);
-        EditorCanvas.Invalidate();
+        SetEditorZoom(_zoom / 1.25f);
     }
 
     private void FitButton_Click(object sender, RoutedEventArgs args)
     {
-        _zoom = 1;
-        EditorCanvas.Invalidate();
+        SetEditorZoom(1, resetPan: true);
     }
 
     private void ZoomInButton_Click(
         object sender,
         RoutedEventArgs args)
     {
-        _zoom = Math.Min(4, _zoom * 1.25f);
+        SetEditorZoom(_zoom * 1.25f);
+    }
+
+    private void ActualSizeButton_Click(
+        object sender,
+        RoutedEventArgs args)
+    {
+        if (_editorBackground is null
+            || _editorViewportSize.X <= 0
+            || _editorViewportSize.Y <= 0)
+        {
+            return;
+        }
+
+        var fullView = FitRect(
+            _editorViewportSize.X,
+            _editorViewportSize.Y,
+            _editorBackground.Width,
+            _editorBackground.Height,
+            1);
+        var fitScale = fullView.Width / _editorBackground.Width;
+        var rasterScale = (float)Math.Max(
+            XamlRoot.RasterizationScale,
+            0.001);
+        SetEditorZoom(
+            1 / Math.Max(fitScale * rasterScale, 0.001f),
+            resetPan: true);
+    }
+
+    private void SetEditorZoom(float zoom, bool resetPan = false)
+    {
+        _zoom = Math.Clamp(zoom, 1, 8);
+        if (resetPan)
+        {
+            _pan = Vector2.Zero;
+        }
+
+        ClampPan();
         EditorCanvas.Invalidate();
     }
 
@@ -2329,6 +2541,45 @@ public sealed partial class MainWindow : Window
 
     private static float Distance(SKPoint first, SKPoint second) =>
         SKPoint.Distance(first, second);
+
+    private void ClampPan()
+    {
+        if (_editorBackground is null
+            || _editorViewportSize.X <= 0
+            || _editorViewportSize.Y <= 0
+            || _zoom <= 1)
+        {
+            _pan = Vector2.Zero;
+            return;
+        }
+
+        var fullView = FitRect(
+            _editorViewportSize.X,
+            _editorViewportSize.Y,
+            _editorBackground.Width,
+            _editorBackground.Height,
+            1);
+        _pan = ViewportNavigation.ClampPan(
+            _pan,
+            _editorViewportSize,
+            new Vector2(fullView.Width, fullView.Height),
+            _zoom);
+    }
+
+    private static double PointDistance(Point first, Point second)
+    {
+        var x = first.X - second.X;
+        var y = first.Y - second.Y;
+        return Math.Sqrt(x * x + y * y);
+    }
+
+    private static Point PointMidpoint(Point first, Point second) => new(
+        (first.X + second.X) / 2,
+        (first.Y + second.Y) / 2);
+
+    private static Vector2 ToVector(Point point) => new(
+        (float)point.X,
+        (float)point.Y);
 
     private static SKRect FitRect(
         float availableWidth,
