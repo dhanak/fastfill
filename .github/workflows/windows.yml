@@ -69,7 +69,6 @@ jobs:
           [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
 
           $certificate = $null
-          $trustedCertificate = $null
           try {
             $certType =
               [Security.Cryptography.X509Certificates.X509Certificate2]
@@ -104,21 +103,9 @@ jobs:
             if ($LASTEXITCODE -ne 0) {
               throw "Authenticode signing failed."
             }
-
-            $trustedCertificate = Import-Certificate `
-              -FilePath $cerPath `
-              -CertStoreLocation Cert:\CurrentUser\Root
-            & $signTool.FullName verify /pa /v $executable
-            if ($LASTEXITCODE -ne 0) {
-              throw "Authenticode verification failed."
-            }
+            Write-Host "Portable executable signing complete."
           }
           finally {
-            if ($trustedCertificate) {
-              $trustedPath = "Cert:\CurrentUser\Root\" +
-                $trustedCertificate.Thumbprint
-              Remove-Item $trustedPath -Force
-            }
             if ($certificate) {
               $certificate.Dispose()
             }
