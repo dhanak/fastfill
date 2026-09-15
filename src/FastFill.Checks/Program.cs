@@ -1,6 +1,5 @@
 using System.IO.Compression;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using System.Text;
 using FastFill.Core;
 using OpenCvSharp;
@@ -25,22 +24,6 @@ internal static class Program
                 return 0;
             }
 
-            if (args.FirstOrDefault() == "--detect")
-            {
-                if (args.Length < 2)
-                {
-                    throw new ArgumentException(
-                        "--detect requires at least one image path.");
-                }
-
-                foreach (var path in args.Skip(1))
-                {
-                    PrintDetection(path);
-                }
-
-                return 0;
-            }
-
             var updateGoldens = args.Contains(
                 "--update-goldens",
                 StringComparer.Ordinal);
@@ -59,17 +42,9 @@ internal static class Program
     private static async Task RunAsync(bool updateGoldens)
     {
         var source = CreateSyntheticDocument();
-        var detection = DocumentDetector.DetectEncoded(source);
-        Assert(detection.Found, "Synthetic document was not detected.");
-        Assert(detection.Confidence >= 0.8, "Detection confidence is low.");
-        Assert(detection.AreaRatio >= 0.45, "Detected document is too small.");
-        Assert(
-            detection.Corners!.MaximumCornerDistance(ExpectedCrop()) < 0.04,
-            "Detected corners are outside tolerance.");
-
         var processed = ImageProcessor.Process(
             source,
-            detection.Corners,
+            ExpectedCrop(),
             0,
             new PageFilterSettings
             {
@@ -78,7 +53,6 @@ internal static class Program
             });
         Assert(processed.Width > 600, "Perspective output is too narrow.");
         Assert(processed.Height > 400, "Perspective output is too short.");
-        CheckAutoCapture(detection);
 
         var project = CreateProject();
         var page = project.Pages[0];
@@ -111,25 +85,6 @@ internal static class Program
         CheckGolden(previewPath, "annotated-page.png", updateGoldens);
         await CheckStorageAndPdfAsync(project, source);
         await CheckUnsafeArchiveAsync();
-        await CheckReplayAsync(source);
-    }
-
-    private static void PrintDetection(string path)
-    {
-        var detection = DocumentDetector.DetectEncoded(
-            File.ReadAllBytes(path));
-        Console.WriteLine(
-            $"{Path.GetFileName(path)}: found={detection.Found}, "
-            + $"confidence={detection.Confidence:F3}, "
-            + $"area={detection.AreaRatio:F3}, "
-            + $"sharpness={detection.Sharpness:F1}");
-        if (detection.Corners is not null)
-        {
-            Console.WriteLine(string.Join(
-                ", ",
-                detection.Corners.Points.Select(
-                    point => $"({point.X:F3}, {point.Y:F3})")));
-        }
     }
 
     private static byte[] CreateSyntheticDocument()
@@ -266,42 +221,6 @@ internal static class Program
         };
     }
 
-    private static void CheckAutoCapture(DocumentDetection detection)
-    {
-        var gate = new AutoCaptureGate();
-        var start = DateTimeOffset.UtcNow;
-        var stable = detection with
-        {
-            Confidence = 0.65,
-            AreaRatio = 0.2,
-            Sharpness = 200,
-        };
-        Assert(
-            gate.Evaluate(stable, start) == AutoCaptureState.HoldSteady,
-            "Auto-capture did not begin stability wait.");
-        Assert(
-            gate.Evaluate(stable, start.AddMilliseconds(1500))
-                == AutoCaptureState.HoldSteady,
-            "Auto-capture countdown ended early.");
-        Assert(
-            Math.Abs(gate.Progress - 0.5) < 0.01,
-            "Auto-capture countdown progress is incorrect.");
-        Assert(
-            gate.Evaluate(stable, start.AddMilliseconds(3100))
-                == AutoCaptureState.Ready,
-            "Auto-capture did not become ready.");
-        Assert(
-            gate.Evaluate(stable, start.AddSeconds(2))
-                == AutoCaptureState.Captured,
-            "Auto-capture cooldown failed.");
-        Assert(
-            gate.Evaluate(
-                stable with { Sharpness = 10 },
-                start.AddSeconds(3)) == AutoCaptureState.NoDocument,
-            "Blur rejection failed.");
-        Assert(gate.Progress == 0, "Auto-capture countdown did not reset.");
-    }
-
     private static void CheckUndo(FastFillProject project)
     {
         var history = new UndoBuffer<FastFillProject>(ProjectJson.Clone);
@@ -404,35 +323,6 @@ internal static class Program
         }
 
         Assert(rejected, "Unsafe ZIP path was accepted.");
-    }
-
-    private static async Task CheckReplayAsync(byte[] source)
-    {
-        using var decoded = Cv2.ImDecode(source, ImreadModes.Color);
-        using var bgra = new Mat();
-        Cv2.CvtColor(decoded, bgra, ColorConversionCodes.BGR2BGRA);
-        bgra.GetArray(out Vec4b[] pixels);
-        var bytes = MemoryMarshal.AsBytes(pixels.AsSpan()).ToArray();
-        var frame = new FramePacket(
-            DateTimeOffset.UtcNow,
-            bytes,
-            bgra.Width,
-            bgra.Height,
-            bgra.Width * 4,
-            0,
-            false,
-            CameraPosition.Back);
-        await using var replay = new ReplayFrameSource(
-            [frame],
-            TimeSpan.FromMilliseconds(10));
-        var arrived = new TaskCompletionSource(
-            TaskCreationOptions.RunContinuationsAsynchronously);
-        replay.FrameArrived += _ => arrived.TrySetResult();
-        await replay.StartAsync();
-        await arrived.Task.WaitAsync(TimeSpan.FromSeconds(1));
-        var captured = await replay.CaptureAsync();
-        Assert(captured.Width == 1000, "Replay capture dimensions changed.");
-        await replay.StopAsync();
     }
 
     private static void CheckGolden(

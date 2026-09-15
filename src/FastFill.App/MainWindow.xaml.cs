@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.Windows.Media.Capture;
 using SkiaSharp;
 using SkiaSharp.Views.Windows;
 using Windows.ApplicationModel.DataTransfer;
@@ -44,19 +45,13 @@ public sealed partial class MainWindow : Window
 
     private readonly UndoBuffer<FastFillProject> _history =
         new(ProjectJson.Clone);
-    private readonly AutoCaptureGate _autoCaptureGate = new();
     private readonly Dictionary<ToolMode, ToolSettings> _toolSettings =
         CreateToolSettings();
     private readonly string _workspaceRoot;
     private FastFillProject _project = new();
     private string _workspace = string.Empty;
     private string? _projectPath;
-    private IReadOnlyList<CameraChoice> _cameraChoices = [];
-    private CameraFrameSource? _camera;
-    private int _cameraIndex;
-    private int _detecting;
     private int _capturing;
-    private DocumentDetection? _latestDetection;
     private byte[]? _pendingBytes;
     private string _pendingExtension = ".jpg";
     private CropQuad _pendingCrop = CropQuad.Full;
@@ -104,7 +99,6 @@ public sealed partial class MainWindow : Window
     private bool _controlsReady;
     private DataTransferManager? _dataTransferManager;
     private StorageFile? _shareFile;
-    private AppScreen _screen = AppScreen.Home;
 
     public MainWindow()
     {
@@ -123,7 +117,6 @@ public sealed partial class MainWindow : Window
         _controlsReady = true;
         ApplyToolOptions();
         Closed += MainWindow_Closed;
-        VisibilityChanged += MainWindow_VisibilityChanged;
         ShowRecoverIfAvailable();
     }
 
@@ -132,7 +125,7 @@ public sealed partial class MainWindow : Window
         RoutedEventArgs args)
     {
         CreateProject();
-        await StartCameraAsync();
+        await CaptureWithWindowsCameraAsync();
     }
 
     private async void AddPageButton_Click(
@@ -145,7 +138,7 @@ public sealed partial class MainWindow : Window
         }
 
         _editingPageIndex = null;
-        await StartCameraAsync();
+        await CaptureWithWindowsCameraAsync();
     }
 
     private async void ImportButton_Click(
@@ -283,95 +276,38 @@ public sealed partial class MainWindow : Window
         return false;
     }
 
-    private async Task StartCameraAsync()
+    private async Task CaptureWithWindowsCameraAsync()
     {
-        try
-        {
-            SetScreen(AppScreen.Capture);
-            CaptureStatusText.Text = "Starting camera…";
-            await StopCameraAsync();
-            if (_cameraChoices.Count == 0)
-            {
-                _cameraChoices = await CameraFrameSource.FindAsync();
-                _cameraIndex = Math.Max(
-                    0,
-                    _cameraChoices.ToList().FindIndex(choice =>
-                        choice.Position == CameraPosition.Back));
-            }
-
-            if (_cameraChoices.Count == 0)
-            {
-                throw new InvalidOperationException("No camera was found.");
-            }
-
-            var choice = _cameraChoices[_cameraIndex];
-            CameraPreview.RenderTransformOrigin = new Point(0.5, 0.5);
-            CameraPreview.RenderTransform = new ScaleTransform
-            {
-                ScaleX = choice.Position == CameraPosition.Front ? -1 : 1,
-                ScaleY = 1,
-            };
-            _camera = new CameraFrameSource(choice, CameraPreview);
-            _camera.FrameArrived += Camera_FrameArrived;
-            _camera.Failed += Camera_Failed;
-            await _camera.StartAsync();
-            CaptureStatusText.Text = $"Using {choice.Name}";
-            _autoCaptureGate.Reset();
-            CaptureCountdownRing.Value = 0;
-        }
-        catch (UnauthorizedAccessException exception)
-        {
-            await ShowErrorAsync(
-                "Camera permission denied",
-                exception,
-                "Enable camera access in Windows Settings, then retry.");
-        }
-        catch (Exception exception)
-        {
-            await ShowErrorAsync("Camera failed", exception);
-        }
-    }
-
-    private async void SwitchCameraButton_Click(
-        object sender,
-        RoutedEventArgs args)
-    {
-        if (_cameraChoices.Count < 2)
-        {
-            SetStatus("No second camera is available.");
-            return;
-        }
-
-        _cameraIndex = (_cameraIndex + 1) % _cameraChoices.Count;
-        await StartCameraAsync();
-    }
-
-    private async void CaptureButton_Click(
-        object sender,
-        RoutedEventArgs args) => await CapturePhotoAsync();
-
-    private async Task CapturePhotoAsync()
-    {
-        if (_camera is null
-            || Interlocked.Exchange(ref _capturing, 1) != 0)
+        if (Interlocked.Exchange(ref _capturing, 1) != 0)
         {
             return;
         }
 
         try
         {
-            CaptureStatusText.Text = "Capturing…";
-            var bytes = await _camera.CaptureJpegAsync();
+            SetStatus("Opening Windows camera…");
+            var camera = new CameraCaptureUI(AppWindow.Id);
+            camera.PhotoSettings.AllowCropping = true;
+            camera.PhotoSettings.Format = CameraCaptureUIPhotoFormat.Jpeg;
+            camera.PhotoSettings.MaxResolution =
+                CameraCaptureUIMaxPhotoResolution.HighestAvailable;
+            var photo = await camera.CaptureFileAsync(
+                CameraCaptureUIMode.Photo);
+            if (photo is null)
+            {
+                RestoreAfterCapture();
+                SetStatus("Capture canceled.");
+                return;
+            }
+
+            var bytes = await ReadStorageFileAsync(photo);
             _editingPageIndex = null;
-            await StopCameraAsync();
-            await BeginReviewAsync(bytes, ".jpg");
+            await BeginReviewAsync(bytes, photo.FileType);
         }
         catch (Exception exception)
         {
-            _autoCaptureGate.Reset();
-            CaptureCountdownRing.Value = 0;
-            await ShowErrorAsync("Capture failed", exception);
-            CaptureStatusText.Text = "Ready to capture";
+            RestoreAfterCapture();
+            await ShowErrorAsync("Windows camera failed", exception);
         }
         finally
         {
@@ -379,131 +315,15 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void Camera_FrameArrived(FramePacket frame)
+    private void RestoreAfterCapture()
     {
-        if (Interlocked.Exchange(ref _detecting, 1) != 0)
-        {
-            return;
-        }
-
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                var detection = DocumentDetector.Detect(frame);
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    _latestDetection = detection;
-                    UpdateDetectionOverlay(frame, detection);
-                    if (!AutoCaptureToggle.IsOn)
-                    {
-                        CaptureCountdownRing.Value = 0;
-                        return;
-                    }
-
-                    var state = _autoCaptureGate.Evaluate(
-                        detection,
-                        frame.Timestamp);
-                    CaptureCountdownRing.Value =
-                        _autoCaptureGate.Progress * 100;
-                    CaptureStatusText.Text = state switch
-                    {
-                        AutoCaptureState.NoDocument => "Find document edges",
-                        AutoCaptureState.HoldSteady =>
-                            $"Hold steady "
-                            + $"{RemainingCountdownSeconds():0.0}s",
-                        AutoCaptureState.Ready => "Captured",
-                        _ => "Captured",
-                    };
-                    if (state == AutoCaptureState.Ready)
-                    {
-                        _ = CapturePhotoAsync();
-                    }
-                });
-            }
-            finally
-            {
-                Interlocked.Exchange(ref _detecting, 0);
-            }
-        });
-    }
-
-    private double RemainingCountdownSeconds() => Math.Max(
-        0,
-        AutoCaptureGate.CountdownDuration.TotalSeconds
-            * (1 - _autoCaptureGate.Progress));
-
-    private void AutoCaptureToggle_Toggled(
-        object sender,
-        RoutedEventArgs args)
-    {
-        if (!_controlsReady)
-        {
-            return;
-        }
-
-        _autoCaptureGate.Reset();
-        CaptureCountdownRing.Value = 0;
-        CaptureStatusText.Text = AutoCaptureToggle.IsOn
-            ? "Find document edges"
-            : "Auto capture off";
-    }
-
-    private void UpdateDetectionOverlay(
-        FramePacket frame,
-        DocumentDetection detection)
-    {
-        if (detection.Corners is null)
-        {
-            DetectionPolygon.Points.Clear();
-            return;
-        }
-
-        var width = DetectionOverlay.ActualWidth;
-        var height = DetectionOverlay.ActualHeight;
-        var scale = Math.Min(width / frame.Width, height / frame.Height);
-        var contentWidth = frame.Width * scale;
-        var contentHeight = frame.Height * scale;
-        var offsetX = (width - contentWidth) / 2;
-        var offsetY = (height - contentHeight) / 2;
-        DetectionPolygon.Points.Clear();
-        foreach (var corner in detection.Corners.Points)
-        {
-            var x = frame.Mirrored ? 1 - corner.X : corner.X;
-            DetectionPolygon.Points.Add(new Point(
-                offsetX + x * contentWidth,
-                offsetY + corner.Y * contentHeight));
-        }
-    }
-
-    private async void CaptureBackButton_Click(
-        object sender,
-        RoutedEventArgs args)
-    {
-        await StopCameraAsync();
         if (_project.Pages.Count == 0)
         {
             SetScreen(AppScreen.Home);
-        }
-        else
-        {
-            ShowEditor();
-        }
-    }
-
-    private async Task StopCameraAsync()
-    {
-        if (_camera is null)
-        {
             return;
         }
 
-        var camera = _camera;
-        _camera = null;
-        camera.FrameArrived -= Camera_FrameArrived;
-        camera.Failed -= Camera_Failed;
-        await camera.DisposeAsync();
-        DetectionPolygon.Points.Clear();
+        ShowEditor();
     }
 
     private async Task BeginReviewAsync(byte[] bytes, string extension)
@@ -529,9 +349,7 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            var detection = await Task.Run(
-                () => DocumentDetector.DetectEncoded(bytes));
-            _pendingCrop = detection.Corners ?? CropQuad.Full;
+            _pendingCrop = CropQuad.Full;
             _pendingFilter = new PageFilterSettings();
             _pendingRotation = 0;
         }
@@ -773,7 +591,7 @@ public sealed partial class MainWindow : Window
         }
 
         ClearReview();
-        await StartCameraAsync();
+        await CaptureWithWindowsCameraAsync();
     }
 
     private async void AcceptPageButton_Click(
@@ -2404,11 +2222,7 @@ public sealed partial class MainWindow : Window
 
     private void SetScreen(AppScreen screen)
     {
-        _screen = screen;
         HomePanel.Visibility = screen == AppScreen.Home
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        CapturePanel.Visibility = screen == AppScreen.Capture
             ? Visibility.Visible
             : Visibility.Collapsed;
         ReviewPanel.Visibility = screen == AppScreen.Review
@@ -2417,22 +2231,6 @@ public sealed partial class MainWindow : Window
         EditorPanel.Visibility = screen == AppScreen.Editor
             ? Visibility.Visible
             : Visibility.Collapsed;
-    }
-
-    private async void MainWindow_VisibilityChanged(
-        object sender,
-        WindowVisibilityChangedEventArgs args)
-    {
-        if (!args.Visible && _camera is not null)
-        {
-            await StopCameraAsync();
-        }
-        else if (args.Visible
-            && _screen == AppScreen.Capture
-            && _camera is null)
-        {
-            await StartCameraAsync();
-        }
     }
 
     private void MainWindow_Closed(object sender, WindowEventArgs args)
@@ -2464,13 +2262,7 @@ public sealed partial class MainWindow : Window
         {
             _dataTransferManager.DataRequested -= DataTransfer_DataRequested;
         }
-
-        _ = StopCameraAsync();
     }
-
-    private void Camera_Failed(string message) =>
-        DispatcherQueue.TryEnqueue(() =>
-            CaptureStatusText.Text = $"Camera stopped: {message}");
 
     private void ShowRecoverIfAvailable() =>
         RecoverButton.IsEnabled = FindLatestRecoveryManifest() is not null;
@@ -2757,7 +2549,6 @@ public sealed partial class MainWindow : Window
     private enum AppScreen
     {
         Home,
-        Capture,
         Review,
         Editor,
     }

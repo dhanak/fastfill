@@ -9,10 +9,9 @@ corrected pages and annotations at 300 DPI.
 
 ## Current scope
 
-- Front/back camera capture. Stable-document auto capture is enabled by
-  default, with a visible countdown; manual capture remains available.
-- OpenCV corner detection, manual four-corner correction, rotation, enhanced
-  color, grayscale, black-and-white, and contrast.
+- Windows camera capture with its built-in crop workflow and camera controls.
+- Manual four-corner perspective correction, rotation, enhanced color,
+  grayscale, black-and-white, and contrast.
 - Inline editable text, pen, highlighter, lines, arrows, boxes, ovals,
   checkmarks, and X marks.
 - Selection, drag move/resize, rotate, recolor, fill, thickness, delete,
@@ -44,17 +43,9 @@ When an intentional renderer change alters the preview:
 make update-goldens
 ```
 
-This loop covers document detection, perspective correction, filters,
-auto-capture stability, hit testing, undo/redo, hostile archive rejection,
-`.docscan` round trips, annotation rendering, and multipage PDF export.
-
-Calibrate detection with camera samples without changing the test suite:
-
-```sh
-docker run --rm \
-  -v "$PWD/captures:/samples:ro" \
-  fastfill-checks --detect /samples/frame.jpg
-```
+This loop covers perspective correction, filters, hit testing, undo/redo,
+hostile archive rejection, `.docscan` round trips, annotation rendering, and
+multipage PDF export.
 
 Linux cannot execute WinUI's Windows-only XAML compiler. Every push therefore
 runs the same checks on Windows and compiles the WinUI app in GitHub Actions.
@@ -72,7 +63,8 @@ dotnet build src/FastFill.App -c Debug -p:Platform=x64
 
 Run `FastFill.App` from Visual Studio for camera and interactive UI work. Use
 JPEG/PNG import for deterministic editor iteration; it exercises the same
-review, correction, annotation, project, and export paths as camera capture.
+review, correction, annotation, project, and export paths as Windows camera
+capture.
 
 ## Portable Windows build
 
@@ -103,13 +95,10 @@ current portable ZIP without signing in:
 
 Use the device only before a release candidate. One short pass:
 
-1. Test both cameras, permission denial, rotation, suspend/resume, and auto
-   capture under bright, dim, and glare-heavy light.
+1. Test Windows camera capture, camera switching, cancellation, cropping, and
+   return to FastFill.
 2. Drag all crop handles and annotation tools with finger and Surface Pen.
    Verify controls remain usable at 150% and 200% display scaling.
 3. Export a five-page PDF, reopen a `.docscan`, share to Mail, and save to a
    USB drive.
 4. Check memory, thermal behavior, and capture latency over 20 repeated scans.
-
-Keep calibration thresholds in `AutoCaptureGate` and capture throttling in
-`CameraFrameSource`; those are expected to need real-device tuning.

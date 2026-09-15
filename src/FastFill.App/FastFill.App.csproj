@@ -16,7 +16,6 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
     <PublishTrimmed>false</PublishTrimmed>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../FastFill.Core/FastFill.Core.csproj" />
