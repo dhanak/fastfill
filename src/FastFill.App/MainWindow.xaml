@@ -664,8 +664,7 @@
                              Value="18"
                              SmallChange="1"
                              SpinButtonPlacementMode="Inline"
-                             PreviewKeyDown=
-                               "FontSizePicker_PreviewKeyDown"
+                             PreviewKeyDown="FontSizePicker_PreviewKeyDown"
                              ValueChanged="FontSize_ValueChanged" />
                 </StackPanel>
                 <Grid x:Name="TransformPanel" Margin="0,6,0,0">
