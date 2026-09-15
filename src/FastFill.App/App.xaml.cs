@@ -17,9 +17,17 @@ public partial class App : Application
         var window = new MainWindow();
         _window = window;
         window.Activate();
-        if (window.AppWindow.Presenter is OverlappedPresenter presenter)
+        try
         {
-            presenter.Maximize();
+            if (window.AppWindow.Presenter is OverlappedPresenter presenter)
+            {
+                presenter.Maximize();
+            }
+        }
+        catch (Exception exception)
+        {
+            // Presenter failure must not block launch.
+            System.Diagnostics.Debug.WriteLine(exception);
         }
 
         var projectPath = Environment.GetCommandLineArgs()

@@ -911,6 +911,11 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs args)
     {
+        if (!_controlsReady)
+        {
+            return;
+        }
+
         AutoDetectCornersButton.Visibility =
             AdjustCornersToggle.IsChecked == true
                 ? Visibility.Visible
