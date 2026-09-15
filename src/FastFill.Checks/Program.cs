@@ -113,6 +113,7 @@ internal static class Program
             "X mark hit test failed.");
         CheckUndo(project);
         CheckViewportNavigation();
+        CheckAnnotationGeometry();
 
         var preview = PageRenderer.RenderPng(processed, page);
         var previewPath = Path.Combine(
@@ -367,6 +368,55 @@ internal static class Program
             Title = "FastFill check",
             Pages = [page],
         };
+    }
+
+    private static void CheckAnnotationGeometry()
+    {
+        var rectangle = new ShapeAnnotation
+        {
+            Shape = ShapeKind.Rectangle,
+            Start = new(0.1f, 0.1f),
+            End = new(0.3f, 0.2f),
+            StrokeWidth = 4,
+        };
+        var resized = (ShapeAnnotation)AnnotationGeometry.ResizeFromCorner(
+            rectangle,
+            2,
+            new NormalizedPoint(0.6f, 0.3f),
+            600,
+            800);
+        var resizedBounds = AnnotationGeometry.Bounds(resized);
+        Assert(
+            Math.Abs(resizedBounds.Width - 0.5f) < 0.001
+                && Math.Abs(resizedBounds.Height - 0.2f) < 0.001,
+            "Annotation resize still preserves its old aspect ratio.");
+        Assert(
+            Math.Abs(resized.StrokeWidth - rectangle.StrokeWidth) < 0.001,
+            "Annotation resize changed line thickness.");
+
+        var text = new TextAnnotation
+        {
+            Text = "Resize me",
+            Bounds = new(0.2f, 0.2f, 0.2f, 0.05f),
+            FontSize = 18,
+        };
+        var resizedText = (TextAnnotation)AnnotationGeometry.ResizeByFactor(
+            text,
+            1.5f);
+        Assert(
+            Math.Abs(resizedText.FontSize - text.FontSize) < 0.001,
+            "Text box resize changed font size.");
+
+        var center = new Vector2(0.5f, 0.5f);
+        var rotation = AnnotationGeometry.PageRotation(
+            MathF.PI / 2,
+            center,
+            600,
+            800);
+        var rotated = Vector2.Transform(new Vector2(0.6f, 0.5f), rotation);
+        Assert(
+            Vector2.Distance(rotated, new Vector2(0.5f, 0.575f)) < 0.001,
+            "Page rotation did not preserve physical aspect ratio.");
     }
 
     private static void CheckAutoCapture(DocumentDetection detection)

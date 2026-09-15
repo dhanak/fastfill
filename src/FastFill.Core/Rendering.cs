@@ -6,12 +6,16 @@ namespace FastFill.Core;
 public sealed record RenderOptions(
     float PageWidthPoints,
     float PageHeightPoints,
-    Guid? SelectedAnnotationId = null,
+    IReadOnlySet<Guid>? SelectedAnnotationIds = null,
     bool DrawSelection = false,
-    Guid? HiddenAnnotationId = null);
+    Guid? HiddenAnnotationId = null,
+    Guid? TransformAnnotationId = null,
+    NormalizedRect? SelectionRectangle = null);
 
 public static class PageRenderer
 {
+    public const float RotationHandleOffset = 24;
+
     public static void Draw(
         SKCanvas canvas,
         SKImage background,
@@ -29,7 +33,10 @@ public static class PageRenderer
             new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
         canvas.Save();
         canvas.Translate(destination.Left, destination.Top);
-        canvas.Scale(destination.Width, destination.Height);
+        canvas.Scale(
+            destination.Width / options.PageWidthPoints,
+            destination.Height / options.PageHeightPoints);
+        var displayScale = destination.Width / options.PageWidthPoints;
         foreach (var annotation in page.Annotations)
         {
             if (annotation.Id == options.HiddenAnnotationId)
@@ -37,7 +44,16 @@ public static class PageRenderer
                 continue;
             }
 
-            DrawAnnotation(canvas, annotation, options);
+            DrawAnnotation(canvas, annotation, options, displayScale);
+        }
+
+        if (options.SelectionRectangle is NormalizedRect selectionRectangle)
+        {
+            DrawSelectionRectangle(
+                canvas,
+                selectionRectangle,
+                options,
+                displayScale);
         }
 
         canvas.Restore();
@@ -78,15 +94,16 @@ public static class PageRenderer
     private static void DrawAnnotation(
         SKCanvas canvas,
         Annotation annotation,
-        RenderOptions options)
+        RenderOptions options,
+        float displayScale)
     {
         canvas.Save();
-        canvas.Concat(ToSkia(annotation.Transform));
-        using var paint = CreatePaint(annotation, options);
+        canvas.Concat(ToSkia(annotation.Transform, options));
+        using var paint = CreatePaint(annotation);
         switch (annotation)
         {
             case FreehandAnnotation freehand:
-                DrawFreehand(canvas, freehand, paint);
+                DrawFreehand(canvas, freehand, paint, options);
                 break;
             case TextAnnotation text:
                 DrawText(canvas, text, paint, options);
@@ -97,17 +114,20 @@ public static class PageRenderer
         }
 
         if (options.DrawSelection
-            && options.SelectedAnnotationId == annotation.Id)
+            && options.SelectedAnnotationIds?.Contains(annotation.Id) == true)
         {
-            DrawSelection(canvas, annotation, options);
+            DrawSelection(
+                canvas,
+                annotation,
+                options,
+                displayScale,
+                annotation.Id == options.TransformAnnotationId);
         }
 
         canvas.Restore();
     }
 
-    private static SKPaint CreatePaint(
-        Annotation annotation,
-        RenderOptions options)
+    private static SKPaint CreatePaint(Annotation annotation)
     {
         var color = new SKColor(annotation.ColorArgb);
         if (annotation is FreehandAnnotation { IsHighlighter: true })
@@ -122,14 +142,15 @@ public static class PageRenderer
             Style = SKPaintStyle.Stroke,
             StrokeCap = SKStrokeCap.Round,
             StrokeJoin = SKStrokeJoin.Round,
-            StrokeWidth = annotation.StrokeWidth / options.PageWidthPoints,
+            StrokeWidth = annotation.StrokeWidth,
         };
     }
 
     private static void DrawFreehand(
         SKCanvas canvas,
         FreehandAnnotation annotation,
-        SKPaint paint)
+        SKPaint paint,
+        RenderOptions options)
     {
         if (annotation.Points.Count == 0)
         {
@@ -137,10 +158,10 @@ public static class PageRenderer
         }
 
         using var builder = new SKPathBuilder();
-        builder.MoveTo(annotation.Points[0].X, annotation.Points[0].Y);
+        builder.MoveTo(ToSkia(annotation.Points[0], options));
         foreach (var point in annotation.Points.Skip(1))
         {
-            builder.LineTo(point.X, point.Y);
+            builder.LineTo(ToSkia(point, options));
         }
 
         if (annotation.Filled && annotation.Points.Count >= 3)
@@ -170,19 +191,20 @@ public static class PageRenderer
             annotation.FontFamily);
         using var font = new SKFont(
             typeface ?? SKTypeface.Default,
-            annotation.FontSize / options.PageWidthPoints);
+            annotation.FontSize);
         var lineHeight = font.Size * 1.25f;
-        var y = annotation.Bounds.Y + font.Size;
-        foreach (var line in WrapText(annotation.Text, font, annotation.Bounds))
+        var bounds = ToSkia(annotation.Bounds, options);
+        var y = bounds.Top + font.Size;
+        foreach (var line in WrapText(annotation.Text, font, bounds.Width))
         {
-            if (y > annotation.Bounds.Bottom)
+            if (y > bounds.Bottom)
             {
                 break;
             }
 
             canvas.DrawText(
                 line,
-                annotation.Bounds.X,
+                bounds.Left,
                 y,
                 SKTextAlign.Left,
                 font,
@@ -194,7 +216,7 @@ public static class PageRenderer
     private static IEnumerable<string> WrapText(
         string text,
         SKFont font,
-        NormalizedRect bounds)
+        float width)
     {
         foreach (var paragraph in text.ReplaceLineEndings("\n").Split('\n'))
         {
@@ -203,7 +225,7 @@ public static class PageRenderer
             {
                 var candidate = line.Length == 0 ? word : $"{line} {word}";
                 if (line.Length > 0
-                    && font.MeasureText(candidate) > bounds.Width)
+                    && font.MeasureText(candidate) > width)
                 {
                     yield return line;
                     line = word;
@@ -225,8 +247,11 @@ public static class PageRenderer
         RenderOptions options)
     {
         var bounds = ToSkia(
-            NormalizedRect.FromPoints(annotation.Start, annotation.End));
-        if (annotation.Filled)
+            NormalizedRect.FromPoints(annotation.Start, annotation.End),
+            options);
+        if (annotation.Filled
+            && annotation.Shape is ShapeKind.Rectangle
+                or ShapeKind.Ellipse)
         {
             paint.Style = SKPaintStyle.Fill;
         }
@@ -234,7 +259,7 @@ public static class PageRenderer
         switch (annotation.Shape)
         {
             case ShapeKind.Line:
-                DrawLine(canvas, annotation, paint);
+                DrawLine(canvas, annotation, paint, options);
                 break;
             case ShapeKind.Arrow:
                 DrawArrow(canvas, annotation, paint, options);
@@ -259,11 +284,10 @@ public static class PageRenderer
     private static void DrawLine(
         SKCanvas canvas,
         ShapeAnnotation annotation,
-        SKPaint paint) => canvas.DrawLine(
-            annotation.Start.X,
-            annotation.Start.Y,
-            annotation.End.X,
-            annotation.End.Y,
+        SKPaint paint,
+        RenderOptions options) => canvas.DrawLine(
+            ToSkia(annotation.Start, options),
+            ToSkia(annotation.End, options),
             paint);
 
     private static void DrawArrow(
@@ -272,15 +296,9 @@ public static class PageRenderer
         SKPaint paint,
         RenderOptions options)
     {
-        DrawLine(canvas, annotation, paint);
-        var width = options.PageWidthPoints;
-        var height = options.PageHeightPoints;
-        var start = new Vector2(
-            annotation.Start.X * width,
-            annotation.Start.Y * height);
-        var end = new Vector2(
-            annotation.End.X * width,
-            annotation.End.Y * height);
+        DrawLine(canvas, annotation, paint, options);
+        var start = ToVector(annotation.Start, options);
+        var end = ToVector(annotation.End, options);
         var direction = end - start;
         if (direction.LengthSquared() < float.Epsilon)
         {
@@ -293,16 +311,16 @@ public static class PageRenderer
         var left = end - direction * size + normal * size * 0.55f;
         var right = end - direction * size - normal * size * 0.55f;
         canvas.DrawLine(
-            end.X / width,
-            end.Y / height,
-            left.X / width,
-            left.Y / height,
+            end.X,
+            end.Y,
+            left.X,
+            left.Y,
             paint);
         canvas.DrawLine(
-            end.X / width,
-            end.Y / height,
-            right.X / width,
-            right.Y / height,
+            end.X,
+            end.Y,
+            right.X,
+            right.Y,
             paint);
     }
 
@@ -345,72 +363,107 @@ public static class PageRenderer
     private static void DrawSelection(
         SKCanvas canvas,
         Annotation annotation,
-        RenderOptions options)
+        RenderOptions options,
+        float displayScale,
+        bool drawHandles)
     {
-        var bounds = GetBounds(annotation);
+        var bounds = AnnotationGeometry.Bounds(annotation);
         using var selection = new SKPaint
         {
             Color = SKColors.DeepSkyBlue,
             IsAntialias = true,
             Style = SKPaintStyle.Stroke,
-            StrokeWidth = 1.5f / options.PageWidthPoints,
+            StrokeWidth = 1.5f / displayScale,
         };
-        canvas.DrawRect(ToSkia(bounds), selection);
-        var radiusX = 7 / options.PageWidthPoints;
-        var radiusY = 7 / options.PageHeightPoints;
+        canvas.DrawRect(ToSkia(bounds, options), selection);
+        if (!drawHandles)
+        {
+            return;
+        }
+
+        var radius = 7 / displayScale;
         using var handleFill = new SKPaint
         {
             Color = SKColors.White,
             IsAntialias = true,
             Style = SKPaintStyle.Fill,
         };
-        foreach (var point in BoundsCorners(bounds))
+        foreach (var point in AnnotationGeometry.BoundsCorners(bounds))
         {
+            var center = ToSkia(point, options);
             var handle = new SKRect(
-                point.X - radiusX,
-                point.Y - radiusY,
-                point.X + radiusX,
-                point.Y + radiusY);
+                center.X - radius,
+                center.Y - radius,
+                center.X + radius,
+                center.Y + radius);
             canvas.DrawOval(handle, handleFill);
             canvas.DrawOval(handle, selection);
         }
+
+        var top = new SKPoint(
+            (bounds.X + bounds.Right) / 2 * options.PageWidthPoints,
+            bounds.Y * options.PageHeightPoints);
+        var rotationCenter = new SKPoint(
+            top.X,
+            top.Y - RotationHandleOffset / displayScale);
+        canvas.DrawLine(top, rotationCenter, selection);
+        canvas.DrawCircle(rotationCenter, radius, handleFill);
+        canvas.DrawCircle(rotationCenter, radius, selection);
     }
 
-    private static NormalizedPoint[] BoundsCorners(NormalizedRect bounds) =>
-    [
-        new(bounds.X, bounds.Y),
-        new(bounds.Right, bounds.Y),
-        new(bounds.Right, bounds.Bottom),
-        new(bounds.X, bounds.Bottom),
-    ];
-
-    private static NormalizedRect GetBounds(Annotation annotation) =>
-        annotation switch
+    private static void DrawSelectionRectangle(
+        SKCanvas canvas,
+        NormalizedRect rectangle,
+        RenderOptions options,
+        float displayScale)
+    {
+        using var paint = new SKPaint
         {
-            FreehandAnnotation ink when ink.Points.Count > 0 => new(
-                ink.Points.Min(point => point.X),
-                ink.Points.Min(point => point.Y),
-                ink.Points.Max(point => point.X)
-                    - ink.Points.Min(point => point.X),
-                ink.Points.Max(point => point.Y)
-                    - ink.Points.Min(point => point.Y)),
-            TextAnnotation text => text.Bounds,
-            ShapeAnnotation shape =>
-                NormalizedRect.FromPoints(shape.Start, shape.End),
-            _ => new(0, 0, 0, 0),
+            Color = SKColors.DeepSkyBlue,
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = 1.5f / displayScale,
+            PathEffect = SKPathEffect.CreateDash(
+                [6 / displayScale, 4 / displayScale],
+                0),
         };
+        canvas.DrawRect(ToSkia(rectangle, options), paint);
+    }
 
-    private static SKRect ToSkia(NormalizedRect rectangle) =>
-        new(rectangle.X, rectangle.Y, rectangle.Right, rectangle.Bottom);
+    private static SKPoint ToSkia(
+        NormalizedPoint point,
+        RenderOptions options) => new(
+        point.X * options.PageWidthPoints,
+        point.Y * options.PageHeightPoints);
 
-    private static SKMatrix ToSkia(AffineTransform transform) => new()
+    private static Vector2 ToVector(
+        NormalizedPoint point,
+        RenderOptions options) => new(
+        point.X * options.PageWidthPoints,
+        point.Y * options.PageHeightPoints);
+
+    private static SKRect ToSkia(
+        NormalizedRect rectangle,
+        RenderOptions options) => new(
+        rectangle.X * options.PageWidthPoints,
+        rectangle.Y * options.PageHeightPoints,
+        rectangle.Right * options.PageWidthPoints,
+        rectangle.Bottom * options.PageHeightPoints);
+
+    private static SKMatrix ToSkia(
+        AffineTransform transform,
+        RenderOptions options) => new()
     {
         ScaleX = transform.M11,
-        SkewX = transform.M21,
-        TransX = transform.M31,
-        SkewY = transform.M12,
+        SkewX = transform.M21
+            * options.PageWidthPoints
+            / options.PageHeightPoints,
+        TransX = transform.M31 * options.PageWidthPoints,
+        SkewY = transform.M12
+            * options.PageHeightPoints
+            / options.PageWidthPoints,
         ScaleY = transform.M22,
-        TransY = transform.M32,
+        TransY = transform.M32 * options.PageHeightPoints,
         Persp0 = 0,
         Persp1 = 0,
         Persp2 = 1,

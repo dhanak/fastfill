@@ -137,6 +137,23 @@ public static class AnnotationHitTester
         return null;
     }
 
+    public static bool BoundsContain(
+        Annotation annotation,
+        NormalizedPoint pagePoint,
+        float tolerance = 0)
+    {
+        if (!Matrix3x2.Invert(annotation.Transform.Matrix, out var inverse))
+        {
+            return false;
+        }
+
+        var local = NormalizedPoint.From(
+            Vector2.Transform(pagePoint.Vector, inverse));
+        return AnnotationGeometry.Bounds(annotation).Contains(
+            local,
+            tolerance);
+    }
+
     private static bool Contains(
         Annotation annotation,
         NormalizedPoint point,
@@ -333,4 +350,204 @@ public static class AnnotationHitTester
             point,
             new NormalizedPoint(bounds.Right, bounds.Y),
             new NormalizedPoint(bounds.X, bounds.Bottom)));
+}
+
+public static class AnnotationGeometry
+{
+    public static NormalizedRect Bounds(Annotation annotation) =>
+        annotation switch
+        {
+            FreehandAnnotation ink when ink.Points.Count > 0 => new(
+                ink.Points.Min(point => point.X),
+                ink.Points.Min(point => point.Y),
+                ink.Points.Max(point => point.X)
+                    - ink.Points.Min(point => point.X),
+                ink.Points.Max(point => point.Y)
+                    - ink.Points.Min(point => point.Y)),
+            TextAnnotation text => text.Bounds,
+            ShapeAnnotation shape => NormalizedRect.FromPoints(
+                shape.Start,
+                shape.End),
+            _ => new(0, 0, 0, 0),
+        };
+
+    public static NormalizedPoint[] BoundsCorners(Annotation annotation) =>
+        BoundsCorners(Bounds(annotation));
+
+    public static NormalizedPoint[] BoundsCorners(NormalizedRect bounds) =>
+    [
+        new(bounds.X, bounds.Y),
+        new(bounds.Right, bounds.Y),
+        new(bounds.Right, bounds.Bottom),
+        new(bounds.X, bounds.Bottom),
+    ];
+
+    public static NormalizedRect TransformedBounds(Annotation annotation)
+    {
+        var corners = BoundsCorners(annotation)
+            .Select(annotation.Transform.Apply)
+            .ToArray();
+        return new NormalizedRect(
+            corners.Min(point => point.X),
+            corners.Min(point => point.Y),
+            corners.Max(point => point.X) - corners.Min(point => point.X),
+            corners.Max(point => point.Y) - corners.Min(point => point.Y));
+    }
+
+    public static bool Intersects(
+        Annotation annotation,
+        NormalizedRect rectangle)
+    {
+        var bounds = TransformedBounds(annotation);
+        return bounds.X <= rectangle.Right
+            && bounds.Right >= rectangle.X
+            && bounds.Y <= rectangle.Bottom
+            && bounds.Bottom >= rectangle.Y;
+    }
+
+    public static Annotation ResizeFromCorner(
+        Annotation annotation,
+        int cornerIndex,
+        NormalizedPoint newCorner,
+        float pageWidth,
+        float pageHeight)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageWidth, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageHeight, 1);
+        var corners = BoundsCorners(annotation);
+        ArgumentOutOfRangeException.ThrowIfNegative(cornerIndex);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(
+            cornerIndex,
+            corners.Length);
+
+        if (annotation is ShapeAnnotation
+            {
+                Shape: ShapeKind.Line or ShapeKind.Arrow,
+            } line)
+        {
+            return ResizeLine(line, corners[cornerIndex], newCorner);
+        }
+
+        var opposite = corners[(cornerIndex + 2) % corners.Length];
+        if (annotation is ShapeAnnotation
+            {
+                Shape: ShapeKind.Checkmark or ShapeKind.Cross,
+            })
+        {
+            newCorner = SquareCorner(
+                opposite,
+                newCorner,
+                pageWidth,
+                pageHeight);
+        }
+
+        return ResizeToBounds(
+            annotation,
+            NormalizedRect.FromPoints(opposite, newCorner));
+    }
+
+    public static Annotation ResizeByFactor(
+        Annotation annotation,
+        float factor)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(factor);
+        var bounds = Bounds(annotation);
+        var centerX = bounds.X + bounds.Width / 2;
+        var centerY = bounds.Y + bounds.Height / 2;
+        return ResizeToBounds(
+            annotation,
+            new NormalizedRect(
+                centerX - bounds.Width * factor / 2,
+                centerY - bounds.Height * factor / 2,
+                bounds.Width * factor,
+                bounds.Height * factor));
+    }
+
+    public static Matrix3x2 PageRotation(
+        float radians,
+        Vector2 normalizedCenter,
+        float pageWidth,
+        float pageHeight)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageWidth, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageHeight, 1);
+        var pageCenter = new Vector2(
+            normalizedCenter.X * pageWidth,
+            normalizedCenter.Y * pageHeight);
+        return Matrix3x2.CreateScale(pageWidth, pageHeight)
+            * Matrix3x2.CreateTranslation(-pageCenter)
+            * Matrix3x2.CreateRotation(radians)
+            * Matrix3x2.CreateTranslation(pageCenter)
+            * Matrix3x2.CreateScale(1 / pageWidth, 1 / pageHeight);
+    }
+
+    private static Annotation ResizeToBounds(
+        Annotation annotation,
+        NormalizedRect target)
+    {
+        var source = Bounds(annotation);
+        return annotation switch
+        {
+            FreehandAnnotation ink => ink with
+            {
+                Points = ink.Points
+                    .Select(point => Remap(point, source, target))
+                    .ToList(),
+            },
+            TextAnnotation text => text with { Bounds = target },
+            ShapeAnnotation shape => shape with
+            {
+                Start = Remap(shape.Start, source, target),
+                End = Remap(shape.End, source, target),
+            },
+            _ => annotation,
+        };
+    }
+
+    private static ShapeAnnotation ResizeLine(
+        ShapeAnnotation line,
+        NormalizedPoint draggedCorner,
+        NormalizedPoint newCorner)
+    {
+        if (draggedCorner.DistanceTo(line.Start)
+            <= draggedCorner.DistanceTo(line.End))
+        {
+            return line with { Start = newCorner };
+        }
+
+        return line with { End = newCorner };
+    }
+
+    private static NormalizedPoint Remap(
+        NormalizedPoint point,
+        NormalizedRect source,
+        NormalizedRect target) => new(
+        Remap(point.X, source.X, source.Width, target.X, target.Width),
+        Remap(point.Y, source.Y, source.Height, target.Y, target.Height));
+
+    private static float Remap(
+        float value,
+        float sourceStart,
+        float sourceLength,
+        float targetStart,
+        float targetLength) => sourceLength <= float.Epsilon
+        ? targetStart + targetLength / 2
+        : targetStart
+            + (value - sourceStart) / sourceLength * targetLength;
+
+    private static NormalizedPoint SquareCorner(
+        NormalizedPoint anchor,
+        NormalizedPoint corner,
+        float pageWidth,
+        float pageHeight)
+    {
+        var deltaX = (corner.X - anchor.X) * pageWidth;
+        var deltaY = (corner.Y - anchor.Y) * pageHeight;
+        var size = Math.Max(Math.Abs(deltaX), Math.Abs(deltaY));
+        var directionX = deltaX < 0 ? -1 : 1;
+        var directionY = deltaY < 0 ? -1 : 1;
+        return new NormalizedPoint(
+            anchor.X + directionX * size / pageWidth,
+            anchor.Y + directionY * size / pageHeight);
+    }
 }

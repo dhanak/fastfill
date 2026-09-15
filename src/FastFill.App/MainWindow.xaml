@@ -100,10 +100,10 @@
             <Button Grid.Column="1"
                     Click="ImportButton_Click"
                     Style="{StaticResource HomeTileButtonStyle}"
-                    AutomationProperties.Name="Import JPEG or PNG">
+                    AutomationProperties.Name="Import image or PDF">
               <StackPanel Spacing="12">
                 <FontIcon Glyph="&#xE91B;" FontSize="38" />
-                <TextBlock Text="Import image"
+                <TextBlock Text="Import image / PDF"
                            FontSize="18"
                            TextAlignment="Center" />
               </StackPanel>
@@ -397,7 +397,7 @@
                          TextWrapping="Wrap"
                          BorderThickness="2"
                          BorderBrush="#FF00A4EF"
-                         Background="#DFFFFFFF"
+                         Background="#99FFFFFF"
                          Foreground="#FF111827"
                          Padding="3,0"
                          LostFocus="InlineTextEditor_LostFocus"
@@ -478,7 +478,8 @@
                                 IsChecked="True"
                                 Click="ToolButton_Click"
                                 Tag="Select"
-                                ToolTipService.ToolTip="Select and move"
+                                ToolTipService.ToolTip=
+                                  "Select; Shift moves, Ctrl resizes/adds"
                                 AutomationProperties.Name="Select and move"
                                 Style="{StaticResource ToolToggleStyle}">
                     <FontIcon Glyph="&#xE7C9;" FontSize="20" />
@@ -683,6 +684,11 @@
                         Content="Delete selected"
                         IsEnabled="False"
                         Click="DeleteObjectButton_Click"
+                        Style="{StaticResource RailButtonStyle}" />
+                <Button x:Name="DeleteAllObjectsButton"
+                        Content="Delete all"
+                        IsEnabled="False"
+                        Click="DeleteAllObjectsButton_Click"
                         Style="{StaticResource RailButtonStyle}" />
               </StackPanel>
             </ScrollViewer>
