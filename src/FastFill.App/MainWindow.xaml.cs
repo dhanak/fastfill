@@ -444,7 +444,7 @@ public sealed partial class MainWindow : Window
             _camera.FrameArrived += Camera_FrameArrived;
             _camera.Failed += Camera_Failed;
             await _camera.StartAsync();
-            CaptureStatusText.Text = $"Using {choice.Name}";
+            CaptureStatusText.Text = "Find document edges";
             _autoCaptureGate.Reset();
             CaptureCountdownRing.Value = 0;
         }
@@ -524,12 +524,6 @@ public sealed partial class MainWindow : Window
                 {
                     _latestDetection = detection;
                     UpdateDetectionOverlay(frame, detection);
-                    if (!AutoCaptureToggle.IsOn)
-                    {
-                        CaptureCountdownRing.Value = 0;
-                        return;
-                    }
-
                     var state = _autoCaptureGate.Evaluate(
                         detection,
                         frame.Timestamp);
@@ -570,22 +564,6 @@ public sealed partial class MainWindow : Window
         0,
         AutoCaptureGate.CountdownDuration.TotalSeconds
             * (1 - _autoCaptureGate.Progress));
-
-    private void AutoCaptureToggle_Toggled(
-        object sender,
-        RoutedEventArgs args)
-    {
-        if (!_controlsReady)
-        {
-            return;
-        }
-
-        _autoCaptureGate.Reset();
-        CaptureCountdownRing.Value = 0;
-        CaptureStatusText.Text = AutoCaptureToggle.IsOn
-            ? "Find document edges"
-            : "Auto capture off";
-    }
 
     private void UpdateDetectionOverlay(
         FramePacket frame,
@@ -3334,7 +3312,7 @@ public sealed partial class MainWindow : Window
 
     private void Camera_Failed(string message) =>
         DispatcherQueue.TryEnqueue(() =>
-            CaptureStatusText.Text = $"Camera stopped: {message}");
+            CaptureStatusText.Text = $"Camera error: {message}");
 
     private void ShowRecoverIfAvailable() =>
         RecoverButton.IsEnabled = FindLatestRecoveryManifest() is not null;

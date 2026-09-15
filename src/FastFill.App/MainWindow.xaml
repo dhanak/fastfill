@@ -144,9 +144,7 @@
       <Grid x:Name="CapturePanel"
             Visibility="Collapsed"
             Background="Black">
-        <MediaPlayerElement x:Name="CameraPreview"
-                            AreTransportControlsEnabled="False"
-                            Stretch="Uniform" />
+        <Image x:Name="CameraPreview" Stretch="Uniform" />
         <Canvas x:Name="DetectionOverlay"
                 IsHitTestVisible="False">
           <Polygon x:Name="DetectionPolygon"
@@ -154,44 +152,57 @@
                    StrokeThickness="4"
                    Fill="#5000D4FF" />
         </Canvas>
-        <Border HorizontalAlignment="Stretch"
-                VerticalAlignment="Top"
-                Background="#B0000000"
-                Padding="12">
-          <Grid ColumnSpacing="8">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="Auto" />
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-              <ColumnDefinition Width="Auto" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <Button Content="Back"
-                    Click="CaptureBackButton_Click"
-                    Style="{StaticResource TouchButtonStyle}" />
-            <TextBlock x:Name="CaptureStatusText"
-                       Grid.Column="1"
-                       Text="Starting camera…"
-                       Foreground="White"
-                       FontSize="18"
-                       VerticalAlignment="Center"
-                       HorizontalAlignment="Center" />
-            <TextBlock Grid.Column="2"
-                       Text="Auto capture"
-                       Foreground="White"
-                       VerticalAlignment="Center" />
-            <ToggleSwitch x:Name="AutoCaptureToggle"
-                          Grid.Column="3"
-                          IsOn="True"
-                          OnContent=""
-                          OffContent=""
-                          Toggled="AutoCaptureToggle_Toggled"
-                          VerticalAlignment="Center" />
-            <Button Grid.Column="4"
-                    Content="Switch camera"
-                    Click="SwitchCameraButton_Click"
-                    Style="{StaticResource TouchButtonStyle}" />
-          </Grid>
+        <Grid Margin="12" VerticalAlignment="Top">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <Button Width="56"
+                  Height="56"
+                  Padding="0"
+                  BorderThickness="0"
+                  Background="Transparent"
+                  Foreground="White"
+                  Click="CaptureBackButton_Click"
+                  AutomationProperties.Name="Back"
+                  ToolTipService.ToolTip="Back">
+            <FontIcon Glyph="&#xE72B;" FontSize="24" />
+          </Button>
+          <Button Grid.Column="2"
+                  Width="56"
+                  Height="56"
+                  Padding="0"
+                  BorderThickness="0"
+                  Background="Transparent"
+                  Foreground="White"
+                  Click="SwitchCameraButton_Click"
+                  AutomationProperties.Name="Switch camera"
+                  ToolTipService.ToolTip="Switch camera">
+            <Grid Width="32" Height="32">
+              <FontIcon Glyph="&#xE114;"
+                        FontSize="22"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Top" />
+              <FontIcon Glyph="&#xE72C;"
+                        FontSize="16"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Bottom" />
+            </Grid>
+          </Button>
+        </Grid>
+        <Border HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Margin="12,12,12,138"
+                Padding="12,6"
+                CornerRadius="16"
+                Background="#80000000"
+                IsHitTestVisible="False">
+          <TextBlock x:Name="CaptureStatusText"
+                     Text="Starting camera…"
+                     Foreground="White"
+                     FontSize="18"
+                     AutomationProperties.LiveSetting="Polite" />
         </Border>
         <Grid Width="104"
               Height="104"

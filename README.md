@@ -36,7 +36,8 @@ unrecognized-app warning, select **More info**, then **Run anyway**.
 ## Features
 
 - 📷 Front or rear camera capture with live document framing, automatic
-  capture enabled by default, and a three-second stability countdown.
+  capture, and a three-second stability countdown. The shutter remains
+  available for immediate manual capture.
 - Manual four-corner perspective correction, page rotation, contrast,
   enhanced color, grayscale, and black-and-white filters.
 - JPEG, PNG, and multi-page PDF import using Windows' built-in PDF renderer.

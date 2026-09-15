@@ -1,11 +1,11 @@
 using System.Runtime.InteropServices;
 using FastFill.Core;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Devices.Enumeration;
 using Windows.Graphics.Imaging;
 using Windows.Media.Capture;
 using Windows.Media.Capture.Frames;
-using Windows.Media.Core;
 using Windows.Media.MediaProperties;
 using Windows.Storage.Streams;
 
@@ -19,19 +19,23 @@ internal sealed record CameraChoice(
 internal sealed class CameraFrameSource : IFrameSource
 {
     private readonly CameraChoice _choice;
-    private readonly MediaPlayerElement _preview;
+    private readonly Image _preview;
+    private readonly SoftwareBitmapSource _previewSource = new();
     private MediaCapture? _capture;
     private MediaFrameReader? _reader;
     private FramePacket? _latestFrame;
     private long _lastFrameTicks;
     private int _copyingFrame;
+    private int _presentingFrame;
+    private int _frameFailureReported;
 
     public CameraFrameSource(
         CameraChoice choice,
-        MediaPlayerElement preview)
+        Image preview)
     {
         _choice = choice;
         _preview = preview;
+        _preview.Source = _previewSource;
     }
 
     public event Action<FramePacket>? FrameArrived;
@@ -88,8 +92,6 @@ internal sealed class CameraFrameSource : IFrameSource
                 ?? colorSources.FirstOrDefault()
                 ?? throw new InvalidOperationException(
                     "Camera has no color preview stream.");
-            _preview.AutoPlay = true;
-            _preview.Source = MediaSource.CreateFromMediaFrameSource(source);
             var reader = await capture.CreateFrameReaderAsync(
                 source,
                 MediaEncodingSubtypes.Bgra8);
@@ -110,6 +112,7 @@ internal sealed class CameraFrameSource : IFrameSource
         }
         catch
         {
+            _preview.Source = null;
             capture.Failed -= Capture_Failed;
             capture.Dispose();
             throw;
@@ -203,13 +206,76 @@ internal sealed class CameraFrameSource : IFrameSource
                 source,
                 BitmapPixelFormat.Bgra8,
                 BitmapAlphaMode.Premultiplied);
+            PresentFrame(bitmap);
             var packet = CopyFrame(bitmap);
             _latestFrame = packet;
             FrameArrived?.Invoke(packet);
         }
+        catch (Exception exception)
+        {
+            ReportFrameFailure(
+                $"Preview frame failed: {exception.Message}");
+        }
         finally
         {
             Interlocked.Exchange(ref _copyingFrame, 0);
+        }
+    }
+
+    private void PresentFrame(SoftwareBitmap bitmap)
+    {
+        if (Interlocked.Exchange(ref _presentingFrame, 1) != 0)
+        {
+            return;
+        }
+
+        SoftwareBitmap copy;
+        try
+        {
+            copy = SoftwareBitmap.Copy(bitmap);
+        }
+        catch
+        {
+            Interlocked.Exchange(ref _presentingFrame, 0);
+            throw;
+        }
+
+        if (_preview.DispatcherQueue.TryEnqueue(async () =>
+            {
+                try
+                {
+                    await _previewSource.SetBitmapAsync(copy);
+                }
+                catch (Exception exception)
+                {
+                    ReportFrameFailure(
+                        $"Preview display failed: {exception.Message}");
+                }
+                finally
+                {
+                    copy.Dispose();
+                    Interlocked.Exchange(ref _presentingFrame, 0);
+                }
+            }))
+        {
+            return;
+        }
+
+        copy.Dispose();
+        Interlocked.Exchange(ref _presentingFrame, 0);
+    }
+
+    private void ReportFrameFailure(string message)
+    {
+        if (Interlocked.Exchange(ref _frameFailureReported, 1) != 0)
+        {
+            return;
+        }
+
+        if (!_preview.DispatcherQueue.TryEnqueue(
+                () => Failed?.Invoke(message)))
+        {
+            Interlocked.Exchange(ref _frameFailureReported, 0);
         }
     }
 
