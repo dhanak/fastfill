@@ -4,7 +4,8 @@
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:skia="using:SkiaSharp.Views.Windows"
   Title="FastFill">
-  <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+  <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+        KeyDown="RootGrid_KeyDown">
     <Grid.RowDefinitions>
       <RowDefinition Height="64" />
       <RowDefinition Height="*" />
@@ -66,10 +67,10 @@
 
     <Grid Grid.Row="1">
       <Grid x:Name="HomePanel">
-        <StackPanel Width="440"
+        <StackPanel Width="480"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    Spacing="12">
+                    Spacing="10">
           <TextBlock Text="Scan. Fill. Send."
                      FontSize="36"
                      FontWeight="SemiBold"
@@ -77,20 +78,61 @@
           <TextBlock Text="Documents stay on this device."
                      FontSize="18"
                      HorizontalAlignment="Center" />
-          <Button Content="New camera scan"
-                  Click="NewScanButton_Click"
-                  Style="{StaticResource TouchButtonStyle}" />
-          <Button Content="Import JPEG or PNG"
-                  Click="ImportButton_Click"
-                  Style="{StaticResource TouchButtonStyle}" />
-          <Button Content="Open FastFill project"
-                  Click="OpenButton_Click"
-                  Style="{StaticResource TouchButtonStyle}" />
-          <Button x:Name="RecoverButton"
-                  Content="Recover autosaved project"
-                  Visibility="Collapsed"
-                  Click="RecoverButton_Click"
-                  Style="{StaticResource TouchButtonStyle}" />
+          <Grid Margin="0,12,0,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="*" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Button Click="NewScanButton_Click"
+                    Style="{StaticResource HomeTileButtonStyle}"
+                    AutomationProperties.Name="New camera scan">
+              <StackPanel Spacing="12">
+                <FontIcon Glyph="&#xE114;" FontSize="38" />
+                <TextBlock Text="New camera scan"
+                           FontSize="18"
+                           TextAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Grid.Column="1"
+                    Click="ImportButton_Click"
+                    Style="{StaticResource HomeTileButtonStyle}"
+                    AutomationProperties.Name="Import JPEG or PNG">
+              <StackPanel Spacing="12">
+                <FontIcon Glyph="&#xE91B;" FontSize="38" />
+                <TextBlock Text="Import image"
+                           FontSize="18"
+                           TextAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button Grid.Row="1"
+                    Click="OpenButton_Click"
+                    Style="{StaticResource HomeTileButtonStyle}"
+                    AutomationProperties.Name="Open FastFill project">
+              <StackPanel Spacing="12">
+                <FontIcon Glyph="&#xE8E5;" FontSize="38" />
+                <TextBlock Text="Open project"
+                           FontSize="18"
+                           TextAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button x:Name="RecoverButton"
+                    Grid.Row="1"
+                    Grid.Column="1"
+                    Click="RecoverButton_Click"
+                    Style="{StaticResource HomeTileButtonStyle}"
+                    AutomationProperties.Name="Recover autosaved project">
+              <StackPanel Spacing="12">
+                <FontIcon Glyph="&#xE777;" FontSize="38" />
+                <TextBlock Text="Recover autosave"
+                           FontSize="18"
+                           TextAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </Grid>
         </StackPanel>
       </Grid>
 
@@ -117,6 +159,7 @@
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Button Content="Back"
                     Click="CaptureBackButton_Click"
@@ -128,28 +171,51 @@
                        FontSize="18"
                        VerticalAlignment="Center"
                        HorizontalAlignment="Center" />
+            <TextBlock Grid.Column="2"
+                       Text="Auto capture"
+                       Foreground="White"
+                       VerticalAlignment="Center" />
             <ToggleSwitch x:Name="AutoCaptureToggle"
-                          Grid.Column="2"
-                          Header="Auto capture"
-                          Foreground="White"
+                          Grid.Column="3"
+                          IsOn="True"
+                          OnContent=""
+                          OffContent=""
+                          Toggled="AutoCaptureToggle_Toggled"
                           VerticalAlignment="Center" />
-            <Button Grid.Column="3"
+            <Button Grid.Column="4"
                     Content="Switch camera"
                     Click="SwitchCameraButton_Click"
                     Style="{StaticResource TouchButtonStyle}" />
           </Grid>
         </Border>
-        <Button Width="84"
-                Height="84"
-                CornerRadius="42"
-                BorderThickness="6"
-                BorderBrush="White"
-                Background="#FF0067C0"
-                Content="Capture"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Bottom"
-                Margin="0,0,0,28"
-                Click="CaptureButton_Click" />
+        <Grid Width="104"
+              Height="104"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Bottom"
+              Margin="0,0,0,22">
+          <ProgressRing x:Name="CaptureCountdownRing"
+                        Width="104"
+                        Height="104"
+                        IsActive="True"
+                        IsIndeterminate="False"
+                        Value="0"
+                        Foreground="#FF00D4FF"
+                        IsHitTestVisible="False" />
+          <Button Width="84"
+                  Height="84"
+                  CornerRadius="42"
+                  BorderThickness="5"
+                  BorderBrush="White"
+                  Background="#FF0067C0"
+                  Foreground="White"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  AutomationProperties.Name="Capture photo"
+                  ToolTipService.ToolTip="Capture photo"
+                  Click="CaptureButton_Click">
+            <FontIcon Glyph="&#xE114;" FontSize="28" />
+          </Button>
+        </Grid>
       </Grid>
 
       <Grid x:Name="ReviewPanel"
@@ -215,9 +281,9 @@
       <Grid x:Name="EditorPanel" Visibility="Collapsed">
         <Grid x:Name="EditorLayout" Padding="8">
           <Grid.ColumnDefinitions>
-            <ColumnDefinition x:Name="PageColumn" Width="132" />
+            <ColumnDefinition x:Name="PageColumn" Width="136" />
             <ColumnDefinition Width="*" />
-            <ColumnDefinition x:Name="ToolColumn" Width="190" />
+            <ColumnDefinition x:Name="ToolColumn" Width="170" />
           </Grid.ColumnDefinitions>
           <Grid.RowDefinitions>
             <RowDefinition Height="*" />
@@ -258,7 +324,8 @@
           <Border x:Name="PageRail"
                   Grid.Column="0"
                   Margin="0,0,8,0"
-                  Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                  Background=
+                    "{ThemeResource CardBackgroundFillColorDefaultBrush}"
                   CornerRadius="8">
             <StackPanel>
               <TextBlock Text="Pages"
@@ -266,30 +333,39 @@
                          Margin="10" />
               <ListView x:Name="PageList"
                         Height="360"
+                        AllowDrop="True"
+                        CanDragItems="True"
+                        CanReorderItems="True"
+                        DragItemsStarting="PageList_DragItemsStarting"
+                        DragItemsCompleted="PageList_DragItemsCompleted"
                         SelectionChanged="PageList_SelectionChanged" />
-              <StackPanel Orientation="Horizontal"
-                          HorizontalAlignment="Center">
+              <Grid ColumnSpacing="2" Margin="2,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
                 <Button Content="↑"
                         AutomationProperties.Name="Move page earlier"
                         Click="MovePageEarlierButton_Click"
-                        Style="{StaticResource TouchButtonStyle}" />
-                <Button Content="↓"
+                        Style="{StaticResource RailButtonStyle}" />
+                <Button Grid.Column="1"
+                        Content="↓"
                         AutomationProperties.Name="Move page later"
                         Click="MovePageLaterButton_Click"
-                        Style="{StaticResource TouchButtonStyle}" />
-              </StackPanel>
+                        Style="{StaticResource RailButtonStyle}" />
+              </Grid>
               <Button Content="Add page"
                       Click="AddPageButton_Click"
-                      Style="{StaticResource TouchButtonStyle}" />
+                      Style="{StaticResource RailButtonStyle}" />
               <Button Content="Import"
                       Click="ImportButton_Click"
-                      Style="{StaticResource TouchButtonStyle}" />
+                      Style="{StaticResource RailButtonStyle}" />
               <Button Content="Edit page"
                       Click="EditPageButton_Click"
-                      Style="{StaticResource TouchButtonStyle}" />
+                      Style="{StaticResource RailButtonStyle}" />
               <Button Content="Delete page"
                       Click="DeletePageButton_Click"
-                      Style="{StaticResource TouchButtonStyle}" />
+                      Style="{StaticResource RailButtonStyle}" />
             </StackPanel>
           </Border>
 
@@ -297,131 +373,281 @@
                   Grid.Column="1"
                   Background="#FF202020"
                   CornerRadius="8">
-            <skia:SKXamlCanvas x:Name="EditorCanvas"
-                               IgnorePixelScaling="True"
-                               PaintSurface="EditorCanvas_PaintSurface"
-                               PointerPressed="EditorCanvas_PointerPressed"
-                               PointerMoved="EditorCanvas_PointerMoved"
-                               PointerReleased="EditorCanvas_PointerReleased" />
+            <Grid>
+              <skia:SKXamlCanvas x:Name="EditorCanvas"
+                                 IgnorePixelScaling="True"
+                                 PaintSurface="EditorCanvas_PaintSurface"
+                                 PointerPressed="EditorCanvas_PointerPressed"
+                                 PointerMoved="EditorCanvas_PointerMoved"
+                                 PointerReleased="EditorCanvas_PointerReleased"
+                                 DoubleTapped="EditorCanvas_DoubleTapped" />
+              <Canvas x:Name="EditorOverlay">
+                <TextBox x:Name="InlineTextEditor"
+                         Visibility="Collapsed"
+                         IsHitTestVisible="True"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         BorderThickness="2"
+                         BorderBrush="#FF00A4EF"
+                         Background="#DFFFFFFF"
+                         Foreground="#FF111827"
+                         Padding="3,0"
+                         LostFocus="InlineTextEditor_LostFocus"
+                         KeyDown="InlineTextEditor_KeyDown" />
+              </Canvas>
+            </Grid>
           </Border>
 
           <Border x:Name="ToolRail"
                   Grid.Column="2"
                   Margin="8,0,0,0"
-                  Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                  Background=
+                    "{ThemeResource CardBackgroundFillColorDefaultBrush}"
                   CornerRadius="8">
             <ScrollViewer HorizontalScrollBarVisibility="Auto"
                           VerticalScrollBarVisibility="Auto">
               <StackPanel x:Name="ToolPanel" Padding="8">
                 <TextBlock Text="Tools"
                            FontWeight="SemiBold"
-                           Margin="4,4,4,8" />
-                <ToggleButton x:Name="SelectToolButton"
-                              Content="Select / move"
-                              IsChecked="True"
-                              Click="ToolButton_Click"
-                              Tag="Select"
-                              Style="{StaticResource ToolToggleStyle}" />
-                <ToggleButton Content="Text"
-                              Click="ToolButton_Click"
-                              Tag="Text"
-                              Style="{StaticResource ToolToggleStyle}" />
-                <ToggleButton Content="Pen"
-                              Click="ToolButton_Click"
-                              Tag="Pen"
-                              Style="{StaticResource ToolToggleStyle}" />
-                <ToggleButton Content="Highlighter"
-                              Click="ToolButton_Click"
-                              Tag="Highlighter"
-                              Style="{StaticResource ToolToggleStyle}" />
-                <ToggleButton Content="Line"
-                              Click="ToolButton_Click"
-                              Tag="Line"
-                              Style="{StaticResource ToolToggleStyle}" />
-                <ToggleButton Content="Arrow"
-                              Click="ToolButton_Click"
-                              Tag="Arrow"
-                              Style="{StaticResource ToolToggleStyle}" />
-                <ToggleButton Content="Box"
-                              Click="ToolButton_Click"
-                              Tag="Rectangle"
-                              Style="{StaticResource ToolToggleStyle}" />
-                <ToggleButton Content="Circle"
-                              Click="ToolButton_Click"
-                              Tag="Ellipse"
-                              Style="{StaticResource ToolToggleStyle}" />
-                <ToggleButton Content="Checkmark"
-                              Click="ToolButton_Click"
-                              Tag="Checkmark"
-                              Style="{StaticResource ToolToggleStyle}" />
+                           Margin="4,4,4,6" />
+                <Grid x:Name="ToolButtonGrid">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
+                  <ToggleButton x:Name="SelectToolButton"
+                                IsChecked="True"
+                                Click="ToolButton_Click"
+                                Tag="Select"
+                                ToolTipService.ToolTip="Select and move"
+                                AutomationProperties.Name="Select and move"
+                                Style="{StaticResource ToolToggleStyle}">
+                    <FontIcon Glyph="&#xE7C9;" FontSize="20" />
+                  </ToggleButton>
+                  <ToggleButton Grid.Column="1"
+                                Click="ToolButton_Click"
+                                Tag="Text"
+                                ToolTipService.ToolTip="Text"
+                                AutomationProperties.Name="Text"
+                                Style="{StaticResource ToolToggleStyle}">
+                    <FontIcon Glyph="&#xE8D2;" FontSize="20" />
+                  </ToggleButton>
+                  <ToggleButton Grid.Column="2"
+                                Click="ToolButton_Click"
+                                Tag="Pen"
+                                ToolTipService.ToolTip="Pen"
+                                AutomationProperties.Name="Pen"
+                                Style="{StaticResource ToolToggleStyle}">
+                    <FontIcon Glyph="&#xE76D;" FontSize="20" />
+                  </ToggleButton>
+                  <ToggleButton Grid.Row="1"
+                                Click="ToolButton_Click"
+                                Tag="Highlighter"
+                                ToolTipService.ToolTip="Highlighter"
+                                AutomationProperties.Name="Highlighter"
+                                Style="{StaticResource ToolToggleStyle}">
+                    <FontIcon Glyph="&#xE7E6;" FontSize="20" />
+                  </ToggleButton>
+                  <ToggleButton Grid.Row="1"
+                                Grid.Column="1"
+                                Click="ToolButton_Click"
+                                Tag="Line"
+                                ToolTipService.ToolTip="Straight line"
+                                AutomationProperties.Name="Straight line"
+                                Style="{StaticResource ToolToggleStyle}">
+                    <TextBlock Text="╱" FontSize="24" />
+                  </ToggleButton>
+                  <ToggleButton Grid.Row="1"
+                                Grid.Column="2"
+                                Click="ToolButton_Click"
+                                Tag="Arrow"
+                                ToolTipService.ToolTip="Arrow"
+                                AutomationProperties.Name="Arrow"
+                                Style="{StaticResource ToolToggleStyle}">
+                    <TextBlock Text="↗" FontSize="24" />
+                  </ToggleButton>
+                  <ToggleButton Grid.Row="2"
+                                Click="ToolButton_Click"
+                                Tag="Rectangle"
+                                ToolTipService.ToolTip="Box"
+                                AutomationProperties.Name="Box"
+                                Style="{StaticResource ToolToggleStyle}">
+                    <TextBlock Text="□" FontSize="24" />
+                  </ToggleButton>
+                  <ToggleButton Grid.Row="2"
+                                Grid.Column="1"
+                                Click="ToolButton_Click"
+                                Tag="Ellipse"
+                                ToolTipService.ToolTip="Oval"
+                                AutomationProperties.Name="Oval"
+                                Style="{StaticResource ToolToggleStyle}">
+                    <TextBlock Text="○" FontSize="24" />
+                  </ToggleButton>
+                  <ToggleButton Grid.Row="2"
+                                Grid.Column="2"
+                                Click="ToolButton_Click"
+                                Tag="Checkmark"
+                                ToolTipService.ToolTip="Checkmark"
+                                AutomationProperties.Name="Checkmark"
+                                Style="{StaticResource ToolToggleStyle}">
+                    <TextBlock Text="✓" FontSize="24" />
+                  </ToggleButton>
+                  <ToggleButton Grid.Row="3"
+                                Click="ToolButton_Click"
+                                Tag="Cross"
+                                ToolTipService.ToolTip="X mark"
+                                AutomationProperties.Name="X mark"
+                                Style="{StaticResource ToolToggleStyle}">
+                    <TextBlock Text="✕" FontSize="22" />
+                  </ToggleButton>
+                </Grid>
                 <TextBlock Text="Color" Margin="4,10,4,2" />
-                <StackPanel Orientation="Horizontal">
+                <Grid x:Name="ColorPanel">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                  </Grid.RowDefinitions>
                   <Button Background="#FF111827"
                           Tag="FF111827"
+                          BorderThickness="3"
+                          BorderBrush="#FF00A4EF"
                           AutomationProperties.Name="Black"
                           Click="ColorButton_Click"
-                          Style="{StaticResource TouchButtonStyle}" />
-                  <Button Background="#FFD13438"
-                          Tag="FFD13438"
+                          Style="{StaticResource ColorButtonStyle}" />
+                  <Button Grid.Column="1"
+                          Background="#FFFFFFFF"
+                          Tag="FFFFFFFF"
+                          AutomationProperties.Name="White"
+                          Click="ColorButton_Click"
+                          Style="{StaticResource ColorButtonStyle}" />
+                  <Button Grid.Column="2"
+                          Background="#FFE11D48"
+                          Tag="FFE11D48"
                           AutomationProperties.Name="Red"
                           Click="ColorButton_Click"
-                          Style="{StaticResource TouchButtonStyle}" />
-                  <Button Background="#FF0067C0"
-                          Tag="FF0067C0"
+                          Style="{StaticResource ColorButtonStyle}" />
+                  <Button Grid.Row="1"
+                          Background="#FF0078D4"
+                          Tag="FF0078D4"
                           AutomationProperties.Name="Blue"
                           Click="ColorButton_Click"
-                          Style="{StaticResource TouchButtonStyle}" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal">
-                  <Button Background="#FF008272"
-                          Tag="FF008272"
+                          Style="{StaticResource ColorButtonStyle}" />
+                  <Button Grid.Row="1"
+                          Grid.Column="1"
+                          Background="#FF16A34A"
+                          Tag="FF16A34A"
                           AutomationProperties.Name="Green"
                           Click="ColorButton_Click"
-                          Style="{StaticResource TouchButtonStyle}" />
-                  <Button Background="#FFFFD800"
+                          Style="{StaticResource ColorButtonStyle}" />
+                  <Button Grid.Row="1"
+                          Grid.Column="2"
+                          Background="#FFFFD800"
                           Tag="FFFFD800"
                           AutomationProperties.Name="Yellow"
                           Click="ColorButton_Click"
-                          Style="{StaticResource TouchButtonStyle}" />
-                </StackPanel>
-                <TextBlock Text="Thickness" Margin="4,8,4,0" />
+                          Style="{StaticResource ColorButtonStyle}" />
+                </Grid>
+                <TextBlock x:Name="ThicknessLabel"
+                           Text="Thickness"
+                           Margin="4,8,4,0" />
                 <Slider x:Name="ThicknessSlider"
                         Minimum="1"
                         Maximum="20"
                         Value="3"
                         StepFrequency="1"
                         ValueChanged="ThicknessSlider_ValueChanged" />
-                <ToggleSwitch x:Name="FilledToggle"
-                              Header="Filled shape"
-                              Toggled="FilledToggle_Toggled" />
-                <Button Content="Rotate selected"
-                        Click="RotateObjectButton_Click"
-                        Style="{StaticResource TouchButtonStyle}" />
-                <StackPanel Orientation="Horizontal">
-                  <Button Content="Smaller"
-                          Click="SmallerObjectButton_Click"
-                          Style="{StaticResource TouchButtonStyle}" />
-                  <Button Content="Larger"
-                          Click="LargerObjectButton_Click"
-                          Style="{StaticResource TouchButtonStyle}" />
+                <StackPanel x:Name="FillPanel"
+                            Orientation="Horizontal"
+                            Spacing="8"
+                            Margin="4,2">
+                  <TextBlock Text="Fill" VerticalAlignment="Center" />
+                  <ToggleSwitch x:Name="FilledToggle"
+                                OnContent=""
+                                OffContent=""
+                                Toggled="FilledToggle_Toggled" />
                 </StackPanel>
-                <Button Content="Delete selected"
+                <StackPanel x:Name="FontPanel" Spacing="4">
+                  <ComboBox x:Name="FontFamilyPicker"
+                            Header="Typeface"
+                            SelectedIndex="0"
+                            SelectionChanged="FontFamily_SelectionChanged">
+                    <ComboBoxItem Content="Segoe UI" />
+                    <ComboBoxItem Content="Arial" />
+                    <ComboBoxItem Content="Calibri" />
+                    <ComboBoxItem Content="Times New Roman" />
+                  </ComboBox>
+                  <NumberBox x:Name="FontSizePicker"
+                             Header="Font size"
+                             Minimum="6"
+                             Maximum="144"
+                             Value="18"
+                             SmallChange="1"
+                             SpinButtonPlacementMode="Compact"
+                             ValueChanged="FontSize_ValueChanged" />
+                </StackPanel>
+                <Grid Margin="0,6,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <Button Click="RotateObjectButton_Click"
+                          AutomationProperties.Name="Rotate selected"
+                          ToolTipService.ToolTip="Rotate selected"
+                          Style="{StaticResource TouchButtonStyle}">
+                    <FontIcon Glyph="&#xE7AD;" />
+                  </Button>
+                  <Button Grid.Column="1"
+                          Content="−"
+                          Click="SmallerObjectButton_Click"
+                          AutomationProperties.Name="Make selected smaller"
+                          ToolTipService.ToolTip="Make selected smaller"
+                          Style="{StaticResource TouchButtonStyle}" />
+                  <Button Grid.Column="2"
+                          Content="+"
+                          Click="LargerObjectButton_Click"
+                          AutomationProperties.Name="Make selected larger"
+                          ToolTipService.ToolTip="Make selected larger"
+                          Style="{StaticResource TouchButtonStyle}" />
+                </Grid>
+                <Button x:Name="DeleteObjectButton"
+                        Content="Delete selected"
+                        IsEnabled="False"
                         Click="DeleteObjectButton_Click"
-                        Style="{StaticResource TouchButtonStyle}" />
+                        Style="{StaticResource RailButtonStyle}" />
                 <TextBlock Text="Zoom" Margin="4,8,4,0" />
-                <StackPanel Orientation="Horizontal">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
                   <Button Content="−"
                           AutomationProperties.Name="Zoom out"
                           Click="ZoomOutButton_Click"
                           Style="{StaticResource TouchButtonStyle}" />
-                  <Button Content="Fit"
+                  <Button Grid.Column="1"
+                          Content="Fit"
                           Click="FitButton_Click"
                           Style="{StaticResource TouchButtonStyle}" />
-                  <Button Content="+"
+                  <Button Grid.Column="2"
+                          Content="+"
                           AutomationProperties.Name="Zoom in"
                           Click="ZoomInButton_Click"
                           Style="{StaticResource TouchButtonStyle}" />
-                </StackPanel>
+                </Grid>
               </StackPanel>
             </ScrollViewer>
           </Border>

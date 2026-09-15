@@ -24,6 +24,22 @@ internal static class Program
                 return 0;
             }
 
+            if (args.FirstOrDefault() == "--detect")
+            {
+                if (args.Length < 2)
+                {
+                    throw new ArgumentException(
+                        "--detect requires at least one image path.");
+                }
+
+                foreach (var path in args.Skip(1))
+                {
+                    PrintDetection(path);
+                }
+
+                return 0;
+            }
+
             var updateGoldens = args.Contains(
                 "--update-goldens",
                 StringComparer.Ordinal);
@@ -70,6 +86,18 @@ internal static class Program
                 page.Annotations,
                 new NormalizedPoint(0.3f, 0.3f)) is not null,
             "Annotation hit test failed.");
+        Assert(
+            AnnotationHitTester.HitTest(
+                page.Annotations,
+                new NormalizedPoint(0.68f, 0.86f))
+                is FreehandAnnotation { Filled: true },
+            "Filled freehand hit test failed.");
+        Assert(
+            AnnotationHitTester.HitTest(
+                page.Annotations,
+                new NormalizedPoint(0.77f, 0.73f))
+                is ShapeAnnotation { Shape: ShapeKind.Cross },
+            "X mark hit test failed.");
         CheckUndo(project);
 
         var preview = PageRenderer.RenderPng(processed, page);
@@ -82,6 +110,24 @@ internal static class Program
         await CheckStorageAndPdfAsync(project, source);
         await CheckUnsafeArchiveAsync();
         await CheckReplayAsync(source);
+    }
+
+    private static void PrintDetection(string path)
+    {
+        var detection = DocumentDetector.DetectEncoded(
+            File.ReadAllBytes(path));
+        Console.WriteLine(
+            $"{Path.GetFileName(path)}: found={detection.Found}, "
+            + $"confidence={detection.Confidence:F3}, "
+            + $"area={detection.AreaRatio:F3}, "
+            + $"sharpness={detection.Sharpness:F1}");
+        if (detection.Corners is not null)
+        {
+            Console.WriteLine(string.Join(
+                ", ",
+                detection.Corners.Points.Select(
+                    point => $"({point.X:F3}, {point.Y:F3})")));
+        }
     }
 
     private static byte[] CreateSyntheticDocument()
@@ -170,6 +216,26 @@ internal static class Program
                     ColorArgb = 0xff008272,
                     StrokeWidth = 7,
                 },
+                new ShapeAnnotation
+                {
+                    Shape = ShapeKind.Cross,
+                    Start = new(0.72f, 0.68f),
+                    End = new(0.82f, 0.78f),
+                    ColorArgb = 0xffd13438,
+                    StrokeWidth = 6,
+                },
+                new FreehandAnnotation
+                {
+                    Filled = true,
+                    ColorArgb = 0xff16a34a,
+                    StrokeWidth = 3,
+                    Points =
+                    [
+                        new(0.65f, 0.8f),
+                        new(0.75f, 0.88f),
+                        new(0.6f, 0.9f),
+                    ],
+                },
                 new FreehandAnnotation
                 {
                     IsHighlighter = true,
@@ -204,26 +270,34 @@ internal static class Program
         var start = DateTimeOffset.UtcNow;
         var stable = detection with
         {
-            Confidence = 0.95,
-            AreaRatio = 0.6,
+            Confidence = 0.65,
+            AreaRatio = 0.2,
             Sharpness = 200,
         };
         Assert(
             gate.Evaluate(stable, start) == AutoCaptureState.HoldSteady,
             "Auto-capture did not begin stability wait.");
         Assert(
-            gate.Evaluate(stable, start.AddMilliseconds(800))
+            gate.Evaluate(stable, start.AddMilliseconds(1500))
+                == AutoCaptureState.HoldSteady,
+            "Auto-capture countdown ended early.");
+        Assert(
+            Math.Abs(gate.Progress - 0.5) < 0.01,
+            "Auto-capture countdown progress is incorrect.");
+        Assert(
+            gate.Evaluate(stable, start.AddMilliseconds(3100))
                 == AutoCaptureState.Ready,
             "Auto-capture did not become ready.");
         Assert(
-            gate.Evaluate(stable, start.AddSeconds(1))
+            gate.Evaluate(stable, start.AddSeconds(2))
                 == AutoCaptureState.Captured,
             "Auto-capture cooldown failed.");
         Assert(
             gate.Evaluate(
                 stable with { Sharpness = 10 },
-                start.AddSeconds(2)) == AutoCaptureState.NoDocument,
+                start.AddSeconds(3)) == AutoCaptureState.NoDocument,
             "Blur rejection failed.");
+        Assert(gate.Progress == 0, "Auto-capture countdown did not reset.");
     }
 
     private static void CheckUndo(FastFillProject project)

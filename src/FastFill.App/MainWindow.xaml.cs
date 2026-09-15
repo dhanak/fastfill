@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using FastFill.Core;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -17,6 +18,7 @@ using Windows.Storage;
 using Windows.Storage.Pickers;
 using Windows.Storage.Streams;
 using Windows.System;
+using Windows.UI.Core;
 using WinRT;
 
 namespace FastFill.App;
@@ -43,6 +45,8 @@ public sealed partial class MainWindow : Window
     private readonly UndoBuffer<FastFillProject> _history =
         new(ProjectJson.Clone);
     private readonly AutoCaptureGate _autoCaptureGate = new();
+    private readonly Dictionary<ToolMode, ToolSettings> _toolSettings =
+        CreateToolSettings();
     private readonly string _workspaceRoot;
     private FastFillProject _project = new();
     private string _workspace = string.Empty;
@@ -70,14 +74,27 @@ public sealed partial class MainWindow : Window
     private int? _activeCropCorner;
     private int _pageIndex;
     private ToolMode _tool = ToolMode.Select;
-    private uint _toolColor = 0xff111827;
     private NormalizedPoint? _pointerStart;
     private Guid? _selectedAnnotationId;
     private AffineTransform? _dragStartTransform;
+    private AffineTransform? _resizeStartTransform;
+    private Vector2 _resizeCenter;
+    private float _resizeStartDistance;
+    private bool _resizingSelection;
+    private bool _pointerMoved;
+    private bool _interactionCheckpointed;
     private Guid? _draftAnnotationId;
+    private Guid? _textEditAnnotationId;
+    private NormalizedRect _textEditBounds;
+    private AffineTransform _textEditTransform = AffineTransform.Identity;
+    private bool _closingTextEditor;
     private float _zoom = 1;
     private bool _dirty;
     private bool _updatingPageList;
+    private bool _reorderingPages;
+    private Guid? _activePageBeforeReorder;
+    private bool _updatingToolOptions;
+    private bool _controlsReady;
     private DataTransferManager? _dataTransferManager;
     private StorageFile? _shareFile;
     private AppScreen _screen = AppScreen.Home;
@@ -92,7 +109,8 @@ public sealed partial class MainWindow : Window
             "workspaces");
         Directory.CreateDirectory(_workspaceRoot);
         InitializeShare();
-        InstallKeyboardShortcuts();
+        _controlsReady = true;
+        ApplyToolOptions();
         Closed += MainWindow_Closed;
         VisibilityChanged += MainWindow_VisibilityChanged;
         ShowRecoverIfAvailable();
@@ -200,7 +218,7 @@ public sealed partial class MainWindow : Window
             var manifest = FindLatestRecoveryManifest();
             if (manifest is null)
             {
-                RecoverButton.Visibility = Visibility.Collapsed;
+                RecoverButton.IsEnabled = false;
                 return;
             }
 
@@ -288,6 +306,7 @@ public sealed partial class MainWindow : Window
             await _camera.StartAsync();
             CaptureStatusText.Text = $"Using {choice.Name}";
             _autoCaptureGate.Reset();
+            CaptureCountdownRing.Value = 0;
         }
         catch (UnauthorizedAccessException exception)
         {
@@ -338,6 +357,8 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception exception)
         {
+            _autoCaptureGate.Reset();
+            CaptureCountdownRing.Value = 0;
             await ShowErrorAsync("Capture failed", exception);
             CaptureStatusText.Text = "Ready to capture";
         }
@@ -365,16 +386,21 @@ public sealed partial class MainWindow : Window
                     UpdateDetectionOverlay(frame, detection);
                     if (!AutoCaptureToggle.IsOn)
                     {
+                        CaptureCountdownRing.Value = 0;
                         return;
                     }
 
                     var state = _autoCaptureGate.Evaluate(
                         detection,
                         frame.Timestamp);
+                    CaptureCountdownRing.Value =
+                        _autoCaptureGate.Progress * 100;
                     CaptureStatusText.Text = state switch
                     {
                         AutoCaptureState.NoDocument => "Find document edges",
-                        AutoCaptureState.HoldSteady => "Hold steady…",
+                        AutoCaptureState.HoldSteady =>
+                            $"Hold steady "
+                            + $"{RemainingCountdownSeconds():0.0}s",
                         AutoCaptureState.Ready => "Captured",
                         _ => "Captured",
                     };
@@ -389,6 +415,27 @@ public sealed partial class MainWindow : Window
                 Interlocked.Exchange(ref _detecting, 0);
             }
         });
+    }
+
+    private double RemainingCountdownSeconds() => Math.Max(
+        0,
+        AutoCaptureGate.CountdownDuration.TotalSeconds
+            * (1 - _autoCaptureGate.Progress));
+
+    private void AutoCaptureToggle_Toggled(
+        object sender,
+        RoutedEventArgs args)
+    {
+        if (!_controlsReady)
+        {
+            return;
+        }
+
+        _autoCaptureGate.Reset();
+        CaptureCountdownRing.Value = 0;
+        CaptureStatusText.Text = AutoCaptureToggle.IsOn
+            ? "Find document edges"
+            : "Auto capture off";
     }
 
     private void UpdateDetectionOverlay(
@@ -669,6 +716,7 @@ public sealed partial class MainWindow : Window
         {
             Mode = (PageFilterMode)FilterPicker.SelectedIndex,
         };
+        AdjustCornersToggle.IsChecked = false;
         await RefreshReviewAsync();
     }
 
@@ -685,6 +733,7 @@ public sealed partial class MainWindow : Window
         {
             Contrast = (int)Math.Round(args.NewValue),
         };
+        AdjustCornersToggle.IsChecked = false;
         await RefreshReviewAsync();
     }
 
@@ -697,6 +746,7 @@ public sealed partial class MainWindow : Window
         RoutedEventArgs args)
     {
         _pendingRotation = (_pendingRotation + 1) % 4;
+        AdjustCornersToggle.IsChecked = false;
         await RefreshReviewAsync();
     }
 
@@ -790,7 +840,9 @@ public sealed partial class MainWindow : Window
         PageList.Items.Clear();
         for (var index = 0; index < _project.Pages.Count; index++)
         {
-            PageList.Items.Add($"Page {index + 1}");
+            PageList.Items.Add(new PageListItem(
+                _project.Pages[index].Id,
+                $"Page {index + 1}"));
         }
 
         PageList.SelectedIndex = _pageIndex;
@@ -801,6 +853,7 @@ public sealed partial class MainWindow : Window
 
     private async Task LoadActivePageAsync()
     {
+        CancelInlineTextEdit();
         if (_project.Pages.Count == 0)
         {
             _processedPage = null;
@@ -829,6 +882,7 @@ public sealed partial class MainWindow : Window
             _editorBackground?.Dispose();
             _editorBackground = image;
             _selectedAnnotationId = null;
+            ApplyToolOptions();
             EditorCanvas.Invalidate();
             SetStatus($"Page {_pageIndex + 1} of {_project.Pages.Count}");
         }
@@ -862,6 +916,9 @@ public sealed partial class MainWindow : Window
         var widthPoints = _processedPage is null
             ? 612
             : _processedPage.Width / PdfExporter.DotsPerInch * 72;
+        var heightPoints = _processedPage is null
+            ? 792
+            : _processedPage.Height / PdfExporter.DotsPerInch * 72;
         PageRenderer.Draw(
             canvas,
             _editorBackground,
@@ -869,8 +926,11 @@ public sealed partial class MainWindow : Window
             _editorImageRect,
             new RenderOptions(
                 widthPoints,
+                heightPoints,
                 _selectedAnnotationId,
-                DrawSelection: true));
+                DrawSelection: true,
+                HiddenAnnotationId: _textEditAnnotationId));
+        PositionInlineTextEditor(widthPoints);
     }
 
     private void EditorCanvas_PointerPressed(
@@ -883,19 +943,24 @@ public sealed partial class MainWindow : Window
         }
 
         _pointerStart = point;
+        _pointerMoved = false;
+        _interactionCheckpointed = false;
+        _resizingSelection = false;
         if (_tool == ToolMode.Select)
         {
+            if (TryBeginSelectionResize(point))
+            {
+                EditorCanvas.CapturePointer(args.Pointer);
+                return;
+            }
+
             var hit = AnnotationHitTester.HitTest(
                 CurrentPage.Annotations,
                 point,
                 16 / Math.Max(_editorImageRect.Width, 1));
             _selectedAnnotationId = hit?.Id;
             _dragStartTransform = hit?.Transform;
-            if (hit is not null)
-            {
-                _history.Checkpoint(_project);
-            }
-
+            ApplyToolOptions();
             EditorCanvas.Invalidate();
             EditorCanvas.CapturePointer(args.Pointer);
             return;
@@ -903,34 +968,54 @@ public sealed partial class MainWindow : Window
 
         if (_tool == ToolMode.Text)
         {
+            var hit = AnnotationHitTester.HitTest(
+                CurrentPage.Annotations,
+                point,
+                18 / Math.Max(_editorImageRect.Width, 1));
+            if (hit is TextAnnotation text)
+            {
+                _pointerStart = null;
+                _selectedAnnotationId = text.Id;
+                ApplyToolOptions();
+                BeginInlineTextEdit(
+                    text.Id,
+                    text.Text,
+                    text.Bounds,
+                    text.Transform);
+                return;
+            }
+
             EditorCanvas.CapturePointer(args.Pointer);
             return;
         }
 
         _history.Checkpoint(_project);
+        var settings = _toolSettings[_tool];
         Annotation annotation = _tool switch
         {
             ToolMode.Pen or ToolMode.Highlighter =>
                 new FreehandAnnotation
                 {
-                    ColorArgb = _toolColor,
-                    StrokeWidth = (float)ThicknessSlider.Value,
+                    ColorArgb = settings.Color,
+                    StrokeWidth = settings.Thickness,
                     IsHighlighter = _tool == ToolMode.Highlighter,
+                    Filled = _tool == ToolMode.Pen && settings.Filled,
                     Points = [point],
                 },
             _ => new ShapeAnnotation
             {
-                ColorArgb = _toolColor,
-                StrokeWidth = (float)ThicknessSlider.Value,
+                ColorArgb = settings.Color,
+                StrokeWidth = settings.Thickness,
                 Shape = ToShapeKind(_tool),
                 Start = point,
                 End = point,
-                Filled = FilledToggle.IsOn,
+                Filled = settings.Filled,
             },
         };
         CurrentPage.Annotations.Add(annotation);
         _draftAnnotationId = annotation.Id;
         _selectedAnnotationId = annotation.Id;
+        ApplyToolOptions();
         EditorCanvas.CapturePointer(args.Pointer);
         EditorCanvas.Invalidate();
     }
@@ -945,16 +1030,46 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        _pointerMoved |= PageDistancePixels(
+            _pointerStart.Value,
+            point) >= 3;
         if (_tool == ToolMode.Select
-            && _selectedAnnotationId is Guid selected
-            && _dragStartTransform is AffineTransform start)
+            && _selectedAnnotationId is Guid selected)
         {
-            var offset = point.Vector - _pointerStart.Value.Vector;
-            var matrix = start.Matrix
-                * Matrix3x2.CreateTranslation(offset);
-            ReplaceAnnotation(
-                selected,
-                annotation => WithTransform(annotation, matrix));
+            if (!_pointerMoved)
+            {
+                return;
+            }
+
+            CheckpointInteraction();
+            if (_resizingSelection
+                && _resizeStartTransform is AffineTransform resizeStart)
+            {
+                var distance = PageDistancePixels(
+                    NormalizedPoint.From(_resizeCenter),
+                    point);
+                var scale = Math.Clamp(
+                    distance / Math.Max(_resizeStartDistance, 1),
+                    0.15f,
+                    8);
+                var centered = Matrix3x2.CreateTranslation(-_resizeCenter)
+                    * Matrix3x2.CreateScale(scale)
+                    * Matrix3x2.CreateTranslation(_resizeCenter);
+                ReplaceAnnotation(
+                    selected,
+                    annotation => WithTransform(
+                        annotation,
+                        resizeStart.Matrix * centered));
+            }
+            else if (_dragStartTransform is AffineTransform dragStart)
+            {
+                var offset = point.Vector - _pointerStart.Value.Vector;
+                var matrix = dragStart.Matrix
+                    * Matrix3x2.CreateTranslation(offset);
+                ReplaceAnnotation(
+                    selected,
+                    annotation => WithTransform(annotation, matrix));
+            }
         }
         else if (_draftAnnotationId is Guid draft)
         {
@@ -964,7 +1079,13 @@ public sealed partial class MainWindow : Window
                 {
                     Points = AppendPoint(ink.Points, point),
                 },
-                ShapeAnnotation shape => shape with { End = point },
+                ShapeAnnotation shape => shape with
+                {
+                    End = shape.Shape is ShapeKind.Checkmark
+                        or ShapeKind.Cross
+                            ? ConstrainToSquare(shape.Start, point)
+                            : point,
+                },
                 _ => annotation,
             });
         }
@@ -972,7 +1093,7 @@ public sealed partial class MainWindow : Window
         EditorCanvas.Invalidate();
     }
 
-    private async void EditorCanvas_PointerReleased(
+    private void EditorCanvas_PointerReleased(
         object sender,
         PointerRoutedEventArgs args)
     {
@@ -982,75 +1103,337 @@ public sealed partial class MainWindow : Window
         }
 
         EditorCanvas.ReleasePointerCapture(args.Pointer);
-        var changed = _draftAnnotationId is not null
-            || _tool == ToolMode.Select
-            && _selectedAnnotationId is not null
-            && _dragStartTransform is not null;
+        CompleteDraftAnnotation();
+        var changed = _draftAnnotationId is not null || _pointerMoved
+            && _tool == ToolMode.Select
+            && _selectedAnnotationId is not null;
         if (_tool == ToolMode.Text
             && TryGetPagePoint(args, out var end))
         {
-            changed = await AddTextAsync(_pointerStart.Value, end);
+            BeginNewTextEdit(_pointerStart.Value, end);
         }
 
         _pointerStart = null;
         _draftAnnotationId = null;
         _dragStartTransform = null;
+        _resizeStartTransform = null;
+        _resizingSelection = false;
         if (changed)
         {
             MarkChanged();
         }
 
+        ApplyToolOptions();
         EditorCanvas.Invalidate();
     }
 
-    private async Task<bool> AddTextAsync(
+    private void BeginNewTextEdit(
         NormalizedPoint start,
         NormalizedPoint end)
     {
-        var input = new TextBox
-        {
-            AcceptsReturn = true,
-            Header = "Text",
-            MinWidth = 360,
-            MinHeight = 120,
-        };
-        var dialog = new ContentDialog
-        {
-            Title = "Add text",
-            Content = input,
-            PrimaryButtonText = "Add",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = XamlRoot,
-        };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary
-            || string.IsNullOrWhiteSpace(input.Text))
-        {
-            return false;
-        }
-
-        _history.Checkpoint(_project);
         var bounds = NormalizedRect.FromPoints(start, end);
         if (bounds.Width < 0.08f || bounds.Height < 0.04f)
         {
             bounds = new NormalizedRect(
                 start.X,
                 start.Y,
-                Math.Min(0.4f, 1 - start.X),
-                Math.Min(0.12f, 1 - start.Y));
+                Math.Min(0.24f, 1 - start.X),
+                Math.Min(0.07f, 1 - start.Y));
         }
 
-        var annotation = new TextAnnotation
+        BeginInlineTextEdit(
+            null,
+            string.Empty,
+            bounds,
+            AffineTransform.Identity);
+    }
+
+    private void EditorCanvas_DoubleTapped(
+        object sender,
+        DoubleTappedRoutedEventArgs args)
+    {
+        if (_project.Pages.Count == 0)
         {
-            ColorArgb = _toolColor,
-            StrokeWidth = (float)ThicknessSlider.Value,
-            Text = input.Text.Trim(),
-            Bounds = bounds,
-            FontSize = Math.Max(10, (float)ThicknessSlider.Value * 5),
-        };
-        CurrentPage.Annotations.Add(annotation);
-        _selectedAnnotationId = annotation.Id;
+            return;
+        }
+
+        var position = ToSkia(args.GetPosition(EditorCanvas));
+        if (!_editorImageRect.Contains(position))
+        {
+            return;
+        }
+
+        var point = ToNormalized(position, _editorImageRect);
+        var hit = AnnotationHitTester.HitTest(
+            CurrentPage.Annotations,
+            point,
+            18 / Math.Max(_editorImageRect.Width, 1));
+        if (hit is not TextAnnotation text)
+        {
+            return;
+        }
+
+        _selectedAnnotationId = text.Id;
+        ApplyToolOptions();
+        BeginInlineTextEdit(
+            text.Id,
+            text.Text,
+            text.Bounds,
+            text.Transform);
+        args.Handled = true;
+    }
+
+    private void BeginInlineTextEdit(
+        Guid? annotationId,
+        string text,
+        NormalizedRect bounds,
+        AffineTransform transform)
+    {
+        CancelInlineTextEdit();
+        _textEditAnnotationId = annotationId;
+        _textEditBounds = bounds;
+        _textEditTransform = transform;
+        InlineTextEditor.Text = text;
+        InlineTextEditor.Visibility = Visibility.Visible;
+        PositionInlineTextEditor(EditorPageWidthPoints());
+        InlineTextEditor.Focus(FocusState.Programmatic);
+        InlineTextEditor.SelectAll();
+        EditorCanvas.Invalidate();
+    }
+
+    private void PositionInlineTextEditor(float widthPoints)
+    {
+        if (InlineTextEditor.Visibility != Visibility.Visible
+            || _editorImageRect.IsEmpty)
+        {
+            return;
+        }
+
+        var corners = BoundsCorners(_textEditBounds)
+            .Select(_textEditTransform.Apply)
+            .ToArray();
+        var left = _editorImageRect.Left
+            + corners.Min(point => point.X) * _editorImageRect.Width;
+        var top = _editorImageRect.Top
+            + corners.Min(point => point.Y) * _editorImageRect.Height;
+        var right = _editorImageRect.Left
+            + corners.Max(point => point.X) * _editorImageRect.Width;
+        var bottom = _editorImageRect.Top
+            + corners.Max(point => point.Y) * _editorImageRect.Height;
+        Canvas.SetLeft(InlineTextEditor, left);
+        Canvas.SetTop(InlineTextEditor, top);
+        InlineTextEditor.Width = Math.Max(48, right - left);
+        InlineTextEditor.Height = Math.Max(40, bottom - top);
+        InlineTextEditor.FontFamily = new FontFamily(SelectedFontFamily());
+        InlineTextEditor.FontSize = SelectedFontSize()
+            * _editorImageRect.Width
+            / Math.Max(widthPoints, 1);
+        InlineTextEditor.Foreground = new SolidColorBrush(
+            ToWindowsColor(SelectedTextColor()));
+    }
+
+    private void InlineTextEditor_LostFocus(
+        object sender,
+        RoutedEventArgs args)
+    {
+        if (!_closingTextEditor)
+        {
+            CommitInlineTextEdit();
+        }
+    }
+
+    private void InlineTextEditor_KeyDown(
+        object sender,
+        KeyRoutedEventArgs args)
+    {
+        if (args.Key != VirtualKey.Escape)
+        {
+            return;
+        }
+
+        args.Handled = true;
+        CancelInlineTextEdit();
+        EditorCanvas.Focus(FocusState.Programmatic);
+    }
+
+    private void CommitInlineTextEdit()
+    {
+        if (InlineTextEditor.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        var text = InlineTextEditor.Text.Trim();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            CancelInlineTextEdit();
+            EditorCanvas.Invalidate();
+            return;
+        }
+
+        _history.Checkpoint(_project);
+        var fontFamily = SelectedFontFamily();
+        var fontSize = SelectedFontSize();
+        Guid annotationId;
+        if (_textEditAnnotationId is Guid existingId
+            && CurrentPage.Annotations.FirstOrDefault(
+                annotation => annotation.Id == existingId)
+                is TextAnnotation existing)
+        {
+            annotationId = existingId;
+            ReplaceAnnotation(existingId, annotation => existing with
+            {
+                Text = text,
+                FontFamily = fontFamily,
+                FontSize = fontSize,
+            });
+        }
+        else
+        {
+            var settings = _toolSettings[ToolMode.Text];
+            var annotation = new TextAnnotation
+            {
+                ColorArgb = settings.Color,
+                StrokeWidth = 3,
+                Text = text,
+                Bounds = _textEditBounds,
+                FontFamily = fontFamily,
+                FontSize = fontSize,
+            };
+            CurrentPage.Annotations.Add(annotation);
+            annotationId = annotation.Id;
+        }
+
+        CloseInlineTextEditor();
+        _selectedAnnotationId = annotationId;
+        MarkChanged();
+        ApplyToolOptions();
+        EditorCanvas.Invalidate();
+    }
+
+    private void CancelInlineTextEdit()
+    {
+        if (!_controlsReady
+            || InlineTextEditor.Visibility != Visibility.Visible)
+        {
+            _textEditAnnotationId = null;
+            return;
+        }
+
+        CloseInlineTextEditor();
+        EditorCanvas.Invalidate();
+    }
+
+    private void CloseInlineTextEditor()
+    {
+        _closingTextEditor = true;
+        InlineTextEditor.Visibility = Visibility.Collapsed;
+        InlineTextEditor.Text = string.Empty;
+        _textEditAnnotationId = null;
+        _closingTextEditor = false;
+    }
+
+    private bool TryBeginSelectionResize(NormalizedPoint point)
+    {
+        if (SelectedAnnotation is not Annotation selected)
+        {
+            return false;
+        }
+
+        var nearHandle = BoundsCorners(AnnotationBounds(selected))
+            .Select(selected.Transform.Apply)
+            .Any(corner => PageDistancePixels(corner, point) <= 28);
+        if (!nearHandle)
+        {
+            return false;
+        }
+
+        _resizeCenter = AnnotationCenter(selected);
+        _resizeStartDistance = PageDistancePixels(
+            NormalizedPoint.From(_resizeCenter),
+            point);
+        _resizeStartTransform = selected.Transform;
+        _resizingSelection = true;
         return true;
+    }
+
+    private void CheckpointInteraction()
+    {
+        if (_interactionCheckpointed)
+        {
+            return;
+        }
+
+        _history.Checkpoint(_project);
+        _interactionCheckpointed = true;
+    }
+
+    private void CompleteDraftAnnotation()
+    {
+        if (_draftAnnotationId is not Guid id
+            || CurrentPage.Annotations.FirstOrDefault(
+                annotation => annotation.Id == id)
+                is not ShapeAnnotation shape
+            || PageDistancePixels(shape.Start, shape.End) >= 12)
+        {
+            return;
+        }
+
+        var end = DefaultShapeEnd(shape);
+        ReplaceAnnotation(id, annotation => shape with { End = end });
+    }
+
+    private NormalizedPoint DefaultShapeEnd(ShapeAnnotation shape)
+    {
+        var width = Math.Max(_editorImageRect.Width, 1);
+        var height = Math.Max(_editorImageRect.Height, 1);
+        var target = new NormalizedPoint(
+            shape.Start.X + 64 / width,
+            shape.Start.Y + 48 / height).Clamp();
+        if (shape.Shape is ShapeKind.Checkmark or ShapeKind.Cross)
+        {
+            return ConstrainToSquare(shape.Start, target);
+        }
+
+        if (shape.Shape is ShapeKind.Line or ShapeKind.Arrow)
+        {
+            target = target with { Y = shape.Start.Y };
+        }
+
+        return target;
+    }
+
+    private NormalizedPoint ConstrainToSquare(
+        NormalizedPoint start,
+        NormalizedPoint end)
+    {
+        var width = Math.Max(_editorImageRect.Width, 1);
+        var height = Math.Max(_editorImageRect.Height, 1);
+        var deltaX = (end.X - start.X) * width;
+        var deltaY = (end.Y - start.Y) * height;
+        var directionX = deltaX < 0 ? -1 : 1;
+        var directionY = deltaY < 0 ? -1 : 1;
+        var availableX = directionX > 0
+            ? (1 - start.X) * width
+            : start.X * width;
+        var availableY = directionY > 0
+            ? (1 - start.Y) * height
+            : start.Y * height;
+        var size = Math.Min(
+            Math.Max(Math.Abs(deltaX), Math.Abs(deltaY)),
+            Math.Min(availableX, availableY));
+        return new NormalizedPoint(
+            start.X + directionX * size / width,
+            start.Y + directionY * size / height);
+    }
+
+    private float PageDistancePixels(
+        NormalizedPoint first,
+        NormalizedPoint second)
+    {
+        var x = (first.X - second.X) * _editorImageRect.Width;
+        var y = (first.Y - second.Y) * _editorImageRect.Height;
+        return MathF.Sqrt(x * x + y * y);
     }
 
     private void ToolButton_Click(object sender, RoutedEventArgs args)
@@ -1062,7 +1445,9 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        foreach (var button in ToolPanel.Children.OfType<ToggleButton>())
+        CommitInlineTextEdit();
+        foreach (var button in ToolButtonGrid.Children
+            .OfType<ToggleButton>())
         {
             button.IsChecked = ReferenceEquals(button, selected);
         }
@@ -1071,8 +1456,10 @@ public sealed partial class MainWindow : Window
         if (tool != ToolMode.Select)
         {
             _selectedAnnotationId = null;
-            EditorCanvas.Invalidate();
         }
+
+        ApplyToolOptions();
+        EditorCanvas.Invalidate();
     }
 
     private void ColorButton_Click(object sender, RoutedEventArgs args)
@@ -1087,27 +1474,217 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _toolColor = color;
+        if (_tool != ToolMode.Select)
+        {
+            _toolSettings[_tool] = _toolSettings[_tool] with
+            {
+                Color = color,
+            };
+        }
+
         ChangeSelected(annotation => annotation with
         {
             ColorArgb = color,
         });
+        UpdateColorSelection(color);
+        if (InlineTextEditor.Visibility == Visibility.Visible)
+        {
+            InlineTextEditor.Foreground = new SolidColorBrush(
+                ToWindowsColor(color));
+        }
     }
 
     private void ThicknessSlider_ValueChanged(
         object sender,
-        RangeBaseValueChangedEventArgs args) =>
+        RangeBaseValueChangedEventArgs args)
+    {
+        if (!_controlsReady || _updatingToolOptions)
+        {
+            return;
+        }
+
+        if (_tool != ToolMode.Select)
+        {
+            _toolSettings[_tool] = _toolSettings[_tool] with
+            {
+                Thickness = (float)args.NewValue,
+            };
+        }
+
         ChangeSelected(annotation => annotation with
         {
             StrokeWidth = (float)args.NewValue,
         });
+    }
 
     private void FilledToggle_Toggled(
         object sender,
-        RoutedEventArgs args) =>
-        ChangeSelected(annotation => annotation is ShapeAnnotation shape
-            ? shape with { Filled = FilledToggle.IsOn }
+        RoutedEventArgs args)
+    {
+        if (!_controlsReady || _updatingToolOptions)
+        {
+            return;
+        }
+
+        if (_tool != ToolMode.Select)
+        {
+            _toolSettings[_tool] = _toolSettings[_tool] with
+            {
+                Filled = FilledToggle.IsOn,
+            };
+        }
+
+        ChangeSelected(annotation => annotation switch
+        {
+            ShapeAnnotation shape => shape with
+            {
+                Filled = FilledToggle.IsOn,
+            },
+            FreehandAnnotation ink => ink with
+            {
+                Filled = FilledToggle.IsOn,
+            },
+            _ => annotation,
+        });
+    }
+
+    private void FontFamily_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs args)
+    {
+        if (!_controlsReady || _updatingToolOptions)
+        {
+            return;
+        }
+
+        var family = SelectedFontFamily();
+        _toolSettings[ToolMode.Text] = _toolSettings[ToolMode.Text] with
+        {
+            FontFamily = family,
+        };
+        if (InlineTextEditor.Visibility == Visibility.Visible)
+        {
+            InlineTextEditor.FontFamily = new FontFamily(family);
+            return;
+        }
+
+        ChangeSelected(annotation => annotation is TextAnnotation text
+            ? text with { FontFamily = family }
             : annotation);
+    }
+
+    private void FontSize_ValueChanged(
+        NumberBox sender,
+        NumberBoxValueChangedEventArgs args)
+    {
+        if (!_controlsReady || _updatingToolOptions)
+        {
+            return;
+        }
+
+        var size = SelectedFontSize();
+        _toolSettings[ToolMode.Text] = _toolSettings[ToolMode.Text] with
+        {
+            FontSize = size,
+        };
+        if (InlineTextEditor.Visibility == Visibility.Visible)
+        {
+            PositionInlineTextEditor(EditorPageWidthPoints());
+            return;
+        }
+
+        ChangeSelected(annotation => annotation is TextAnnotation text
+            ? text with { FontSize = size }
+            : annotation);
+    }
+
+    private void ApplyToolOptions()
+    {
+        if (!_controlsReady)
+        {
+            return;
+        }
+
+        _updatingToolOptions = true;
+        var selected = SelectedAnnotation;
+        var settings = selected is null
+            ? _toolSettings[_tool]
+            : ToolSettings.FromAnnotation(selected);
+        ThicknessSlider.Value = Math.Clamp(
+            settings.Thickness,
+            (float)ThicknessSlider.Minimum,
+            (float)ThicknessSlider.Maximum);
+        FilledToggle.IsOn = settings.Filled;
+        SelectComboItem(FontFamilyPicker, settings.FontFamily);
+        FontSizePicker.Value = settings.FontSize;
+        UpdateColorSelection(settings.Color);
+
+        var supportsThickness = selected switch
+        {
+            TextAnnotation => false,
+            not null => true,
+            _ => _tool is not (ToolMode.Select or ToolMode.Text),
+        };
+        var supportsFill = selected switch
+        {
+            FreehandAnnotation { IsHighlighter: false } => true,
+            ShapeAnnotation { Shape: ShapeKind.Rectangle
+                or ShapeKind.Ellipse } => true,
+            not null => false,
+            _ => _tool is ToolMode.Pen
+                or ToolMode.Rectangle
+                or ToolMode.Ellipse,
+        };
+        var supportsFont = selected is TextAnnotation
+            || selected is null && _tool == ToolMode.Text;
+        var supportsColor = selected is not null
+            || _tool != ToolMode.Select;
+        ThicknessSlider.IsEnabled = supportsThickness;
+        ThicknessLabel.Opacity = supportsThickness ? 1 : 0.45;
+        FilledToggle.IsEnabled = supportsFill;
+        FillPanel.Opacity = supportsFill ? 1 : 0.45;
+        FontPanel.Visibility = supportsFont
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        ColorPanel.IsEnabled = supportsColor;
+        ColorPanel.Opacity = supportsColor ? 1 : 0.45;
+        DeleteObjectButton.IsEnabled = selected is not null;
+        _updatingToolOptions = false;
+    }
+
+    private void UpdateColorSelection(uint color)
+    {
+        foreach (var button in ColorPanel.Children.OfType<Button>())
+        {
+            var selected = button.Tag is string tag
+                && uint.TryParse(
+                    tag,
+                    NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture,
+                    out var value)
+                && value == color;
+            button.BorderThickness = new Thickness(selected ? 3 : 1);
+            button.BorderBrush = new SolidColorBrush(
+                selected
+                    ? Windows.UI.Color.FromArgb(255, 0, 164, 239)
+                    : Windows.UI.Color.FromArgb(102, 127, 127, 127));
+        }
+    }
+
+    private static void SelectComboItem(ComboBox comboBox, string value)
+    {
+        var match = comboBox.Items
+            .OfType<ComboBoxItem>()
+            .Select((item, index) => new { Item = item, Index = index })
+            .FirstOrDefault(candidate => string.Equals(
+                candidate.Item.Content?.ToString(),
+                value,
+                StringComparison.Ordinal));
+        if (match is not null)
+        {
+            comboBox.SelectedIndex = match.Index;
+        }
+    }
 
     private void RotateObjectButton_Click(
         object sender,
@@ -1158,6 +1735,7 @@ public sealed partial class MainWindow : Window
         CurrentPage.Annotations.RemoveAll(annotation => annotation.Id == id);
         _selectedAnnotationId = null;
         MarkChanged();
+        ApplyToolOptions();
         EditorCanvas.Invalidate();
     }
 
@@ -1188,6 +1766,7 @@ public sealed partial class MainWindow : Window
         SelectionChangedEventArgs args)
     {
         if (_updatingPageList
+            || _reorderingPages
             || PageList.SelectedIndex < 0
             || PageList.SelectedIndex == _pageIndex)
         {
@@ -1196,6 +1775,50 @@ public sealed partial class MainWindow : Window
 
         _pageIndex = PageList.SelectedIndex;
         await LoadActivePageAsync();
+    }
+
+    private void PageList_DragItemsStarting(
+        object sender,
+        DragItemsStartingEventArgs args)
+    {
+        _reorderingPages = true;
+        _activePageBeforeReorder = CurrentPage.Id;
+    }
+
+    private void PageList_DragItemsCompleted(
+        object sender,
+        DragItemsCompletedEventArgs args)
+    {
+        var orderedIds = PageList.Items
+            .OfType<PageListItem>()
+            .Select(item => item.PageId)
+            .ToList();
+        _reorderingPages = false;
+        var selectedPageId = _activePageBeforeReorder
+            ?? _project.Pages[_pageIndex].Id;
+        _activePageBeforeReorder = null;
+        if (orderedIds.Count != _project.Pages.Count
+            || orderedIds.SequenceEqual(
+                _project.Pages.Select(page => page.Id)))
+        {
+            _updatingPageList = true;
+            PageList.SelectedIndex = _project.Pages.FindIndex(
+                page => page.Id == selectedPageId);
+            _updatingPageList = false;
+            return;
+        }
+
+        var pages = _project.Pages.ToDictionary(page => page.Id);
+        _history.Checkpoint(_project);
+        _project.Pages.Clear();
+        _project.Pages.AddRange(orderedIds.Select(id => pages[id]));
+        _pageIndex = _project.Pages.FindIndex(
+            page => page.Id == selectedPageId);
+        _updatingPageList = true;
+        PageList.SelectedIndex = _pageIndex;
+        _updatingPageList = false;
+        MarkChanged();
+        SetStatus($"Page {_pageIndex + 1} of {_project.Pages.Count}");
     }
 
     private async void EditPageButton_Click(
@@ -1280,6 +1903,29 @@ public sealed partial class MainWindow : Window
     private async void UndoButton_Click(
         object sender,
         RoutedEventArgs args) => await UndoAsync();
+
+    private async void RootGrid_KeyDown(
+        object sender,
+        KeyRoutedEventArgs args)
+    {
+        var control = InputKeyboardSource.GetKeyStateForCurrentThread(
+            VirtualKey.Control);
+        if (!control.HasFlag(CoreVirtualKeyStates.Down))
+        {
+            return;
+        }
+
+        if (args.Key == VirtualKey.Z)
+        {
+            args.Handled = true;
+            await UndoAsync();
+        }
+        else if (args.Key == VirtualKey.Y)
+        {
+            args.Handled = true;
+            await RedoAsync();
+        }
+    }
 
     private async Task UndoAsync()
     {
@@ -1543,30 +2189,6 @@ public sealed partial class MainWindow : Window
             : Visibility.Collapsed;
     }
 
-    private void InstallKeyboardShortcuts()
-    {
-        AddShortcut(VirtualKey.Z, VirtualKeyModifiers.Control, UndoAsync);
-        AddShortcut(VirtualKey.Y, VirtualKeyModifiers.Control, RedoAsync);
-    }
-
-    private void AddShortcut(
-        VirtualKey key,
-        VirtualKeyModifiers modifiers,
-        Func<Task> action)
-    {
-        var shortcut = new KeyboardAccelerator
-        {
-            Key = key,
-            Modifiers = modifiers,
-        };
-        shortcut.Invoked += (sender, args) =>
-        {
-            args.Handled = true;
-            _ = action();
-        };
-        ((UIElement)Content).KeyboardAccelerators.Add(shortcut);
-    }
-
     private async void MainWindow_VisibilityChanged(
         object sender,
         WindowVisibilityChangedEventArgs args)
@@ -1620,12 +2242,8 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() =>
             CaptureStatusText.Text = $"Camera stopped: {message}");
 
-    private void ShowRecoverIfAvailable()
-    {
-        RecoverButton.Visibility = FindLatestRecoveryManifest() is null
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-    }
+    private void ShowRecoverIfAvailable() =>
+        RecoverButton.IsEnabled = FindLatestRecoveryManifest() is not null;
 
     private string? FindLatestRecoveryManifest()
     {
@@ -1738,8 +2356,45 @@ public sealed partial class MainWindow : Window
         ToolMode.Rectangle => ShapeKind.Rectangle,
         ToolMode.Ellipse => ShapeKind.Ellipse,
         ToolMode.Checkmark => ShapeKind.Checkmark,
+        ToolMode.Cross => ShapeKind.Cross,
         _ => throw new ArgumentOutOfRangeException(nameof(tool)),
     };
+
+    private float EditorPageWidthPoints() => _processedPage is null
+        ? 612
+        : _processedPage.Width / PdfExporter.DotsPerInch * 72;
+
+    private string SelectedFontFamily() =>
+        (FontFamilyPicker.SelectedItem as ComboBoxItem)
+            ?.Content?.ToString()
+        ?? _toolSettings[ToolMode.Text].FontFamily;
+
+    private float SelectedFontSize()
+    {
+        return double.IsNaN(FontSizePicker.Value)
+            ? _toolSettings[ToolMode.Text].FontSize
+            : (float)FontSizePicker.Value;
+    }
+
+    private uint SelectedTextColor()
+    {
+        if (_textEditAnnotationId is Guid id
+            && CurrentPage.Annotations.FirstOrDefault(
+                annotation => annotation.Id == id) is TextAnnotation text)
+        {
+            return text.ColorArgb;
+        }
+
+        return SelectedAnnotation?.ColorArgb
+            ?? _toolSettings[ToolMode.Text].Color;
+    }
+
+    private static Windows.UI.Color ToWindowsColor(uint color) =>
+        Windows.UI.Color.FromArgb(
+            (byte)(color >> 24),
+            (byte)(color >> 16),
+            (byte)(color >> 8),
+            (byte)color);
 
     private static Annotation WithTransform(
         Annotation annotation,
@@ -1770,27 +2425,38 @@ public sealed partial class MainWindow : Window
 
     private static Vector2 AnnotationCenter(Annotation annotation)
     {
-        var bounds = annotation switch
-        {
-            FreehandAnnotation ink when ink.Points.Count > 0 => new
-                NormalizedRect(
-                    ink.Points.Min(point => point.X),
-                    ink.Points.Min(point => point.Y),
-                    ink.Points.Max(point => point.X)
-                        - ink.Points.Min(point => point.X),
-                    ink.Points.Max(point => point.Y)
-                        - ink.Points.Min(point => point.Y)),
-            TextAnnotation text => text.Bounds,
-            ShapeAnnotation shape => NormalizedRect.FromPoints(
-                shape.Start,
-                shape.End),
-            _ => new NormalizedRect(0, 0, 0, 0),
-        };
+        var bounds = AnnotationBounds(annotation);
         var localCenter = new Vector2(
             bounds.X + bounds.Width / 2,
             bounds.Y + bounds.Height / 2);
         return Vector2.Transform(localCenter, annotation.Transform.Matrix);
     }
+
+    private static NormalizedRect AnnotationBounds(
+        Annotation annotation) => annotation switch
+    {
+        FreehandAnnotation ink when ink.Points.Count > 0 => new(
+            ink.Points.Min(point => point.X),
+            ink.Points.Min(point => point.Y),
+            ink.Points.Max(point => point.X)
+                - ink.Points.Min(point => point.X),
+            ink.Points.Max(point => point.Y)
+                - ink.Points.Min(point => point.Y)),
+        TextAnnotation text => text.Bounds,
+        ShapeAnnotation shape => NormalizedRect.FromPoints(
+            shape.Start,
+            shape.End),
+        _ => new NormalizedRect(0, 0, 0, 0),
+    };
+
+    private static NormalizedPoint[] BoundsCorners(
+        NormalizedRect bounds) =>
+    [
+        new(bounds.X, bounds.Y),
+        new(bounds.Right, bounds.Y),
+        new(bounds.Right, bounds.Bottom),
+        new(bounds.X, bounds.Bottom),
+    ];
 
     private static string SafeSuggestedName(string title)
     {
@@ -1805,7 +2471,8 @@ public sealed partial class MainWindow : Window
     private DocumentPage CurrentPage => _project.Pages[_pageIndex];
 
     private Annotation? SelectedAnnotation =>
-        _selectedAnnotationId is Guid id
+        _project.Pages.Count > 0
+            && _selectedAnnotationId is Guid id
             ? CurrentPage.Annotations.FirstOrDefault(
                 annotation => annotation.Id == id)
             : null;
@@ -1837,6 +2504,55 @@ public sealed partial class MainWindow : Window
         Rectangle,
         Ellipse,
         Checkmark,
+        Cross,
+    }
+
+    private sealed record ToolSettings(
+        uint Color,
+        float Thickness,
+        bool Filled,
+        string FontFamily = "Segoe UI",
+        float FontSize = 18)
+    {
+        public static ToolSettings FromAnnotation(Annotation annotation) =>
+            annotation switch
+            {
+                TextAnnotation text => new(
+                    text.ColorArgb,
+                    text.StrokeWidth,
+                    false,
+                    text.FontFamily,
+                    text.FontSize),
+                FreehandAnnotation ink => new(
+                    ink.ColorArgb,
+                    ink.StrokeWidth,
+                    ink.Filled),
+                ShapeAnnotation shape => new(
+                    shape.ColorArgb,
+                    shape.StrokeWidth,
+                    shape.Filled),
+                _ => new(0xff111827, 3, false),
+            };
+    }
+
+    private static Dictionary<ToolMode, ToolSettings>
+        CreateToolSettings() => new()
+    {
+        [ToolMode.Select] = new(0xff111827, 3, false),
+        [ToolMode.Text] = new(0xff111827, 3, false),
+        [ToolMode.Pen] = new(0xff111827, 3, false),
+        [ToolMode.Highlighter] = new(0xffffd800, 14, false),
+        [ToolMode.Line] = new(0xff111827, 3, false),
+        [ToolMode.Arrow] = new(0xff111827, 3, false),
+        [ToolMode.Rectangle] = new(0xff111827, 3, false),
+        [ToolMode.Ellipse] = new(0xff111827, 3, false),
+        [ToolMode.Checkmark] = new(0xff16a34a, 5, false),
+        [ToolMode.Cross] = new(0xffe11d48, 5, false),
+    };
+
+    private sealed record PageListItem(Guid PageId, string Label)
+    {
+        public override string ToString() => Label;
     }
 
     [ComImport]

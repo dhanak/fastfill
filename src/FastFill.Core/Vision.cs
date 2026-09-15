@@ -73,38 +73,99 @@ public static class DocumentDetector
             RetrievalModes.List,
             ContourApproximationModes.ApproxSimple);
 
+        using var color = new Mat();
+        if (scaled.Channels() == 4)
+        {
+            Cv2.CvtColor(scaled, color, ColorConversionCodes.BGRA2BGR);
+        }
+        else
+        {
+            scaled.CopyTo(color);
+        }
+
+        using var hsv = new Mat();
+        using var paperMask = new Mat();
+        Cv2.CvtColor(color, hsv, ColorConversionCodes.BGR2HSV);
+        Cv2.InRange(
+            hsv,
+            new Scalar(0, 0, 115),
+            new Scalar(180, 105, 255),
+            paperMask);
+        using var paperKernel = Cv2.GetStructuringElement(
+            MorphShapes.Ellipse,
+            new Size(9, 9));
+        using var paperOpenKernel = Cv2.GetStructuringElement(
+            MorphShapes.Ellipse,
+            new Size(25, 25));
+        Cv2.MorphologyEx(
+            paperMask,
+            paperMask,
+            MorphTypes.Close,
+            paperKernel,
+            iterations: 2);
+        Cv2.MorphologyEx(
+            paperMask,
+            paperMask,
+            MorphTypes.Open,
+            paperOpenKernel);
+        Cv2.FindContours(
+            paperMask,
+            out var paperContours,
+            out _,
+            RetrievalModes.External,
+            ContourApproximationModes.ApproxSimple);
+        contours = contours.Concat(paperContours).ToArray();
+
         Point[]? best = null;
         var bestScore = 0d;
         var bestAreaRatio = 0d;
         var imageArea = scaled.Width * (double)scaled.Height;
+        var candidates = new List<Point[]>();
         foreach (var contour in contours)
         {
-            var perimeter = Cv2.ArcLength(contour, true);
-            var polygon = Cv2.ApproxPolyDP(contour, perimeter * 0.02, true);
-            if (polygon.Length != 4 || !Cv2.IsContourConvex(polygon))
+            var hull = Cv2.ConvexHull(contour);
+            foreach (var outline in new[] { contour, hull })
             {
-                continue;
-            }
+                var perimeter = Cv2.ArcLength(outline, true);
+                foreach (var epsilon in new[]
+                {
+                    0.01,
+                    0.015,
+                    0.02,
+                    0.03,
+                    0.04,
+                })
+                {
+                    var polygon = Cv2.ApproxPolyDP(
+                        outline,
+                        perimeter * epsilon,
+                        true);
+                    if (polygon.Length != 4
+                        || !Cv2.IsContourConvex(polygon))
+                    {
+                        continue;
+                    }
 
-            var area = Math.Abs(Cv2.ContourArea(polygon));
-            var areaRatio = area / imageArea;
-            if (areaRatio < 0.05)
-            {
-                continue;
+                    candidates.Add(polygon);
+                }
             }
+        }
 
-            var bounds = Cv2.BoundingRect(polygon);
-            var rectangularity = area / (bounds.Width * (double)bounds.Height);
-            var areaScore = Math.Min(1, areaRatio / 0.65);
-            var score = (areaScore * 0.65) + (rectangularity * 0.35);
-            if (score <= bestScore)
+        candidates.AddRange(FindLineQuadrilaterals(edges));
+        foreach (var polygon in candidates)
+        {
+            var scored = ScoreCandidate(
+                polygon,
+                scaled.Size(),
+                imageArea);
+            if (scored is null || scored.Value.Score <= bestScore)
             {
                 continue;
             }
 
             best = polygon;
-            bestScore = score;
-            bestAreaRatio = areaRatio;
+            bestScore = scored.Value.Score;
+            bestAreaRatio = scored.Value.AreaRatio;
         }
 
         using var laplacian = new Mat();
@@ -147,6 +208,200 @@ public static class DocumentDetector
             scale,
             InterpolationFlags.Area);
         return result;
+    }
+
+    private static (double Score, double AreaRatio)? ScoreCandidate(
+        Point[] polygon,
+        Size imageSize,
+        double imageArea)
+    {
+        var area = Math.Abs(Cv2.ContourArea(polygon));
+        var areaRatio = area / imageArea;
+        if (areaRatio < 0.05 || !Cv2.IsContourConvex(polygon))
+        {
+            return null;
+        }
+
+        var rectangle = Cv2.MinAreaRect(polygon);
+        var rectangleArea = rectangle.Size.Width
+            * (double)rectangle.Size.Height;
+        var shortestSide = Math.Min(
+            rectangle.Size.Width,
+            rectangle.Size.Height);
+        var longestSide = Math.Max(
+            rectangle.Size.Width,
+            rectangle.Size.Height);
+        if (rectangleArea <= 0
+            || shortestSide <= 0
+            || longestSide / shortestSide > 5)
+        {
+            return null;
+        }
+
+        var rectangularity = Math.Min(1, area / rectangleArea);
+        var areaScore = Math.Min(1, areaRatio / 0.55);
+        var border = Math.Min(imageSize.Width, imageSize.Height) * 0.02;
+        var borderCorners = polygon.Count(point =>
+            point.X <= border
+            || point.Y <= border
+            || point.X >= imageSize.Width - border
+            || point.Y >= imageSize.Height - border);
+        var borderPenalty = areaRatio >= 0.85
+            ? 0
+            : borderCorners * 0.12;
+        var score = (areaScore * 0.65)
+            + (rectangularity * 0.35)
+            - borderPenalty;
+        return (score, areaRatio);
+    }
+
+    private static IEnumerable<Point[]> FindLineQuadrilaterals(Mat edges)
+    {
+        var minimumLength = Math.Min(edges.Width, edges.Height) * 0.18;
+        var lines = Cv2.HoughLinesP(
+            edges,
+            1,
+            Math.PI / 180,
+            70,
+            minimumLength,
+            60);
+        var horizontal = lines
+            .Where(line => Math.Abs(line.P2.X - line.P1.X)
+                >= Math.Abs(line.P2.Y - line.P1.Y) * 1.5)
+            .OrderByDescending(LineLength)
+            .Take(14)
+            .ToArray();
+        var vertical = lines
+            .Where(line => Math.Abs(line.P2.Y - line.P1.Y)
+                >= Math.Abs(line.P2.X - line.P1.X) * 1.5)
+            .OrderByDescending(LineLength)
+            .Take(14)
+            .ToArray();
+        for (var firstH = 0; firstH < horizontal.Length; firstH++)
+        {
+            for (var secondH = firstH + 1;
+                secondH < horizontal.Length;
+                secondH++)
+            {
+                var top = horizontal[firstH];
+                var bottom = horizontal[secondH];
+                if (LineMidpoint(top).Y > LineMidpoint(bottom).Y)
+                {
+                    (top, bottom) = (bottom, top);
+                }
+
+                if (LineMidpoint(bottom).Y - LineMidpoint(top).Y
+                    < edges.Height * 0.12)
+                {
+                    continue;
+                }
+
+                foreach (var polygon in VerticalLinePairs(
+                    top,
+                    bottom,
+                    vertical,
+                    edges.Size()))
+                {
+                    yield return polygon;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<Point[]> VerticalLinePairs(
+        LineSegmentPoint top,
+        LineSegmentPoint bottom,
+        LineSegmentPoint[] vertical,
+        Size imageSize)
+    {
+        for (var firstV = 0; firstV < vertical.Length; firstV++)
+        {
+            for (var secondV = firstV + 1;
+                secondV < vertical.Length;
+                secondV++)
+            {
+                var left = vertical[firstV];
+                var right = vertical[secondV];
+                if (LineMidpoint(left).X > LineMidpoint(right).X)
+                {
+                    (left, right) = (right, left);
+                }
+
+                if (LineMidpoint(right).X - LineMidpoint(left).X
+                    < imageSize.Width * 0.12
+                    || !TryIntersect(top, left, out var topLeft)
+                    || !TryIntersect(top, right, out var topRight)
+                    || !TryIntersect(bottom, right, out var bottomRight)
+                    || !TryIntersect(bottom, left, out var bottomLeft))
+                {
+                    continue;
+                }
+
+                var points = new[]
+                {
+                    topLeft,
+                    topRight,
+                    bottomRight,
+                    bottomLeft,
+                };
+                var margin = Math.Min(
+                    imageSize.Width,
+                    imageSize.Height) * 0.05;
+                if (points.Any(point =>
+                    point.X < -margin
+                    || point.Y < -margin
+                    || point.X > imageSize.Width + margin
+                    || point.Y > imageSize.Height + margin))
+                {
+                    continue;
+                }
+
+                yield return points.Select(point => new Point(
+                    Math.Clamp(
+                        (int)Math.Round(point.X),
+                        0,
+                        imageSize.Width - 1),
+                    Math.Clamp(
+                        (int)Math.Round(point.Y),
+                        0,
+                        imageSize.Height - 1))).ToArray();
+            }
+        }
+    }
+
+    private static bool TryIntersect(
+        LineSegmentPoint first,
+        LineSegmentPoint second,
+        out Point2d intersection)
+    {
+        var firstA = first.P2.Y - first.P1.Y;
+        var firstB = first.P1.X - first.P2.X;
+        var firstC = firstA * first.P1.X + firstB * first.P1.Y;
+        var secondA = second.P2.Y - second.P1.Y;
+        var secondB = second.P1.X - second.P2.X;
+        var secondC = secondA * second.P1.X + secondB * second.P1.Y;
+        var determinant = firstA * secondB - secondA * firstB;
+        if (Math.Abs(determinant) < 0.001)
+        {
+            intersection = default;
+            return false;
+        }
+
+        intersection = new Point2d(
+            (secondB * firstC - firstB * secondC) / determinant,
+            (firstA * secondC - secondA * firstC) / determinant);
+        return true;
+    }
+
+    private static Point2d LineMidpoint(LineSegmentPoint line) => new(
+        (line.P1.X + line.P2.X) / 2d,
+        (line.P1.Y + line.P2.Y) / 2d);
+
+    private static double LineLength(LineSegmentPoint line)
+    {
+        var x = line.P2.X - line.P1.X;
+        var y = line.P2.Y - line.P1.Y;
+        return Math.Sqrt(x * x + y * y);
     }
 
     private static Point[] OrderCorners(Point[] points)
@@ -376,12 +631,14 @@ public enum AutoCaptureState
 
 public sealed class AutoCaptureGate
 {
-    private static readonly TimeSpan StableDuration =
-        TimeSpan.FromMilliseconds(750);
+    public static TimeSpan CountdownDuration { get; } =
+        TimeSpan.FromSeconds(3);
 
     private CropQuad? _lastCorners;
     private DateTimeOffset? _stableSince;
     private bool _captured;
+
+    public double Progress { get; private set; }
 
     public AutoCaptureState Evaluate(
         DocumentDetection detection,
@@ -389,8 +646,8 @@ public sealed class AutoCaptureGate
         double minimumSharpness = 80)
     {
         if (!detection.Found
-            || detection.Confidence < 0.8
-            || detection.AreaRatio < 0.25
+            || detection.Confidence < 0.55
+            || detection.AreaRatio < 0.1
             || detection.Sharpness < minimumSharpness)
         {
             Reset();
@@ -399,20 +656,28 @@ public sealed class AutoCaptureGate
 
         if (_captured)
         {
+            Progress = 1;
             return AutoCaptureState.Captured;
         }
 
         var corners = detection.Corners!;
         if (_lastCorners is null
-            || corners.MaximumCornerDistance(_lastCorners) > 0.015f)
+            || corners.MaximumCornerDistance(_lastCorners) > 0.025f)
         {
             _stableSince = timestamp;
             _lastCorners = corners;
+            Progress = 0;
             return AutoCaptureState.HoldSteady;
         }
 
         _lastCorners = corners;
-        if (timestamp - _stableSince < StableDuration)
+        var stableSince = _stableSince ?? timestamp;
+        var elapsed = timestamp - stableSince;
+        Progress = Math.Clamp(
+            elapsed / CountdownDuration,
+            0,
+            1);
+        if (elapsed < CountdownDuration)
         {
             return AutoCaptureState.HoldSteady;
         }
@@ -426,5 +691,6 @@ public sealed class AutoCaptureGate
         _lastCorners = null;
         _stableSince = null;
         _captured = false;
+        Progress = 0;
     }
 }

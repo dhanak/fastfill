@@ -138,6 +138,7 @@ public enum ShapeKind
     Rectangle,
     Ellipse,
     Checkmark,
+    Cross,
 }
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
@@ -157,6 +158,7 @@ public sealed record FreehandAnnotation : Annotation
 {
     public List<NormalizedPoint> Points { get; init; } = [];
     public bool IsHighlighter { get; init; }
+    public bool Filled { get; init; }
 }
 
 public sealed record TextAnnotation : Annotation
@@ -165,6 +167,7 @@ public sealed record TextAnnotation : Annotation
     public NormalizedRect Bounds { get; init; } =
         new(0.1f, 0.1f, 0.3f, 0.1f);
     public float FontSize { get; init; } = 14;
+    public string FontFamily { get; init; } = "Segoe UI";
 }
 
 public sealed record ShapeAnnotation : Annotation

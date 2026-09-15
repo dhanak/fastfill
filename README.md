@@ -9,12 +9,14 @@ corrected pages and annotations at 300 DPI.
 
 ## Current scope
 
-- Front/back camera capture. Manual capture is default; stable-document auto
-  capture is optional.
+- Front/back camera capture. Stable-document auto capture is enabled by
+  default, with a visible countdown; manual capture remains available.
 - OpenCV corner detection, manual four-corner correction, rotation, enhanced
   color, grayscale, black-and-white, and contrast.
-- Text, pen, highlighter, lines, arrows, boxes, circles, and checkmarks.
-- Selection, move, rotate, scale, recolor, fill, thickness, delete, undo, redo.
+- Inline editable text, pen, highlighter, lines, arrows, boxes, ovals,
+  checkmarks, and X marks.
+- Selection, drag move/resize, rotate, recolor, fill, thickness, delete,
+  undo, redo, and drag page reorder.
 - Five-page projects, autosave recovery, editable `.docscan` files.
 - Flattened PDF, file picker export to local/USB storage, Windows share sheet.
 
@@ -45,6 +47,14 @@ make update-goldens
 This loop covers document detection, perspective correction, filters,
 auto-capture stability, hit testing, undo/redo, hostile archive rejection,
 `.docscan` round trips, annotation rendering, and multipage PDF export.
+
+Calibrate detection with camera samples without changing the test suite:
+
+```sh
+docker run --rm \
+  -v "$PWD/captures:/samples:ro" \
+  fastfill-checks --detect /samples/frame.jpg
+```
 
 Linux cannot execute WinUI's Windows-only XAML compiler. Every push therefore
 runs the same checks on Windows and compiles the WinUI app in GitHub Actions.

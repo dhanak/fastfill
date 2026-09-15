@@ -16,11 +16,35 @@
       </Style>
       <Style x:Key="ToolToggleStyle" TargetType="ToggleButton">
         <Setter Property="MinHeight" Value="48" />
-        <Setter Property="MinWidth" Value="150" />
+        <Setter Property="MinWidth" Value="48" />
         <Setter Property="Margin" Value="2" />
-        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+      </Style>
+      <Style x:Key="HomeTileButtonStyle" TargetType="Button">
+        <Setter Property="MinHeight" Value="150" />
+        <Setter Property="MinWidth" Value="210" />
+        <Setter Property="Margin" Value="6" />
+        <Setter Property="Padding" Value="18" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+      </Style>
+      <Style x:Key="RailButtonStyle" TargetType="Button">
+        <Setter Property="MinHeight" Value="48" />
+        <Setter Property="Margin" Value="4,2" />
+        <Setter Property="Padding" Value="8" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+      </Style>
+      <Style x:Key="ColorButtonStyle" TargetType="Button">
+        <Setter Property="Width" Value="36" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="CornerRadius" Value="18" />
+        <Setter Property="Margin" Value="2" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="#667F7F7F" />
       </Style>
     </ResourceDictionary>
   </Application.Resources>
 </Application>
-

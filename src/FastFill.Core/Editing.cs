@@ -106,6 +106,9 @@ public static class AnnotationHitTester
         NormalizedPoint point,
         float tolerance) => annotation switch
     {
+        FreehandAnnotation { Filled: true } ink =>
+            PolygonContains(ink.Points, point)
+            || PolylineDistance(ink.Points, point, close: true) <= tolerance,
         FreehandAnnotation ink =>
             PolylineDistance(ink.Points, point) <= tolerance,
         TextAnnotation text => text.Bounds.Contains(point, tolerance),
@@ -134,13 +137,15 @@ public static class AnnotationHitTester
                 shape.Filled),
             ShapeKind.Checkmark => CheckmarkDistance(bounds, point)
                 <= tolerance,
+            ShapeKind.Cross => CrossDistance(bounds, point) <= tolerance,
             _ => false,
         };
     }
 
     private static float PolylineDistance(
         List<NormalizedPoint> points,
-        NormalizedPoint point)
+        NormalizedPoint point,
+        bool close = false)
     {
         if (points.Count == 0)
         {
@@ -160,7 +165,46 @@ public static class AnnotationHitTester
                 SegmentDistance(point, points[index - 1], points[index]));
         }
 
+        if (close)
+        {
+            distance = Math.Min(
+                distance,
+                SegmentDistance(point, points[^1], points[0]));
+        }
+
         return distance;
+    }
+
+    private static bool PolygonContains(
+        List<NormalizedPoint> points,
+        NormalizedPoint point)
+    {
+        if (points.Count < 3)
+        {
+            return false;
+        }
+
+        var inside = false;
+        for (var index = 0; index < points.Count; index++)
+        {
+            var current = points[index];
+            var previous = points[(index + points.Count - 1) % points.Count];
+            if ((current.Y > point.Y) == (previous.Y > point.Y))
+            {
+                continue;
+            }
+
+            var crossing = (previous.X - current.X)
+                * (point.Y - current.Y)
+                / (previous.Y - current.Y)
+                + current.X;
+            if (point.X < crossing)
+            {
+                inside = !inside;
+            }
+        }
+
+        return inside;
     }
 
     private static float SegmentDistance(
@@ -241,4 +285,16 @@ public static class AnnotationHitTester
             SegmentDistance(point, start, middle),
             SegmentDistance(point, middle, end));
     }
+
+    private static float CrossDistance(
+        NormalizedRect bounds,
+        NormalizedPoint point) => Math.Min(
+        SegmentDistance(
+            point,
+            new NormalizedPoint(bounds.X, bounds.Y),
+            new NormalizedPoint(bounds.Right, bounds.Bottom)),
+        SegmentDistance(
+            point,
+            new NormalizedPoint(bounds.Right, bounds.Y),
+            new NormalizedPoint(bounds.X, bounds.Bottom)));
 }

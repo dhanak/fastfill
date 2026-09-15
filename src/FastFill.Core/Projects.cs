@@ -133,6 +133,15 @@ public static class ProjectValidator
                 case TextAnnotation text when text.Text.Length > 10_000:
                     throw new InvalidDataException(
                         "Text annotation is too long.");
+                case TextAnnotation text
+                    when text.FontSize is < 6 or > 144:
+                    throw new InvalidDataException(
+                        "Text annotation font size is invalid.");
+                case TextAnnotation text
+                    when string.IsNullOrWhiteSpace(text.FontFamily)
+                    || text.FontFamily.Length > 100:
+                    throw new InvalidDataException(
+                        "Text annotation font family is invalid.");
             }
         }
     }

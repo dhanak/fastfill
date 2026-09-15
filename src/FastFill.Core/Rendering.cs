@@ -5,14 +5,13 @@ namespace FastFill.Core;
 
 public sealed record RenderOptions(
     float PageWidthPoints,
+    float PageHeightPoints,
     Guid? SelectedAnnotationId = null,
-    bool DrawSelection = false);
+    bool DrawSelection = false,
+    Guid? HiddenAnnotationId = null);
 
 public static class PageRenderer
 {
-    private static readonly SKTypeface AnnotationTypeface =
-        SKTypeface.FromFamilyName("Segoe UI") ?? SKTypeface.Default;
-
     public static void Draw(
         SKCanvas canvas,
         SKImage background,
@@ -33,6 +32,11 @@ public static class PageRenderer
         canvas.Scale(destination.Width, destination.Height);
         foreach (var annotation in page.Annotations)
         {
+            if (annotation.Id == options.HiddenAnnotationId)
+            {
+                continue;
+            }
+
             DrawAnnotation(canvas, annotation, options);
         }
 
@@ -65,7 +69,7 @@ public static class PageRenderer
             image,
             page,
             new SKRect(0, 0, width, height),
-            new RenderOptions(612));
+            new RenderOptions(612, 612f * height / width));
         using var snapshot = surface.Snapshot();
         using var data = snapshot.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
@@ -139,7 +143,19 @@ public static class PageRenderer
             builder.LineTo(point.X, point.Y);
         }
 
+        if (annotation.Filled && annotation.Points.Count >= 3)
+        {
+            builder.Close();
+        }
+
         using var path = builder.Detach();
+        if (annotation.Filled && annotation.Points.Count >= 3)
+        {
+            paint.Style = SKPaintStyle.Fill;
+            canvas.DrawPath(path, paint);
+            paint.Style = SKPaintStyle.Stroke;
+        }
+
         canvas.DrawPath(path, paint);
     }
 
@@ -150,8 +166,10 @@ public static class PageRenderer
         RenderOptions options)
     {
         paint.Style = SKPaintStyle.Fill;
+        using var typeface = SKTypeface.FromFamilyName(
+            annotation.FontFamily);
         using var font = new SKFont(
-            AnnotationTypeface,
+            typeface ?? SKTypeface.Default,
             annotation.FontSize / options.PageWidthPoints);
         var lineHeight = font.Size * 1.25f;
         var y = annotation.Bounds.Y + font.Size;
@@ -230,6 +248,9 @@ public static class PageRenderer
             case ShapeKind.Checkmark:
                 DrawCheckmark(canvas, bounds, paint);
                 break;
+            case ShapeKind.Cross:
+                DrawCross(canvas, bounds, paint);
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(annotation));
         }
@@ -252,8 +273,14 @@ public static class PageRenderer
         RenderOptions options)
     {
         DrawLine(canvas, annotation, paint);
-        var start = annotation.Start.Vector;
-        var end = annotation.End.Vector;
+        var width = options.PageWidthPoints;
+        var height = options.PageHeightPoints;
+        var start = new Vector2(
+            annotation.Start.X * width,
+            annotation.Start.Y * height);
+        var end = new Vector2(
+            annotation.End.X * width,
+            annotation.End.Y * height);
         var direction = end - start;
         if (direction.LengthSquared() < float.Epsilon)
         {
@@ -262,13 +289,21 @@ public static class PageRenderer
 
         direction = Vector2.Normalize(direction);
         var normal = new Vector2(-direction.Y, direction.X);
-        var size = Math.Max(
-            10 / options.PageWidthPoints,
-            paint.StrokeWidth * 4);
+        var size = Math.Max(10, annotation.StrokeWidth * 4);
         var left = end - direction * size + normal * size * 0.55f;
         var right = end - direction * size - normal * size * 0.55f;
-        canvas.DrawLine(end.X, end.Y, left.X, left.Y, paint);
-        canvas.DrawLine(end.X, end.Y, right.X, right.Y, paint);
+        canvas.DrawLine(
+            end.X / width,
+            end.Y / height,
+            left.X / width,
+            left.Y / height,
+            paint);
+        canvas.DrawLine(
+            end.X / width,
+            end.Y / height,
+            right.X / width,
+            right.Y / height,
+            paint);
     }
 
     private static void DrawCheckmark(
@@ -287,6 +322,26 @@ public static class PageRenderer
         canvas.DrawPath(path, paint);
     }
 
+    private static void DrawCross(
+        SKCanvas canvas,
+        SKRect bounds,
+        SKPaint paint)
+    {
+        paint.Style = SKPaintStyle.Stroke;
+        canvas.DrawLine(
+            bounds.Left,
+            bounds.Top,
+            bounds.Right,
+            bounds.Bottom,
+            paint);
+        canvas.DrawLine(
+            bounds.Right,
+            bounds.Top,
+            bounds.Left,
+            bounds.Bottom,
+            paint);
+    }
+
     private static void DrawSelection(
         SKCanvas canvas,
         Annotation annotation,
@@ -301,7 +356,33 @@ public static class PageRenderer
             StrokeWidth = 1.5f / options.PageWidthPoints,
         };
         canvas.DrawRect(ToSkia(bounds), selection);
+        var radiusX = 7 / options.PageWidthPoints;
+        var radiusY = 7 / options.PageHeightPoints;
+        using var handleFill = new SKPaint
+        {
+            Color = SKColors.White,
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill,
+        };
+        foreach (var point in BoundsCorners(bounds))
+        {
+            var handle = new SKRect(
+                point.X - radiusX,
+                point.Y - radiusY,
+                point.X + radiusX,
+                point.Y + radiusY);
+            canvas.DrawOval(handle, handleFill);
+            canvas.DrawOval(handle, selection);
+        }
     }
+
+    private static NormalizedPoint[] BoundsCorners(NormalizedRect bounds) =>
+    [
+        new(bounds.X, bounds.Y),
+        new(bounds.Right, bounds.Y),
+        new(bounds.Right, bounds.Bottom),
+        new(bounds.X, bounds.Bottom),
+    ];
 
     private static NormalizedRect GetBounds(Annotation annotation) =>
         annotation switch
@@ -382,7 +463,7 @@ public static class PdfExporter
                 image,
                 page,
                 new SKRect(0, 0, widthPoints, heightPoints),
-                new RenderOptions(widthPoints));
+                new RenderOptions(widthPoints, heightPoints));
             document.EndPage();
             progress?.Report(index + 1);
         }
