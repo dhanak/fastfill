@@ -46,10 +46,12 @@ unrecognized-app warning, select **More info**, then **Run anyway**.
   shapes.
 - Move, resize, rotate, recolor, reorder, or delete annotations after placing
   them. Multi-selection, undo, and redo are supported.
-- Drag page reordering for projects containing up to five pages.
+- Drag page reordering for projects containing up to 20 pages.
 - 🔍 Full-view, 1:1, and stepped zoom controls. The Navigate tool enables
-  pinch zoom and two-finger pan.
-- Editable `.docscan` projects with autosave recovery.
+  pinch zoom, touch pan, and mouse-wheel zoom.
+- Editable `.docscan` projects with autosave recovery. FastFill also opens a
+  `.docscan` passed to `FastFill.exe`, including through Windows **Open with**
+  or an existing file association.
 - Flattened 300-DPI PDF export to local or USB storage and the Windows share
   sheet for mail and other installed applications.
 
@@ -98,7 +100,7 @@ with Windows account and disk security.
 
 ## Current limits
 
-- Maximum five pages per project.
+- Maximum 20 pages per project.
 - No OCR or searchable-PDF generation.
 - No cloud synchronization or direct SMTP delivery.
 - Development certificate has no public publisher reputation.

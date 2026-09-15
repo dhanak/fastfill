@@ -31,11 +31,17 @@
         </StackPanel>
         <TextBlock x:Name="StatusText"
                    Grid.Column="1"
+                   Margin="20,0,12,0"
                    Text="Ready"
                    TextTrimming="CharacterEllipsis"
                    VerticalAlignment="Center"
                    AutomationProperties.LiveSetting="Polite" />
         <StackPanel Grid.Column="2" Orientation="Horizontal">
+          <Button x:Name="CloseProjectButton"
+                  Content="Close project"
+                  Visibility="Collapsed"
+                  Click="CloseProjectButton_Click"
+                  Style="{StaticResource TouchButtonStyle}" />
           <Button Content="Shortcuts"
                   Click="ShortcutsButton_Click"
                   AutomationProperties.Name="Show keyboard shortcuts"
@@ -265,6 +271,10 @@
                           Checked="ReviewSetting_Changed"
                           Unchecked="ReviewSetting_Changed"
                           Style="{StaticResource ToolToggleStyle}" />
+            <Button x:Name="AutoDetectCornersButton"
+                    Content="Auto-detect"
+                    Click="AutoDetectCornersButton_Click"
+                    Style="{StaticResource TouchButtonStyle}" />
             <ComboBox x:Name="FilterPicker"
                       Header="Color"
                       MinWidth="170"
@@ -362,8 +372,8 @@
                         ReorderMode="Enabled"
                         ScrollViewer.HorizontalScrollMode="Disabled"
                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                        ScrollViewer.VerticalScrollMode="Disabled"
-                        ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                        ScrollViewer.VerticalScrollMode="Auto"
+                        ScrollViewer.VerticalScrollBarVisibility="Auto"
                         DragItemsStarting="PageList_DragItemsStarting"
                         DragItemsCompleted="PageList_DragItemsCompleted"
                         SelectionChanged="PageList_SelectionChanged" />
@@ -409,6 +419,7 @@
                                  PointerMoved="EditorCanvas_PointerMoved"
                                  PointerReleased="EditorCanvas_PointerReleased"
                                  PointerCanceled="EditorCanvas_PointerCanceled"
+                                 PointerWheelChanged="EditorCanvas_Wheel"
                                  DoubleTapped="EditorCanvas_DoubleTapped" />
               <Canvas x:Name="EditorOverlay">
                 <TextBox x:Name="InlineTextEditor"

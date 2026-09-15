@@ -197,7 +197,7 @@ public sealed record DocumentPage
 public sealed record FastFillProject
 {
     public const int CurrentSchemaVersion = 1;
-    public const int MaximumPages = 5;
+    public const int MaximumPages = 20;
 
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
     public Guid Id { get; init; } = Guid.NewGuid();

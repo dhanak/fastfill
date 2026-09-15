@@ -330,14 +330,40 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
+            await OpenProjectFromPathAsync(file.Path);
+        }
+        catch (Exception exception)
+        {
+            await ShowErrorAsync("Open failed", exception);
+        }
+    }
+
+    internal async Task OpenProjectFromPathAsync(string filePath)
+    {
+        try
+        {
+            if (!string.Equals(
+                Path.GetExtension(filePath),
+                ".docscan",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException(
+                    "FastFill can only open .docscan projects.");
+            }
+
+            var fullPath = Path.GetFullPath(filePath);
             var workspace = Path.Combine(
                 _workspaceRoot,
                 Guid.NewGuid().ToString("N"));
-            var loaded = await ProjectArchive.LoadAsync(file.Path, workspace);
+            var loaded = await ProjectArchive.LoadAsync(
+                fullPath,
+                workspace);
             _project = loaded.Project;
             _workspace = loaded.WorkspacePath;
-            _projectPath = file.Path;
+            _projectPath = fullPath;
             _pageIndex = 0;
+            _zoom = 1;
+            _pan = Vector2.Zero;
             _history.Clear();
             _dirty = false;
             ShowEditor();
@@ -409,7 +435,8 @@ public sealed partial class MainWindow : Window
             return true;
         }
 
-        SetStatus("FastFill v1 supports up to five pages.");
+        SetStatus($"FastFill supports up to "
+            + $"{FastFillProject.MaximumPages} pages.");
         return false;
     }
 
@@ -882,7 +909,62 @@ public sealed partial class MainWindow : Window
 
     private void ReviewSetting_Changed(
         object sender,
-        RoutedEventArgs args) => ReviewCanvas.Invalidate();
+        RoutedEventArgs args)
+    {
+        AutoDetectCornersButton.Visibility =
+            AdjustCornersToggle.IsChecked == true
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        ReviewCanvas.Invalidate();
+    }
+
+    private async void AutoDetectCornersButton_Click(
+        object sender,
+        RoutedEventArgs args)
+    {
+        if (_pendingBytes is null
+            || AdjustCornersToggle.IsChecked != true)
+        {
+            return;
+        }
+
+        AutoDetectCornersButton.IsEnabled = false;
+        SetStatus("Detecting document boundary…");
+        try
+        {
+            var bytes = _pendingBytes;
+            var hint = _pendingCrop == CropQuad.Full
+                ? null
+                : _pendingCrop;
+            var detection = await Task.Run(
+                () => DocumentDetector.DetectEncoded(bytes, hint));
+            if (!ReferenceEquals(_pendingBytes, bytes)
+                || _screen != AppScreen.Review)
+            {
+                return;
+            }
+
+            if (detection.Corners is null)
+            {
+                SetStatus("No document boundary found.");
+                return;
+            }
+
+            _pendingCrop = detection.Corners;
+            ReviewCanvas.Invalidate();
+            await RefreshReviewAsync();
+            SetStatus("Document boundary detected.");
+        }
+        catch (Exception exception)
+        {
+            await ShowErrorAsync("Auto-detect failed", exception);
+        }
+        finally
+        {
+            AutoDetectCornersButton.IsEnabled =
+                AdjustCornersToggle.IsChecked == true;
+        }
+    }
 
     private async void RotatePageButton_Click(
         object sender,
@@ -2070,6 +2152,27 @@ public sealed partial class MainWindow : Window
         args.Handled = true;
     }
 
+    private void EditorCanvas_Wheel(
+        object sender,
+        PointerRoutedEventArgs args)
+    {
+        if (_tool != ToolMode.Navigate || _editorBackground is null)
+        {
+            return;
+        }
+
+        var delta = args.GetCurrentPoint(EditorCanvas)
+            .Properties.MouseWheelDelta;
+        if (delta == 0)
+        {
+            return;
+        }
+
+        SetEditorZoom(
+            _zoom * MathF.Pow(1.2f, delta / 120f));
+        args.Handled = true;
+    }
+
     private void CompleteDraftAnnotation()
     {
         if (_draftAnnotationId is not Guid id
@@ -2913,6 +3016,7 @@ public sealed partial class MainWindow : Window
                 "Geometry",
                 "Ctrl+draw/resize shape",
                 "Constrain box or oval to square or circle"),
+            ("Navigation", "Mouse wheel", "Zoom in or out"),
             ("Text", "Enter", "Accept text edit"),
             ("Text", "Shift+Enter", "Insert line break"),
             ("Text", "Esc", "Cancel text edit"),
@@ -3321,6 +3425,61 @@ public sealed partial class MainWindow : Window
         ShareButton.IsEnabled = hasPages;
     }
 
+    private async void CloseProjectButton_Click(
+        object sender,
+        RoutedEventArgs args)
+    {
+        var hasUnacceptedCapture = _pendingBytes is not null;
+        if ((_dirty && _project.Pages.Count > 0) || hasUnacceptedCapture)
+        {
+            var dialog = new ContentDialog
+            {
+                Title = "Close project?",
+                Content = "Unsaved changes and any unaccepted capture "
+                    + "will be closed.",
+                PrimaryButtonText = "Close project",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = XamlRoot,
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+        }
+
+        await StopCameraAsync();
+        CancelInlineTextEdit();
+        _renderCancellation?.Cancel();
+        _autosaveCancellation?.Cancel();
+        ClearReview();
+        _processedPage = null;
+        _editorBackground?.Dispose();
+        _editorBackground = null;
+        _project = new FastFillProject();
+        _workspace = string.Empty;
+        _projectPath = null;
+        _dirty = false;
+        _pageIndex = 0;
+        _zoom = 1;
+        _pan = Vector2.Zero;
+        _history.Clear();
+        _selectedAnnotationIds.Clear();
+        _navigationPoints.Clear();
+        _activeCropCorner = null;
+        _pointerStart = null;
+        _draftAnnotationId = null;
+        _interactionSnapshot = null;
+        ResetSelectionInteraction();
+        _updatingPageList = true;
+        PageList.Items.Clear();
+        PageList.SelectedIndex = -1;
+        _updatingPageList = false;
+        SetScreen(AppScreen.Home);
+        ShowRecoverIfAvailable();
+        SetStatus("Ready");
+    }
+
     private void SetScreen(AppScreen screen)
     {
         _screen = screen;
@@ -3336,6 +3495,10 @@ public sealed partial class MainWindow : Window
         EditorPanel.Visibility = screen == AppScreen.Editor
             ? Visibility.Visible
             : Visibility.Collapsed;
+        CloseProjectButton.Visibility = screen == AppScreen.Home
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        UpdateCommandState();
     }
 
     private async void MainWindow_VisibilityChanged(

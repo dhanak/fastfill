@@ -45,7 +45,9 @@ public static class ProjectValidator
 
         if (project.Pages.Count > FastFillProject.MaximumPages)
         {
-            throw new InvalidDataException("A project may contain five pages.");
+            throw new InvalidDataException(
+                $"A project may contain at most "
+                + $"{FastFillProject.MaximumPages} pages.");
         }
 
         if (project.Title.Length > 200)
