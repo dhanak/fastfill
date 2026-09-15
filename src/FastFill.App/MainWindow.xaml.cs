@@ -10,7 +10,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.Windows.Media.Capture;
 using SkiaSharp;
 using SkiaSharp.Views.Windows;
 using Windows.ApplicationModel.DataTransfer;
@@ -30,6 +29,21 @@ namespace FastFill.App;
     Justification = "WinUI owns Window lifetime; Closed releases resources.")]
 public sealed partial class MainWindow : Window
 {
+    private static readonly Uri WindowsCameraUri =
+        new("microsoft.windows.camera:");
+    private static readonly Guid CameraRollFolderId = new(
+        0xab5fb87b,
+        0x7ce2,
+        0x4f83,
+        0x91,
+        0x5d,
+        0x55,
+        0x08,
+        0x46,
+        0xc9,
+        0x53,
+        0x7b);
+
     private static readonly Guid DataTransferManagerId = new(
         0xa5caee9b,
         0x8708,
@@ -157,12 +171,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            var picker = new FileOpenPicker();
-            InitializePicker(picker);
-            picker.FileTypeFilter.Add(".jpg");
-            picker.FileTypeFilter.Add(".jpeg");
-            picker.FileTypeFilter.Add(".png");
-            var file = await picker.PickSingleFileAsync();
+            var file = await PickImageAsync();
             if (file is null)
             {
                 return;
@@ -285,14 +294,79 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            SetStatus("Opening Windows camera…");
-            var camera = new CameraCaptureUI(AppWindow.Id);
-            camera.PhotoSettings.AllowCropping = true;
-            camera.PhotoSettings.Format = CameraCaptureUIPhotoFormat.Jpeg;
-            camera.PhotoSettings.MaxResolution =
-                CameraCaptureUIMaxPhotoResolution.HighestAvailable;
-            var photo = await camera.CaptureFileAsync(
-                CameraCaptureUIMode.Photo);
+            var cameraRoll = GetCameraRollPath();
+            Directory.CreateDirectory(cameraRoll);
+            var filesBeforeCapture = Directory
+                .EnumerateFiles(cameraRoll)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var dialog = new ContentDialog
+            {
+                Title = "Capture with Windows Camera",
+                Content = "Select Document mode and take one photo. "
+                    + "Return to FastFill, then choose Use latest photo.",
+                PrimaryButtonText = "Use latest photo",
+                SecondaryButtonText = "Browse instead",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = XamlRoot,
+            };
+
+            SetStatus("Opening Windows Camera…");
+            var dialogOperation = dialog.ShowAsync();
+            bool launched;
+            try
+            {
+                launched = await Launcher.LaunchUriAsync(WindowsCameraUri);
+            }
+            catch
+            {
+                dialog.Hide();
+                await dialogOperation;
+                throw;
+            }
+
+            if (!launched)
+            {
+                dialog.Hide();
+                await dialogOperation;
+                throw new InvalidOperationException(
+                    "Windows Camera is not installed.");
+            }
+
+            var choice = await dialogOperation;
+            if (choice == ContentDialogResult.None)
+            {
+                RestoreAfterCapture();
+                SetStatus("Capture canceled.");
+                return;
+            }
+
+            StorageFile? photo;
+            if (choice == ContentDialogResult.Primary)
+            {
+                var path = FindNewCameraImage(
+                    cameraRoll,
+                    filesBeforeCapture);
+                if (path is null)
+                {
+                    RestoreAfterCapture();
+                    await ShowErrorAsync(
+                        "No captured photo found",
+                        new FileNotFoundException(
+                            "Camera Roll has no new JPEG or PNG."),
+                        "Take a photo in Windows Camera before choosing "
+                            + "Use latest photo.");
+                    return;
+                }
+
+                photo = await StorageFile.GetFileFromPathAsync(path);
+            }
+            else
+            {
+                photo = await PickImageAsync();
+            }
+
             if (photo is null)
             {
                 RestoreAfterCapture();
@@ -314,6 +388,68 @@ public sealed partial class MainWindow : Window
             Interlocked.Exchange(ref _capturing, 0);
         }
     }
+
+    private async Task<StorageFile?> PickImageAsync()
+    {
+        var picker = new FileOpenPicker
+        {
+            SuggestedStartLocation = PickerLocationId.PicturesLibrary,
+        };
+        InitializePicker(picker);
+        picker.FileTypeFilter.Add(".jpg");
+        picker.FileTypeFilter.Add(".jpeg");
+        picker.FileTypeFilter.Add(".png");
+        return await picker.PickSingleFileAsync();
+    }
+
+    private static string? FindNewCameraImage(
+        string cameraRoll,
+        HashSet<string> filesBeforeCapture) =>
+        Directory
+            .EnumerateFiles(cameraRoll)
+            .Where(path => !filesBeforeCapture.Contains(path))
+            .Where(path => IsSupportedImagePath(path))
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault();
+
+    private static bool IsSupportedImagePath(string path)
+    {
+        var extension = Path.GetExtension(path);
+        return extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".png", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetCameraRollPath()
+    {
+        var folderId = CameraRollFolderId;
+        Marshal.ThrowExceptionForHR(SHGetKnownFolderPath(
+            ref folderId,
+            0,
+            IntPtr.Zero,
+            out var pathPointer));
+        try
+        {
+            return Marshal.PtrToStringUni(pathPointer)
+                ?? throw new InvalidOperationException(
+                    "Windows did not return the Camera Roll path.");
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
+    }
+
+    [DllImport(
+        "shell32.dll",
+        CharSet = CharSet.Unicode,
+        ExactSpelling = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    private static extern int SHGetKnownFolderPath(
+        ref Guid folderId,
+        uint flags,
+        IntPtr token,
+        out IntPtr path);
 
     private void RestoreAfterCapture()
     {

@@ -9,7 +9,8 @@ corrected pages and annotations at 300 DPI.
 
 ## Current scope
 
-- Windows camera capture with its built-in crop workflow and camera controls.
+- Windows Camera document mode, including its boundary guide, crop tools,
+  camera switching, and a Camera Roll handoff for portable builds.
 - Manual four-corner perspective correction, rotation, enhanced color,
   grayscale, black-and-white, and contrast.
 - Inline editable text, pen, highlighter, lines, arrows, boxes, ovals,
@@ -86,6 +87,10 @@ not create public SmartScreen reputation, so Windows may still show an
 unrecognized-app warning for a downloaded build. If it does, use **More info**,
 then **Run anyway**.
 
+Capture opens Windows Camera and leaves a FastFill handoff prompt behind it.
+Use Camera's Document mode, take the scan, return to FastFill, then select
+**Use latest photo**. **Browse instead** handles nonstandard save locations.
+
 Successful `master` builds replace the public `dev` prerelease. Download the
 current portable ZIP without signing in:
 
@@ -95,8 +100,8 @@ current portable ZIP without signing in:
 
 Use the device only before a release candidate. One short pass:
 
-1. Test Windows camera capture, camera switching, cancellation, cropping, and
-   return to FastFill.
+1. Test Windows Camera launch, Document mode, camera switching, cancellation,
+   cropping, and Camera Roll return to FastFill.
 2. Drag all crop handles and annotation tools with finger and Surface Pen.
    Verify controls remain usable at 150% and 200% display scaling.
 3. Export a five-page PDF, reopen a `.docscan`, share to Mail, and save to a
