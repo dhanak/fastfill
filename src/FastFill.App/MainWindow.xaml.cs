@@ -1823,7 +1823,11 @@ public sealed partial class MainWindow : Window
         FontPanel.Visibility = supportsFont
             ? Visibility.Visible
             : Visibility.Collapsed;
-        ColorPanel.IsEnabled = supportsColor;
+        foreach (var button in ColorPanel.Children.OfType<Button>())
+        {
+            button.IsEnabled = supportsColor;
+        }
+
         ColorPanel.Opacity = supportsColor ? 1 : 0.45;
         DeleteObjectButton.IsEnabled = selected is not null;
         _updatingToolOptions = false;
