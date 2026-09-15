@@ -283,7 +283,7 @@
           <Grid.ColumnDefinitions>
             <ColumnDefinition x:Name="PageColumn" Width="136" />
             <ColumnDefinition Width="*" />
-            <ColumnDefinition x:Name="ToolColumn" Width="170" />
+            <ColumnDefinition x:Name="ToolColumn" Width="216" />
           </Grid.ColumnDefinitions>
           <Grid.RowDefinitions>
             <RowDefinition Height="*" />
@@ -316,6 +316,12 @@
                   <Setter Target="ToolColumn.Width" Value="0" />
                   <Setter Target="ToolPanel.Orientation"
                           Value="Horizontal" />
+                  <Setter
+                    Target="ToolScrollViewer.HorizontalScrollBarVisibility"
+                    Value="Auto" />
+                  <Setter
+                    Target="ToolScrollViewer.VerticalScrollBarVisibility"
+                    Value="Disabled" />
                 </VisualState.Setters>
               </VisualState>
             </VisualStateGroup>
@@ -336,6 +342,7 @@
                         AllowDrop="True"
                         CanDragItems="True"
                         CanReorderItems="True"
+                        ReorderMode="Enabled"
                         DragItemsStarting="PageList_DragItemsStarting"
                         DragItemsCompleted="PageList_DragItemsCompleted"
                         SelectionChanged="PageList_SelectionChanged" />
@@ -396,11 +403,13 @@
                          LostFocus="InlineTextEditor_LostFocus"
                          KeyDown="InlineTextEditor_KeyDown" />
               </Canvas>
-              <Border HorizontalAlignment="Center"
+              <Border x:Name="NavigationBar"
+                      HorizontalAlignment="Center"
                       VerticalAlignment="Bottom"
                       Margin="16"
                       Padding="4"
                       CornerRadius="10"
+                      Visibility="Collapsed"
                       Background=
                         "{ThemeResource CardBackgroundFillColorDefaultBrush}">
                 <StackPanel Orientation="Horizontal" Spacing="2">
@@ -436,7 +445,8 @@
                   Background=
                     "{ThemeResource CardBackgroundFillColorDefaultBrush}"
                   CornerRadius="8">
-            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+            <ScrollViewer x:Name="ToolScrollViewer"
+                          HorizontalScrollBarVisibility="Disabled"
                           VerticalScrollBarVisibility="Auto">
               <StackPanel x:Name="ToolPanel" Padding="8">
                 <TextBlock Text="Tools"
@@ -454,7 +464,17 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                   </Grid.RowDefinitions>
+                  <ToggleButton Click="ToolButton_Click"
+                                Tag="Navigate"
+                                ToolTipService.ToolTip="Navigate page"
+                                AutomationProperties.Name="Navigate page"
+                                Style="{StaticResource ToolToggleStyle}">
+                    <TextBlock Text="✋"
+                               FontFamily="Segoe UI Symbol"
+                               FontSize="20" />
+                  </ToggleButton>
                   <ToggleButton x:Name="SelectToolButton"
+                                Grid.Column="1"
                                 IsChecked="True"
                                 Click="ToolButton_Click"
                                 Tag="Select"
@@ -463,7 +483,7 @@
                                 Style="{StaticResource ToolToggleStyle}">
                     <FontIcon Glyph="&#xE7C9;" FontSize="20" />
                   </ToggleButton>
-                  <ToggleButton Grid.Column="1"
+                  <ToggleButton Grid.Column="2"
                                 Click="ToolButton_Click"
                                 Tag="Text"
                                 ToolTipService.ToolTip="Text"
@@ -471,7 +491,7 @@
                                 Style="{StaticResource ToolToggleStyle}">
                     <FontIcon Glyph="&#xE8D2;" FontSize="20" />
                   </ToggleButton>
-                  <ToggleButton Grid.Column="2"
+                  <ToggleButton Grid.Row="1"
                                 Click="ToolButton_Click"
                                 Tag="Pen"
                                 ToolTipService.ToolTip="Pen"
@@ -480,6 +500,7 @@
                     <FontIcon Glyph="&#xE76D;" FontSize="20" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="1"
+                                Grid.Column="1"
                                 Click="ToolButton_Click"
                                 Tag="Highlighter"
                                 ToolTipService.ToolTip="Highlighter"
@@ -488,7 +509,7 @@
                     <FontIcon Glyph="&#xE7E6;" FontSize="20" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="1"
-                                Grid.Column="1"
+                                Grid.Column="2"
                                 Click="ToolButton_Click"
                                 Tag="Line"
                                 ToolTipService.ToolTip="Straight line"
@@ -496,8 +517,7 @@
                                 Style="{StaticResource ToolToggleStyle}">
                     <TextBlock Text="╱" FontSize="24" />
                   </ToggleButton>
-                  <ToggleButton Grid.Row="1"
-                                Grid.Column="2"
+                  <ToggleButton Grid.Row="2"
                                 Click="ToolButton_Click"
                                 Tag="Arrow"
                                 ToolTipService.ToolTip="Arrow"
@@ -506,6 +526,7 @@
                     <TextBlock Text="↗" FontSize="24" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="2"
+                                Grid.Column="1"
                                 Click="ToolButton_Click"
                                 Tag="Rectangle"
                                 ToolTipService.ToolTip="Box"
@@ -514,7 +535,7 @@
                     <TextBlock Text="□" FontSize="24" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="2"
-                                Grid.Column="1"
+                                Grid.Column="2"
                                 Click="ToolButton_Click"
                                 Tag="Ellipse"
                                 ToolTipService.ToolTip="Oval"
@@ -522,8 +543,7 @@
                                 Style="{StaticResource ToolToggleStyle}">
                     <TextBlock Text="○" FontSize="24" />
                   </ToggleButton>
-                  <ToggleButton Grid.Row="2"
-                                Grid.Column="2"
+                  <ToggleButton Grid.Row="3"
                                 Click="ToolButton_Click"
                                 Tag="Checkmark"
                                 ToolTipService.ToolTip="Checkmark"
@@ -532,6 +552,7 @@
                     <TextBlock Text="✓" FontSize="24" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="3"
+                                Grid.Column="1"
                                 Click="ToolButton_Click"
                                 Tag="Cross"
                                 ToolTipService.ToolTip="X mark"
@@ -629,18 +650,18 @@
                              SpinButtonPlacementMode="Compact"
                              ValueChanged="FontSize_ValueChanged" />
                 </StackPanel>
-                <Grid Margin="0,6,0,0">
+                <Grid x:Name="TransformPanel" Margin="0,6,0,0">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                   </Grid.ColumnDefinitions>
                   <Button Click="RotateObjectButton_Click"
+                          Content="↻ 15°"
                           AutomationProperties.Name="Rotate selected"
                           ToolTipService.ToolTip="Rotate selected"
-                          Style="{StaticResource TouchButtonStyle}">
-                    <FontIcon Glyph="&#xE7AD;" />
-                  </Button>
+                          Padding="4"
+                          Style="{StaticResource TouchButtonStyle}" />
                   <Button Grid.Column="1"
                           Content="−"
                           Click="SmallerObjectButton_Click"

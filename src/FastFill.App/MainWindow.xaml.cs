@@ -91,8 +91,7 @@ public sealed partial class MainWindow : Window
     private float _zoom = 1;
     private Vector2 _pan;
     private Vector2 _editorViewportSize;
-    private readonly Dictionary<uint, Point> _touchPoints = [];
-    private bool _touchGesture;
+    private readonly Dictionary<uint, Point> _navigationPoints = [];
     private double _gestureStartDistance;
     private Point _gestureStartCenter;
     private float _gestureStartZoom;
@@ -954,7 +953,7 @@ public sealed partial class MainWindow : Window
         object sender,
         PointerRoutedEventArgs args)
     {
-        if (HandleTouchPressed(args))
+        if (HandleNavigationPressed(args))
         {
             return;
         }
@@ -1046,7 +1045,7 @@ public sealed partial class MainWindow : Window
         object sender,
         PointerRoutedEventArgs args)
     {
-        if (HandleTouchMoved(args))
+        if (HandleNavigationMoved(args))
         {
             return;
         }
@@ -1124,7 +1123,7 @@ public sealed partial class MainWindow : Window
         object sender,
         PointerRoutedEventArgs args)
     {
-        if (HandleTouchReleased(args))
+        if (HandleNavigationReleased(args))
         {
             return;
         }
@@ -1189,7 +1188,8 @@ public sealed partial class MainWindow : Window
         object sender,
         DoubleTappedRoutedEventArgs args)
     {
-        if (_project.Pages.Count == 0)
+        if (_project.Pages.Count == 0
+            || _tool is not (ToolMode.Select or ToolMode.Text))
         {
             return;
         }
@@ -1440,53 +1440,34 @@ public sealed partial class MainWindow : Window
         EditorCanvas.Invalidate();
     }
 
-    private bool HandleTouchPressed(PointerRoutedEventArgs args)
+    private bool HandleNavigationPressed(PointerRoutedEventArgs args)
     {
-        if (args.Pointer.PointerDeviceType != PointerDeviceType.Touch)
+        if (_tool != ToolMode.Navigate)
         {
             return false;
         }
 
-        _touchPoints[args.Pointer.PointerId] =
+        _navigationPoints[args.Pointer.PointerId] =
             args.GetCurrentPoint(EditorCanvas).Position;
-        if (_touchPoints.Count < 2)
-        {
-            return _touchGesture;
-        }
-
-        if (!_touchGesture)
-        {
-            CancelEditorInteraction();
-            var points = _touchPoints.Values.Take(2).ToArray();
-            _gestureStartDistance = PointDistance(points[0], points[1]);
-            _gestureStartCenter = PointMidpoint(points[0], points[1]);
-            _gestureStartZoom = _zoom;
-            _gestureStartPan = _pan;
-            _touchGesture = true;
-        }
-
+        BeginNavigationGesture();
         EditorCanvas.CapturePointer(args.Pointer);
         args.Handled = true;
         return true;
     }
 
-    private bool HandleTouchMoved(PointerRoutedEventArgs args)
+    private bool HandleNavigationMoved(PointerRoutedEventArgs args)
     {
-        if (args.Pointer.PointerDeviceType != PointerDeviceType.Touch)
+        if (_tool != ToolMode.Navigate
+            || !_navigationPoints.ContainsKey(args.Pointer.PointerId))
         {
             return false;
         }
 
-        _touchPoints[args.Pointer.PointerId] =
+        _navigationPoints[args.Pointer.PointerId] =
             args.GetCurrentPoint(EditorCanvas).Position;
-        if (!_touchGesture)
+        var points = _navigationPoints.Values.Take(2).ToArray();
+        if (points.Length >= 2)
         {
-            return false;
-        }
-
-        if (_touchPoints.Count >= 2)
-        {
-            var points = _touchPoints.Values.Take(2).ToArray();
             var distance = PointDistance(points[0], points[1]);
             var scale = distance
                 / Math.Max(_gestureStartDistance, 1);
@@ -1503,43 +1484,60 @@ public sealed partial class MainWindow : Window
                 _gestureStartPan,
                 _gestureStartZoom,
                 _zoom);
-            ClampPan();
-            EditorCanvas.Invalidate();
+        }
+        else
+        {
+            var offset = ToVector(points[0])
+                - ToVector(_gestureStartCenter);
+            _pan = _gestureStartPan + offset;
+        }
+
+        ClampPan();
+        EditorCanvas.Invalidate();
+        args.Handled = true;
+        return true;
+    }
+
+    private bool HandleNavigationReleased(PointerRoutedEventArgs args)
+    {
+        if (_tool != ToolMode.Navigate
+            || !_navigationPoints.Remove(args.Pointer.PointerId))
+        {
+            return false;
+        }
+
+        EditorCanvas.ReleasePointerCapture(args.Pointer);
+        if (_navigationPoints.Count > 0)
+        {
+            BeginNavigationGesture();
         }
 
         args.Handled = true;
         return true;
     }
 
-    private bool HandleTouchReleased(PointerRoutedEventArgs args)
+    private void BeginNavigationGesture()
     {
-        if (args.Pointer.PointerDeviceType != PointerDeviceType.Touch)
-        {
-            return false;
-        }
-
-        var wasGesture = _touchGesture;
-        _touchPoints.Remove(args.Pointer.PointerId);
-        if (_touchPoints.Count == 0)
-        {
-            _touchGesture = false;
-        }
-
-        if (wasGesture)
-        {
-            EditorCanvas.ReleasePointerCapture(args.Pointer);
-            args.Handled = true;
-        }
-
-        return wasGesture;
+        var points = _navigationPoints.Values.Take(2).ToArray();
+        _gestureStartPan = _pan;
+        _gestureStartZoom = _zoom;
+        _gestureStartCenter = points.Length >= 2
+            ? PointMidpoint(points[0], points[1])
+            : points[0];
+        _gestureStartDistance = points.Length >= 2
+            ? PointDistance(points[0], points[1])
+            : 0;
     }
 
     private void EditorCanvas_PointerCanceled(
         object sender,
         PointerRoutedEventArgs args)
     {
-        _touchPoints.Clear();
-        _touchGesture = false;
+        if (HandleNavigationReleased(args))
+        {
+            return;
+        }
+
         CancelEditorInteraction();
         EditorCanvas.ReleasePointerCapture(args.Pointer);
         args.Handled = true;
@@ -1623,6 +1621,7 @@ public sealed partial class MainWindow : Window
         }
 
         CommitInlineTextEdit();
+        _navigationPoints.Clear();
         foreach (var button in ToolButtonGrid.Children
             .OfType<ToggleButton>())
         {
@@ -1641,7 +1640,8 @@ public sealed partial class MainWindow : Window
 
     private void ColorButton_Click(object sender, RoutedEventArgs args)
     {
-        if (sender is not Button { Tag: string value }
+        if (!ColorPanel.IsHitTestVisible
+            || sender is not Button { Tag: string value }
             || !uint.TryParse(
                 value,
                 NumberStyles.HexNumber,
@@ -1800,7 +1800,8 @@ public sealed partial class MainWindow : Window
         {
             TextAnnotation => false,
             not null => true,
-            _ => _tool is not (ToolMode.Select or ToolMode.Text),
+            _ => _tool is not (
+                ToolMode.Navigate or ToolMode.Select or ToolMode.Text),
         };
         var supportsFill = selected switch
         {
@@ -1815,7 +1816,7 @@ public sealed partial class MainWindow : Window
         var supportsFont = selected is TextAnnotation
             || selected is null && _tool == ToolMode.Text;
         var supportsColor = selected is not null
-            || _tool != ToolMode.Select;
+            || _tool is not (ToolMode.Navigate or ToolMode.Select);
         ThicknessSlider.IsEnabled = supportsThickness;
         ThicknessLabel.Opacity = supportsThickness ? 1 : 0.45;
         FilledToggle.IsEnabled = supportsFill;
@@ -1823,12 +1824,17 @@ public sealed partial class MainWindow : Window
         FontPanel.Visibility = supportsFont
             ? Visibility.Visible
             : Visibility.Collapsed;
+        ColorPanel.IsHitTestVisible = supportsColor;
+        ColorPanel.Opacity = supportsColor ? 1 : 0.45;
         foreach (var button in ColorPanel.Children.OfType<Button>())
         {
-            button.IsEnabled = supportsColor;
+            button.IsTabStop = supportsColor;
         }
 
-        ColorPanel.Opacity = supportsColor ? 1 : 0.45;
+        NavigationBar.Visibility = _tool == ToolMode.Navigate
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        TransformPanel.IsEnabled = selected is not null;
         DeleteObjectButton.IsEnabled = selected is not null;
         _updatingToolOptions = false;
     }
@@ -2750,6 +2756,7 @@ public sealed partial class MainWindow : Window
 
     private enum ToolMode
     {
+        Navigate,
         Select,
         Text,
         Pen,
@@ -2793,6 +2800,7 @@ public sealed partial class MainWindow : Window
     private static Dictionary<ToolMode, ToolSettings>
         CreateToolSettings() => new()
     {
+        [ToolMode.Navigate] = new(0xff111827, 3, false),
         [ToolMode.Select] = new(0xff111827, 3, false),
         [ToolMode.Text] = new(0xff111827, 3, false),
         [ToolMode.Pen] = new(0xff111827, 3, false),
