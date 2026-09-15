@@ -1,35 +1,115 @@
 # FastFill
 
-Touch-first Windows 11 document capture, correction, annotation, and PDF
-export. Initial hardware target: Microsoft Surface Pro 6.
+[![Windows build][build-badge]][build]
+[![Portable development build][download-badge]][download]
+[![Windows 11 x64][windows-badge]][download]
+[![MIT license][license-badge]][license]
 
-FastFill keeps projects local. A `.docscan` file is a validated ZIP containing
-the JSON edit model and original JPEG/PNG page assets. PDF export flattens the
-corrected pages and annotations at 300 DPI.
+📄 Scan, correct, annotate, and export documents on Windows 11. FastFill is
+designed for touchscreens and initially targets Microsoft Surface Pro 6.
 
-## Current scope
+FastFill is under active development. Projects and document images stay on
+the local computer unless you explicitly export or share them.
 
-- Front/back camera capture. Stable-document auto capture is enabled by
-  default, with a visible countdown; manual capture remains available.
-- OpenCV live corner framing, manual four-corner correction, rotation,
-  enhanced color, grayscale, black-and-white, and contrast.
-- JPEG/PNG and multi-page PDF import. PDF pages use Windows' built-in renderer
-  at 300 DPI and follow the five-page project limit.
-- Inline editable, content-sized text; pen; highlighter; lines; arrows; boxes;
-  ovals; checkmarks; and X marks.
-- Marquee/Ctrl multi-selection, geometry-aware resize, drag rotation, layer
-  ordering, bulk styling/deletion, undo, redo, drag page reorder, pinch zoom,
-  and two-finger pan. Ctrl snaps angles and aspect; Alt forces resize.
-- Five-page projects, autosave recovery, editable `.docscan` files.
-- Flattened PDF, file picker export to local/USB storage, Windows share sheet.
+## 🚀 Download and run
 
-No OCR, cloud sync, SMTP client, or at-rest encryption in v1.
+**Requirements:** Windows 11 on an x64 computer. No installer, developer
+license, .NET runtime, or separate Windows App SDK runtime is required.
 
-## Fast Linux loop
+1. [Download the latest portable development build][download].
+2. Extract the ZIP to any folder.
+3. Keep every extracted file together.
+4. Run `FastFill\FastFill.exe`.
 
-Only the WinUI shell is Windows-specific. Detection, correction, project I/O,
-annotation rendering, and PDF output live in `FastFill.Core` and run in the
-Linux container.
+The development executable uses a persistent self-signed certificate. Trust
+it once for each Windows account used to test FastFill:
+
+1. Open `FastFill\FastFill.cer` and select **Install Certificate**.
+2. Select **Current User**.
+3. Place it in **Trusted Root Certification Authorities**.
+4. Finish the import, then run `FastFill.exe`.
+
+Only trust the certificate downloaded from this repository. Self-signing does
+not create public SmartScreen reputation. If Windows shows an
+unrecognized-app warning, select **More info**, then **Run anyway**.
+
+## Features
+
+- 📷 Front or rear camera capture with live document framing, automatic
+  capture enabled by default, and a three-second stability countdown.
+- Manual four-corner perspective correction, page rotation, contrast,
+  enhanced color, grayscale, and black-and-white filters.
+- JPEG, PNG, and multi-page PDF import using Windows' built-in PDF renderer.
+- Inline editable text, pen, highlighter, lines, arrows, boxes, ovals,
+  checkmarks, X marks, and filled shapes.
+- Move, resize, rotate, recolor, reorder, or delete annotations after placing
+  them. Multi-selection, undo, and redo are supported.
+- Drag page reordering for projects containing up to five pages.
+- 🔍 Full-view, 1:1, and stepped zoom controls. The Navigate tool enables
+  pinch zoom and two-finger pan.
+- Editable `.docscan` projects with autosave recovery.
+- Flattened 300-DPI PDF export to local or USB storage and the Windows share
+  sheet for mail and other installed applications.
+
+## Typical workflow
+
+1. Choose **New camera scan**, **Import image / PDF**, **Open project**, or
+   **Recover autosave**.
+2. Capture or import a page. Review its corners, rotation, color mode, and
+   contrast before accepting it.
+3. Add annotations. Select an existing object to move, resize, rotate, style,
+   reorder, or delete it.
+4. Add or import more pages. Drag pages in the left rail to reorder them.
+5. Save an editable `.docscan` project or export and share a PDF.
+
+The interface is touch-friendly. A keyboard is only required for text entry
+and optional shortcuts.
+
+## Controls and shortcuts
+
+Select **Shortcuts** in FastFill's top bar for the complete reference.
+
+| Shortcut | Function |
+| --- | --- |
+| **Ctrl+Z** | Undo the last change. |
+| **Ctrl+Y** | Redo the last undone change. |
+| **Delete** | Delete selected annotations. |
+| **Ctrl+click** | Add or remove an object from the selection. |
+| **Shift+drag** | Always move the selected object. |
+| **Alt+drag** | Resize from the nearest handle. |
+| **Ctrl+rotate** | Snap rotation to 45-degree increments. |
+| **Ctrl+drag endpoint** | Snap a line or arrow to 45-degree angles. |
+| **Ctrl+resize shape** | Constrain a box or oval to a square or circle. |
+| **Enter** | Accept text editing. |
+| **Shift+Enter** | Insert a line break while editing text. |
+| **Escape** | Cancel text editing. |
+
+## 🔒 Local files and privacy
+
+A `.docscan` file is a validated ZIP containing the JSON edit model and the
+original JPEG or PNG page assets. Annotations remain editable until PDF
+export, which flattens corrected pages and annotations into the final file.
+
+FastFill has no cloud sync or built-in SMTP client. Sharing uses the Windows
+share sheet. Projects are not encrypted at rest, so protect sensitive files
+with Windows account and disk security.
+
+## Current limits
+
+- Maximum five pages per project.
+- No OCR or searchable-PDF generation.
+- No cloud synchronization or direct SMTP delivery.
+- Development certificate has no public publisher reputation.
+
+---
+
+## Development
+
+The WinUI shell lives in `FastFill.App`. Detection, correction, project I/O,
+annotation rendering, and PDF output live in `FastFill.Core`, allowing most
+iterations to run in the Linux container without Surface hardware.
+
+### Fast Linux loop
 
 ```sh
 make check
@@ -37,9 +117,8 @@ make preview
 ```
 
 `make check` builds the pinned .NET 10 container, runs framework-free checks,
-and compares the rendered page with
-`tests/goldens/annotated-page.png`. Preview outputs land in
-`artifacts/preview/`.
+and compares the rendered page with `tests/goldens/annotated-page.png`.
+Preview outputs land in `artifacts/preview/`.
 
 When an intentional renderer change alters the preview:
 
@@ -47,11 +126,13 @@ When an intentional renderer change alters the preview:
 make update-goldens
 ```
 
-This loop covers document detection, perspective correction, filters,
-auto-capture stability, hit testing, undo/redo, hostile archive rejection,
-`.docscan` round trips, annotation rendering, and multipage PDF export.
+The check covers document detection, perspective correction, filters,
+auto-capture stability, hit testing, annotation geometry and ordering,
+undo/redo, hostile archive rejection, `.docscan` round trips, annotation
+rendering, and multi-page PDF export.
 
-Calibrate detection with camera samples without changing the test suite:
+Calibrate detection against captured camera samples without changing the test
+suite:
 
 ```sh
 docker run --rm \
@@ -59,11 +140,10 @@ docker run --rm \
   fastfill-checks --detect /samples/frame.jpg
 ```
 
-Linux cannot execute WinUI's Windows-only XAML compiler. Every push therefore
-runs the same checks on Windows and compiles the WinUI app in GitHub Actions.
-Most work should need no SP6 access.
+Linux cannot execute WinUI's Windows-only XAML compiler. GitHub Actions runs
+the same checks on Windows and compiles the complete WinUI application.
 
-## Windows development
+### Windows development
 
 Requirements: Windows 11, Visual Studio with WinUI/C# workloads, and .NET 10.
 
@@ -74,45 +154,36 @@ dotnet build src/FastFill.App -c Debug -p:Platform=x64
 ```
 
 Run `FastFill.App` from Visual Studio for camera and interactive UI work. Use
-JPEG/PNG import for deterministic editor iteration; it exercises the same
+JPEG or PNG import for deterministic editor iteration; it follows the same
 review, correction, annotation, project, and export paths as camera capture.
 
-## Portable Windows build
+### CI and portable releases
 
-The Windows workflow publishes FastFill as an unpackaged, self-contained x64
-folder. It needs no application installation, developer license, .NET runtime,
-or Windows App SDK runtime. Extract the ZIP anywhere and run
-`FastFill\FastFill.exe`. Keep the other extracted files beside the executable.
+The `Windows` workflow checks and publishes FastFill as an unpackaged,
+self-contained x64 folder. Successful `master` builds replace the public
+`dev` prerelease and include `FastFill.cer` in the portable archive. Pull
+request builds create a private workflow artifact but do not publish a
+release.
 
-Master builds are Authenticode-signed with FastFill's persistent self-signed
-development certificate. Trust it once on each test account:
+### Minimal SP6 release gate
 
-1. Open `FastFill\FastFill.cer` and select **Install Certificate**.
-2. Select **Current User**, then place it in **Trusted Root Certification
-   Authorities**.
-3. Finish the import and run `FastFill.exe`.
+Use the Surface only before a release candidate. One short pass:
 
-Only trust the certificate downloaded from this repository. Self-signing does
-not create public SmartScreen reputation, so Windows may still show an
-unrecognized-app warning for a downloaded build. If it does, use **More info**,
-then **Run anyway**.
-
-Successful `master` builds replace the public `dev` prerelease. Download the
-current portable ZIP without signing in:
-
-<https://github.com/dhanak/fastfill/releases/download/dev/FastFill-portable.zip>
-
-## Minimal SP6 gate
-
-Use the device only before a release candidate. One short pass:
-
-1. Test both cameras, permission denial, rotation, suspend/resume, and auto
-   capture under bright, dim, and glare-heavy light.
-2. Drag all crop handles and annotation tools with finger and Surface Pen.
-   Verify controls remain usable at 150% and 200% display scaling.
-3. Import a multi-page PDF, export it again, reopen a `.docscan`, share to
-   Mail, and save to a USB drive.
+1. Test both cameras, permission denial, rotation, suspend/resume, and
+   automatic capture under bright, dim, and glare-heavy light.
+2. Drag crop handles and every annotation tool using touch and Surface Pen.
+   Verify controls at 150% and 200% display scaling.
+3. Import a multi-page PDF, export it, reopen a `.docscan`, share to Mail, and
+   save to a USB drive.
 4. Check memory, thermal behavior, and capture latency over 20 repeated scans.
 
 Keep calibration thresholds in `AutoCaptureGate` and capture throttling in
-`CameraFrameSource`; those are expected to need real-device tuning.
+`CameraFrameSource`; both require final real-device calibration.
+
+[build]: https://github.com/dhanak/fastfill/actions/workflows/windows.yml
+[build-badge]: https://github.com/dhanak/fastfill/actions/workflows/windows.yml/badge.svg
+[download]: https://github.com/dhanak/fastfill/releases/download/dev/FastFill-portable.zip
+[download-badge]: https://img.shields.io/badge/download-portable_dev-0078D4
+[windows-badge]: https://img.shields.io/badge/Windows_11-x64-0078D4
+[license]: LICENSE
+[license-badge]: https://img.shields.io/badge/license-MIT-green
