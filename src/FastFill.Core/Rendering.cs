@@ -451,6 +451,11 @@ public static class PageRenderer
             canvas.DrawOval(handle, selection);
         }
 
+        if (!AnnotationGeometry.SupportsRotation(annotation))
+        {
+            return;
+        }
+
         var top = new SKPoint(
             (bounds.X + bounds.Right) / 2 * options.PageWidthPoints,
             bounds.Y * options.PageHeightPoints);

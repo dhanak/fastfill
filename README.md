@@ -80,7 +80,7 @@ Select **Shortcuts** in FastFill's top bar for the complete reference.
 | **Alt+drag** | Resize from the nearest handle. |
 | **Ctrl+rotate** | Snap rotation to 45-degree increments. |
 | **Ctrl+drag endpoint** | Snap a line or arrow to 45-degree angles. |
-| **Ctrl+resize shape** | Constrain a box or oval to a square or circle. |
+| **Ctrl+draw/resize shape** | Constrain a box or oval to a square or circle. |
 | **Enter** | Accept text editing. |
 | **Shift+Enter** | Insert a line break while editing text. |
 | **Escape** | Cancel text editing. |

@@ -1414,14 +1414,18 @@ public sealed partial class MainWindow : Window
                 },
                 ShapeAnnotation shape => shape with
                 {
-                    End = shape.Shape is ShapeKind.Checkmark
-                        or ShapeKind.Cross
-                            ? ConstrainToSquare(shape.Start, point)
-                            : shape.Shape is (
-                                ShapeKind.Line or ShapeKind.Arrow)
-                                && IsKeyDown(VirtualKey.Control)
-                                    ? SnapLineEnd(shape.Start, point)
-                                    : point,
+                    End = shape.Shape switch
+                    {
+                        ShapeKind.Checkmark or ShapeKind.Cross =>
+                            ConstrainToSquare(shape.Start, point),
+                        ShapeKind.Rectangle or ShapeKind.Ellipse
+                            when IsKeyDown(VirtualKey.Control) =>
+                                ConstrainToSquare(shape.Start, point),
+                        ShapeKind.Line or ShapeKind.Arrow
+                            when IsKeyDown(VirtualKey.Control) =>
+                                SnapLineEnd(shape.Start, point),
+                        _ => point,
+                    },
                 },
                 _ => annotation,
             });
@@ -1804,7 +1808,8 @@ public sealed partial class MainWindow : Window
 
     private bool TryBeginSelectionRotation(NormalizedPoint point)
     {
-        if (SelectedAnnotation is not Annotation selected)
+        if (SelectedAnnotation is not Annotation selected
+            || !AnnotationGeometry.SupportsRotation(selected))
         {
             return false;
         }
@@ -2393,7 +2398,8 @@ public sealed partial class MainWindow : Window
         NavigationBar.Visibility = _tool == ToolMode.Navigate
             ? Visibility.Visible
             : Visibility.Collapsed;
-        RotateObjectButton.IsEnabled = hasSelection;
+        RotateObjectButton.IsEnabled =
+            selections.Any(AnnotationGeometry.SupportsRotation);
         SmallerObjectButton.IsEnabled = hasSelection;
         LargerObjectButton.IsEnabled = hasSelection;
         SendToBackButton.IsEnabled = hasSelection;
@@ -2455,6 +2461,7 @@ public sealed partial class MainWindow : Window
     {
         var selections = SelectedAnnotations;
         var rotations = selections
+            .Where(AnnotationGeometry.SupportsRotation)
             .Select(annotation => new
             {
                 Annotation = annotation,
@@ -2831,19 +2838,16 @@ public sealed partial class MainWindow : Window
                 "Snap line or arrow to 45° angles"),
             (
                 "Geometry",
-                "Ctrl+resize shape",
+                "Ctrl+draw/resize shape",
                 "Constrain box or oval to square or circle"),
             ("Text", "Enter", "Accept text edit"),
             ("Text", "Shift+Enter", "Insert line break"),
             ("Text", "Esc", "Cancel text edit"),
         };
-        var table = new Grid
-        {
-            MinWidth = 640,
-        };
+        var table = new Grid();
         table.ColumnDefinitions.Add(new ColumnDefinition
         {
-            Width = new GridLength(100),
+            Width = new GridLength(92),
         });
         table.ColumnDefinitions.Add(new ColumnDefinition
         {

@@ -423,7 +423,19 @@
                          Padding="4,0"
                          LostFocus="InlineTextEditor_LostFocus"
                          TextChanging="InlineTextEditor_TextChanging"
-                         PreviewKeyDown="InlineTextEditor_KeyDown" />
+                         PreviewKeyDown="InlineTextEditor_KeyDown">
+                  <TextBox.Resources>
+                    <SolidColorBrush x:Key="TextControlBackground"
+                                     Color="#3000A4EF" />
+                    <SolidColorBrush
+                      x:Key="TextControlBackgroundPointerOver"
+                      Color="#3000A4EF" />
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused"
+                                     Color="#3000A4EF" />
+                    <SolidColorBrush x:Key="TextControlBackgroundDisabled"
+                                     Color="#3000A4EF" />
+                  </TextBox.Resources>
+                </TextBox>
               </Canvas>
               <Border x:Name="NavigationBar"
                       HorizontalAlignment="Center"

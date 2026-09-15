@@ -354,6 +354,12 @@ public static class AnnotationHitTester
 
 public static class AnnotationGeometry
 {
+    public static bool SupportsRotation(Annotation annotation) =>
+        annotation is not ShapeAnnotation
+        {
+            Shape: ShapeKind.Line or ShapeKind.Arrow,
+        };
+
     public static NormalizedRect Bounds(Annotation annotation) =>
         annotation switch
         {

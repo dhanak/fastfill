@@ -404,6 +404,10 @@ internal static class Program
         Assert(
             lineHandles.SequenceEqual([line.Start, line.End]),
             "Line resize handles are not its endpoints.");
+        Assert(
+            !AnnotationGeometry.SupportsRotation(line)
+                && AnnotationGeometry.SupportsRotation(rectangle),
+            "Rotation support does not match annotation geometry.");
         var resizedLine = (ShapeAnnotation)
             AnnotationGeometry.ResizeFromCorner(
                 line,
