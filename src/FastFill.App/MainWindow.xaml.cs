@@ -2135,8 +2135,8 @@ public sealed partial class MainWindow : Window
 
         _updatingToolOptions = true;
         var selections = SelectedAnnotations;
-        var selected = selections.FirstOrDefault();
         var hasSelection = selections.Count > 0;
+        var selected = hasSelection ? selections[0] : null;
         var settings = selected is null
             ? _toolSettings[_tool]
             : ToolSettings.FromAnnotation(selected);
@@ -3113,8 +3113,10 @@ public sealed partial class MainWindow : Window
             return text.ColorArgb;
         }
 
-        return SelectedAnnotations.FirstOrDefault()?.ColorArgb
-            ?? _toolSettings[ToolMode.Text].Color;
+        var selections = SelectedAnnotations;
+        return selections.Count > 0
+            ? selections[0].ColorArgb
+            : _toolSettings[ToolMode.Text].Color;
     }
 
     private static Windows.UI.Color ToWindowsColor(uint color) =>
@@ -3217,10 +3219,14 @@ public sealed partial class MainWindow : Window
                     _selectedAnnotationIds.Contains(annotation.Id))
                 .ToList();
 
-    private Annotation? SelectedAnnotation =>
-        _selectedAnnotationIds.Count == 1
-            ? SelectedAnnotations.FirstOrDefault()
-            : null;
+    private Annotation? SelectedAnnotation
+    {
+        get
+        {
+            var selections = SelectedAnnotations;
+            return selections.Count == 1 ? selections[0] : null;
+        }
+    }
 
     private NormalizedRect? SelectionRectangle =>
         _pointerMoved
