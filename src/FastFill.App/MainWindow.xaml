@@ -36,6 +36,11 @@
                    VerticalAlignment="Center"
                    AutomationProperties.LiveSetting="Polite" />
         <StackPanel Grid.Column="2" Orientation="Horizontal">
+          <Button Content="Shortcuts"
+                  Click="ShortcutsButton_Click"
+                  AutomationProperties.Name="Show keyboard shortcuts"
+                  ToolTipService.ToolTip="Keyboard shortcuts"
+                  Style="{StaticResource TouchButtonStyle}" />
           <Button x:Name="UndoButton"
                   Content="Undo"
                   IsEnabled="False"

@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using FastFill.Core;
 using Microsoft.UI.Input;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -2819,6 +2820,136 @@ public sealed partial class MainWindow : Window
     private async void UndoButton_Click(
         object sender,
         RoutedEventArgs args) => await UndoAsync();
+
+    private async void ShortcutsButton_Click(
+        object sender,
+        RoutedEventArgs args)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "Keyboard and pointer shortcuts",
+            Content = CreateShortcutsTable(),
+            CloseButtonText = "Close",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        await dialog.ShowAsync();
+    }
+
+    private static ScrollViewer CreateShortcutsTable()
+    {
+        var rows = new (string Context, string Shortcut, string Action)[]
+        {
+            ("Global", "Ctrl+Z", "Undo last change"),
+            ("Global", "Ctrl+Y", "Redo last undone change"),
+            ("Global", "Delete", "Delete selected annotations"),
+            ("Selection", "Ctrl+click", "Add or remove from selection"),
+            ("Selection", "Shift+drag", "Always move selected object"),
+            ("Selection", "Alt+drag", "Resize from nearest handle"),
+            ("Geometry", "Ctrl+rotate", "Snap rotation to 45° increments"),
+            (
+                "Geometry",
+                "Ctrl+drag endpoint",
+                "Snap line or arrow to 45° angles"),
+            (
+                "Geometry",
+                "Ctrl+resize shape",
+                "Constrain box or oval to square or circle"),
+            ("Text", "Enter", "Accept text edit"),
+            ("Text", "Shift+Enter", "Insert line break"),
+            ("Text", "Esc", "Cancel text edit"),
+        };
+        var table = new Grid
+        {
+            MinWidth = 640,
+        };
+        table.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(100),
+        });
+        table.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(180),
+        });
+        table.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(1, GridUnitType.Star),
+        });
+        AddShortcutRow(
+            table,
+            0,
+            "Context",
+            "Shortcut",
+            "Function",
+            header: true);
+        for (var index = 0; index < rows.Length; index++)
+        {
+            var row = rows[index];
+            AddShortcutRow(
+                table,
+                index + 1,
+                row.Context,
+                row.Shortcut,
+                row.Action,
+                header: false);
+        }
+
+        return new ScrollViewer
+        {
+            Content = table,
+            MaxHeight = 620,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollMode = ScrollMode.Auto,
+        };
+    }
+
+    private static void AddShortcutRow(
+        Grid table,
+        int row,
+        string context,
+        string shortcut,
+        string action,
+        bool header)
+    {
+        table.RowDefinitions.Add(new RowDefinition
+        {
+            Height = GridLength.Auto,
+        });
+        AddShortcutCell(table, row, 0, context, header);
+        AddShortcutCell(table, row, 1, shortcut, bold: true);
+        AddShortcutCell(table, row, 2, action, header);
+    }
+
+    private static void AddShortcutCell(
+        Grid table,
+        int row,
+        int column,
+        string value,
+        bool bold)
+    {
+        var border = new Border
+        {
+            Padding = new Thickness(10, 8),
+            BorderBrush = new SolidColorBrush(
+                Windows.UI.Color.FromArgb(48, 127, 127, 127)),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Background = row == 0
+                ? new SolidColorBrush(
+                    Windows.UI.Color.FromArgb(36, 0, 120, 212))
+                : null,
+            Child = new TextBlock
+            {
+                Text = value,
+                FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+        Grid.SetRow(border, row);
+        Grid.SetColumn(border, column);
+        table.Children.Add(border);
+    }
 
     private async void RootGrid_KeyDown(
         object sender,
