@@ -109,6 +109,10 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        AppWindow.SetIcon(Path.Combine(
+            AppContext.BaseDirectory,
+            "Assets",
+            "AppIcon.ico"));
         _workspaceRoot = Path.Combine(
             Environment.GetFolderPath(
                 Environment.SpecialFolder.LocalApplicationData),
