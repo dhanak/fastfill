@@ -5,6 +5,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-2025
@@ -130,3 +137,39 @@ jobs:
           name: FastFill-msix
           path: ${{ runner.temp }}/FastFillPackages/**
           if-no-files-found: error
+
+  publish:
+    if: >-
+      github.ref == 'refs/heads/master' &&
+      github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download installable package
+        uses: actions/download-artifact@v8
+        with:
+          name: FastFill-msix
+          path: FastFillPackages
+      - name: Create public archive
+        run: zip -r FastFill-msix.zip FastFillPackages
+      - name: Publish public development build
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view dev >/dev/null 2>&1; then
+            gh api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/git/refs/tags/dev" \
+              -f "sha=${GITHUB_SHA}" \
+              -F force=true >/dev/null
+            gh release upload dev FastFill-msix.zip --clobber
+          else
+            gh release create dev FastFill-msix.zip \
+              --prerelease \
+              --target "${GITHUB_SHA}" \
+              --title "FastFill development build" \
+              --notes "Latest successful master build."
+          fi

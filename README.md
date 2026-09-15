@@ -82,6 +82,11 @@ it only once. Keep its PFX and password outside Git, and rotate it before
 expiry or after suspected compromise. Replace the development publisher and
 certificate before production distribution.
 
+Successful `master` builds replace the public `dev` prerelease. Download the
+current installer without signing in:
+
+<https://github.com/dhanak/fastfill/releases/download/dev/FastFill-msix.zip>
+
 ## Minimal SP6 gate
 
 Use the device only before a release candidate. One short pass:
