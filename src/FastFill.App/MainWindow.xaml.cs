@@ -233,11 +233,11 @@ public sealed partial class MainWindow : Window
         {
             using var page = document.GetPage(index);
             var width = checked((int)Math.Ceiling(
-                page.Dimensions.Width
+                page.Size.Width
                 * PdfExporter.DotsPerInch
                 / 96));
             var height = checked((int)Math.Ceiling(
-                page.Dimensions.Height
+                page.Size.Height
                 * PdfExporter.DotsPerInch
                 / 96));
             ProjectValidator.ValidateImageInput(1, width, height);
@@ -246,7 +246,6 @@ public sealed partial class MainWindow : Window
             {
                 DestinationWidth = checked((uint)width),
                 DestinationHeight = checked((uint)height),
-                BackgroundColor = Windows.UI.Colors.White,
                 BitmapEncoderId = Windows.Graphics.Imaging.BitmapEncoder
                     .PngEncoderId,
             };
