@@ -91,6 +91,7 @@ internal static class Program
         Assert(processed.Width > 600, "Perspective output is too narrow.");
         Assert(processed.Height > 400, "Perspective output is too short.");
         CheckAutoCapture(detection);
+        CheckDetectionStabilizer(detection);
 
         var project = CreateProject();
         var page = project.Pages[0];
@@ -513,7 +514,68 @@ internal static class Program
                 start.AddSeconds(3)) == AutoCaptureState.NoDocument,
             "Blur rejection failed.");
         Assert(gate.Progress == 0, "Auto-capture countdown did not reset.");
+
+        var driftGate = new AutoCaptureGate();
+        driftGate.Evaluate(stable, start);
+        driftGate.Evaluate(
+            stable with { Corners = Shift(stable.Corners!, 0.025f, 0) },
+            start.AddSeconds(1));
+        Assert(driftGate.Progress > 0, "Small camera jitter reset countdown.");
+        driftGate.Evaluate(
+            stable with { Corners = Shift(stable.Corners!, 0.05f, 0) },
+            start.AddSeconds(2));
+        Assert(
+            driftGate.Progress == 0,
+            "Slow document drift did not reset countdown.");
     }
+
+    private static void CheckDetectionStabilizer(
+        DocumentDetection detection)
+    {
+        var stabilizer = new DocumentDetectionStabilizer();
+        var baseline = detection with
+        {
+            Confidence = 0.85,
+            AreaRatio = 0.3,
+            Sharpness = 60,
+        };
+        var nearby = baseline with
+        {
+            Corners = Shift(baseline.Corners!, 0.01f, 0),
+        };
+        Assert(
+            !stabilizer.Update(baseline).Found
+                && !stabilizer.Update(nearby).Found,
+            "Detection stabilizer did not delay its first result.");
+        var stable = stabilizer.Update(baseline);
+        Assert(stable.Found, "Detection consensus was not accepted.");
+
+        var distant = baseline with
+        {
+            Corners = Shift(baseline.Corners!, -0.12f, 0),
+        };
+        stabilizer.Update(distant);
+        var held = stabilizer.Update(distant);
+        Assert(
+            held.Corners!.MaximumCornerDistance(stable.Corners!) < 0.03f,
+            "Minority detections displaced the stable framing.");
+        var switched = stabilizer.Update(distant);
+        Assert(
+            switched.Corners!.MaximumCornerDistance(distant.Corners!)
+                < 0.01f,
+            "Detection framing ignored a new majority.");
+    }
+
+    private static CropQuad Shift(CropQuad quad, float x, float y) => new(
+        Shift(quad.TopLeft, x, y),
+        Shift(quad.TopRight, x, y),
+        Shift(quad.BottomRight, x, y),
+        Shift(quad.BottomLeft, x, y));
+
+    private static NormalizedPoint Shift(
+        NormalizedPoint point,
+        float x,
+        float y) => new(point.X + x, point.Y + y);
 
     private static void CheckUndo(FastFillProject project)
     {

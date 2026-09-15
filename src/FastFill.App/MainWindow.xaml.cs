@@ -47,6 +47,7 @@ public sealed partial class MainWindow : Window
     private readonly UndoBuffer<FastFillProject> _history =
         new(ProjectJson.Clone);
     private readonly AutoCaptureGate _autoCaptureGate = new();
+    private readonly DocumentDetectionStabilizer _detectionStabilizer = new();
     private readonly Dictionary<ToolMode, ToolSettings> _toolSettings =
         CreateToolSettings();
     private readonly string _workspaceRoot;
@@ -419,6 +420,8 @@ public sealed partial class MainWindow : Window
             SetScreen(AppScreen.Capture);
             CaptureStatusText.Text = "Starting camera…";
             await StopCameraAsync();
+            _detectionStabilizer.Reset();
+            _latestDetection = null;
             if (_cameraChoices.Count == 0)
             {
                 _cameraChoices = await CameraFrameSource.FindAsync();
@@ -489,11 +492,12 @@ public sealed partial class MainWindow : Window
 
         try
         {
+            var detectionHint = _latestDetection?.Corners;
             CaptureStatusText.Text = "Capturing…";
             var bytes = await _camera.CaptureJpegAsync();
             _editingPageIndex = null;
             await StopCameraAsync();
-            await BeginReviewAsync(bytes, ".jpg");
+            await BeginReviewAsync(bytes, ".jpg", detectionHint);
         }
         catch (Exception exception)
         {
@@ -519,7 +523,10 @@ public sealed partial class MainWindow : Window
         {
             try
             {
-                var detection = DocumentDetector.Detect(frame);
+                var rawDetection = DocumentDetector.Detect(
+                    frame,
+                    _detectionStabilizer.Hint);
+                var detection = _detectionStabilizer.Update(rawDetection);
                 DispatcherQueue.TryEnqueue(() =>
                 {
                     _latestDetection = detection;
@@ -624,7 +631,10 @@ public sealed partial class MainWindow : Window
         DetectionPolygon.Points.Clear();
     }
 
-    private async Task BeginReviewAsync(byte[] bytes, string extension)
+    private async Task BeginReviewAsync(
+        byte[] bytes,
+        string extension,
+        CropQuad? detectionHint = null)
     {
         _pendingBytes = bytes;
         _pendingExtension = extension.Equals(
@@ -648,8 +658,12 @@ public sealed partial class MainWindow : Window
         else
         {
             var detection = await Task.Run(
-                () => DocumentDetector.DetectEncoded(bytes));
-            _pendingCrop = detection.Corners ?? CropQuad.Full;
+                () => DocumentDetector.DetectEncoded(
+                    bytes,
+                    detectionHint));
+            _pendingCrop = detection.Corners
+                ?? detectionHint
+                ?? CropQuad.Full;
             _pendingFilter = new PageFilterSettings();
             _pendingRotation = 0;
         }

@@ -18,31 +18,37 @@ public static class DocumentDetector
     private const int MaximumDetectionEdge = 1280;
     private const double MinimumDetectionConfidence = 0.7;
 
-    public static DocumentDetection Detect(FramePacket frame)
+    public static DocumentDetection Detect(
+        FramePacket frame,
+        CropQuad? hint = null)
     {
         frame.Validate();
+        ValidateHint(hint);
         using var source = Mat.FromPixelData(
             frame.Height,
             frame.Width,
             MatType.CV_8UC4,
             frame.Bgra32,
             frame.Stride);
-        return Detect(source);
+        return Detect(source, hint);
     }
 
-    public static DocumentDetection DetectEncoded(byte[] encodedImage)
+    public static DocumentDetection DetectEncoded(
+        byte[] encodedImage,
+        CropQuad? hint = null)
     {
         ArgumentNullException.ThrowIfNull(encodedImage);
+        ValidateHint(hint);
         using var source = Cv2.ImDecode(encodedImage, ImreadModes.Color);
         if (source.Empty())
         {
             throw new ArgumentException("Image could not be decoded.");
         }
 
-        return Detect(source);
+        return Detect(source, hint);
     }
 
-    private static DocumentDetection Detect(Mat source)
+    private static DocumentDetection Detect(Mat source, CropQuad? hint)
     {
         using var scaled = ResizeForDetection(source);
         using var gray = new Mat();
@@ -119,8 +125,9 @@ public static class DocumentDetector
             ContourApproximationModes.ApproxSimple);
         contours = contours.Concat(paperContours).ToArray();
 
-        Point[]? best = null;
+        CropQuad? best = null;
         var bestScore = 0d;
+        var bestRank = 0d;
         var bestAreaRatio = 0d;
         var imageArea = scaled.Width * (double)scaled.Height;
         var candidates = new List<Point[]>();
@@ -162,13 +169,26 @@ public static class DocumentDetector
                 scaled.Size(),
                 imageArea,
                 paperMask);
-            if (scored is null || scored.Value.Score <= bestScore)
+            if (scored is null)
             {
                 continue;
             }
 
-            best = polygon;
+            var ordered = OrderCorners(polygon);
+            var quad = new CropQuad(
+                Normalize(ordered[0], scaled.Size()),
+                Normalize(ordered[1], scaled.Size()),
+                Normalize(ordered[2], scaled.Size()),
+                Normalize(ordered[3], scaled.Size()));
+            var rank = scored.Value.Score + HintBonus(quad, hint);
+            if (rank <= bestRank)
+            {
+                continue;
+            }
+
+            best = quad;
             bestScore = scored.Value.Score;
+            bestRank = rank;
             bestAreaRatio = scored.Value.AreaRatio;
         }
 
@@ -181,12 +201,6 @@ public static class DocumentDetector
             return new(null, 0, 0, sharpness);
         }
 
-        var ordered = OrderCorners(best);
-        var quad = new CropQuad(
-            Normalize(ordered[0], scaled.Size()),
-            Normalize(ordered[1], scaled.Size()),
-            Normalize(ordered[2], scaled.Size()),
-            Normalize(ordered[3], scaled.Size()));
         if (bestScore < MinimumDetectionConfidence)
         {
             return new(
@@ -195,15 +209,37 @@ public static class DocumentDetector
                 bestAreaRatio,
                 sharpness)
             {
-                CandidateCorners = quad,
+                CandidateCorners = best,
             };
         }
 
         return new(
-            quad,
+            best,
             Math.Clamp(bestScore, 0, 1),
             bestAreaRatio,
             sharpness);
+    }
+
+    private static double HintBonus(CropQuad candidate, CropQuad? hint)
+    {
+        if (hint is null)
+        {
+            return 0;
+        }
+
+        const float maximumHintDistance = 0.12f;
+        var distance = candidate.MaximumCornerDistance(hint);
+        return distance >= maximumHintDistance
+            ? 0
+            : 0.12 * (1 - (distance / maximumHintDistance));
+    }
+
+    private static void ValidateHint(CropQuad? hint)
+    {
+        if (hint is not null && !hint.IsConvex())
+        {
+            throw new ArgumentException("Detection hint must be convex.");
+        }
     }
 
     private static Mat ResizeForDetection(Mat source)
@@ -709,6 +745,139 @@ public static class ImageProcessor
     }
 }
 
+public sealed class DocumentDetectionStabilizer
+{
+    private const int WindowSize = 5;
+    private const int RequiredVotes = 3;
+    private const float AgreementDistance = 0.08f;
+    private const float SmoothingFactor = 0.35f;
+
+    private readonly Queue<DocumentDetection> _history = new();
+    private CropQuad? _corners;
+
+    public CropQuad? Hint => _corners;
+
+    public DocumentDetection Update(DocumentDetection detection)
+    {
+        ArgumentNullException.ThrowIfNull(detection);
+        _history.Enqueue(detection);
+        while (_history.Count > WindowSize)
+        {
+            _history.Dequeue();
+        }
+
+        var found = _history
+            .Where(item => item.Corners is not null)
+            .ToArray();
+        var cluster = FindConsensus(found);
+        if (cluster.Length < RequiredVotes)
+        {
+            if (_history.Count == WindowSize)
+            {
+                _corners = null;
+            }
+
+            return new(null, 0, 0, detection.Sharpness)
+            {
+                CandidateCorners = _corners,
+            };
+        }
+
+        var target = MedianQuad(cluster.Select(item => item.Corners!));
+        _corners = _corners is null
+            || _corners.MaximumCornerDistance(target) > AgreementDistance
+                ? target
+                : Interpolate(_corners, target, SmoothingFactor);
+        return new(
+            _corners,
+            Median(cluster.Select(item => item.Confidence)),
+            Median(cluster.Select(item => item.AreaRatio)),
+            detection.Sharpness);
+    }
+
+    public void Reset()
+    {
+        _history.Clear();
+        _corners = null;
+    }
+
+    private DocumentDetection[] FindConsensus(
+        DocumentDetection[] detections)
+    {
+        if (_corners is not null)
+        {
+            var current = Matching(detections, _corners);
+            if (current.Length >= RequiredVotes)
+            {
+                return current;
+            }
+        }
+
+        return detections
+            .Select(seed => Matching(detections, seed.Corners!))
+            .OrderByDescending(cluster => cluster.Length)
+            .ThenByDescending(cluster =>
+                cluster.Sum(item => item.Confidence))
+            .FirstOrDefault() ?? [];
+    }
+
+    private static DocumentDetection[] Matching(
+        IEnumerable<DocumentDetection> detections,
+        CropQuad center) => detections
+        .Where(item => item.Corners!
+            .MaximumCornerDistance(center) <= AgreementDistance)
+        .ToArray();
+
+    private static CropQuad MedianQuad(IEnumerable<CropQuad> values)
+    {
+        var quads = values.ToArray();
+        return new CropQuad(
+            MedianPoint(quads.Select(value => value.TopLeft)),
+            MedianPoint(quads.Select(value => value.TopRight)),
+            MedianPoint(quads.Select(value => value.BottomRight)),
+            MedianPoint(quads.Select(value => value.BottomLeft)));
+    }
+
+    private static NormalizedPoint MedianPoint(
+        IEnumerable<NormalizedPoint> values)
+    {
+        var points = values.ToArray();
+        return new NormalizedPoint(
+            (float)Median(points.Select(point => (double)point.X)),
+            (float)Median(points.Select(point => (double)point.Y)));
+    }
+
+    private static double Median(IEnumerable<double> values)
+    {
+        var ordered = values.Order().ToArray();
+        if (ordered.Length == 0)
+        {
+            return 0;
+        }
+
+        var middle = ordered.Length / 2;
+        return ordered.Length % 2 == 0
+            ? (ordered[middle - 1] + ordered[middle]) / 2
+            : ordered[middle];
+    }
+
+    private static CropQuad Interpolate(
+        CropQuad current,
+        CropQuad target,
+        float amount) => new(
+        Interpolate(current.TopLeft, target.TopLeft, amount),
+        Interpolate(current.TopRight, target.TopRight, amount),
+        Interpolate(current.BottomRight, target.BottomRight, amount),
+        Interpolate(current.BottomLeft, target.BottomLeft, amount));
+
+    private static NormalizedPoint Interpolate(
+        NormalizedPoint current,
+        NormalizedPoint target,
+        float amount) => new(
+        current.X + ((target.X - current.X) * amount),
+        current.Y + ((target.Y - current.Y) * amount));
+}
+
 public enum AutoCaptureState
 {
     NoDocument,
@@ -758,7 +927,6 @@ public sealed class AutoCaptureGate
             return AutoCaptureState.HoldSteady;
         }
 
-        _lastCorners = corners;
         var stableSince = _stableSince ?? timestamp;
         var elapsed = timestamp - stableSince;
         Progress = Math.Clamp(
