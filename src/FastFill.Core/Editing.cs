@@ -498,6 +498,24 @@ public static class AnnotationGeometry
             * Matrix3x2.CreateScale(1 / pageWidth, 1 / pageHeight);
     }
 
+    public static float PageRotationRadians(
+        AffineTransform transform,
+        float pageWidth,
+        float pageHeight)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageWidth, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageHeight, 1);
+        var origin = Vector2.Transform(
+            Vector2.Zero,
+            transform.Matrix);
+        var horizontal = Vector2.Transform(
+            new Vector2(1 / pageWidth, 0),
+            transform.Matrix);
+        return MathF.Atan2(
+            (horizontal.Y - origin.Y) * pageHeight,
+            (horizontal.X - origin.X) * pageWidth);
+    }
+
     private static Annotation ResizeToBounds(
         Annotation annotation,
         NormalizedRect target)
@@ -566,5 +584,50 @@ public static class AnnotationGeometry
         return new NormalizedPoint(
             anchor.X + directionX * size / pageWidth,
             anchor.Y + directionY * size / pageHeight);
+    }
+}
+
+public static class AnnotationOrdering
+{
+    public static bool SendToBack(
+        List<Annotation> annotations,
+        IReadOnlySet<Guid> selectedIds) =>
+        MoveToEdge(annotations, selectedIds, toFront: false);
+
+    public static bool BringToFront(
+        List<Annotation> annotations,
+        IReadOnlySet<Guid> selectedIds) =>
+        MoveToEdge(annotations, selectedIds, toFront: true);
+
+    private static bool MoveToEdge(
+        List<Annotation> annotations,
+        IReadOnlySet<Guid> selectedIds,
+        bool toFront)
+    {
+        ArgumentNullException.ThrowIfNull(annotations);
+        ArgumentNullException.ThrowIfNull(selectedIds);
+        var selected = annotations
+            .Where(annotation => selectedIds.Contains(annotation.Id))
+            .ToList();
+        if (selected.Count == 0)
+        {
+            return false;
+        }
+
+        var unselected = annotations
+            .Where(annotation => !selectedIds.Contains(annotation.Id));
+        var reordered = (toFront
+                ? unselected.Concat(selected)
+                : selected.Concat(unselected))
+            .ToList();
+        if (reordered.Select(annotation => annotation.Id).SequenceEqual(
+            annotations.Select(annotation => annotation.Id)))
+        {
+            return false;
+        }
+
+        annotations.Clear();
+        annotations.AddRange(reordered);
+        return true;
     }
 }

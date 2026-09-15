@@ -75,9 +75,17 @@ internal sealed class CameraFrameSource : IFrameSource
                     SharingMode = MediaCaptureSharingMode.ExclusiveControl,
                 });
             cancellationToken.ThrowIfCancellationRequested();
-            var source = capture.FrameSources.Values.FirstOrDefault(candidate =>
-                candidate.Info.MediaStreamType == MediaStreamType.VideoPreview
-                || candidate.Info.SourceKind == MediaFrameSourceKind.Color)
+            var colorSources = capture.FrameSources.Values
+                .Where(candidate =>
+                    candidate.Info.SourceKind == MediaFrameSourceKind.Color)
+                .ToArray();
+            var source = colorSources.FirstOrDefault(candidate =>
+                    candidate.Info.MediaStreamType
+                        == MediaStreamType.VideoPreview)
+                ?? colorSources.FirstOrDefault(candidate =>
+                    candidate.Info.MediaStreamType
+                        == MediaStreamType.VideoRecord)
+                ?? colorSources.FirstOrDefault()
                 ?? throw new InvalidOperationException(
                     "Camera has no color preview stream.");
             _preview.AutoPlay = true;
@@ -85,6 +93,8 @@ internal sealed class CameraFrameSource : IFrameSource
             var reader = await capture.CreateFrameReaderAsync(
                 source,
                 MediaEncodingSubtypes.Bgra8);
+            reader.AcquisitionMode =
+                MediaFrameReaderAcquisitionMode.Realtime;
             reader.FrameArrived += Reader_FrameArrived;
             var status = await reader.StartAsync();
             if (status != MediaFrameReaderStartStatus.Success)

@@ -447,6 +447,29 @@ internal static class Program
         Assert(
             Vector2.Distance(rotated, new Vector2(0.5f, 0.575f)) < 0.001,
             "Page rotation did not preserve physical aspect ratio.");
+        var rotationTransform = AffineTransform.FromMatrix(
+            AnnotationGeometry.PageRotation(
+                MathF.PI / 3,
+                center,
+                600,
+                800));
+        Assert(
+            Math.Abs(AnnotationGeometry.PageRotationRadians(
+                rotationTransform,
+                600,
+                800) - MathF.PI / 3) < 0.001,
+            "Page rotation angle could not be recovered.");
+
+        List<Annotation> annotations = [rectangle, line, text];
+        var selectedIds = new HashSet<Guid> { line.Id };
+        Assert(
+            AnnotationOrdering.SendToBack(annotations, selectedIds)
+                && annotations[0].Id == line.Id,
+            "Annotation was not sent to the back.");
+        Assert(
+            AnnotationOrdering.BringToFront(annotations, selectedIds)
+                && annotations[^1].Id == line.Id,
+            "Annotation was not brought to the front.");
     }
 
     private static void CheckAutoCapture(DocumentDetection detection)

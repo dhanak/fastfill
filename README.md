@@ -17,9 +17,9 @@ corrected pages and annotations at 300 DPI.
   at 300 DPI and follow the five-page project limit.
 - Inline editable, content-sized text; pen; highlighter; lines; arrows; boxes;
   ovals; checkmarks; and X marks.
-- Marquee/Ctrl multi-selection, geometry-aware resize, drag rotation, bulk
-  styling/deletion, undo, redo, drag page reorder, pinch zoom, and
-  two-finger pan.
+- Marquee/Ctrl multi-selection, geometry-aware resize, drag rotation, layer
+  ordering, bulk styling/deletion, undo, redo, drag page reorder, pinch zoom,
+  and two-finger pan. Ctrl snaps angles and aspect; Alt forces resize.
 - Five-page projects, autosave recovery, editable `.docscan` files.
 - Flattened PDF, file picker export to local/USB storage, Windows share sheet.
 

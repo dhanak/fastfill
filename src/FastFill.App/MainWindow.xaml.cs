@@ -549,6 +549,15 @@ public sealed partial class MainWindow : Window
                     }
                 });
             }
+            catch (Exception exception)
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    DetectionPolygon.Points.Clear();
+                    CaptureStatusText.Text =
+                        $"Detection failed: {exception.Message}";
+                });
+            }
             finally
             {
                 Interlocked.Exchange(ref _detecting, 0);
@@ -1116,7 +1125,8 @@ public sealed partial class MainWindow : Window
         if (!TryGetPagePoint(
             args,
             out var point,
-            allowSelectionMargin: _tool == ToolMode.Select))
+            allowSelectionMargin: _tool == ToolMode.Select
+                || SelectedAnnotation is not null))
         {
             return;
         }
@@ -1125,19 +1135,35 @@ public sealed partial class MainWindow : Window
         _pointerMoved = false;
         _interactionSnapshot = null;
         ResetSelectionInteraction();
+        if (_tool is not (
+                ToolMode.Navigate or ToolMode.Select or ToolMode.Text)
+            && TryBeginSelectedObjectInteraction(point))
+        {
+            EditorCanvas.CapturePointer(args.Pointer);
+            return;
+        }
+
+        if (_tool != ToolMode.Select
+            && (point.X is < 0 or > 1
+                || point.Y is < 0 or > 1))
+        {
+            _pointerStart = null;
+            return;
+        }
+
         if (_tool == ToolMode.Select)
         {
             var control = IsKeyDown(VirtualKey.Control);
             var shift = IsKeyDown(VirtualKey.Shift);
+            var alt = IsKeyDown(VirtualKey.Menu);
             if (!shift
-                && !control
                 && TryBeginSelectionRotation(point))
             {
                 EditorCanvas.CapturePointer(args.Pointer);
                 return;
             }
 
-            var forceResize = control
+            var forceResize = alt
                 && SelectedAnnotation is Annotation selected
                 && AnnotationHitTester.BoundsContain(selected, point);
             if (!shift
@@ -1277,7 +1303,10 @@ public sealed partial class MainWindow : Window
             || !TryGetPagePoint(
                 args,
                 out var point,
-                allowSelectionMargin: _tool == ToolMode.Select))
+                allowSelectionMargin: _tool == ToolMode.Select
+                    || _rotatingSelection
+                    || _resizingSelection
+                    || _dragStartTransforms is not null))
         {
             return;
         }
@@ -1285,7 +1314,10 @@ public sealed partial class MainWindow : Window
         _pointerMoved |= PageDistancePixels(
             _pointerStart.Value,
             point) >= 3;
-        if (_tool == ToolMode.Select)
+        if (_tool == ToolMode.Select
+            || _rotatingSelection
+            || _resizingSelection
+            || _dragStartTransforms is not null)
         {
             if (_selectionRectangleStart is not null)
             {
@@ -1315,6 +1347,15 @@ public sealed partial class MainWindow : Window
                 var delta = MathF.Atan2(
                     MathF.Sin(angle - _rotationStartAngle),
                     MathF.Cos(angle - _rotationStartAngle));
+                if (IsKeyDown(VirtualKey.Control))
+                {
+                    var initial = AnnotationGeometry.PageRotationRadians(
+                        rotationStart,
+                        EditorPageWidthPoints(),
+                        EditorPageHeightPoints());
+                    delta = SnapAngle(initial + delta) - initial;
+                }
+
                 var operation = AnnotationGeometry.PageRotation(
                     delta,
                     _rotationCenter,
@@ -1332,8 +1373,37 @@ public sealed partial class MainWindow : Window
                     resizeStart.Transform.Matrix,
                     out var inverse))
             {
+                var target = point;
+                if (IsKeyDown(VirtualKey.Control)
+                    && resizeStart is ShapeAnnotation
+                    {
+                        Shape: ShapeKind.Line or ShapeKind.Arrow,
+                    } line)
+                {
+                    var fixedEndpoint = _resizeCornerIndex == 0
+                        ? line.End
+                        : line.Start;
+                    target = SnapLineEnd(
+                        resizeStart.Transform.Apply(fixedEndpoint),
+                        point);
+                }
+
                 var local = NormalizedPoint.From(
-                    Vector2.Transform(point.Vector, inverse));
+                    Vector2.Transform(target.Vector, inverse));
+                if (IsKeyDown(VirtualKey.Control)
+                    && resizeStart is ShapeAnnotation
+                    {
+                        Shape: ShapeKind.Rectangle or ShapeKind.Ellipse,
+                    })
+                {
+                    var corners = AnnotationGeometry.BoundsCorners(
+                        resizeStart);
+                    local = ConstrainToSquare(
+                        corners[(_resizeCornerIndex + 2)
+                            % corners.Length],
+                        local);
+                }
+
                 var resized = AnnotationGeometry.ResizeFromCorner(
                     resizeStart,
                     _resizeCornerIndex,
@@ -1368,7 +1438,11 @@ public sealed partial class MainWindow : Window
                     End = shape.Shape is ShapeKind.Checkmark
                         or ShapeKind.Cross
                             ? ConstrainToSquare(shape.Start, point)
-                            : point,
+                            : shape.Shape is (
+                                ShapeKind.Line or ShapeKind.Arrow)
+                                && IsKeyDown(VirtualKey.Control)
+                                    ? SnapLineEnd(shape.Start, point)
+                                    : point,
                 },
                 _ => annotation,
             });
@@ -1544,8 +1618,8 @@ public sealed partial class MainWindow : Window
             + corners.Max(point => point.Y) * _editorImageRect.Height;
         Canvas.SetLeft(InlineTextEditor, left);
         Canvas.SetTop(InlineTextEditor, top);
-        InlineTextEditor.Width = Math.Max(48, right - left);
-        InlineTextEditor.Height = Math.Max(40, bottom - top);
+        InlineTextEditor.Width = Math.Max(48, right - left + 12);
+        InlineTextEditor.Height = Math.Max(40, bottom - top + 4);
         InlineTextEditor.FontFamily = new FontFamily(SelectedFontFamily());
         InlineTextEditor.FontSize = SelectedFontSize()
             * _editorImageRect.Width
@@ -1554,9 +1628,9 @@ public sealed partial class MainWindow : Window
             ToWindowsColor(SelectedTextColor()));
     }
 
-    private void InlineTextEditor_TextChanged(
-        object sender,
-        TextChangedEventArgs args)
+    private void InlineTextEditor_TextChanging(
+        TextBox sender,
+        TextBoxTextChangingEventArgs args)
     {
         if (InlineTextEditor.Visibility != Visibility.Visible
             || _closingTextEditor)
@@ -1777,6 +1851,35 @@ public sealed partial class MainWindow : Window
             .ToDictionary(
                 annotation => annotation.Id,
                 annotation => annotation.Transform);
+    }
+
+    private bool TryBeginSelectedObjectInteraction(NormalizedPoint point)
+    {
+        if (SelectedAnnotation is not Annotation selected)
+        {
+            return false;
+        }
+
+        var shift = IsKeyDown(VirtualKey.Shift);
+        if (!shift && TryBeginSelectionRotation(point))
+        {
+            return true;
+        }
+
+        var forceResize = IsKeyDown(VirtualKey.Menu)
+            && AnnotationHitTester.BoundsContain(selected, point);
+        if (!shift && TryBeginSelectionResize(point, forceResize))
+        {
+            return true;
+        }
+
+        if (!AnnotationHitTester.BoundsContain(selected, point))
+        {
+            return false;
+        }
+
+        BeginSelectionMove();
+        return true;
     }
 
     private void SelectByRectangle(
@@ -2018,6 +2121,47 @@ public sealed partial class MainWindow : Window
             start.Y + directionY * size / height);
     }
 
+    private NormalizedPoint SnapLineEnd(
+        NormalizedPoint start,
+        NormalizedPoint end)
+    {
+        var width = Math.Max(_editorImageRect.Width, 1);
+        var height = Math.Max(_editorImageRect.Height, 1);
+        var deltaX = (end.X - start.X) * width;
+        var deltaY = (end.Y - start.Y) * height;
+        var length = MathF.Sqrt(deltaX * deltaX + deltaY * deltaY);
+        if (length <= float.Epsilon)
+        {
+            return end;
+        }
+
+        var angle = SnapAngle(MathF.Atan2(deltaY, deltaX));
+        var directionX = MathF.Cos(angle);
+        var directionY = MathF.Sin(angle);
+        if (Math.Abs(directionX) > 0.001f)
+        {
+            var available = directionX > 0
+                ? (1 - start.X) * width
+                : start.X * width;
+            length = Math.Min(length, available / Math.Abs(directionX));
+        }
+
+        if (Math.Abs(directionY) > 0.001f)
+        {
+            var available = directionY > 0
+                ? (1 - start.Y) * height
+                : start.Y * height;
+            length = Math.Min(length, available / Math.Abs(directionY));
+        }
+
+        return new NormalizedPoint(
+            start.X + directionX * length / width,
+            start.Y + directionY * length / height).Clamp();
+    }
+
+    private static float SnapAngle(float radians) =>
+        MathF.Round(radians / (MathF.PI / 4)) * (MathF.PI / 4);
+
     private float PageDistancePixels(
         NormalizedPoint first,
         NormalizedPoint second)
@@ -2205,6 +2349,17 @@ public sealed partial class MainWindow : Window
             : annotation);
     }
 
+    private void FontSizePicker_PreviewKeyDown(
+        object sender,
+        KeyRoutedEventArgs args)
+    {
+        if (args.Key == VirtualKey.Enter)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+                EditorCanvas.Focus(FocusState.Programmatic));
+        }
+    }
+
     private void ApplyToolOptions()
     {
         if (!_controlsReady)
@@ -2260,10 +2415,10 @@ public sealed partial class MainWindow : Window
             ? Visibility.Visible
             : Visibility.Collapsed;
         RotateObjectButton.IsEnabled = hasSelection;
-        var hasResizableSelection = selections.Any(
-            annotation => annotation is not TextAnnotation);
-        SmallerObjectButton.IsEnabled = hasResizableSelection;
-        LargerObjectButton.IsEnabled = hasResizableSelection;
+        SmallerObjectButton.IsEnabled = hasSelection;
+        LargerObjectButton.IsEnabled = hasSelection;
+        SendToBackButton.IsEnabled = hasSelection;
+        BringToFrontButton.IsEnabled = hasSelection;
 
         DeleteObjectButton.IsEnabled = hasSelection;
         DeleteAllObjectsButton.IsEnabled = _project.Pages.Count > 0
@@ -2307,7 +2462,7 @@ public sealed partial class MainWindow : Window
 
     private void RotateObjectButton_Click(
         object sender,
-        RoutedEventArgs args) => RotateSelected(MathF.PI / 12);
+        RoutedEventArgs args) => ResetSelectedRotation();
 
     private void SmallerObjectButton_Click(
         object sender,
@@ -2317,24 +2472,35 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs args) => ResizeSelected(1.1f);
 
-    private void RotateSelected(float radians)
+    private void ResetSelectedRotation()
     {
         var selections = SelectedAnnotations;
-        if (selections.Count == 0)
+        var rotations = selections
+            .Select(annotation => new
+            {
+                Annotation = annotation,
+                Radians = AnnotationGeometry.PageRotationRadians(
+                    annotation.Transform,
+                    EditorPageWidthPoints(),
+                    EditorPageHeightPoints()),
+            })
+            .Where(value => Math.Abs(value.Radians) > 0.0001f)
+            .ToArray();
+        if (rotations.Length == 0)
         {
             return;
         }
 
         _history.Checkpoint(_project);
-        foreach (var selected in selections)
+        foreach (var value in rotations)
         {
             var operation = AnnotationGeometry.PageRotation(
-                radians,
-                AnnotationCenter(selected),
+                -value.Radians,
+                AnnotationCenter(value.Annotation),
                 EditorPageWidthPoints(),
                 EditorPageHeightPoints());
             ReplaceAnnotation(
-                selected.Id,
+                value.Annotation.Id,
                 annotation => WithTransform(
                     annotation,
                     annotation.Transform.Matrix * operation));
@@ -2355,12 +2521,50 @@ public sealed partial class MainWindow : Window
         _history.Checkpoint(_project);
         foreach (var selected in selections)
         {
-            var resized = AnnotationGeometry.ResizeByFactor(
-                selected,
-                factor);
+            var resized = selected is TextAnnotation text
+                ? PageRenderer.FitTextBounds(
+                    text with
+                    {
+                        FontSize = Math.Clamp(
+                            text.FontSize + (factor < 1 ? -1 : 1),
+                            6,
+                            144),
+                    },
+                    EditorPageWidthPoints(),
+                    EditorPageHeightPoints())
+                : AnnotationGeometry.ResizeByFactor(selected, factor);
             ReplaceAnnotation(selected.Id, _ => resized);
         }
 
+        MarkChanged();
+        ApplyToolOptions();
+        EditorCanvas.Invalidate();
+    }
+
+    private void SendToBackButton_Click(
+        object sender,
+        RoutedEventArgs args) => ReorderSelectedAnnotations(toFront: false);
+
+    private void BringToFrontButton_Click(
+        object sender,
+        RoutedEventArgs args) => ReorderSelectedAnnotations(toFront: true);
+
+    private void ReorderSelectedAnnotations(bool toFront)
+    {
+        var before = ProjectJson.Clone(_project);
+        var changed = toFront
+            ? AnnotationOrdering.BringToFront(
+                CurrentPage.Annotations,
+                _selectedAnnotationIds)
+            : AnnotationOrdering.SendToBack(
+                CurrentPage.Annotations,
+                _selectedAnnotationIds);
+        if (!changed)
+        {
+            return;
+        }
+
+        _history.Checkpoint(before);
         MarkChanged();
         EditorCanvas.Invalidate();
     }

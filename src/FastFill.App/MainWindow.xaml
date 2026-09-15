@@ -402,12 +402,12 @@
                          TextWrapping="Wrap"
                          BorderThickness="2"
                          BorderBrush="#FF00A4EF"
-                         Background="#99FFFFFF"
+                         Background="#3000A4EF"
                          Foreground="#FF111827"
-                         Padding="3,0"
+                         Padding="4,0"
                          LostFocus="InlineTextEditor_LostFocus"
-                         TextChanged="InlineTextEditor_TextChanged"
-                         KeyDown="InlineTextEditor_KeyDown" />
+                         TextChanging="InlineTextEditor_TextChanging"
+                         PreviewKeyDown="InlineTextEditor_KeyDown" />
               </Canvas>
               <Border x:Name="NavigationBar"
                       HorizontalAlignment="Center"
@@ -485,7 +485,7 @@
                                 Click="ToolButton_Click"
                                 Tag="Select"
                                 ToolTipService.ToolTip=
-                                  "Select; Shift moves, Ctrl resizes/adds"
+                                  "Ctrl: add/snap; Shift: move; Alt: resize"
                                 AutomationProperties.Name="Select and move"
                                 Style="{StaticResource ToolToggleStyle}">
                     <FontIcon Glyph="&#xE7C9;" FontSize="20" />
@@ -658,7 +658,9 @@
                              Maximum="144"
                              Value="18"
                              SmallChange="1"
-                             SpinButtonPlacementMode="Compact"
+                             SpinButtonPlacementMode="Inline"
+                             PreviewKeyDown=
+                               "FontSizePicker_PreviewKeyDown"
                              ValueChanged="FontSize_ValueChanged" />
                 </StackPanel>
                 <Grid x:Name="TransformPanel" Margin="0,6,0,0">
@@ -669,9 +671,9 @@
                   </Grid.ColumnDefinitions>
                   <Button x:Name="RotateObjectButton"
                           Click="RotateObjectButton_Click"
-                          Content="↻ 15°"
-                          AutomationProperties.Name="Rotate selected"
-                          ToolTipService.ToolTip="Rotate selected"
+                          Content="↻ 0°"
+                          AutomationProperties.Name="Reset rotation"
+                          ToolTipService.ToolTip="Reset rotation"
                           Padding="4"
                           Style="{StaticResource TouchButtonStyle}" />
                   <Button x:Name="SmallerObjectButton"
@@ -687,6 +689,29 @@
                           Click="LargerObjectButton_Click"
                           AutomationProperties.Name="Make selected larger"
                           ToolTipService.ToolTip="Make selected larger"
+                          Style="{StaticResource TouchButtonStyle}" />
+                </Grid>
+                <Grid x:Name="LayerPanel"
+                      Margin="0,4,0,0"
+                      ColumnSpacing="4">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <Button x:Name="SendToBackButton"
+                          Content="To back"
+                          Click="SendToBackButton_Click"
+                          AutomationProperties.Name="Send selected to back"
+                          ToolTipService.ToolTip="Send selected to back"
+                          Style="{StaticResource TouchButtonStyle}" />
+                  <Button x:Name="BringToFrontButton"
+                          Grid.Column="1"
+                          Content="To front"
+                          Click="BringToFrontButton_Click"
+                          AutomationProperties.Name=
+                            "Bring selected to front"
+                          ToolTipService.ToolTip=
+                            "Bring selected to front"
                           Style="{StaticResource TouchButtonStyle}" />
                 </Grid>
                 <Button x:Name="DeleteObjectButton"
