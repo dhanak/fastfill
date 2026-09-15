@@ -2481,7 +2481,7 @@ public sealed partial class MainWindow : Window
                     CultureInfo.InvariantCulture,
                     out var value)
                 && value == color;
-            button.BorderThickness = new Thickness(selected ? 3 : 1);
+            button.BorderThickness = new Thickness(selected ? 2 : 1);
             button.BorderBrush = new SolidColorBrush(
                 selected
                     ? Windows.UI.Color.FromArgb(255, 0, 164, 239)

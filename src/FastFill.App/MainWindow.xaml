@@ -613,7 +613,7 @@
                   </Grid.RowDefinitions>
                   <Button Background="#FF111827"
                           Tag="FF111827"
-                          BorderThickness="3"
+                          BorderThickness="2"
                           BorderBrush="#FF00A4EF"
                           AutomationProperties.Name="Black"
                           Click="ColorButton_Click"
