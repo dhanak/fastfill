@@ -1645,7 +1645,7 @@ public sealed partial class MainWindow : Window
     {
         var dragged = PageDistancePixels(start, end) >= 8;
         if (!dragged
-            && SmartSnapToggle.IsOn
+            && SmartSnapToggle.IsChecked == true
             && _pageSnapFeatures?.FindHorizontalLine(
                 start,
                 EditorSnapRadius()) is SnapLineFeature line)
@@ -2334,7 +2334,7 @@ public sealed partial class MainWindow : Window
 
         if (shape.Shape is ShapeKind.Checkmark or ShapeKind.Cross)
         {
-            var box = SmartSnapToggle.IsOn
+            var box = SmartSnapToggle.IsChecked == true
                 ? _pageSnapFeatures?.FindBox(
                     shape.Start,
                     EditorSnapRadius())
@@ -2570,7 +2570,7 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    private void FilledToggle_Toggled(
+    private void FilledToggle_Click(
         object sender,
         RoutedEventArgs args)
     {
@@ -2583,7 +2583,7 @@ public sealed partial class MainWindow : Window
         {
             _toolSettings[_tool] = _toolSettings[_tool] with
             {
-                Filled = FilledToggle.IsOn,
+                Filled = FilledToggle.IsChecked == true,
             };
         }
 
@@ -2594,11 +2594,11 @@ public sealed partial class MainWindow : Window
                 Shape: ShapeKind.Rectangle or ShapeKind.Ellipse,
             } shape => shape with
             {
-                Filled = FilledToggle.IsOn,
+                Filled = FilledToggle.IsChecked == true,
             },
             FreehandAnnotation { IsHighlighter: false } ink => ink with
             {
-                Filled = FilledToggle.IsOn,
+                Filled = FilledToggle.IsChecked == true,
             },
             _ => annotation,
         });
@@ -2730,7 +2730,7 @@ public sealed partial class MainWindow : Window
             settings.Thickness,
             (float)ThicknessSlider.Minimum,
             (float)ThicknessSlider.Maximum);
-        FilledToggle.IsOn = settings.Filled;
+        FilledToggle.IsChecked = settings.Filled;
         SelectComboItem(FontFamilyPicker, settings.FontFamily);
         FontSizePicker.Value = settings.FontSize;
         BoldTextToggle.IsChecked = settings.IsBold;
@@ -2756,17 +2756,24 @@ public sealed partial class MainWindow : Window
             && _tool is ToolMode.Text
                 or ToolMode.Checkmark
                 or ToolMode.Cross;
-        ThicknessSlider.IsEnabled = supportsThickness;
-        ThicknessLabel.Opacity = supportsThickness ? 1 : 0.45;
-        FilledToggle.IsEnabled = supportsFill;
-        FillPanel.Opacity = supportsFill ? 1 : 0.45;
+        ThicknessPanel.Visibility = supportsThickness
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        FilledToggle.Visibility = supportsFill
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         FontPanel.Visibility = supportsFont
             ? Visibility.Visible
             : Visibility.Collapsed;
-        ColorPanel.IsHitTestVisible = supportsColor;
-        ColorPanel.Opacity = supportsColor ? 1 : 0.45;
-        SmartSnapToggle.IsEnabled = supportsSmartSnap;
-        SmartSnapPanel.Opacity = supportsSmartSnap ? 1 : 0.45;
+        ColorOptionsPanel.Visibility = supportsColor
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        SmartSnapToggle.Visibility = supportsSmartSnap
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        OptionTogglePanel.Visibility = supportsFill || supportsSmartSnap
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         foreach (var button in ColorPanel.Children.OfType<Button>())
         {
             button.IsTabStop = supportsColor;
@@ -2775,16 +2782,28 @@ public sealed partial class MainWindow : Window
         NavigationBar.Visibility = _tool == ToolMode.Navigate
             ? Visibility.Visible
             : Visibility.Collapsed;
-        RotateObjectButton.IsEnabled =
-            selections.Any(AnnotationGeometry.SupportsRotation);
-        SmallerObjectButton.IsEnabled = hasSelection;
-        LargerObjectButton.IsEnabled = hasSelection;
-        SendToBackButton.IsEnabled = hasSelection;
-        BringToFrontButton.IsEnabled = hasSelection;
+        TransformPanel.Visibility = hasSelection
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        RotateObjectButton.Visibility = selections.Any(
+            AnnotationGeometry.SupportsRotation)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        LayerPanel.Visibility = hasSelection
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
-        DeleteObjectButton.IsEnabled = hasSelection;
-        DeleteAllObjectsButton.IsEnabled = _project.Pages.Count > 0
+        var hasAnnotations = _project.Pages.Count > 0
             && CurrentPage.Annotations.Count > 0;
+        DeleteObjectButton.Visibility = hasSelection
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        DeleteAllObjectsButton.Visibility = hasAnnotations
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        DeletePanel.Visibility = hasSelection || hasAnnotations
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         _updatingToolOptions = false;
     }
 

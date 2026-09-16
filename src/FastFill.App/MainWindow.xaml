@@ -611,88 +611,96 @@
                     <TextBlock Text="✕" FontSize="22" />
                   </ToggleButton>
                 </Grid>
-                <StackPanel x:Name="SmartSnapPanel"
-                            Orientation="Horizontal"
-                            Spacing="8"
-                            Margin="4,8,4,0">
-                  <TextBlock Text="Smart snap"
-                             VerticalAlignment="Center" />
-                  <ToggleSwitch x:Name="SmartSnapToggle"
-                                IsOn="True"
-                                OnContent=""
-                                OffContent=""
-                                ToolTipService.ToolTip=
-                                  "Snap marks to boxes and text to lines" />
-                </StackPanel>
-                <TextBlock Text="Color" Margin="4,10,4,2" />
-                <Grid x:Name="ColorPanel">
+                <Grid x:Name="OptionTogglePanel"
+                      Margin="0,8,0,0">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                   </Grid.ColumnDefinitions>
-                  <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                  </Grid.RowDefinitions>
-                  <Button Background="#FF111827"
-                          Tag="FF111827"
-                          BorderThickness="2"
-                          BorderBrush="#FF00A4EF"
-                          AutomationProperties.Name="Black"
-                          Click="ColorButton_Click"
-                          Style="{StaticResource ColorButtonStyle}" />
-                  <Button Grid.Column="1"
-                          Background="#FFFFFFFF"
-                          Tag="FFFFFFFF"
-                          AutomationProperties.Name="White"
-                          Click="ColorButton_Click"
-                          Style="{StaticResource ColorButtonStyle}" />
-                  <Button Grid.Column="2"
-                          Background="#FFE11D48"
-                          Tag="FFE11D48"
-                          AutomationProperties.Name="Red"
-                          Click="ColorButton_Click"
-                          Style="{StaticResource ColorButtonStyle}" />
-                  <Button Grid.Row="1"
-                          Background="#FF0078D4"
-                          Tag="FF0078D4"
-                          AutomationProperties.Name="Blue"
-                          Click="ColorButton_Click"
-                          Style="{StaticResource ColorButtonStyle}" />
-                  <Button Grid.Row="1"
-                          Grid.Column="1"
-                          Background="#FF16A34A"
-                          Tag="FF16A34A"
-                          AutomationProperties.Name="Green"
-                          Click="ColorButton_Click"
-                          Style="{StaticResource ColorButtonStyle}" />
-                  <Button Grid.Row="1"
-                          Grid.Column="2"
-                          Background="#FFFFD800"
-                          Tag="FFFFD800"
-                          AutomationProperties.Name="Yellow"
-                          Click="ColorButton_Click"
-                          Style="{StaticResource ColorButtonStyle}" />
+                  <ToggleButton x:Name="SmartSnapToggle"
+                                IsChecked="True"
+                                AutomationProperties.Name="Smart snap"
+                                ToolTipService.ToolTip=
+                                  "Snap marks to boxes and text to lines"
+                                Style="{StaticResource ToolToggleStyle}">
+                    <TextBlock Text="&#x1F9F2;"
+                               FontFamily="Segoe UI Emoji"
+                               FontSize="20" />
+                  </ToggleButton>
+                  <ToggleButton x:Name="FilledToggle"
+                                Click="FilledToggle_Click"
+                                AutomationProperties.Name="Fill"
+                                ToolTipService.ToolTip="Fill"
+                                Style="{StaticResource ToolToggleStyle}">
+                    <TextBlock Text="&#x1FAA3;"
+                               FontFamily="Segoe UI Emoji"
+                               FontSize="20" />
+                  </ToggleButton>
                 </Grid>
-                <TextBlock x:Name="ThicknessLabel"
-                           Text="Thickness"
-                           Margin="4,8,4,0" />
-                <Slider x:Name="ThicknessSlider"
-                        Minimum="1"
-                        Maximum="20"
-                        Value="3"
-                        StepFrequency="1"
-                        ValueChanged="ThicknessSlider_ValueChanged" />
-                <StackPanel x:Name="FillPanel"
-                            Orientation="Horizontal"
-                            Spacing="8"
-                            Margin="4,2">
-                  <TextBlock Text="Fill" VerticalAlignment="Center" />
-                  <ToggleSwitch x:Name="FilledToggle"
-                                OnContent=""
-                                OffContent=""
-                                Toggled="FilledToggle_Toggled" />
+                <StackPanel x:Name="ColorOptionsPanel">
+                  <TextBlock Text="Color" Margin="4,10,4,2" />
+                  <Grid x:Name="ColorPanel">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Button Background="#FF111827"
+                            Tag="FF111827"
+                            BorderThickness="2"
+                            BorderBrush="#FF00A4EF"
+                            AutomationProperties.Name="Black"
+                            Click="ColorButton_Click"
+                            Style="{StaticResource ColorButtonStyle}" />
+                    <Button Grid.Column="1"
+                            Background="#FFFFFFFF"
+                            Tag="FFFFFFFF"
+                            AutomationProperties.Name="White"
+                            Click="ColorButton_Click"
+                            Style="{StaticResource ColorButtonStyle}" />
+                    <Button Grid.Column="2"
+                            Background="#FFE11D48"
+                            Tag="FFE11D48"
+                            AutomationProperties.Name="Red"
+                            Click="ColorButton_Click"
+                            Style="{StaticResource ColorButtonStyle}" />
+                    <Button Grid.Row="1"
+                            Background="#FF0078D4"
+                            Tag="FF0078D4"
+                            AutomationProperties.Name="Blue"
+                            Click="ColorButton_Click"
+                            Style="{StaticResource ColorButtonStyle}" />
+                    <Button Grid.Row="1"
+                            Grid.Column="1"
+                            Background="#FF16A34A"
+                            Tag="FF16A34A"
+                            AutomationProperties.Name="Green"
+                            Click="ColorButton_Click"
+                            Style="{StaticResource ColorButtonStyle}" />
+                    <Button Grid.Row="1"
+                            Grid.Column="2"
+                            Background="#FFFFD800"
+                            Tag="FFFFD800"
+                            AutomationProperties.Name="Yellow"
+                            Click="ColorButton_Click"
+                            Style="{StaticResource ColorButtonStyle}" />
+                  </Grid>
+                </StackPanel>
+                <StackPanel x:Name="ThicknessPanel">
+                  <TextBlock Text="Thickness"
+                             Margin="4,8,4,0" />
+                  <Slider x:Name="ThicknessSlider"
+                          Minimum="1"
+                          Maximum="20"
+                          Value="3"
+                          StepFrequency="1"
+                          ValueChanged=
+                            "ThicknessSlider_ValueChanged" />
                 </StackPanel>
                 <StackPanel x:Name="FontPanel" Spacing="4">
                   <ComboBox x:Name="FontFamilyPicker"
@@ -797,16 +805,32 @@
                             "Bring selected to front"
                           Style="{StaticResource TouchButtonStyle}" />
                 </Grid>
-                <Button x:Name="DeleteObjectButton"
-                        Content="Delete selected"
-                        IsEnabled="False"
-                        Click="DeleteObjectButton_Click"
-                        Style="{StaticResource RailButtonStyle}" />
-                <Button x:Name="DeleteAllObjectsButton"
-                        Content="Delete all"
-                        IsEnabled="False"
-                        Click="DeleteAllObjectsButton_Click"
-                        Style="{StaticResource RailButtonStyle}" />
+                <Grid x:Name="DeletePanel"
+                      Margin="0,4,0,0"
+                      ColumnSpacing="4">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                  </Grid.ColumnDefinitions>
+                  <Button x:Name="DeleteObjectButton"
+                          Click="DeleteObjectButton_Click"
+                          AutomationProperties.Name="Delete selected"
+                          ToolTipService.ToolTip="Delete selected"
+                          Style="{StaticResource TouchButtonStyle}">
+                    <FontIcon Glyph="&#xE74D;" FontSize="20" />
+                  </Button>
+                  <Button x:Name="DeleteAllObjectsButton"
+                          Grid.Column="1"
+                          Click="DeleteAllObjectsButton_Click"
+                          AutomationProperties.Name="Delete all"
+                          ToolTipService.ToolTip="Delete all"
+                          Style="{StaticResource TouchButtonStyle}">
+                    <StackPanel Orientation="Horizontal">
+                      <FontIcon Glyph="&#xE74D;" FontSize="16" />
+                      <FontIcon Glyph="&#xE74D;" FontSize="16" />
+                    </StackPanel>
+                  </Button>
+                </Grid>
               </StackPanel>
             </ScrollViewer>
           </Border>
