@@ -2,7 +2,7 @@
 
 [![Windows build][build-badge]][build]
 [![Portable development build][download-badge]][download]
-[![Windows 11 x64][windows-badge]][download]
+[![Windows 11 x64][windows-badge]][release]
 [![MIT license][license-badge]][license]
 
 📄 Scan, correct, annotate, and export documents on Windows 11. FastFill is
@@ -16,7 +16,7 @@ the local computer unless you explicitly export or share them.
 **Requirements:** Windows 11 on an x64 computer. No installer, developer
 license, .NET runtime, or separate Windows App SDK runtime is required.
 
-1. [Download the latest portable development build][download].
+1. [Download the latest portable release][release].
 2. Extract the ZIP to any folder.
 3. Keep every extracted file together.
 4. Run `FastFill\FastFill.exe`.
@@ -189,6 +189,7 @@ Keep calibration thresholds in `AutoCaptureGate` and capture throttling in
 [build]: https://github.com/dhanak/fastfill/actions/workflows/windows.yml
 [build-badge]: https://github.com/dhanak/fastfill/actions/workflows/windows.yml/badge.svg
 [download]: https://github.com/dhanak/fastfill/releases/download/dev/FastFill-portable.zip
+[release]: https://github.com/dhanak/fastfill/releases/latest/download/FastFill-portable.zip
 [download-badge]: https://img.shields.io/badge/download-portable_dev-0078D4
 [windows-badge]: https://img.shields.io/badge/Windows_11-x64-0078D4
 [license]: LICENSE
