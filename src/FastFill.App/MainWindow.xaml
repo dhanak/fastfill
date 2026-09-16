@@ -253,7 +253,8 @@
                              PaintSurface="ReviewCanvas_PaintSurface"
                              PointerPressed="ReviewCanvas_PointerPressed"
                              PointerMoved="ReviewCanvas_PointerMoved"
-                             PointerReleased="ReviewCanvas_PointerReleased" />
+                             PointerReleased="ReviewCanvas_PointerReleased"
+                             PointerCanceled="ReviewCanvas_PointerCanceled" />
         </Border>
         <ScrollViewer Grid.Row="1"
                       HorizontalScrollBarVisibility="Auto"
@@ -262,8 +263,14 @@
                       HorizontalAlignment="Center"
                       Padding="0,10,0,0"
                       Spacing="8">
-            <Button Content="Retake"
+            <Button x:Name="RetakeButton"
+                    Content="Retake"
                     Click="RetakeButton_Click"
+                    Style="{StaticResource TouchButtonStyle}" />
+            <Button x:Name="CancelReviewButton"
+                    Content="Cancel"
+                    Visibility="Collapsed"
+                    Click="CancelReviewButton_Click"
                     Style="{StaticResource TouchButtonStyle}" />
             <ToggleButton x:Name="AdjustCornersToggle"
                           Content="Adjust corners"
@@ -274,6 +281,10 @@
             <Button x:Name="AutoDetectCornersButton"
                     Content="Auto-detect"
                     Click="AutoDetectCornersButton_Click"
+                    Style="{StaticResource TouchButtonStyle}" />
+            <Button x:Name="FullFrameButton"
+                    Content="Full frame"
+                    Click="FullFrameButton_Click"
                     Style="{StaticResource TouchButtonStyle}" />
             <ComboBox x:Name="FilterPicker"
                       Header="Color"
@@ -610,32 +621,28 @@
                                 Style="{StaticResource ToolToggleStyle}">
                     <TextBlock Text="✕" FontSize="22" />
                   </ToggleButton>
-                </Grid>
-                <Grid x:Name="OptionTogglePanel"
-                      Margin="0,8,0,0">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                  </Grid.ColumnDefinitions>
                   <ToggleButton x:Name="SmartSnapToggle"
+                                Grid.Row="3"
+                                Grid.Column="2"
                                 IsChecked="True"
                                 AutomationProperties.Name="Smart snap"
                                 ToolTipService.ToolTip=
                                   "Snap marks to boxes and text to lines"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <TextBlock Text="&#x1F9F2;"
-                               FontFamily="Segoe UI Emoji"
-                               FontSize="20" />
+                    <PathIcon Data="M4,3 L10,3 L10,12
+                                    C10,13.1 10.9,14 12,14
+                                    C13.1,14 14,13.1 14,12 L14,3 L20,3
+                                    L20,12 C20,16.4 16.4,20 12,20
+                                    C7.6,20 4,16.4 4,12 Z" />
                   </ToggleButton>
                   <ToggleButton x:Name="FilledToggle"
+                                Grid.Row="3"
+                                Grid.Column="2"
                                 Click="FilledToggle_Click"
                                 AutomationProperties.Name="Fill"
                                 ToolTipService.ToolTip="Fill"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <TextBlock Text="&#x1FAA3;"
-                               FontFamily="Segoe UI Emoji"
-                               FontSize="20" />
+                    <FontIcon Glyph="&#xED67;" FontSize="20" />
                   </ToggleButton>
                 </Grid>
                 <StackPanel x:Name="ColorOptionsPanel">
@@ -782,31 +789,39 @@
                           Style="{StaticResource TouchButtonStyle}" />
                 </Grid>
                 <Grid x:Name="LayerPanel"
-                      Margin="0,4,0,0"
-                      ColumnSpacing="4">
+                      Margin="0,4,0,0">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                   </Grid.ColumnDefinitions>
                   <Button x:Name="SendToBackButton"
-                          Content="To back"
                           Click="SendToBackButton_Click"
                           AutomationProperties.Name="Send selected to back"
                           ToolTipService.ToolTip="Send selected to back"
-                          Style="{StaticResource TouchButtonStyle}" />
+                          Padding="4"
+                          Style="{StaticResource TouchButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                      <FontIcon Glyph="&#xE74B;" FontSize="16" />
+                      <TextBlock Text="To back" />
+                    </StackPanel>
+                  </Button>
                   <Button x:Name="BringToFrontButton"
                           Grid.Column="1"
-                          Content="To front"
                           Click="BringToFrontButton_Click"
                           AutomationProperties.Name=
                             "Bring selected to front"
                           ToolTipService.ToolTip=
                             "Bring selected to front"
-                          Style="{StaticResource TouchButtonStyle}" />
+                          Padding="4"
+                          Style="{StaticResource TouchButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                      <FontIcon Glyph="&#xE74A;" FontSize="16" />
+                      <TextBlock Text="To front" />
+                    </StackPanel>
+                  </Button>
                 </Grid>
                 <Grid x:Name="DeletePanel"
-                      Margin="0,4,0,0"
-                      ColumnSpacing="4">
+                      Margin="0,4,0,0">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />

@@ -706,8 +706,18 @@ public sealed partial class MainWindow : Window
         FilterPicker.SelectedIndex = (int)_pendingFilter.Mode;
         ContrastSlider.Value = _pendingFilter.Contrast;
         AdjustCornersToggle.IsChecked = true;
+        var editingExistingPage = _editingPageIndex is not null;
+        RetakeButton.Visibility = editingExistingPage
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        CancelReviewButton.Visibility = editingExistingPage
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         SetScreen(AppScreen.Review);
         await RefreshReviewAsync();
+        SetStatus(editingExistingPage
+            ? "Editing page. Drag a corner; hold Ctrl to snap."
+            : "Review page. Drag a corner; hold Ctrl to snap.");
     }
 
     private async Task RefreshReviewAsync()
@@ -838,6 +848,7 @@ public sealed partial class MainWindow : Window
         {
             _activeCropCorner = distances.Index;
             ReviewCanvas.CapturePointer(args.Pointer);
+            UpdateReviewDragStatus();
         }
     }
 
@@ -853,8 +864,61 @@ public sealed partial class MainWindow : Window
         var point = ToNormalized(
             ToSkia(args.GetCurrentPoint(ReviewCanvas).Position),
             _reviewImageRect);
+        UpdateCropCorner(
+            index,
+            point,
+            snap: IsKeyDown(VirtualKey.Control));
+        UpdateReviewDragStatus();
+    }
+
+    private async void ReviewCanvas_PointerReleased(
+        object sender,
+        PointerRoutedEventArgs args)
+    {
+        if (_activeCropCorner is not int index)
+        {
+            return;
+        }
+
+        var point = ToNormalized(
+            ToSkia(args.GetCurrentPoint(ReviewCanvas).Position),
+            _reviewImageRect);
+        UpdateCropCorner(
+            index,
+            point,
+            snap: IsKeyDown(VirtualKey.Control));
+        _activeCropCorner = null;
+        ReviewCanvas.ReleasePointerCapture(args.Pointer);
+
+        await RefreshReviewAsync();
+        SetReviewIdleStatus();
+    }
+
+    private void ReviewCanvas_PointerCanceled(
+        object sender,
+        PointerRoutedEventArgs args)
+    {
+        _activeCropCorner = null;
+        ReviewCanvas.ReleasePointerCapture(args.Pointer);
+        SetReviewIdleStatus();
+    }
+
+    private void UpdateCropCorner(
+        int index,
+        NormalizedPoint point,
+        bool snap)
+    {
+        point = point.Clamp();
+        if (snap
+            && _reviewSnapFeatures?.FindCorner(
+                point,
+                ReviewSnapRadius()) is NormalizedPoint snapped)
+        {
+            point = snapped;
+        }
+
         var corners = _pendingCrop.Points.ToArray();
-        corners[index] = point.Clamp();
+        corners[index] = point;
         var candidate = new CropQuad(
             corners[0],
             corners[1],
@@ -867,46 +931,24 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async void ReviewCanvas_PointerReleased(
-        object sender,
-        PointerRoutedEventArgs args)
-    {
-        if (_activeCropCorner is not int index)
-        {
-            return;
-        }
+    private float ReviewSnapRadius() => Math.Clamp(
+        52 / Math.Max(
+            1,
+            Math.Min(
+                _reviewImageRect.Width,
+                _reviewImageRect.Height)),
+        0.015f,
+        0.09f);
 
-        _activeCropCorner = null;
-        ReviewCanvas.ReleasePointerCapture(args.Pointer);
-        var radius = Math.Clamp(
-            52 / Math.Max(
-                1,
-                Math.Min(
-                    _reviewImageRect.Width,
-                    _reviewImageRect.Height)),
-            0.015f,
-            0.09f);
-        var snapped = _reviewSnapFeatures?.FindCorner(
-            _pendingCrop.Points[index],
-            radius);
-        if (snapped is NormalizedPoint point)
-        {
-            var corners = _pendingCrop.Points.ToArray();
-            corners[index] = point;
-            var candidate = new CropQuad(
-                corners[0],
-                corners[1],
-                corners[2],
-                corners[3]);
-            if (candidate.IsConvex())
-            {
-                _pendingCrop = candidate;
-                ReviewCanvas.Invalidate();
-            }
-        }
+    private void UpdateReviewDragStatus() => SetStatus(
+        IsKeyDown(VirtualKey.Control)
+            ? "Ctrl: snapping corner to nearby image features."
+            : "Drag corner freely. Hold Ctrl to snap.");
 
-        await RefreshReviewAsync();
-    }
+    private void SetReviewIdleStatus() => SetStatus(
+        _editingPageIndex is not null
+            ? "Editing page. Drag a corner; hold Ctrl to snap."
+            : "Review page. Drag a corner; hold Ctrl to snap.");
 
     private async void FilterPicker_SelectionChanged(
         object sender,
@@ -955,6 +997,9 @@ public sealed partial class MainWindow : Window
             AdjustCornersToggle.IsChecked == true
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+        FullFrameButton.Visibility = AdjustCornersToggle.IsChecked == true
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         ReviewCanvas.Invalidate();
     }
 
@@ -1010,6 +1055,21 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void FullFrameButton_Click(
+        object sender,
+        RoutedEventArgs args)
+    {
+        if (_pendingBytes is null)
+        {
+            return;
+        }
+
+        _pendingCrop = CropQuad.Full;
+        ReviewCanvas.Invalidate();
+        await RefreshReviewAsync();
+        SetStatus("Using the full image frame.");
+    }
+
     private async void RotatePageButton_Click(
         object sender,
         RoutedEventArgs args)
@@ -1032,6 +1092,15 @@ public sealed partial class MainWindow : Window
 
         ClearReview();
         await StartCameraAsync();
+    }
+
+    private void CancelReviewButton_Click(
+        object sender,
+        RoutedEventArgs args)
+    {
+        ClearReview();
+        ShowEditor();
+        SetEditorIdleStatus();
     }
 
     private async void AcceptPageButton_Click(
@@ -1439,6 +1508,11 @@ public sealed partial class MainWindow : Window
         _pointerMoved |= PageDistancePixels(
             _pointerStart.Value,
             point) >= 3;
+        if (_pointerMoved)
+        {
+            UpdateEditorDragStatus();
+        }
+
         if (_tool == ToolMode.Select
             || _rotatingSelection
             || _resizingSelection
@@ -1637,6 +1711,7 @@ public sealed partial class MainWindow : Window
 
         ApplyToolOptions();
         EditorCanvas.Invalidate();
+        SetEditorIdleStatus();
     }
 
     private void BeginNewTextEdit(
@@ -2007,6 +2082,82 @@ public sealed partial class MainWindow : Window
         MarkChanged();
         ApplyToolOptions();
         EditorCanvas.Invalidate();
+        SetEditorIdleStatus();
+    }
+
+    private void UpdateEditorDragStatus()
+    {
+        var control = IsKeyDown(VirtualKey.Control);
+        var status = _rotatingSelection
+            ? control
+                ? "Ctrl: rotation snapped to 45° increments."
+                : "Rotate freely. Hold Ctrl to snap to 45°."
+            : ResizeDragStatus(control)
+                ?? GeneralEditorDragStatus(control);
+        if (status is not null)
+        {
+            SetStatus(status);
+        }
+    }
+
+    private string? ResizeDragStatus(bool control)
+    {
+        if (!_resizingSelection)
+        {
+            return null;
+        }
+
+        return _resizeStartAnnotation switch
+        {
+            ShapeAnnotation
+            {
+                Shape: ShapeKind.Line or ShapeKind.Arrow,
+            } => control
+                ? "Ctrl: endpoint snapped to a 45° angle."
+                : "Move endpoint freely. Hold Ctrl to snap to 45°.",
+            ShapeAnnotation
+            {
+                Shape: ShapeKind.Rectangle or ShapeKind.Ellipse,
+            } => control
+                ? "Ctrl: shape constrained to equal sides."
+                : "Resize freely. Hold Ctrl for equal sides.",
+            _ => "Resize selection.",
+        };
+    }
+
+    private string? GeneralEditorDragStatus(bool control)
+    {
+        if (_dragStartTransforms is not null)
+        {
+            return "Moving selection. Shift forces move; Alt forces resize.";
+        }
+
+        if (_selectionRectangleStart is not null)
+        {
+            return control
+                ? "Ctrl: adding objects to the selection."
+                : "Drag to select objects. Ctrl-drag adds to selection.";
+        }
+
+        return _tool switch
+        {
+            ToolMode.Rectangle or ToolMode.Ellipse => control
+                ? "Ctrl: shape constrained to equal sides."
+                : "Draw freely. Hold Ctrl for equal sides.",
+            ToolMode.Line or ToolMode.Arrow => control
+                ? "Ctrl: line snapped to a 45° angle."
+                : "Draw freely. Hold Ctrl to snap to 45°.",
+            ToolMode.Text => "Drag to set the text width.",
+            _ => null,
+        };
+    }
+
+    private void SetEditorIdleStatus()
+    {
+        if (_project.Pages.Count > 0)
+        {
+            SetStatus($"Page {_pageIndex + 1} of {_project.Pages.Count}");
+        }
     }
 
     private void CancelInlineTextEdit()
@@ -2195,6 +2346,7 @@ public sealed partial class MainWindow : Window
 
         ApplyToolOptions();
         EditorCanvas.Invalidate();
+        SetEditorIdleStatus();
     }
 
     private bool HandleNavigationPressed(PointerRoutedEventArgs args)
@@ -2251,6 +2403,9 @@ public sealed partial class MainWindow : Window
 
         ClampPan();
         EditorCanvas.Invalidate();
+        SetStatus(points.Length >= 2
+            ? "Pinch to zoom and move the page."
+            : "Drag to pan. Use the mouse wheel to zoom.");
         args.Handled = true;
         return true;
     }
@@ -2267,6 +2422,10 @@ public sealed partial class MainWindow : Window
         if (_navigationPoints.Count > 0)
         {
             BeginNavigationGesture();
+        }
+        else
+        {
+            SetEditorIdleStatus();
         }
 
         args.Handled = true;
@@ -2752,14 +2911,13 @@ public sealed partial class MainWindow : Window
             : _tool == ToolMode.Text;
         var supportsColor = hasSelection
             || _tool is not (ToolMode.Navigate or ToolMode.Select);
-        var supportsSmartSnap = !hasSelection
-            && _tool is ToolMode.Text
+        var supportsSmartSnap = _tool is ToolMode.Text
                 or ToolMode.Checkmark
                 or ToolMode.Cross;
         ThicknessPanel.Visibility = supportsThickness
             ? Visibility.Visible
             : Visibility.Collapsed;
-        FilledToggle.Visibility = supportsFill
+        FilledToggle.Visibility = supportsFill && !supportsSmartSnap
             ? Visibility.Visible
             : Visibility.Collapsed;
         FontPanel.Visibility = supportsFont
@@ -2769,9 +2927,6 @@ public sealed partial class MainWindow : Window
             ? Visibility.Visible
             : Visibility.Collapsed;
         SmartSnapToggle.Visibility = supportsSmartSnap
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        OptionTogglePanel.Visibility = supportsFill || supportsSmartSnap
             ? Visibility.Visible
             : Visibility.Collapsed;
         foreach (var button in ColorPanel.Children.OfType<Button>())
@@ -2801,6 +2956,8 @@ public sealed partial class MainWindow : Window
         DeleteAllObjectsButton.Visibility = hasAnnotations
             ? Visibility.Visible
             : Visibility.Collapsed;
+        Grid.SetColumn(DeleteAllObjectsButton, hasSelection ? 1 : 0);
+        Grid.SetColumnSpan(DeleteAllObjectsButton, hasSelection ? 1 : 2);
         DeletePanel.Visibility = hasSelection || hasAnnotations
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -3236,6 +3393,10 @@ public sealed partial class MainWindow : Window
                 "Geometry",
                 "Ctrl+draw/resize shape",
                 "Constrain box or oval to square or circle"),
+            (
+                "Page crop",
+                "Ctrl+drag corner",
+                "Snap crop corner to a nearby image feature"),
             ("Navigation", "Mouse wheel", "Zoom in or out"),
             ("Text", "Enter", "Accept text edit"),
             ("Text", "Shift+Enter", "Insert line break"),
