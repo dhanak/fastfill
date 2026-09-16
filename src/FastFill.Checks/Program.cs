@@ -364,6 +364,13 @@ internal static class Program
                 && dottedLine.End.X is > 0.5f and < 0.56f,
             $"Dotted text line snap feature included its label: "
                 + $"{dottedLine}.");
+        var dottedLineFromLabel = features.FindHorizontalLine(
+            new NormalizedPoint(108f / 799, 520f / 599),
+            0.04f);
+        Assert(
+            dottedLineFromLabel is not null
+                && dottedLineFromLabel.Start.X > 0.16f,
+            "Dotted text line snap selected the adjacent label.");
     }
 
     private static byte[] CreateFormWithoutVisibleBoundary()

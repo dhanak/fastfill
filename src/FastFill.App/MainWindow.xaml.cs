@@ -2766,6 +2766,37 @@ public sealed partial class MainWindow : Window
         });
     }
 
+    private void ToolOptionToggle_Checked(
+        object sender,
+        RoutedEventArgs args) => SetToolOptionIconBrush(
+            sender,
+            "TextOnAccentFillColorPrimaryBrush");
+
+    private void ToolOptionToggle_Unchecked(
+        object sender,
+        RoutedEventArgs args) => SetToolOptionIconBrush(
+            sender,
+            "TextFillColorPrimaryBrush");
+
+    private void SetToolOptionIconBrush(
+        object sender,
+        string resourceKey)
+    {
+        if (Application.Current.Resources[resourceKey] is not Brush brush)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(sender, SmartSnapToggle))
+        {
+            SmartSnapIcon.Fill = brush;
+        }
+        else if (ReferenceEquals(sender, FilledToggle))
+        {
+            FilledIcon.Fill = brush;
+        }
+    }
+
     private void FontFamily_SelectionChanged(
         object sender,
         SelectionChangedEventArgs args)

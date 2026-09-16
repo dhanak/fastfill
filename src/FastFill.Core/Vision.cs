@@ -785,7 +785,7 @@ public sealed class ImageSnapFeatures
         Size imageSize,
         int minimumLineWidth)
     {
-        if (marks.Count < 4)
+        if (marks.Count < 10)
         {
             return null;
         }
@@ -794,7 +794,7 @@ public sealed class ImageSnapFeatures
         var right = marks[^1].Right;
         var width = right - left;
         var inkWidth = marks.Sum(mark => mark.Width);
-        if (width < minimumLineWidth
+        if (width < minimumLineWidth * 3
             || inkWidth < width * 0.2
             || inkWidth > width * 0.8)
         {
