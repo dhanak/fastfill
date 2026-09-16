@@ -50,7 +50,8 @@ unrecognized-app warning, select **More info**, then **Run anyway**.
   them. Multi-selection, undo, and redo are supported.
 - Drag page reordering for projects containing up to 20 pages.
 - 🔍 Full-view, 1:1, and stepped zoom controls. The Navigate tool enables
-  pinch zoom, touch pan, and mouse-wheel zoom.
+  pinch zoom, touch pan, and mouse-wheel zoom. Right-drag pans temporarily;
+  Win+drag or Win+pinch pans or zooms without changing tools.
 - Editable `.docscan` projects with autosave recovery. FastFill also opens a
   `.docscan` passed to `FastFill.exe`, including through Windows **Open with**
   or an existing file association.
@@ -87,6 +88,8 @@ Select **Shortcuts** in FastFill's top bar for the complete reference.
 | **Ctrl+drag endpoint** | Snap a line or arrow to 45-degree angles. |
 | **Ctrl+draw/resize shape** | Constrain a box or oval to a square or circle. |
 | **Ctrl+drag crop corner** | Snap the corner to a nearby image feature. |
+| **Right-drag** | Pan without changing the selected tool. |
+| **Win+drag/pinch** | Temporarily pan or zoom without changing tools. |
 | **Enter** | Accept text editing. |
 | **Shift+Enter** | Insert a line break while editing text. |
 | **Escape** | Cancel text editing. |

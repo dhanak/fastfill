@@ -629,7 +629,6 @@
                   <ToggleButton x:Name="SmartSnapToggle"
                                 Grid.Row="3"
                                 Grid.Column="2"
-                                IsChecked="True"
                                 AutomationProperties.Name="Smart snap"
                                 ToolTipService.ToolTip=
                                   "Snap marks to boxes and text to lines"

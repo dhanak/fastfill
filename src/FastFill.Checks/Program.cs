@@ -274,6 +274,30 @@ internal static class Program
             new Point(640, 360),
             new Scalar(20, 20, 20),
             3);
+        for (var x = 100; x < 380; x += 16)
+        {
+            Cv2.Line(
+                image,
+                new Point(x, 450),
+                new Point(Math.Min(x + 11, 380), 450),
+                new Scalar(20, 20, 20),
+                2);
+        }
+
+        Cv2.PutText(
+            image,
+            "NAME",
+            new Point(400, 456),
+            HersheyFonts.HersheySimplex,
+            0.55,
+            new Scalar(20, 20, 20),
+            2);
+        Cv2.Line(
+            image,
+            new Point(520, 450),
+            new Point(700, 450),
+            new Scalar(20, 20, 20),
+            2);
         Assert(
             Cv2.ImEncode(".png", image, out var encoded),
             "Snap feature image encoding failed.");
@@ -298,6 +322,22 @@ internal static class Program
                 && line.Start.X < 0.4f
                 && line.End.X > 0.7f,
             "Text line snap feature was not detected.");
+        var dashedLine = features.FindHorizontalLine(
+            new NormalizedPoint(250f / 799, 450f / 599),
+            0.04f);
+        Assert(
+            dashedLine is not null
+                && dashedLine.Start.X < 0.16f
+                && dashedLine.End.X is > 0.44f and < 0.51f,
+            "Dashed text line snap feature was not detected separately.");
+        var separateLine = features.FindHorizontalLine(
+            new NormalizedPoint(620f / 799, 450f / 599),
+            0.04f);
+        Assert(
+            separateLine is not null
+                && separateLine.Start.X > 0.62f
+                && separateLine.End.X > 0.85f,
+            "Separate same-row text line snap feature was merged.");
     }
 
     private static byte[] CreateFormWithoutVisibleBoundary()

@@ -644,27 +644,57 @@ public sealed class ImageSnapFeatures
             .OrderByDescending(value => value.Width * value.Height)
             .ToArray();
 
-        using var edges = new Mat();
-        Cv2.Canny(image, edges, 60, 180);
-        var horizontalLines = Cv2.HoughLinesP(
-                edges,
-                1,
-                Math.PI / 180,
-                40,
-                image.Width * 0.08,
-                image.Width * 0.02)
-            .Where(line =>
-                Math.Abs(line.P2.Y - line.P1.Y)
-                    <= Math.Max(
-                        3,
-                        Math.Abs(line.P2.X - line.P1.X) * 0.08))
-            .Select(line => line.P1.X <= line.P2.X
-                ? new SnapLineFeature(
-                    Normalize(line.P1, image.Size()),
-                    Normalize(line.P2, image.Size()))
-                : new SnapLineFeature(
-                    Normalize(line.P2, image.Size()),
-                    Normalize(line.P1, image.Size())))
+        var bridgeWidth = Math.Clamp(
+            (int)Math.Round(image.Width * 0.006),
+            3,
+            10);
+        var minimumLineWidth = Math.Max(
+            20,
+            (int)Math.Round(image.Width * 0.025));
+        var maximumLineHeight = Math.Max(
+            5,
+            (int)Math.Round(
+                Math.Min(image.Width, image.Height) * 0.012));
+        using var joinedLines = new Mat();
+        using var bridgeKernel = Cv2.GetStructuringElement(
+            MorphShapes.Rect,
+            new Size(bridgeWidth, 3));
+        Cv2.MorphologyEx(
+            binary,
+            joinedLines,
+            MorphTypes.Close,
+            bridgeKernel);
+        using var lineMask = new Mat();
+        using var lineKernel = Cv2.GetStructuringElement(
+            MorphShapes.Rect,
+            new Size(minimumLineWidth, 1));
+        Cv2.MorphologyEx(
+            joinedLines,
+            lineMask,
+            MorphTypes.Open,
+            lineKernel);
+        Cv2.FindContours(
+            lineMask,
+            out var lineContours,
+            out _,
+            RetrievalModes.External,
+            ContourApproximationModes.ApproxSimple);
+        var horizontalLines = lineContours
+            .Select(Cv2.BoundingRect)
+            .Where(bounds => bounds.Width >= minimumLineWidth
+                && bounds.Height <= maximumLineHeight
+                && bounds.Width >= bounds.Height * 5)
+            .Select(bounds => new SnapLineFeature(
+                Normalize(
+                    new Point(
+                        bounds.X,
+                        bounds.Y + bounds.Height / 2),
+                    image.Size()),
+                Normalize(
+                    new Point(
+                        bounds.Right - 1,
+                        bounds.Y + bounds.Height / 2),
+                    image.Size())))
             .OrderByDescending(line => line.End.X - line.Start.X)
             .ToArray();
         return new(

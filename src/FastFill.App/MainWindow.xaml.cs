@@ -2351,14 +2351,17 @@ public sealed partial class MainWindow : Window
 
     private bool HandleNavigationPressed(PointerRoutedEventArgs args)
     {
-        if (_tool != ToolMode.Navigate)
+        var point = args.GetCurrentPoint(EditorCanvas);
+        if (_tool != ToolMode.Navigate
+            && !point.Properties.IsRightButtonPressed
+            && !IsWindowsKeyDown())
         {
             return false;
         }
 
-        _navigationPoints[args.Pointer.PointerId] =
-            args.GetCurrentPoint(EditorCanvas).Position;
+        _navigationPoints[args.Pointer.PointerId] = point.Position;
         BeginNavigationGesture();
+        NavigationBar.Visibility = Visibility.Visible;
         EditorCanvas.CapturePointer(args.Pointer);
         args.Handled = true;
         return true;
@@ -2366,8 +2369,7 @@ public sealed partial class MainWindow : Window
 
     private bool HandleNavigationMoved(PointerRoutedEventArgs args)
     {
-        if (_tool != ToolMode.Navigate
-            || !_navigationPoints.ContainsKey(args.Pointer.PointerId))
+        if (!_navigationPoints.ContainsKey(args.Pointer.PointerId))
         {
             return false;
         }
@@ -2412,8 +2414,7 @@ public sealed partial class MainWindow : Window
 
     private bool HandleNavigationReleased(PointerRoutedEventArgs args)
     {
-        if (_tool != ToolMode.Navigate
-            || !_navigationPoints.Remove(args.Pointer.PointerId))
+        if (!_navigationPoints.Remove(args.Pointer.PointerId))
         {
             return false;
         }
@@ -2425,6 +2426,9 @@ public sealed partial class MainWindow : Window
         }
         else
         {
+            NavigationBar.Visibility = _tool == ToolMode.Navigate
+                ? Visibility.Visible
+                : Visibility.Collapsed;
             SetEditorIdleStatus();
         }
 
@@ -2463,7 +2467,8 @@ public sealed partial class MainWindow : Window
         object sender,
         PointerRoutedEventArgs args)
     {
-        if (_tool != ToolMode.Navigate || _editorBackground is null)
+        if ((_tool != ToolMode.Navigate && !IsWindowsKeyDown())
+            || _editorBackground is null)
         {
             return;
         }
@@ -2563,12 +2568,8 @@ public sealed partial class MainWindow : Window
                 top + normalizedHeight));
     }
 
-    private float EditorSnapRadius() => Math.Clamp(
-        48 / Math.Max(
-            1,
-            Math.Min(_editorImageRect.Width, _editorImageRect.Height)),
-        0.012f,
-        0.08f);
+    // Page-space tolerance keeps smart snap independent of display zoom.
+    private static float EditorSnapRadius() => 0.04f;
 
     private NormalizedPoint ConstrainToSquare(
         NormalizedPoint start,
@@ -2656,7 +2657,8 @@ public sealed partial class MainWindow : Window
         CommitInlineTextEdit();
         _navigationPoints.Clear();
         foreach (var button in ToolButtonGrid.Children
-            .OfType<ToggleButton>())
+            .OfType<ToggleButton>()
+            .Where(button => button.Tag is string))
         {
             button.IsChecked = ReferenceEquals(button, selected);
         }
@@ -3389,6 +3391,11 @@ public sealed partial class MainWindow : Window
                 "Ctrl+drag corner",
                 "Snap crop corner to a nearby image feature"),
             ("Navigation", "Mouse wheel", "Zoom in or out"),
+            ("Navigation", "Right-drag", "Pan without changing tool"),
+            (
+                "Navigation",
+                "Win+drag/pinch",
+                "Temporarily pan or zoom the page"),
             ("Text", "Enter", "Accept text edit"),
             ("Text", "Shift+Enter", "Insert line break"),
             ("Text", "Esc", "Cancel text edit"),
@@ -4189,6 +4196,10 @@ public sealed partial class MainWindow : Window
         InputKeyboardSource.GetKeyStateForCurrentThread(key)
             .HasFlag(CoreVirtualKeyStates.Down);
 
+    private static bool IsWindowsKeyDown() =>
+        IsKeyDown(VirtualKey.LeftWindows)
+        || IsKeyDown(VirtualKey.RightWindows);
+
     private static bool SupportsFill(Annotation annotation) =>
         annotation is FreehandAnnotation { IsHighlighter: false }
         or ShapeAnnotation
@@ -4324,8 +4335,8 @@ public sealed partial class MainWindow : Window
         [ToolMode.Arrow] = new(0xff111827, 3, false),
         [ToolMode.Rectangle] = new(0xff111827, 3, false),
         [ToolMode.Ellipse] = new(0xff111827, 3, false),
-        [ToolMode.Checkmark] = new(0xff16a34a, 3, false),
-        [ToolMode.Cross] = new(0xffe11d48, 3, false),
+        [ToolMode.Checkmark] = new(0xff16a34a, 2, false),
+        [ToolMode.Cross] = new(0xffe11d48, 2, false),
     };
 
     private sealed record PageListItem(Guid PageId, string Label)
