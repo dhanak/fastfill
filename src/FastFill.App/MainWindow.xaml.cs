@@ -2354,7 +2354,7 @@ public sealed partial class MainWindow : Window
         var point = args.GetCurrentPoint(EditorCanvas);
         if (_tool != ToolMode.Navigate
             && !point.Properties.IsRightButtonPressed
-            && !IsWindowsKeyDown())
+            && !IsTemporaryNavigationModifierDown())
         {
             return false;
         }
@@ -2467,7 +2467,8 @@ public sealed partial class MainWindow : Window
         object sender,
         PointerRoutedEventArgs args)
     {
-        if ((_tool != ToolMode.Navigate && !IsWindowsKeyDown())
+        if ((_tool != ToolMode.Navigate
+                && !IsTemporaryNavigationModifierDown())
             || _editorBackground is null)
         {
             return;
@@ -3394,7 +3395,7 @@ public sealed partial class MainWindow : Window
             ("Navigation", "Right-drag", "Pan without changing tool"),
             (
                 "Navigation",
-                "Win+drag/pinch",
+                "Ctrl+Win+drag/pinch",
                 "Temporarily pan or zoom the page"),
             ("Text", "Enter", "Accept text edit"),
             ("Text", "Shift+Enter", "Insert line break"),
@@ -4196,9 +4197,10 @@ public sealed partial class MainWindow : Window
         InputKeyboardSource.GetKeyStateForCurrentThread(key)
             .HasFlag(CoreVirtualKeyStates.Down);
 
-    private static bool IsWindowsKeyDown() =>
-        IsKeyDown(VirtualKey.LeftWindows)
-        || IsKeyDown(VirtualKey.RightWindows);
+    private static bool IsTemporaryNavigationModifierDown() =>
+        IsKeyDown(VirtualKey.Control)
+        && (IsKeyDown(VirtualKey.LeftWindows)
+            || IsKeyDown(VirtualKey.RightWindows));
 
     private static bool SupportsFill(Annotation annotation) =>
         annotation is FreehandAnnotation { IsHighlighter: false }

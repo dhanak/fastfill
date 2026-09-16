@@ -695,6 +695,12 @@ public sealed class ImageSnapFeatures
                         bounds.Right - 1,
                         bounds.Y + bounds.Height / 2),
                     image.Size())))
+            .Concat(FindBrokenHorizontalLines(
+                contours,
+                image.Size(),
+                minimumLineWidth,
+                maximumLineHeight,
+                bridgeWidth))
             .OrderByDescending(line => line.End.X - line.Start.X)
             .ToArray();
         return new(
@@ -703,6 +709,103 @@ public sealed class ImageSnapFeatures
             corners,
             boxes,
             horizontalLines);
+    }
+
+    private static IEnumerable<SnapLineFeature>
+        FindBrokenHorizontalLines(
+            Point[][] contours,
+            Size imageSize,
+            int minimumLineWidth,
+            int maximumLineHeight,
+            int maximumGap)
+    {
+        var alignmentTolerance = Math.Max(2, maximumLineHeight / 3);
+        var maximumMarkHeight = Math.Max(3, maximumLineHeight / 2);
+        var marks = contours
+            .Select(Cv2.BoundingRect)
+            .Where(bounds => bounds.Height <= maximumLineHeight
+                && bounds.Width <= minimumLineWidth * 2
+                && (bounds.Height <= maximumMarkHeight
+                    || bounds.Width >= bounds.Height * 2))
+            .OrderBy(bounds => bounds.Bottom)
+            .ToArray();
+        var rows = new List<List<Rect>>();
+        foreach (var mark in marks)
+        {
+            var row = rows
+                .Where(candidate => Math.Abs(
+                    candidate.Average(bounds => bounds.Bottom)
+                        - mark.Bottom) <= alignmentTolerance)
+                .MinBy(candidate => Math.Abs(
+                    candidate.Average(bounds => bounds.Bottom)
+                        - mark.Bottom));
+            if (row is null)
+            {
+                row = [];
+                rows.Add(row);
+            }
+
+            row.Add(mark);
+        }
+
+        foreach (var row in rows)
+        {
+            var group = new List<Rect>();
+            foreach (var mark in row.OrderBy(bounds => bounds.X))
+            {
+                if (group.Count > 0
+                    && mark.X - group[^1].Right > maximumGap)
+                {
+                    if (CreateBrokenLine(
+                        group,
+                        imageSize,
+                        minimumLineWidth) is { } line)
+                    {
+                        yield return line;
+                    }
+
+                    group.Clear();
+                }
+
+                group.Add(mark);
+            }
+
+            if (CreateBrokenLine(
+                group,
+                imageSize,
+                minimumLineWidth) is { } finalLine)
+            {
+                yield return finalLine;
+            }
+        }
+    }
+
+    private static SnapLineFeature? CreateBrokenLine(
+        List<Rect> marks,
+        Size imageSize,
+        int minimumLineWidth)
+    {
+        if (marks.Count < 4)
+        {
+            return null;
+        }
+
+        var left = marks[0].X;
+        var right = marks[^1].Right;
+        var width = right - left;
+        var inkWidth = marks.Sum(mark => mark.Width);
+        if (width < minimumLineWidth
+            || inkWidth < width * 0.2
+            || inkWidth > width * 0.8)
+        {
+            return null;
+        }
+
+        var centerY = (int)Math.Round(
+            marks.Average(mark => mark.Y + mark.Height / 2d));
+        return new(
+            Normalize(new Point(left, centerY), imageSize),
+            Normalize(new Point(right - 1, centerY), imageSize));
     }
 
     public NormalizedPoint? FindCorner(

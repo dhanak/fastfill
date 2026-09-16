@@ -298,6 +298,23 @@ internal static class Program
             new Point(700, 450),
             new Scalar(20, 20, 20),
             2);
+        Cv2.PutText(
+            image,
+            "Datum:",
+            new Point(60, 520),
+            HersheyFonts.HersheySimplex,
+            0.6,
+            new Scalar(20, 20, 20),
+            2);
+        for (var x = 130; x < 430; x += 6)
+        {
+            Cv2.Circle(
+                image,
+                new Point(x, 520),
+                1,
+                new Scalar(20, 20, 20),
+                -1);
+        }
         Assert(
             Cv2.ImEncode(".png", image, out var encoded),
             "Snap feature image encoding failed.");
@@ -338,6 +355,15 @@ internal static class Program
                 && separateLine.Start.X > 0.62f
                 && separateLine.End.X > 0.85f,
             "Separate same-row text line snap feature was merged.");
+        var dottedLine = features.FindHorizontalLine(
+            new NormalizedPoint(280f / 799, 520f / 599),
+            0.04f);
+        Assert(
+            dottedLine is not null
+                && dottedLine.Start.X is > 0.16f and < 0.2f
+                && dottedLine.End.X is > 0.5f and < 0.56f,
+            $"Dotted text line snap feature included its label: "
+                + $"{dottedLine}.");
     }
 
     private static byte[] CreateFormWithoutVisibleBoundary()

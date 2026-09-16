@@ -635,10 +635,8 @@
                                 Style="{StaticResource ToolToggleStyle}">
                     <!-- CC0 geometry adapted from SVGRepo:
                          https://www.svgrepo.com/svg/269220/magnet -->
-                    <Viewbox Width="24" Height="24">
-                      <Canvas Width="512" Height="512">
-                        <Path Fill=
-                          "{ThemeResource TextFillColorPrimaryBrush}"
+                    <PathIcon Width="24"
+                              Height="24"
                               Data="M507.123,264.039
                                 L436.526,193.441
                                 C430.282,187.197 419.244,187.197
@@ -694,8 +692,6 @@
                                 L354.156,299.359 L401.208,346.407 Z
                                 M424.754,322.862 L377.702,275.814
                                 L424.753,228.763 L471.803,275.814 Z" />
-                      </Canvas>
-                    </Viewbox>
                   </ToggleButton>
                   <ToggleButton x:Name="FilledToggle"
                                 Grid.Row="3"
@@ -706,10 +702,8 @@
                                 Style="{StaticResource ToolToggleStyle}">
                     <!-- CC0 geometry adapted from SVGRepo:
                          https://www.svgrepo.com/svg/433470/fill-o -->
-                    <Viewbox Width="24" Height="24">
-                      <Canvas Width="32" Height="32">
-                        <Path Fill=
-                          "{ThemeResource TextFillColorPrimaryBrush}"
+                    <PathIcon Width="24"
+                              Height="24"
                               Data="M28,22.2 L30.613,26.12
                                 C31.575,27.563 31.185,29.513
                                   29.742,30.475
@@ -756,8 +750,6 @@
                                   28.632,28.811
                                 C29.156,28.462 29.298,27.754
                                   28.949,27.229 Z" />
-                      </Canvas>
-                    </Viewbox>
                   </ToggleButton>
                 </Grid>
                 <StackPanel x:Name="ColorOptionsPanel">
