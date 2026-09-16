@@ -173,7 +173,8 @@ The `Windows` workflow checks and publishes FastFill as an unpackaged,
 self-contained x64 folder. Successful `master` builds replace the public
 `dev` prerelease and include `FastFill.cer` in the portable archive. Pull
 request builds create a private workflow artifact but do not publish a
-release.
+release. Pushing a version tag such as `v0.2.0` creates a permanent release
+with the same name and signed `FastFill-portable.zip` asset.
 
 ### Minimal SP6 release gate
 
