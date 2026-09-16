@@ -2937,30 +2937,21 @@ public sealed partial class MainWindow : Window
         NavigationBar.Visibility = _tool == ToolMode.Navigate
             ? Visibility.Visible
             : Visibility.Collapsed;
-        TransformPanel.Visibility = hasSelection
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        RotateObjectButton.Visibility = selections.Any(
-            AnnotationGeometry.SupportsRotation)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        LayerPanel.Visibility = hasSelection
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        RotateObjectButton.IsEnabled = selections.Any(annotation =>
+            AnnotationGeometry.SupportsRotation(annotation)
+            && Math.Abs(AnnotationGeometry.PageRotationRadians(
+                annotation.Transform,
+                EditorPageWidthPoints(),
+                EditorPageHeightPoints())) > 0.0001f);
+        SmallerObjectButton.IsEnabled = hasSelection;
+        LargerObjectButton.IsEnabled = hasSelection;
+        SendToBackButton.IsEnabled = hasSelection;
+        BringToFrontButton.IsEnabled = hasSelection;
 
         var hasAnnotations = _project.Pages.Count > 0
             && CurrentPage.Annotations.Count > 0;
-        DeleteObjectButton.Visibility = hasSelection
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        DeleteAllObjectsButton.Visibility = hasAnnotations
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        Grid.SetColumn(DeleteAllObjectsButton, hasSelection ? 1 : 0);
-        Grid.SetColumnSpan(DeleteAllObjectsButton, hasSelection ? 1 : 2);
-        DeletePanel.Visibility = hasSelection || hasAnnotations
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        DeleteObjectButton.IsEnabled = hasSelection;
+        DeleteAllObjectsButton.IsEnabled = hasAnnotations;
         _updatingToolOptions = false;
     }
 

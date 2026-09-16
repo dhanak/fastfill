@@ -267,11 +267,6 @@
                     Content="Retake"
                     Click="RetakeButton_Click"
                     Style="{StaticResource TouchButtonStyle}" />
-            <Button x:Name="CancelReviewButton"
-                    Content="Cancel"
-                    Visibility="Collapsed"
-                    Click="CancelReviewButton_Click"
-                    Style="{StaticResource TouchButtonStyle}" />
             <ToggleButton x:Name="AdjustCornersToggle"
                           Content="Adjust corners"
                           IsChecked="True"
@@ -307,6 +302,11 @@
             </StackPanel>
             <Button Content="Rotate"
                     Click="RotatePageButton_Click"
+                    Style="{StaticResource TouchButtonStyle}" />
+            <Button x:Name="CancelReviewButton"
+                    Content="Cancel"
+                    Visibility="Collapsed"
+                    Click="CancelReviewButton_Click"
                     Style="{StaticResource TouchButtonStyle}" />
             <Button Content="Accept page"
                     Click="AcceptPageButton_Click"
@@ -501,10 +501,15 @@
                   Background=
                     "{ThemeResource CardBackgroundFillColorDefaultBrush}"
                   CornerRadius="8">
-            <ScrollViewer x:Name="ToolScrollViewer"
-                          HorizontalScrollBarVisibility="Disabled"
-                          VerticalScrollBarVisibility="Auto">
-              <StackPanel x:Name="ToolPanel" Padding="8">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <ScrollViewer x:Name="ToolScrollViewer"
+                            HorizontalScrollBarVisibility="Disabled"
+                            VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="ToolPanel" Padding="8">
                 <TextBlock Text="Tools"
                            FontWeight="SemiBold"
                            Margin="4,4,4,6" />
@@ -629,11 +634,69 @@
                                 ToolTipService.ToolTip=
                                   "Snap marks to boxes and text to lines"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <PathIcon Data="M4,3 L10,3 L10,12
-                                    C10,13.1 10.9,14 12,14
-                                    C13.1,14 14,13.1 14,12 L14,3 L20,3
-                                    L20,12 C20,16.4 16.4,20 12,20
-                                    C7.6,20 4,16.4 4,12 Z" />
+                    <!-- CC0 geometry adapted from SVGRepo:
+                         https://www.svgrepo.com/svg/269220/magnet -->
+                    <Viewbox Width="24" Height="24">
+                      <Canvas Width="512" Height="512">
+                        <Path Fill=
+                          "{ThemeResource TextFillColorPrimaryBrush}"
+                              Data="M507.123,264.039
+                                L436.526,193.441
+                                C430.282,187.197 419.244,187.197
+                                  412.98,193.441
+                                L247.033,359.388
+                                C235.872,370.548 221.814,377.175
+                                  206.246,378.567
+                                C186.336,380.506 166.82,373.511
+                                  152.697,359.389
+                                C135.457,342.148 129.022,316.862
+                                  135.887,293.378
+                                C139.354,282.162 144.853,272.897
+                                  152.697,265.052
+                                L318.644,99.105
+                                C325.146,92.604 325.146,82.061
+                                  318.644,75.558
+                                L248.048,4.962
+                                C241.548,-1.54 231.005,-1.54
+                                  224.501,4.962
+                                L58.554,170.909
+                                C34.673,194.789 17.799,223.273
+                                  8.4,255.567
+                                C-12.664,326.005 6.547,401.85
+                                  58.552,453.532
+                                C99.468,494.78 156.704,515.814
+                                  214.704,511.314
+                                C262.407,507.908 307.321,487.387
+                                  341.176,453.532
+                                L507.123,287.585
+                                C513.627,281.084 513.627,270.541
+                                  507.123,264.039 Z
+                                M236.274,40.282 L283.324,87.332
+                                L236.274,134.383 L189.224,87.331 Z
+                                M317.63,429.986
+                                C289.44,458.176 252.045,475.262
+                                  212.233,478.106
+                                C163.579,481.867 116.175,464.352
+                                  82.151,430.036
+                                C38.803,386.979 22.81,323.795
+                                  40.322,265.048
+                                C48.134,238.176 62.177,214.469
+                                  82.101,194.456
+                                L165.677,110.879 L212.728,157.93
+                                L129.15,241.505
+                                C117.514,253.143 109.061,267.334
+                                  103.97,283.88
+                                C93.614,319.092 103.262,357.047
+                                  129.151,382.935
+                                C150.324,404.108 179.57,414.592
+                                  209.402,411.718
+                                C232.69,409.623 253.845,399.671
+                                  270.58,382.935
+                                L354.156,299.359 L401.208,346.407 Z
+                                M424.754,322.862 L377.702,275.814
+                                L424.753,228.763 L471.803,275.814 Z" />
+                      </Canvas>
+                    </Viewbox>
                   </ToggleButton>
                   <ToggleButton x:Name="FilledToggle"
                                 Grid.Row="3"
@@ -642,7 +705,60 @@
                                 AutomationProperties.Name="Fill"
                                 ToolTipService.ToolTip="Fill"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <FontIcon Glyph="&#xED67;" FontSize="20" />
+                    <!-- CC0 geometry adapted from SVGRepo:
+                         https://www.svgrepo.com/svg/433470/fill-o -->
+                    <Viewbox Width="24" Height="24">
+                      <Canvas Width="32" Height="32">
+                        <Path Fill=
+                          "{ThemeResource TextFillColorPrimaryBrush}"
+                              Data="M28,22.2 L30.613,26.12
+                                C31.575,27.563 31.185,29.513
+                                  29.742,30.475
+                                C27.652,31.868 24.859,30.37
+                                  24.859,27.862
+                                C24.859,27.242 25.043,26.636
+                                  25.386,26.12 Z
+                                M22.813,9.369
+                                C27.304,13.86 29.489,19.211
+                                  27.537,21.164
+                                L15.777,29.45
+                                C13.847,30.88 11.184,30.731
+                                  9.427,29.123
+                                L3.214,22.918
+                                C1.515,21.219 1.271,18.563
+                                  2.596,16.597
+                                L10.771,5.269
+                                C12.724,3.316 18.322,4.878
+                                  22.813,9.369 Z
+                                M10.719,8.761 L4.339,17.596
+                                C3.49,18.742 3.569,20.32
+                                  4.507,21.375
+                                L10.679,27.553
+                                C11.688,28.562 13.26,28.716
+                                  14.459,27.93
+                                L23.54,21.553
+                                C21.197,20.845 18.327,19.024
+                                  15.742,16.439
+                                C13.173,13.87 11.4,11.06
+                                  10.719,8.761 Z
+                                M12.604,6.15
+                                C11.913,7.057 14.303,11.638
+                                  16.956,14.025
+                                C20.535,17.604 24.564,19.358
+                                  25.731,18.872
+                                C26.442,17.92 24.694,13.696
+                                  21.199,10.783
+                                C17.839,7.422 13.631,5.194
+                                  12.604,6.15 Z
+                                M28,25.806 L27.051,27.229
+                                C26.665,27.807 27.08,29.003
+                                  28,29.003
+                                C28.225,29.003 28.445,28.936
+                                  28.632,28.811
+                                C29.156,28.462 29.298,27.754
+                                  28.949,27.229 Z" />
+                      </Canvas>
+                    </Viewbox>
                   </ToggleButton>
                 </Grid>
                 <StackPanel x:Name="ColorOptionsPanel">
@@ -760,7 +876,15 @@
                     </ToggleButton>
                   </Grid>
                 </StackPanel>
-                <Grid x:Name="TransformPanel" Margin="0,6,0,0">
+                </StackPanel>
+              </ScrollViewer>
+              <Border Grid.Row="1"
+                      Padding="8"
+                      BorderBrush=
+                        "{ThemeResource DividerStrokeColorDefaultBrush}"
+                      BorderThickness="0,1,0,0">
+                <StackPanel Spacing="4">
+                <Grid x:Name="TransformPanel" ColumnSpacing="4">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
@@ -771,25 +895,27 @@
                           Content="↻ 0°"
                           AutomationProperties.Name="Reset rotation"
                           ToolTipService.ToolTip="Reset rotation"
-                          Padding="4"
-                          Style="{StaticResource TouchButtonStyle}" />
+                          Style=
+                            "{StaticResource PaneActionButtonStyle}" />
                   <Button x:Name="SmallerObjectButton"
                           Grid.Column="1"
                           Content="−"
                           Click="SmallerObjectButton_Click"
                           AutomationProperties.Name="Make selected smaller"
                           ToolTipService.ToolTip="Make selected smaller"
-                          Style="{StaticResource TouchButtonStyle}" />
+                          Style=
+                            "{StaticResource PaneActionButtonStyle}" />
                   <Button x:Name="LargerObjectButton"
                           Grid.Column="2"
                           Content="+"
                           Click="LargerObjectButton_Click"
                           AutomationProperties.Name="Make selected larger"
                           ToolTipService.ToolTip="Make selected larger"
-                          Style="{StaticResource TouchButtonStyle}" />
+                          Style=
+                            "{StaticResource PaneActionButtonStyle}" />
                 </Grid>
                 <Grid x:Name="LayerPanel"
-                      Margin="0,4,0,0">
+                      ColumnSpacing="4">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
@@ -798,8 +924,8 @@
                           Click="SendToBackButton_Click"
                           AutomationProperties.Name="Send selected to back"
                           ToolTipService.ToolTip="Send selected to back"
-                          Padding="4"
-                          Style="{StaticResource TouchButtonStyle}">
+                          Style=
+                            "{StaticResource PaneActionButtonStyle}">
                     <StackPanel Orientation="Horizontal" Spacing="4">
                       <FontIcon Glyph="&#xE74B;" FontSize="16" />
                       <TextBlock Text="To back" />
@@ -812,16 +938,15 @@
                             "Bring selected to front"
                           ToolTipService.ToolTip=
                             "Bring selected to front"
-                          Padding="4"
-                          Style="{StaticResource TouchButtonStyle}">
+                          Style=
+                            "{StaticResource PaneActionButtonStyle}">
                     <StackPanel Orientation="Horizontal" Spacing="4">
                       <FontIcon Glyph="&#xE74A;" FontSize="16" />
                       <TextBlock Text="To front" />
                     </StackPanel>
                   </Button>
                 </Grid>
-                <Grid x:Name="DeletePanel"
-                      Margin="0,4,0,0">
+                <Grid x:Name="DeletePanel" ColumnSpacing="4">
                   <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
@@ -830,7 +955,8 @@
                           Click="DeleteObjectButton_Click"
                           AutomationProperties.Name="Delete selected"
                           ToolTipService.ToolTip="Delete selected"
-                          Style="{StaticResource TouchButtonStyle}">
+                          Style=
+                            "{StaticResource PaneActionButtonStyle}">
                     <FontIcon Glyph="&#xE74D;" FontSize="20" />
                   </Button>
                   <Button x:Name="DeleteAllObjectsButton"
@@ -838,15 +964,17 @@
                           Click="DeleteAllObjectsButton_Click"
                           AutomationProperties.Name="Delete all"
                           ToolTipService.ToolTip="Delete all"
-                          Style="{StaticResource TouchButtonStyle}">
+                          Style=
+                            "{StaticResource PaneActionButtonStyle}">
                     <StackPanel Orientation="Horizontal">
                       <FontIcon Glyph="&#xE74D;" FontSize="16" />
                       <FontIcon Glyph="&#xE74D;" FontSize="16" />
                     </StackPanel>
                   </Button>
                 </Grid>
-              </StackPanel>
-            </ScrollViewer>
+                </StackPanel>
+              </Border>
+            </Grid>
           </Border>
         </Grid>
       </Grid>
