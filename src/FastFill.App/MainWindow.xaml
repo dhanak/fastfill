@@ -699,8 +699,7 @@
                           Maximum="20"
                           Value="3"
                           StepFrequency="1"
-                          ValueChanged=
-                            "ThicknessSlider_ValueChanged" />
+                          ValueChanged="ThicknessSlider_ValueChanged" />
                 </StackPanel>
                 <StackPanel x:Name="FontPanel" Spacing="4">
                   <ComboBox x:Name="FontFamilyPicker"
