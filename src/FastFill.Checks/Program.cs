@@ -92,6 +92,7 @@ internal static class Program
         Assert(processed.Height > 400, "Perspective output is too short.");
         CheckAutoCapture(detection);
         CheckDetectionStabilizer(detection);
+        CheckImageSnapFeatures();
 
         var project = CreateProject();
         var page = project.Pages[0];
@@ -254,6 +255,50 @@ internal static class Program
         new(923f / 1279, 59f / 719),
         new(923f / 1279, 678f / 719),
         new(303f / 1279, 669f / 719));
+
+    private static void CheckImageSnapFeatures()
+    {
+        using var image = new Mat(
+            600,
+            800,
+            MatType.CV_8UC3,
+            new Scalar(245, 245, 245));
+        Cv2.Rectangle(
+            image,
+            new Rect(120, 100, 44, 44),
+            new Scalar(20, 20, 20),
+            4);
+        Cv2.Line(
+            image,
+            new Point(240, 360),
+            new Point(640, 360),
+            new Scalar(20, 20, 20),
+            3);
+        Assert(
+            Cv2.ImEncode(".png", image, out var encoded),
+            "Snap feature image encoding failed.");
+
+        var features = ImageSnapFeatures.Analyze(encoded);
+        var box = features.FindBox(
+            new NormalizedPoint(142f / 799, 122f / 599),
+            0.04f);
+        Assert(
+            box is NormalizedRect detected
+                && detected.Width * 800 is > 35 and < 55,
+            "Checkbox snap feature was not detected.");
+        var corner = features.FindCorner(
+            new NormalizedPoint(122f / 799, 102f / 599),
+            0.04f);
+        Assert(corner is not null, "Nearby image corner was not detected.");
+        var line = features.FindHorizontalLine(
+            new NormalizedPoint(440f / 799, 355f / 599),
+            0.04f);
+        Assert(
+            line is not null
+                && line.Start.X < 0.4f
+                && line.End.X > 0.7f,
+            "Text line snap feature was not detected.");
+    }
 
     private static byte[] CreateFormWithoutVisibleBoundary()
     {
@@ -494,18 +539,18 @@ internal static class Program
             gate.Evaluate(stable, start) == AutoCaptureState.HoldSteady,
             "Auto-capture did not begin stability wait.");
         Assert(
-            gate.Evaluate(stable, start.AddMilliseconds(1500))
+            gate.Evaluate(stable, start.AddMilliseconds(1000))
                 == AutoCaptureState.HoldSteady,
             "Auto-capture countdown ended early.");
         Assert(
             Math.Abs(gate.Progress - 0.5) < 0.01,
             "Auto-capture countdown progress is incorrect.");
         Assert(
-            gate.Evaluate(stable, start.AddMilliseconds(3100))
+            gate.Evaluate(stable, start.AddMilliseconds(2100))
                 == AutoCaptureState.Ready,
             "Auto-capture did not become ready.");
         Assert(
-            gate.Evaluate(stable, start.AddSeconds(2))
+            gate.Evaluate(stable, start.AddMilliseconds(2200))
                 == AutoCaptureState.Captured,
             "Auto-capture cooldown failed.");
         Assert(
@@ -544,10 +589,9 @@ internal static class Program
             Corners = Shift(baseline.Corners!, 0.01f, 0),
         };
         Assert(
-            !stabilizer.Update(baseline).Found
-                && !stabilizer.Update(nearby).Found,
+            !stabilizer.Update(baseline).Found,
             "Detection stabilizer did not delay its first result.");
-        var stable = stabilizer.Update(baseline);
+        var stable = stabilizer.Update(nearby);
         Assert(stable.Found, "Detection consensus was not accepted.");
 
         var distant = baseline with

@@ -68,8 +68,10 @@ public sealed partial class MainWindow : Window
     private int? _editingPageIndex;
     private SKImage? _reviewSource;
     private SKImage? _reviewProcessed;
+    private ImageSnapFeatures? _reviewSnapFeatures;
     private ProcessedPage? _processedPage;
     private SKImage? _editorBackground;
+    private ImageSnapFeatures? _pageSnapFeatures;
     private CancellationTokenSource? _renderCancellation;
     private CancellationTokenSource? _autosaveCancellation;
     private SKRect _reviewImageRect;
@@ -98,6 +100,8 @@ public sealed partial class MainWindow : Window
     private NormalizedRect _textEditBounds;
     private float _textEditMaximumWidth = 0.4f;
     private AffineTransform _textEditTransform = AffineTransform.Identity;
+    private NormalizedPoint? _textEditCenterAnchor;
+    private float? _textEditBottomAnchor;
     private bool _closingTextEditor;
     private float _zoom = 1;
     private Vector2 _pan;
@@ -674,6 +678,8 @@ public sealed partial class MainWindow : Window
             bytes.LongLength,
             _reviewSource.Width,
             _reviewSource.Height);
+        var snapFeatures = Task.Run(
+            () => ImageSnapFeatures.Analyze(bytes));
 
         if (_editingPageIndex is int editIndex)
         {
@@ -694,6 +700,8 @@ public sealed partial class MainWindow : Window
             _pendingFilter = new PageFilterSettings();
             _pendingRotation = 0;
         }
+
+        _reviewSnapFeatures = await snapFeatures;
 
         FilterPicker.SelectedIndex = (int)_pendingFilter.Mode;
         ContrastSlider.Value = _pendingFilter.Contrast;
@@ -863,13 +871,40 @@ public sealed partial class MainWindow : Window
         object sender,
         PointerRoutedEventArgs args)
     {
-        if (_activeCropCorner is null)
+        if (_activeCropCorner is not int index)
         {
             return;
         }
 
         _activeCropCorner = null;
         ReviewCanvas.ReleasePointerCapture(args.Pointer);
+        var radius = Math.Clamp(
+            52 / Math.Max(
+                1,
+                Math.Min(
+                    _reviewImageRect.Width,
+                    _reviewImageRect.Height)),
+            0.015f,
+            0.09f);
+        var snapped = _reviewSnapFeatures?.FindCorner(
+            _pendingCrop.Points[index],
+            radius);
+        if (snapped is NormalizedPoint point)
+        {
+            var corners = _pendingCrop.Points.ToArray();
+            corners[index] = point;
+            var candidate = new CropQuad(
+                corners[0],
+                corners[1],
+                corners[2],
+                corners[3]);
+            if (candidate.IsConvex())
+            {
+                _pendingCrop = candidate;
+                ReviewCanvas.Invalidate();
+            }
+        }
+
         await RefreshReviewAsync();
     }
 
@@ -949,13 +984,17 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            if (detection.Corners is null)
+            var corners = detection.Corners
+                ?? (detection.Confidence >= 0.45
+                    ? detection.CandidateCorners
+                    : null);
+            if (corners is null)
             {
-                SetStatus("No document boundary found.");
+                SetStatus("No likely document boundary found.");
                 return;
             }
 
-            _pendingCrop = detection.Corners;
+            _pendingCrop = corners;
             ReviewCanvas.Invalidate();
             await RefreshReviewAsync();
             SetStatus("Document boundary detected.");
@@ -1051,6 +1090,7 @@ public sealed partial class MainWindow : Window
     {
         _pendingBytes = null;
         _editingPageIndex = null;
+        _reviewSnapFeatures = null;
         _reviewSource?.Dispose();
         _reviewSource = null;
         _reviewProcessed?.Dispose();
@@ -1101,6 +1141,7 @@ public sealed partial class MainWindow : Window
         if (_project.Pages.Count == 0)
         {
             _processedPage = null;
+            _pageSnapFeatures = null;
             _editorBackground?.Dispose();
             _editorBackground = null;
             EditorCanvas.Invalidate();
@@ -1119,10 +1160,14 @@ public sealed partial class MainWindow : Window
                 _workspace,
                 page,
                 token);
+            var snapFeatures = await Task.Run(
+                () => ImageSnapFeatures.Analyze(processed.EncodedPng),
+                token);
             token.ThrowIfCancellationRequested();
             var image = SKImage.FromEncodedData(processed.EncodedPng)
                 ?? throw new InvalidDataException("Page image is invalid.");
             _processedPage = processed;
+            _pageSnapFeatures = snapFeatures;
             _editorBackground?.Dispose();
             _editorBackground = image;
             _selectedAnnotationIds.Clear();
@@ -1598,11 +1643,46 @@ public sealed partial class MainWindow : Window
         NormalizedPoint start,
         NormalizedPoint end)
     {
+        var dragged = PageDistancePixels(start, end) >= 8;
+        if (!dragged
+            && SmartSnapToggle.IsOn
+            && _pageSnapFeatures?.FindHorizontalLine(
+                start,
+                EditorSnapRadius()) is SnapLineFeature line)
+        {
+            var lineY = (line.Start.Y + line.End.Y) / 2;
+            var maximumLineWidth = Math.Clamp(
+                line.End.X - line.Start.X,
+                0.08f,
+                0.8f);
+            var initialHeight = SelectedFontSize()
+                * 1.25f
+                / Math.Max(EditorPageHeightPoints(), 1);
+            var lineBounds = new NormalizedRect(
+                line.Start.X,
+                Math.Max(0, lineY - initialHeight),
+                maximumLineWidth,
+                initialHeight);
+            BeginInlineTextEdit(
+                null,
+                string.Empty,
+                lineBounds,
+                maximumLineWidth,
+                AffineTransform.Identity,
+                bottomAnchor: lineY);
+            return;
+        }
+
         var draggedWidth = Math.Abs(end.X - start.X);
-        var maximumWidth = PageDistancePixels(start, end) >= 8
+        var maximumWidth = dragged
             ? Math.Clamp(draggedWidth, 0.16f, 0.6f)
             : 0.4f;
-        maximumWidth = Math.Min(maximumWidth, Math.Max(0.05f, 1 - start.X));
+        if (dragged)
+        {
+            maximumWidth = Math.Min(
+                maximumWidth,
+                Math.Max(0.05f, 1 - start.X));
+        }
         var bounds = new NormalizedRect(
             start.X,
             start.Y,
@@ -1614,7 +1694,8 @@ public sealed partial class MainWindow : Window
             string.Empty,
             bounds,
             maximumWidth,
-            AffineTransform.Identity);
+            AffineTransform.Identity,
+            centerAnchor: dragged ? null : start);
     }
 
     private void EditorCanvas_DoubleTapped(
@@ -1659,13 +1740,17 @@ public sealed partial class MainWindow : Window
         string text,
         NormalizedRect bounds,
         float maximumWidth,
-        AffineTransform transform)
+        AffineTransform transform,
+        NormalizedPoint? centerAnchor = null,
+        float? bottomAnchor = null)
     {
         CommitInlineTextEdit();
         _textEditAnnotationId = annotationId;
         _textEditBounds = bounds;
         _textEditMaximumWidth = maximumWidth;
         _textEditTransform = transform;
+        _textEditCenterAnchor = centerAnchor;
+        _textEditBottomAnchor = bottomAnchor;
         InlineTextEditor.Text = text;
         InlineTextEditor.Visibility = Visibility.Visible;
         UpdateInlineTextBounds();
@@ -1700,10 +1785,40 @@ public sealed partial class MainWindow : Window
             + corners.Max(point => point.X) * _editorImageRect.Width;
         var bottom = _editorImageRect.Top
             + corners.Max(point => point.Y) * _editorImageRect.Height;
+        var editorWidth = Math.Max(48, right - left + 12);
+        var editorHeight = Math.Max(40, bottom - top + 4);
+        if (_textEditCenterAnchor is NormalizedPoint center)
+        {
+            left = _editorImageRect.Left
+                + (center.X * _editorImageRect.Width)
+                - (editorWidth / 2);
+            top = _editorImageRect.Top
+                + (center.Y * _editorImageRect.Height)
+                - (editorHeight / 2);
+        }
+        else if (_textEditBottomAnchor is float bottomAnchor)
+        {
+            top = _editorImageRect.Top
+                + (bottomAnchor * _editorImageRect.Height)
+                - editorHeight;
+        }
+
+        left = Math.Clamp(
+            left,
+            _editorImageRect.Left,
+            Math.Max(
+                _editorImageRect.Left,
+                _editorImageRect.Right - editorWidth));
+        top = Math.Clamp(
+            top,
+            _editorImageRect.Top,
+            Math.Max(
+                _editorImageRect.Top,
+                _editorImageRect.Bottom - editorHeight));
         Canvas.SetLeft(InlineTextEditor, left);
         Canvas.SetTop(InlineTextEditor, top);
-        InlineTextEditor.Width = Math.Max(48, right - left + 12);
-        InlineTextEditor.Height = Math.Max(40, bottom - top + 4);
+        InlineTextEditor.Width = editorWidth;
+        InlineTextEditor.Height = editorHeight;
         InlineTextEditor.FontFamily = new FontFamily(SelectedFontFamily());
         InlineTextEditor.FontSize = SelectedFontSize()
             * _editorImageRect.Width
@@ -1748,7 +1863,33 @@ public sealed partial class MainWindow : Window
             },
             EditorPageWidthPoints(),
             EditorPageHeightPoints());
-        _textEditBounds = layout.Bounds;
+        var bounds = layout.Bounds;
+        if (_textEditCenterAnchor is NormalizedPoint center)
+        {
+            bounds = bounds with
+            {
+                X = Math.Clamp(
+                    center.X - (bounds.Width / 2),
+                    0,
+                    Math.Max(0, 1 - bounds.Width)),
+                Y = Math.Clamp(
+                    center.Y - (bounds.Height / 2),
+                    0,
+                    Math.Max(0, 1 - bounds.Height)),
+            };
+        }
+        else if (_textEditBottomAnchor is float bottom)
+        {
+            bounds = bounds with
+            {
+                Y = Math.Clamp(
+                    bottom - bounds.Height,
+                    0,
+                    Math.Max(0, 1 - bounds.Height)),
+            };
+        }
+
+        _textEditBounds = bounds;
     }
 
     private void InlineTextEditor_LostFocus(
@@ -1887,6 +2028,8 @@ public sealed partial class MainWindow : Window
         InlineTextEditor.Visibility = Visibility.Collapsed;
         InlineTextEditor.Text = string.Empty;
         _textEditAnnotationId = null;
+        _textEditCenterAnchor = null;
+        _textEditBottomAnchor = null;
         _closingTextEditor = false;
     }
 
@@ -2189,6 +2332,34 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (shape.Shape is ShapeKind.Checkmark or ShapeKind.Cross)
+        {
+            var box = SmartSnapToggle.IsOn
+                ? _pageSnapFeatures?.FindBox(
+                    shape.Start,
+                    EditorSnapRadius())
+                : null;
+            var center = box is NormalizedRect bounds
+                ? new NormalizedPoint(
+                    bounds.X + (bounds.Width / 2),
+                    bounds.Y + (bounds.Height / 2))
+                : shape.Start;
+            var size = box is NormalizedRect detectedBox
+                ? Math.Min(
+                    detectedBox.Width * _editorImageRect.Width,
+                    detectedBox.Height * _editorImageRect.Height) * 0.78f
+                : 28;
+            var square = CenteredSquare(center, size);
+            ReplaceAnnotation(
+                id,
+                _ => shape with
+                {
+                    Start = square.Start,
+                    End = square.End,
+                });
+            return;
+        }
+
         var end = DefaultShapeEnd(shape);
         ReplaceAnnotation(id, annotation => shape with { End = end });
     }
@@ -2197,22 +2368,11 @@ public sealed partial class MainWindow : Window
     {
         var width = Math.Max(_editorImageRect.Width, 1);
         var height = Math.Max(_editorImageRect.Height, 1);
-        var defaultWidth = shape.Shape is ShapeKind.Checkmark
-            or ShapeKind.Cross
-            ? 28
-            : 64;
-        var defaultHeight = shape.Shape is ShapeKind.Checkmark
-            or ShapeKind.Cross
-            ? 28
-            : 48;
+        const float defaultWidth = 64;
+        const float defaultHeight = 48;
         var target = new NormalizedPoint(
             shape.Start.X + defaultWidth / width,
             shape.Start.Y + defaultHeight / height).Clamp();
-        if (shape.Shape is ShapeKind.Checkmark or ShapeKind.Cross)
-        {
-            return ConstrainToSquare(shape.Start, target);
-        }
-
         if (shape.Shape is ShapeKind.Line or ShapeKind.Arrow)
         {
             target = target with { Y = shape.Start.Y };
@@ -2220,6 +2380,36 @@ public sealed partial class MainWindow : Window
 
         return target;
     }
+
+    private (NormalizedPoint Start, NormalizedPoint End) CenteredSquare(
+        NormalizedPoint center,
+        float sizePixels)
+    {
+        var width = Math.Max(_editorImageRect.Width, 1);
+        var height = Math.Max(_editorImageRect.Height, 1);
+        var normalizedWidth = Math.Clamp(sizePixels / width, 0.005f, 1);
+        var normalizedHeight = Math.Clamp(sizePixels / height, 0.005f, 1);
+        var left = Math.Clamp(
+            center.X - (normalizedWidth / 2),
+            0,
+            1 - normalizedWidth);
+        var top = Math.Clamp(
+            center.Y - (normalizedHeight / 2),
+            0,
+            1 - normalizedHeight);
+        return (
+            new NormalizedPoint(left, top),
+            new NormalizedPoint(
+                left + normalizedWidth,
+                top + normalizedHeight));
+    }
+
+    private float EditorSnapRadius() => Math.Clamp(
+        48 / Math.Max(
+            1,
+            Math.Min(_editorImageRect.Width, _editorImageRect.Height)),
+        0.012f,
+        0.08f);
 
     private NormalizedPoint ConstrainToSquare(
         NormalizedPoint start,
@@ -2562,6 +2752,10 @@ public sealed partial class MainWindow : Window
             : _tool == ToolMode.Text;
         var supportsColor = hasSelection
             || _tool is not (ToolMode.Navigate or ToolMode.Select);
+        var supportsSmartSnap = !hasSelection
+            && _tool is ToolMode.Text
+                or ToolMode.Checkmark
+                or ToolMode.Cross;
         ThicknessSlider.IsEnabled = supportsThickness;
         ThicknessLabel.Opacity = supportsThickness ? 1 : 0.45;
         FilledToggle.IsEnabled = supportsFill;
@@ -2571,6 +2765,8 @@ public sealed partial class MainWindow : Window
             : Visibility.Collapsed;
         ColorPanel.IsHitTestVisible = supportsColor;
         ColorPanel.Opacity = supportsColor ? 1 : 0.45;
+        SmartSnapToggle.IsEnabled = supportsSmartSnap;
+        SmartSnapPanel.Opacity = supportsSmartSnap ? 1 : 0.45;
         foreach (var button in ColorPanel.Children.OfType<Button>())
         {
             button.IsTabStop = supportsColor;
@@ -3459,6 +3655,7 @@ public sealed partial class MainWindow : Window
         _autosaveCancellation?.Cancel();
         ClearReview();
         _processedPage = null;
+        _pageSnapFeatures = null;
         _editorBackground?.Dispose();
         _editorBackground = null;
         _project = new FastFillProject();

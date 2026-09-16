@@ -611,6 +611,19 @@
                     <TextBlock Text="✕" FontSize="22" />
                   </ToggleButton>
                 </Grid>
+                <StackPanel x:Name="SmartSnapPanel"
+                            Orientation="Horizontal"
+                            Spacing="8"
+                            Margin="4,8,4,0">
+                  <TextBlock Text="Smart snap"
+                             VerticalAlignment="Center" />
+                  <ToggleSwitch x:Name="SmartSnapToggle"
+                                IsOn="True"
+                                OnContent=""
+                                OffContent=""
+                                ToolTipService.ToolTip=
+                                  "Snap marks to boxes and text to lines" />
+                </StackPanel>
                 <TextBlock Text="Color" Margin="4,10,4,2" />
                 <Grid x:Name="ColorPanel">
                   <Grid.ColumnDefinitions>

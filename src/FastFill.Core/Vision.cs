@@ -543,6 +543,272 @@ public static class DocumentDetector
             point.Y / (float)Math.Max(1, size.Height - 1));
 }
 
+public sealed record SnapLineFeature(
+    NormalizedPoint Start,
+    NormalizedPoint End);
+
+public sealed class ImageSnapFeatures
+{
+    private const int MaximumAnalysisEdge = 1600;
+
+    private readonly int _width;
+    private readonly int _height;
+    private readonly NormalizedPoint[] _corners;
+    private readonly NormalizedRect[] _boxes;
+    private readonly SnapLineFeature[] _horizontalLines;
+
+    private ImageSnapFeatures(
+        int width,
+        int height,
+        NormalizedPoint[] corners,
+        NormalizedRect[] boxes,
+        SnapLineFeature[] horizontalLines)
+    {
+        _width = width;
+        _height = height;
+        _corners = corners;
+        _boxes = boxes;
+        _horizontalLines = horizontalLines;
+    }
+
+    public static ImageSnapFeatures Analyze(byte[] encodedImage)
+    {
+        ArgumentNullException.ThrowIfNull(encodedImage);
+        using var source = Cv2.ImDecode(encodedImage, ImreadModes.Grayscale);
+        if (source.Empty())
+        {
+            throw new ArgumentException("Image could not be decoded.");
+        }
+
+        using var image = Resize(source);
+        if (image.Width < 16 || image.Height < 16)
+        {
+            return new(image.Width, image.Height, [], [], []);
+        }
+
+        var cornerPoints = Cv2.GoodFeaturesToTrack(
+            image,
+            300,
+            0.02,
+            8,
+            null!,
+            5,
+            false,
+            0.04);
+        var corners = cornerPoints
+            .Select(point => Normalize(point, image.Size()))
+            .ToArray();
+
+        using var binary = new Mat();
+        Cv2.AdaptiveThreshold(
+            image,
+            binary,
+            255,
+            AdaptiveThresholdTypes.GaussianC,
+            ThresholdTypes.BinaryInv,
+            31,
+            10);
+        Cv2.FindContours(
+            binary,
+            out var contours,
+            out _,
+            RetrievalModes.External,
+            ContourApproximationModes.ApproxSimple);
+        var minimumSide = Math.Max(
+            8,
+            Math.Min(image.Width, image.Height) * 0.006);
+        var maximumSide = Math.Min(image.Width, image.Height) * 0.12;
+        var boxes = contours
+            .Select(contour => new
+            {
+                Contour = contour,
+                Perimeter = Cv2.ArcLength(contour, true),
+            })
+            .Select(value => new
+            {
+                Polygon = Cv2.ApproxPolyDP(
+                    value.Contour,
+                    value.Perimeter * 0.03,
+                    true),
+                Bounds = Cv2.BoundingRect(value.Contour),
+            })
+            .Where(value => value.Polygon.Length == 4
+                && Cv2.IsContourConvex(value.Polygon)
+                && value.Bounds.Width >= minimumSide
+                && value.Bounds.Height >= minimumSide
+                && value.Bounds.Width <= maximumSide
+                && value.Bounds.Height <= maximumSide
+                && value.Bounds.Width / (double)value.Bounds.Height
+                    is >= 0.65 and <= 1.55)
+            .Select(value => Normalize(value.Bounds, image.Size()))
+            .OrderByDescending(value => value.Width * value.Height)
+            .ToArray();
+
+        using var edges = new Mat();
+        Cv2.Canny(image, edges, 60, 180);
+        var horizontalLines = Cv2.HoughLinesP(
+                edges,
+                1,
+                Math.PI / 180,
+                40,
+                image.Width * 0.08,
+                image.Width * 0.02)
+            .Where(line =>
+                Math.Abs(line.P2.Y - line.P1.Y)
+                    <= Math.Max(
+                        3,
+                        Math.Abs(line.P2.X - line.P1.X) * 0.08))
+            .Select(line => line.P1.X <= line.P2.X
+                ? new SnapLineFeature(
+                    Normalize(line.P1, image.Size()),
+                    Normalize(line.P2, image.Size()))
+                : new SnapLineFeature(
+                    Normalize(line.P2, image.Size()),
+                    Normalize(line.P1, image.Size())))
+            .OrderByDescending(line => line.End.X - line.Start.X)
+            .ToArray();
+        return new(
+            image.Width,
+            image.Height,
+            corners,
+            boxes,
+            horizontalLines);
+    }
+
+    public NormalizedPoint? FindCorner(
+        NormalizedPoint point,
+        float maximumDistance)
+    {
+        var match = _corners
+            .Select(candidate => new
+            {
+                Point = candidate,
+                Distance = Distance(point, candidate),
+            })
+            .Where(value => value.Distance <= maximumDistance)
+            .MinBy(value => value.Distance);
+        return match?.Point;
+    }
+
+    public NormalizedRect? FindBox(
+        NormalizedPoint point,
+        float maximumDistance)
+    {
+        var match = _boxes
+            .Select(box => new
+            {
+                Box = box,
+                Distance = DistanceToBox(point, box),
+            })
+            .Where(value => value.Distance <= maximumDistance)
+            .OrderBy(value => value.Distance)
+            .ThenBy(value => Distance(point, Center(value.Box)))
+            .FirstOrDefault();
+        return match?.Box;
+    }
+
+    public SnapLineFeature? FindHorizontalLine(
+        NormalizedPoint point,
+        float maximumDistance)
+    {
+        var match = _horizontalLines
+            .Select(line => new
+            {
+                Line = line,
+                Distance = DistanceToLine(point, line),
+            })
+            .Where(value => value.Distance <= maximumDistance)
+            .MinBy(value => value.Distance);
+        return match?.Line;
+    }
+
+    private double DistanceToBox(
+        NormalizedPoint point,
+        NormalizedRect box)
+    {
+        var nearest = new NormalizedPoint(
+            Math.Clamp(point.X, box.X, box.Right),
+            Math.Clamp(point.Y, box.Y, box.Bottom));
+        return Distance(point, nearest);
+    }
+
+    private double DistanceToLine(
+        NormalizedPoint point,
+        SnapLineFeature line)
+    {
+        var pointX = point.X * _width;
+        var pointY = point.Y * _height;
+        var startX = line.Start.X * _width;
+        var startY = line.Start.Y * _height;
+        var deltaX = (line.End.X - line.Start.X) * _width;
+        var deltaY = (line.End.Y - line.Start.Y) * _height;
+        var lengthSquared = (deltaX * deltaX) + (deltaY * deltaY);
+        var amount = lengthSquared <= double.Epsilon
+            ? 0
+            : Math.Clamp(
+                (((pointX - startX) * deltaX)
+                    + ((pointY - startY) * deltaY))
+                    / lengthSquared,
+                0,
+                1);
+        var nearest = new NormalizedPoint(
+            (float)((startX + (deltaX * amount)) / _width),
+            (float)((startY + (deltaY * amount)) / _height));
+        return Distance(point, nearest);
+    }
+
+    private double Distance(
+        NormalizedPoint first,
+        NormalizedPoint second)
+    {
+        var x = (first.X - second.X) * _width;
+        var y = (first.Y - second.Y) * _height;
+        return Math.Sqrt((x * x) + (y * y))
+            / Math.Min(_width, _height);
+    }
+
+    private static NormalizedPoint Center(NormalizedRect rectangle) => new(
+        rectangle.X + (rectangle.Width / 2),
+        rectangle.Y + (rectangle.Height / 2));
+
+    private static Mat Resize(Mat source)
+    {
+        var longest = Math.Max(source.Width, source.Height);
+        if (longest <= MaximumAnalysisEdge)
+        {
+            return source.Clone();
+        }
+
+        var scale = MaximumAnalysisEdge / (double)longest;
+        var result = new Mat();
+        Cv2.Resize(
+            source,
+            result,
+            new Size(),
+            scale,
+            scale,
+            InterpolationFlags.Area);
+        return result;
+    }
+
+    private static NormalizedPoint Normalize(Point point, Size size) =>
+        new(
+            point.X / (float)Math.Max(1, size.Width - 1),
+            point.Y / (float)Math.Max(1, size.Height - 1));
+
+    private static NormalizedPoint Normalize(Point2f point, Size size) =>
+        new(
+            point.X / Math.Max(1, size.Width - 1),
+            point.Y / Math.Max(1, size.Height - 1));
+
+    private static NormalizedRect Normalize(Rect rectangle, Size size) =>
+        new(
+            rectangle.X / (float)Math.Max(1, size.Width),
+            rectangle.Y / (float)Math.Max(1, size.Height),
+            rectangle.Width / (float)Math.Max(1, size.Width),
+            rectangle.Height / (float)Math.Max(1, size.Height));
+}
+
 public sealed record ProcessedPage(byte[] EncodedPng, int Width, int Height);
 
 public static class ImageProcessor
@@ -747,8 +1013,8 @@ public static class ImageProcessor
 
 public sealed class DocumentDetectionStabilizer
 {
-    private const int WindowSize = 5;
-    private const int RequiredVotes = 3;
+    private const int WindowSize = 4;
+    private const int RequiredVotes = 2;
     private const float AgreementDistance = 0.08f;
     private const float SmoothingFactor = 0.35f;
 
@@ -889,7 +1155,7 @@ public enum AutoCaptureState
 public sealed class AutoCaptureGate
 {
     public static TimeSpan CountdownDuration { get; } =
-        TimeSpan.FromSeconds(3);
+        TimeSpan.FromSeconds(2);
 
     private CropQuad? _lastCorners;
     private DateTimeOffset? _stableSince;

@@ -36,14 +36,16 @@ unrecognized-app warning, select **More info**, then **Run anyway**.
 ## Features
 
 - 📷 Front or rear camera capture with stabilized live document framing,
-  automatic capture, and a three-second stability countdown. The shutter
+  automatic capture, and a two-second stability countdown. The shutter
   remains available for immediate manual capture.
-- Manual four-corner perspective correction, page rotation, contrast,
-  enhanced color, grayscale, and black-and-white filters.
+- Manual four-corner perspective correction with nearby-corner snapping,
+  page rotation, contrast, enhanced color, grayscale, and black-and-white
+  filters.
 - JPEG, PNG, and multi-page PDF import using Windows' built-in PDF renderer.
 - Inline editable text with bold, italic, and underline styles; pen,
   highlighter, lines, arrows, boxes, ovals, checkmarks, X marks, and filled
-  shapes.
+  shapes. Optional smart snap fits marks into detected boxes and places text
+  above nearby form lines.
 - Move, resize, rotate, recolor, reorder, or delete annotations after placing
   them. Multi-selection, undo, and redo are supported.
 - Drag page reordering for projects containing up to 20 pages.
