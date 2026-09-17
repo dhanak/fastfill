@@ -571,6 +571,11 @@ public sealed class ImageSnapFeatures
         _horizontalLines = horizontalLines;
     }
 
+    public IReadOnlyList<SnapLineFeature> HorizontalLines =>
+        _horizontalLines;
+
+    public IReadOnlyList<NormalizedRect> Boxes => _boxes;
+
     public static ImageSnapFeatures Analyze(byte[] encodedImage)
     {
         ArgumentNullException.ThrowIfNull(encodedImage);
@@ -655,21 +660,12 @@ public sealed class ImageSnapFeatures
             5,
             (int)Math.Round(
                 Math.Min(image.Width, image.Height) * 0.012));
-        using var joinedLines = new Mat();
-        using var bridgeKernel = Cv2.GetStructuringElement(
-            MorphShapes.Rect,
-            new Size(bridgeWidth, 3));
-        Cv2.MorphologyEx(
-            binary,
-            joinedLines,
-            MorphTypes.Close,
-            bridgeKernel);
         using var lineMask = new Mat();
         using var lineKernel = Cv2.GetStructuringElement(
             MorphShapes.Rect,
             new Size(minimumLineWidth, 1));
         Cv2.MorphologyEx(
-            joinedLines,
+            binary,
             lineMask,
             MorphTypes.Open,
             lineKernel);
@@ -785,24 +781,60 @@ public sealed class ImageSnapFeatures
         Size imageSize,
         int minimumLineWidth)
     {
-        if (marks.Count < 10)
+        const int minimumMarkCount = 6;
+        if (marks.Count < minimumMarkCount)
         {
             return null;
         }
 
-        var left = marks[0].X;
-        var right = marks[^1].Right;
+        var gaps = marks
+            .Zip(
+                marks.Skip(1),
+                (left, right) => Math.Max(0, right.X - left.Right))
+            .Order()
+            .ToArray();
+        var typicalGap = gaps[gaps.Length / 2];
+        var maximumEdgeGap = typicalGap + 2;
+        var first = 0;
+        var last = marks.Count - 1;
+        while (last - first + 1 > minimumMarkCount
+            && marks[first + 1].X - marks[first].Right
+                > maximumEdgeGap)
+        {
+            first++;
+        }
+
+        while (last - first + 1 > minimumMarkCount
+            && marks[last].X - marks[last - 1].Right
+                > maximumEdgeGap)
+        {
+            last--;
+        }
+
+        var lineMarks = marks
+            .Skip(first)
+            .Take(last - first + 1)
+            .ToArray();
+        var left = lineMarks[0].X;
+        var right = lineMarks[^1].Right;
         var width = right - left;
-        var inkWidth = marks.Sum(mark => mark.Width);
-        if (width < minimumLineWidth * 3
+        var inkWidth = lineMarks.Sum(mark => mark.Width);
+        var maximumDotSize = Math.Max(4, minimumLineWidth / 4);
+        var isDotted = lineMarks.All(mark =>
+            mark.Width <= maximumDotSize
+            && mark.Height <= maximumDotSize);
+        var requiredWidth = isDotted
+            ? minimumLineWidth
+            : minimumLineWidth * 2;
+        if (width < requiredWidth
             || inkWidth < width * 0.2
-            || inkWidth > width * 0.8)
+            || inkWidth > width * 0.9)
         {
             return null;
         }
 
         var centerY = (int)Math.Round(
-            marks.Average(mark => mark.Y + mark.Height / 2d));
+            lineMarks.Average(mark => mark.Y + mark.Height / 2d));
         return new(
             Normalize(new Point(left, centerY), imageSize),
             Normalize(new Point(right - 1, centerY), imageSize));

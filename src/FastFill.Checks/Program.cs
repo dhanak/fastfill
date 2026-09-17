@@ -19,6 +19,14 @@ internal static class Program
     {
         try
         {
+            if (args.FirstOrDefault() == "--snap-lab")
+            {
+                var url = args.ElementAtOrDefault(1)
+                    ?? "http://0.0.0.0:5077";
+                await SnapLab.RunAsync(url);
+                return 0;
+            }
+
             if (args is ["--make-assets", var assetPath])
             {
                 MakeAssets(assetPath);
@@ -315,6 +323,15 @@ internal static class Program
                 new Scalar(20, 20, 20),
                 -1);
         }
+        for (var x = 560; x < 602; x += 6)
+        {
+            Cv2.Circle(
+                image,
+                new Point(x, 560),
+                1,
+                new Scalar(20, 20, 20),
+                -1);
+        }
         Assert(
             Cv2.ImEncode(".png", image, out var encoded),
             "Snap feature image encoding failed.");
@@ -355,6 +372,12 @@ internal static class Program
                 && separateLine.Start.X > 0.62f
                 && separateLine.End.X > 0.85f,
             "Separate same-row text line snap feature was merged.");
+        var ordinaryText = features.FindHorizontalLine(
+            new NormalizedPoint(430f / 799, 456f / 599),
+            0.01f);
+        Assert(
+            ordinaryText is null,
+            "Ordinary text was detected as a snap line.");
         var dottedLine = features.FindHorizontalLine(
             new NormalizedPoint(280f / 799, 520f / 599),
             0.04f);
@@ -371,6 +394,14 @@ internal static class Program
             dottedLineFromLabel is not null
                 && dottedLineFromLabel.Start.X > 0.16f,
             "Dotted text line snap selected the adjacent label.");
+        var shortDottedLine = features.FindHorizontalLine(
+            new NormalizedPoint(580f / 799, 560f / 599),
+            0.02f);
+        Assert(
+            shortDottedLine is not null
+                && shortDottedLine.Start.X is > 0.69f and < 0.72f
+                && shortDottedLine.End.X is > 0.73f and < 0.77f,
+            "Short dotted text line snap feature was not detected.");
     }
 
     private static byte[] CreateFormWithoutVisibleBoundary()

@@ -121,6 +121,14 @@ iterations to run in the Linux container without Surface hardware.
 
 ### Fast Linux loop
 
+Enable the repository hooks once after cloning:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+The pre-push hook rejects unsigned commits newly introduced to a remote.
+
 ```sh
 make check
 make preview
@@ -129,6 +137,18 @@ make preview
 `make check` builds the pinned .NET 10 container, runs framework-free checks,
 and compares the rendered page with `tests/goldens/annotated-page.png`.
 Preview outputs land in `artifacts/preview/`.
+
+Test the production smart-snap detector interactively on Linux:
+
+```sh
+make snap-lab
+```
+
+Open `http://localhost:5077`, then load a JPEG, PNG, or `.docscan`. The lab
+tests text-line, checkbox, and cross-box snapping. It shows every detected
+candidate and the exact placement selected for each click. For PDFs, import
+and save a `.docscan` in FastFill first; Linux has no native Windows PDF
+renderer.
 
 When an intentional renderer change alters the preview:
 

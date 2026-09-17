@@ -1,4 +1,4 @@
-.PHONY: assets check check-xaml preview update-goldens
+.PHONY: assets check check-xaml preview snap-lab update-goldens
 
 IMAGE := fastfill-checks
 ROOT := $(CURDIR)
@@ -21,6 +21,13 @@ preview: check
 		-v "$(ROOT)/artifacts:/work/artifacts" \
 		$(IMAGE)
 	@echo "Preview files: artifacts/preview"
+
+snap-lab:
+	docker build --load -t $(IMAGE) .
+	docker run --rm --init \
+		-e ASPNETCORE_HTTP_PORTS= \
+		-p 127.0.0.1:5077:5077 \
+		$(IMAGE) --snap-lab http://0.0.0.0:5077
 
 update-goldens:
 	docker build --load -t $(IMAGE) .

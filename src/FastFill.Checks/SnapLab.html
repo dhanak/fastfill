@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FastFill Snap Lab</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      --accent: #0078d4;
+      --candidate: #f59e0b;
+      --panel: color-mix(in srgb, Canvas 92%, CanvasText 8%);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: Canvas; color: CanvasText; }
+    header {
+      display: flex;
+      gap: 18px;
+      align-items: baseline;
+      padding: 14px 20px;
+      border-bottom: 1px solid GrayText;
+    }
+    h1 { margin: 0; font-size: 22px; }
+    header span { color: GrayText; }
+    main {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      gap: 14px;
+      height: calc(100vh - 60px);
+      padding: 14px;
+    }
+    aside {
+      overflow: auto;
+      padding: 16px;
+      border-radius: 10px;
+      background: var(--panel);
+    }
+    label { display: block; margin: 0 0 6px; font-weight: 600; }
+    input, select, button {
+      width: 100%;
+      min-height: 40px;
+      margin-bottom: 14px;
+      font: inherit;
+    }
+    input[type="checkbox"] { width: auto; min-height: auto; margin: 0; }
+    input[type="range"] { min-height: auto; }
+    .check {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-weight: 400;
+    }
+    .value { float: right; color: GrayText; font-weight: 400; }
+    .viewer {
+      overflow: auto;
+      display: grid;
+      place-items: start center;
+      border-radius: 10px;
+      background: #272727;
+    }
+    .stage { position: relative; display: inline-block; line-height: 0; }
+    #pageImage {
+      display: block;
+      max-width: calc(100vw - 360px);
+      max-height: calc(100vh - 90px);
+    }
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+      touch-action: none;
+    }
+    #status {
+      min-height: 68px;
+      padding: 10px;
+      border-left: 4px solid var(--accent);
+      background: Canvas;
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
+    .legend { margin-top: 14px; color: GrayText; line-height: 1.5; }
+    .candidate { color: var(--candidate); }
+    .selected { color: #00a4ef; }
+    @media (max-width: 800px) {
+      main { grid-template-columns: 1fr; height: auto; }
+      #pageImage { max-width: calc(100vw - 28px); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>FastFill Snap Lab</h1>
+    <span>Production detector, Linux test surface</span>
+  </header>
+  <main>
+    <aside>
+      <label for="file">Image or project</label>
+      <input id="file" type="file"
+             accept=".jpg,.jpeg,.png,.docscan">
+
+      <label for="page">Page</label>
+      <select id="page" disabled></select>
+
+      <label for="tool">Tool</label>
+      <select id="tool">
+        <option value="text">Text</option>
+        <option value="check">Check</option>
+        <option value="cross">Cross</option>
+      </select>
+
+      <label for="radius">
+        Snap radius
+        <span class="value" id="radiusValue">4%</span>
+      </label>
+      <input id="radius" type="range" min="0.5" max="12"
+             step="0.5" value="4">
+
+      <div id="fontSetting">
+        <label for="fontSize">Text size</label>
+        <input id="fontSize" type="number" min="6" max="144"
+               value="18">
+      </div>
+
+      <label class="check">
+        <input id="candidates" type="checkbox" checked>
+        Show detected candidates
+      </label>
+
+      <button id="clear" type="button">Clear test click</button>
+      <div id="status" role="status">Load a file to begin.</div>
+      <div class="legend">
+        <div class="candidate" id="candidateLegend">
+          Orange: detected lines
+        </div>
+        <div class="selected" id="selectedLegend">
+          Blue: selected line and text box
+        </div>
+        <div>Red: click position</div>
+      </div>
+    </aside>
+    <section class="viewer" aria-label="Snap test page">
+      <div class="stage">
+        <img id="pageImage" alt="Loaded page">
+        <canvas id="overlay" tabindex="0"
+                aria-label="Click a page position to test snapping"></canvas>
+      </div>
+    </section>
+  </main>
+  <script>
+    const file = document.querySelector("#file");
+    const page = document.querySelector("#page");
+    const tool = document.querySelector("#tool");
+    const radius = document.querySelector("#radius");
+    const radiusValue = document.querySelector("#radiusValue");
+    const fontSetting = document.querySelector("#fontSetting");
+    const fontSize = document.querySelector("#fontSize");
+    const candidates = document.querySelector("#candidates");
+    const clear = document.querySelector("#clear");
+    const status = document.querySelector("#status");
+    const candidateLegend = document.querySelector("#candidateLegend");
+    const selectedLegend = document.querySelector("#selectedLegend");
+    const image = document.querySelector("#pageImage");
+    const canvas = document.querySelector("#overlay");
+    const context = canvas.getContext("2d");
+    let pages = [];
+    let lines = [];
+    let boxes = [];
+    let click = null;
+    let result = null;
+
+    async function json(url, options) {
+      const response = await fetch(url, options);
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.error || `Request failed: ${response.status}`);
+      }
+      return body;
+    }
+
+    function setStatus(message) {
+      status.textContent = message;
+    }
+
+    async function loadFile() {
+      if (!file.files.length) return;
+      setStatus("Analyzing…");
+      page.disabled = true;
+      const form = new FormData();
+      form.append("file", file.files[0]);
+      try {
+        const response = await json("/api/load", {
+          method: "POST",
+          body: form,
+        });
+        pages = response.pages;
+        page.replaceChildren(...pages.map(item => {
+          const option = document.createElement("option");
+          option.value = item.index;
+          option.textContent = item.label;
+          return option;
+        }));
+        page.disabled = pages.length < 2;
+        await loadPage(0);
+      } catch (error) {
+        setStatus(error.message);
+      }
+    }
+
+    async function loadPage(index) {
+      page.value = String(index);
+      click = null;
+      result = null;
+      try {
+        const response = await json(`/api/features/${index}`);
+        lines = response.lines;
+        boxes = response.boxes;
+        await new Promise((resolve, reject) => {
+          image.onload = resolve;
+          image.onerror = () => reject(new Error("Page image failed."));
+          image.src = `/api/page/${index}?v=${Date.now()}`;
+        });
+        resize();
+        showReadyStatus();
+      } catch (error) {
+        setStatus(error.message);
+      }
+    }
+
+    function resize() {
+      const bounds = image.getBoundingClientRect();
+      const scale = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.round(bounds.width * scale));
+      canvas.height = Math.max(1, Math.round(bounds.height * scale));
+      context.setTransform(scale, 0, 0, scale, 0, 0);
+      draw(bounds.width, bounds.height);
+    }
+
+    function draw(width, height) {
+      context.clearRect(0, 0, width, height);
+      if (candidates.checked) {
+        context.strokeStyle = "#f59e0b";
+        context.lineWidth = 1.5;
+        if (tool.value === "text") {
+          for (const line of lines) drawLine(line, width, height);
+        } else {
+          for (const box of boxes) drawRect(box, width, height);
+        }
+      }
+      if (result?.placement) {
+        const placement = result.placement;
+        context.fillStyle = "rgba(0, 164, 239, 0.22)";
+        context.fillRect(
+          placement.x * width,
+          placement.y * height,
+          placement.width * width,
+          placement.height * height);
+        context.strokeStyle = "#00a4ef";
+        context.lineWidth = 3;
+        drawRect(placement, width, height);
+        if (result.line) drawLine(result.line, width, height);
+        if (result.candidate) {
+          context.setLineDash([5, 4]);
+          drawRect(result.candidate, width, height);
+          context.setLineDash([]);
+          drawMark(placement, width, height, result.tool);
+        }
+      }
+      if (click) {
+        context.fillStyle = "#ef4444";
+        context.beginPath();
+        context.arc(click.x * width, click.y * height, 5, 0, Math.PI * 2);
+        context.fill();
+      }
+    }
+
+    function drawLine(line, width, height) {
+      context.beginPath();
+      context.moveTo(line.start.x * width, line.start.y * height);
+      context.lineTo(line.end.x * width, line.end.y * height);
+      context.stroke();
+    }
+
+    function drawRect(box, width, height) {
+      context.strokeRect(
+        box.x * width,
+        box.y * height,
+        box.width * width,
+        box.height * height);
+    }
+
+    function drawMark(box, width, height, kind) {
+      const left = box.x * width;
+      const top = box.y * height;
+      const boxWidth = box.width * width;
+      const boxHeight = box.height * height;
+      context.beginPath();
+      context.lineCap = "round";
+      if (kind === "check") {
+        context.moveTo(
+          left + boxWidth * 0.12,
+          top + boxHeight * 0.52);
+        context.lineTo(
+          left + boxWidth * 0.4,
+          top + boxHeight * 0.82);
+        context.lineTo(
+          left + boxWidth * 0.9,
+          top + boxHeight * 0.15);
+      } else {
+        context.moveTo(
+          left + boxWidth * 0.15,
+          top + boxHeight * 0.15);
+        context.lineTo(
+          left + boxWidth * 0.85,
+          top + boxHeight * 0.85);
+        context.moveTo(
+          left + boxWidth * 0.85,
+          top + boxHeight * 0.15);
+        context.lineTo(
+          left + boxWidth * 0.15,
+          top + boxHeight * 0.85);
+      }
+      context.stroke();
+      context.lineCap = "butt";
+    }
+
+    async function testSnap(event) {
+      if (!pages.length || event.button !== 0) return;
+      const bounds = canvas.getBoundingClientRect();
+      click = {
+        x: (event.clientX - bounds.left) / bounds.width,
+        y: (event.clientY - bounds.top) / bounds.height,
+      };
+      result = null;
+      draw(bounds.width, bounds.height);
+      const query = new URLSearchParams({
+        x: click.x,
+        y: click.y,
+        radius: Number(radius.value) / 100,
+        fontSize: Number(fontSize.value),
+        tool: tool.value,
+      });
+      try {
+        result = await json(`/api/snap/${page.value}?${query}`);
+        if (result.line) {
+          const start = result.line.start;
+          const end = result.line.end;
+          setStatus(
+            `Snapped: (${start.x.toFixed(4)}, ${start.y.toFixed(4)}) → `
+            + `(${end.x.toFixed(4)}, ${end.y.toFixed(4)})`);
+        } else if (result.candidate) {
+          const box = result.candidate;
+          setStatus(
+            `Snapped ${tool.value}: `
+            + `(${box.x.toFixed(4)}, ${box.y.toFixed(4)}, `
+            + `${box.width.toFixed(4)}, ${box.height.toFixed(4)})`);
+        } else {
+          setStatus(
+            `No detected ${candidateName()} is within the snap radius.`);
+        }
+      } catch (error) {
+        setStatus(error.message);
+      }
+      draw(bounds.width, bounds.height);
+    }
+
+    file.addEventListener("change", loadFile);
+    page.addEventListener("change", () => loadPage(Number(page.value)));
+    tool.addEventListener("change", () => {
+      click = null;
+      result = null;
+      updateToolUi();
+      resize();
+      showReadyStatus();
+    });
+    radius.addEventListener("input", () => {
+      radiusValue.textContent = `${radius.value}%`;
+    });
+    candidates.addEventListener("change", resize);
+    clear.addEventListener("click", () => {
+      click = null;
+      result = null;
+      resize();
+      showReadyStatus();
+    });
+    canvas.addEventListener("pointerdown", testSnap);
+    new ResizeObserver(resize).observe(image);
+    updateToolUi();
+
+    function candidateName() {
+      return tool.value === "text" ? "line" : "box";
+    }
+
+    function updateToolUi() {
+      const isText = tool.value === "text";
+      fontSetting.hidden = !isText;
+      candidateLegend.textContent = isText
+        ? "Orange: detected lines"
+        : "Orange: detected boxes";
+      selectedLegend.textContent = isText
+        ? "Blue: selected line and text box"
+        : `Blue: selected box and ${tool.value}`;
+    }
+
+    function showReadyStatus() {
+      if (!pages.length) {
+        setStatus("Load a file to begin.");
+        return;
+      }
+      const index = Number(page.value);
+      const count = tool.value === "text" ? lines.length : boxes.length;
+      const candidatesName = tool.value === "text" ? "lines" : "boxes";
+      setStatus(
+        `${pages[index].label}: ${count} detected ${candidatesName}.\n`
+        + `Click near a ${candidateName()} to test snapping.`);
+    }
+  </script>
+</body>
+</html>
