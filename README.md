@@ -135,20 +135,24 @@ make preview
 ```
 
 `make check` builds the pinned .NET 10 container, runs framework-free checks,
-and compares the rendered page with `tests/goldens/annotated-page.png`.
-Preview outputs land in `artifacts/preview/`.
+replays the 224-frame camera regression, and compares the rendered page with
+`tests/goldens/annotated-page.png`. Preview outputs land in
+`artifacts/preview/`.
 
-Test the production smart-snap detector interactively on Linux:
+Test the production smart-snap and auto-framing logic interactively on Linux:
 
 ```sh
-make snap-lab
+make lab
 ```
 
-Open `http://localhost:5077`, then load a JPEG, PNG, or `.docscan`. The lab
-tests text-line, checkbox, and cross-box snapping. It shows every detected
-candidate and the exact placement selected for each click. For PDFs, import
-and save a `.docscan` in FastFill first; Linux has no native Windows PDF
-renderer.
+Open `http://localhost:5077` and choose a lab. Snap Lab tests text-line,
+checkbox, and cross-box placement. Frame Lab tests document framing,
+stabilization, and auto-capture timing. Repeating a single camera frame is
+useful for watching consensus and countdown state advance without hardware.
+The cached checks image is rebuilt first. Press `Ctrl+C` once to stop and
+remove the lab container.
+PDFs must first be imported and saved as `.docscan` for Snap Lab because Linux
+has no native Windows PDF renderer.
 
 When an intentional renderer change alters the preview:
 
@@ -157,9 +161,9 @@ make update-goldens
 ```
 
 The check covers document detection, perspective correction, filters,
-auto-capture stability, hit testing, annotation geometry and ordering,
-undo/redo, hostile archive rejection, `.docscan` round trips, annotation
-rendering, and multi-page PDF export.
+recorded-sequence auto-capture stability, hit testing, annotation geometry and
+ordering, undo/redo, hostile archive rejection, `.docscan` round trips,
+annotation rendering, and multi-page PDF export.
 
 Calibrate detection against captured camera samples without changing the test
 suite:

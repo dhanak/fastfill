@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FastFill Frame Lab</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      --accent: #0078d4;
+      --panel: color-mix(in srgb, Canvas 92%, CanvasText 8%);
+      --raw: #f59e0b;
+      --stable: #00a4ef;
+      --hint: #a855f7;
+      --review: #22c55e;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: Canvas; color: CanvasText; }
+    header {
+      display: flex;
+      gap: 18px;
+      align-items: baseline;
+      padding: 14px 20px;
+      border-bottom: 1px solid GrayText;
+    }
+    h1 { margin: 0; font-size: 22px; }
+    header span, .note { color: GrayText; }
+    header a { margin-left: auto; color: var(--accent); }
+    main {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 14px;
+      height: calc(100vh - 60px);
+      padding: 14px;
+    }
+    aside {
+      overflow: auto;
+      padding: 16px;
+      border-radius: 10px;
+      background: var(--panel);
+    }
+    label { display: block; margin: 0 0 6px; font-weight: 600; }
+    input, select, button {
+      width: 100%;
+      min-height: 40px;
+      margin-bottom: 12px;
+      font: inherit;
+    }
+    input[type="checkbox"] {
+      width: auto;
+      min-height: auto;
+      margin: 0;
+    }
+    input[type="range"] { min-height: auto; }
+    .pair, .buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .buttons { grid-template-columns: 1fr 1fr 1fr; }
+    .check {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 9px;
+      font-weight: 400;
+    }
+    .viewer {
+      overflow: auto;
+      display: grid;
+      place-items: start center;
+      border-radius: 10px;
+      background: #272727;
+    }
+    .stage { position: relative; display: inline-block; line-height: 0; }
+    #frameImage {
+      display: block;
+      max-width: calc(100vw - 380px);
+      max-height: calc(100vh - 90px);
+    }
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    dl {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px 10px;
+      margin: 12px 0;
+      padding: 10px;
+      background: Canvas;
+    }
+    dt { color: GrayText; }
+    dd { margin: 0; text-align: right; }
+    progress { width: 100%; min-height: 16px; }
+    #status {
+      min-height: 44px;
+      padding: 10px;
+      border-left: 4px solid var(--accent);
+      background: Canvas;
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
+    .legend { margin-top: 12px; line-height: 1.5; }
+    .raw { color: var(--raw); }
+    .stable { color: var(--stable); }
+    .hint { color: var(--hint); }
+    .review { color: var(--review); }
+    @media (max-width: 820px) {
+      main { grid-template-columns: 1fr; height: auto; }
+      #frameImage { max-width: calc(100vw - 28px); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>FastFill Frame Lab</h1>
+    <span>Production auto-framing pipeline</span>
+    <a href="/">All labs</a>
+  </header>
+  <main>
+    <aside>
+      <label for="files">Camera frames</label>
+      <input id="files" type="file" multiple
+             accept=".jpg,.jpeg,.png">
+      <div class="note">
+        Select up to 300 frames in playback order. Repeat one image to
+        inspect stabilization and countdown behavior.
+      </div>
+
+      <div class="pair">
+        <div>
+          <label for="interval">Interval (ms)</label>
+          <input id="interval" type="number" min="25" max="5000"
+                 value="250">
+        </div>
+        <div>
+          <label for="repetitions">Repetitions</label>
+          <input id="repetitions" type="number" min="1" max="120"
+                 value="1">
+        </div>
+      </div>
+      <button id="analyze" type="button">Analyze sequence</button>
+
+      <label for="frame">Frame</label>
+      <select id="frame" disabled></select>
+      <input id="timeline" type="range" min="0" max="0" value="0"
+             disabled aria-label="Frame timeline">
+      <div class="buttons">
+        <button id="previous" type="button" disabled>Previous</button>
+        <button id="play" type="button" disabled>Play</button>
+        <button id="next" type="button" disabled>Next</button>
+      </div>
+
+      <label class="check">
+        <input id="showRaw" type="checkbox" checked>
+        Show raw detection
+      </label>
+      <label class="check">
+        <input id="showStable" type="checkbox" checked>
+        Show stabilized detection
+      </label>
+      <label class="check">
+        <input id="showHint" type="checkbox">
+        Show previous-frame hint
+      </label>
+      <label class="check">
+        <input id="showReview" type="checkbox">
+        Show relaxed review result
+      </label>
+
+      <dl>
+        <dt>Raw</dt><dd id="rawState">—</dd>
+        <dt>Confidence</dt><dd id="confidence">—</dd>
+        <dt>Area</dt><dd id="area">—</dd>
+        <dt>Sharpness</dt><dd id="sharpness">—</dd>
+        <dt>Stabilized</dt><dd id="stableState">—</dd>
+        <dt>Review mode</dt><dd id="reviewState">—</dd>
+        <dt>Auto-capture</dt><dd id="captureState">—</dd>
+      </dl>
+      <label for="progress">Countdown</label>
+      <progress id="progress" max="1" value="0"></progress>
+      <div id="status" role="status">Load frames to begin.</div>
+
+      <div class="legend">
+        <div class="raw">Orange: raw result; dashed means candidate</div>
+        <div class="stable">Blue: stabilized production overlay</div>
+        <div class="hint">Purple: hint supplied to detector</div>
+        <div class="review">Green: relaxed post-capture result</div>
+      </div>
+    </aside>
+    <section class="viewer" aria-label="Auto-framing test frame">
+      <div class="stage">
+        <img id="frameImage" alt="Selected camera frame">
+        <canvas id="overlay"></canvas>
+      </div>
+    </section>
+  </main>
+  <script>
+    const files = document.querySelector("#files");
+    const interval = document.querySelector("#interval");
+    const repetitions = document.querySelector("#repetitions");
+    const analyze = document.querySelector("#analyze");
+    const frame = document.querySelector("#frame");
+    const timeline = document.querySelector("#timeline");
+    const previous = document.querySelector("#previous");
+    const play = document.querySelector("#play");
+    const next = document.querySelector("#next");
+    const showRaw = document.querySelector("#showRaw");
+    const showStable = document.querySelector("#showStable");
+    const showHint = document.querySelector("#showHint");
+    const showReview = document.querySelector("#showReview");
+    const rawState = document.querySelector("#rawState");
+    const confidence = document.querySelector("#confidence");
+    const area = document.querySelector("#area");
+    const sharpness = document.querySelector("#sharpness");
+    const stableState = document.querySelector("#stableState");
+    const reviewState = document.querySelector("#reviewState");
+    const captureState = document.querySelector("#captureState");
+    const progress = document.querySelector("#progress");
+    const status = document.querySelector("#status");
+    const image = document.querySelector("#frameImage");
+    const canvas = document.querySelector("#overlay");
+    const context = canvas.getContext("2d");
+    let sequence = [];
+    let frameInterval = 250;
+    let current = 0;
+    let playTimer = null;
+    let playing = false;
+
+    async function json(url, options) {
+      const response = await fetch(url, options);
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.error || `Request failed: ${response.status}`);
+      }
+      return body;
+    }
+
+    async function loadSequence() {
+      if (!files.files.length) {
+        status.textContent = "Choose at least one frame.";
+        return;
+      }
+      stopPlayback();
+      analyze.disabled = true;
+      status.textContent = "Analyzing sequence…";
+      const form = new FormData();
+      for (const file of files.files) form.append("files", file);
+      form.append("intervalMs", interval.value);
+      form.append("repetitions", repetitions.value);
+      try {
+        const response = await json("/api/frame-lab/load", {
+          method: "POST",
+          body: form,
+        });
+        sequence = response.frames;
+        frameInterval = response.intervalMs;
+        frame.replaceChildren(...sequence.map(item => {
+          const option = document.createElement("option");
+          option.value = item.index;
+          option.textContent = `${item.index + 1}. ${item.label}`
+            + (response.repetitions > 1 ? ` · pass ${item.pass}` : "");
+          return option;
+        }));
+        frame.disabled = false;
+        timeline.disabled = false;
+        timeline.max = String(sequence.length - 1);
+        previous.disabled = false;
+        next.disabled = false;
+        play.disabled = sequence.length < 2;
+        await showFrame(0);
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        analyze.disabled = false;
+      }
+    }
+
+    async function showFrame(index) {
+      if (!sequence.length) return;
+      current = Math.max(0, Math.min(index, sequence.length - 1));
+      frame.value = String(current);
+      timeline.value = String(current);
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = () => reject(new Error("Frame image failed."));
+        image.src = `/api/frame-lab/frame/${current}?v=${Date.now()}`;
+      });
+      resize();
+      showMetrics();
+    }
+
+    function showMetrics() {
+      const item = sequence[current];
+      rawState.textContent = detectionState(item.raw);
+      confidence.textContent = item.raw.confidence.toFixed(3);
+      area.textContent = item.raw.areaRatio.toFixed(3);
+      sharpness.textContent = item.raw.sharpness.toFixed(1);
+      stableState.textContent = detectionState(item.stabilized);
+      reviewState.textContent = item.reviewCorners ? "Accepted" : "Rejected";
+      captureState.textContent = item.autoCapture.state;
+      progress.value = item.autoCapture.progress;
+      status.textContent = `Frame ${current + 1}/${sequence.length}: `
+        + `${item.label}\nHint: ${item.hint ? "yes" : "no"}`;
+    }
+
+    function detectionState(detection) {
+      if (detection.found) return "Found";
+      return detection.candidateCorners ? "Candidate" : "None";
+    }
+
+    function resize() {
+      const bounds = image.getBoundingClientRect();
+      const scale = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.round(bounds.width * scale));
+      canvas.height = Math.max(1, Math.round(bounds.height * scale));
+      context.setTransform(scale, 0, 0, scale, 0, 0);
+      draw(bounds.width, bounds.height);
+    }
+
+    function draw(width, height) {
+      context.clearRect(0, 0, width, height);
+      if (!sequence.length) return;
+      const item = sequence[current];
+      if (showHint.checked) {
+        drawQuad(item.hint, width, height, "#a855f7", true);
+      }
+      if (showRaw.checked) {
+        drawQuad(
+          item.raw.overlayCorners,
+          width,
+          height,
+          "#f59e0b",
+          !item.raw.found);
+      }
+      if (showStable.checked) {
+        drawQuad(
+          item.stabilized.overlayCorners,
+          width,
+          height,
+          "#00a4ef",
+          !item.stabilized.found);
+      }
+      if (showReview.checked) {
+        drawQuad(
+          item.reviewCorners,
+          width,
+          height,
+          "#22c55e",
+          false);
+      }
+    }
+
+    function drawQuad(quad, width, height, color, dashed) {
+      if (!quad) return;
+      const points = quad.points.map(point => ({
+        x: point.x * width,
+        y: point.y * height,
+      }));
+      context.strokeStyle = color;
+      context.fillStyle = color;
+      context.lineWidth = 2.5;
+      context.setLineDash(dashed ? [8, 5] : []);
+      context.beginPath();
+      context.moveTo(points[0].x, points[0].y);
+      for (const point of points.slice(1)) {
+        context.lineTo(point.x, point.y);
+      }
+      context.closePath();
+      context.stroke();
+      context.setLineDash([]);
+      const labels = ["TL", "TR", "BR", "BL"];
+      context.font = "12px Segoe UI, sans-serif";
+      for (let index = 0; index < points.length; index++) {
+        const point = points[index];
+        context.beginPath();
+        context.arc(point.x, point.y, 4, 0, Math.PI * 2);
+        context.fill();
+        context.fillText(labels[index], point.x + 6, point.y - 6);
+      }
+    }
+
+    function move(amount) {
+      showFrame(current + amount);
+    }
+
+    async function togglePlayback() {
+      if (playing) {
+        stopPlayback();
+        return;
+      }
+      if (current >= sequence.length - 1) await showFrame(0);
+      playing = true;
+      play.textContent = "Pause";
+      schedulePlayback();
+    }
+
+    function schedulePlayback() {
+      playTimer = setTimeout(async () => {
+        if (!playing) return;
+        if (current >= sequence.length - 1) {
+          stopPlayback();
+        } else {
+          await showFrame(current + 1);
+          if (playing) schedulePlayback();
+        }
+      }, Math.max(100, frameInterval));
+    }
+
+    function stopPlayback() {
+      playing = false;
+      if (playTimer) clearTimeout(playTimer);
+      playTimer = null;
+      play.textContent = "Play";
+    }
+
+    analyze.addEventListener("click", loadSequence);
+    frame.addEventListener("change", () => {
+      stopPlayback();
+      showFrame(Number(frame.value));
+    });
+    timeline.addEventListener("input", () => {
+      stopPlayback();
+      showFrame(Number(timeline.value));
+    });
+    previous.addEventListener("click", () => move(-1));
+    next.addEventListener("click", () => move(1));
+    play.addEventListener("click", togglePlayback);
+    for (const toggle of [showRaw, showStable, showHint, showReview]) {
+      toggle.addEventListener("change", resize);
+    }
+    new ResizeObserver(resize).observe(image);
+  </script>
+</body>
+</html>

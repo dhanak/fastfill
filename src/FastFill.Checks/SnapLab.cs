@@ -39,8 +39,14 @@ internal static class SnapLab
         app.MapGet(
             "/",
             () => Results.Text(
-                ReadPage(),
+                ReadPage("LabHome.html"),
                 "text/html; charset=utf-8"));
+        app.MapGet(
+            "/snap-lab",
+            () => Results.Text(
+                ReadPage("SnapLab.html"),
+                "text/html; charset=utf-8"));
+        FrameLab.MapRoutes(app);
         app.MapPost(
             "/api/load",
             (HttpRequest request, CancellationToken token) =>
@@ -68,7 +74,7 @@ internal static class SnapLab
                     fontSize,
                     tool));
 
-        Console.WriteLine($"FastFill Snap Lab: {url}");
+        Console.WriteLine($"FastFill Labs: {url}");
         Console.WriteLine("Open http://localhost:5077 in a browser.");
         await app.RunAsync();
     }
@@ -313,20 +319,44 @@ internal static class SnapLab
         string label,
         CancellationToken cancellationToken)
     {
-        if (file.Length > ProjectValidator.MaximumImageBytes)
-        {
-            throw new InvalidDataException("Image exceeds 100 MiB.");
-        }
-
-        await using var input = file.OpenReadStream();
-        using var output = new MemoryStream((int)file.Length);
-        await input.CopyToAsync(output, cancellationToken);
-        return CreateImagePage(label, output.ToArray());
+        var bytes = await ReadImageBytesAsync(
+            file,
+            cancellationToken);
+        return CreateImagePage(label, bytes);
     }
 
     private static SnapLabPage CreateImagePage(
         string label,
         byte[] bytes)
+    {
+        var image = InspectImage(bytes);
+        return new(
+            label,
+            bytes,
+            image.ContentType,
+            image.Width,
+            image.Height,
+            ImageSnapFeatures.Analyze(bytes));
+    }
+
+    internal static async Task<byte[]> ReadImageBytesAsync(
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (file.Length is <= 0
+            or > ProjectValidator.MaximumImageBytes)
+        {
+            throw new InvalidDataException(
+                "Image must be between 1 byte and 100 MiB.");
+        }
+
+        await using var input = file.OpenReadStream();
+        using var output = new MemoryStream((int)file.Length);
+        await input.CopyToAsync(output, cancellationToken);
+        return output.ToArray();
+    }
+
+    internal static ImageDetails InspectImage(byte[] bytes)
     {
         using var data = SKData.CreateCopy(bytes);
         using var codec = SKCodec.Create(data)
@@ -347,12 +377,9 @@ internal static class SnapLab
             codec.Info.Width,
             codec.Info.Height);
         return new(
-            label,
-            bytes,
             contentType,
             codec.Info.Width,
-            codec.Info.Height,
-            ImageSnapFeatures.Analyze(bytes));
+            codec.Info.Height);
     }
 
     private static async Task<IReadOnlyList<SnapLabPage>>
@@ -417,12 +444,12 @@ internal static class SnapLab
         }
     }
 
-    private static string ReadPage()
+    private static string ReadPage(string name)
     {
         using var stream = typeof(SnapLab).Assembly
-            .GetManifestResourceStream("FastFill.Checks.SnapLab.html")
+            .GetManifestResourceStream($"FastFill.Checks.{name}")
             ?? throw new InvalidOperationException(
-                "Snap Lab page is missing.");
+                $"Lab page is missing: {name}");
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }
@@ -458,4 +485,9 @@ internal static class SnapLab
         int Width,
         int Height,
         ImageSnapFeatures Features);
+
+    internal sealed record ImageDetails(
+        string ContentType,
+        int Width,
+        int Height);
 }

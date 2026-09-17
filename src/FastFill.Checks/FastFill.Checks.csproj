@@ -19,6 +19,8 @@
       Condition="$([MSBuild]::IsOSPlatform('Linux'))" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="FrameLab.html" />
+    <EmbeddedResource Include="LabHome.html" />
     <EmbeddedResource Include="SnapLab.html" />
   </ItemGroup>
 </Project>

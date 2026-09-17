@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FastFill Labs</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      --accent: #0078d4;
+      --panel: color-mix(in srgb, Canvas 92%, CanvasText 8%);
+    }
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: CanvasText;
+      background: Canvas;
+    }
+    main { width: min(760px, 100%); }
+    h1 { margin: 0 0 6px; font-size: 32px; }
+    p { margin: 0; color: GrayText; line-height: 1.5; }
+    .labs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-top: 28px;
+    }
+    .lab {
+      min-height: 220px;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      border: 2px solid transparent;
+      border-radius: 14px;
+      color: CanvasText;
+      background: var(--panel);
+      text-decoration: none;
+      transition: border-color 120ms, transform 120ms;
+    }
+    .lab:hover, .lab:focus-visible {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      outline: none;
+    }
+    svg {
+      width: 54px;
+      height: 54px;
+      color: var(--accent);
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+    h2 { margin: 2px 0 0; font-size: 24px; }
+    .open {
+      margin-top: auto;
+      color: var(--accent);
+      font-weight: 600;
+    }
+    @media (max-width: 620px) {
+      .labs { grid-template-columns: 1fr; }
+      .lab { min-height: 190px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>FastFill Labs</h1>
+    <p>Test production vision logic on Linux.</p>
+    <section class="labs" aria-label="Available labs">
+      <a class="lab" href="/snap-lab">
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <circle cx="24" cy="24" r="14"></circle>
+          <path d="M24 4v9M24 35v9M4 24h9M35 24h9"></path>
+          <path d="m18 24 4 4 8-9"></path>
+        </svg>
+        <h2>Snap Lab</h2>
+        <p>Inspect text-line, checkbox, and cross-box snapping.</p>
+        <span class="open">Open Snap Lab</span>
+      </a>
+      <a class="lab" href="/frame-lab">
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M18 7H7v11M30 7h11v11M41 30v11H30M18 41H7V30"></path>
+          <path d="m13 15 23-2-2 22-21-1Z"></path>
+        </svg>
+        <h2>Frame Lab</h2>
+        <p>Inspect framing, stabilization, and auto-capture timing.</p>
+        <span class="open">Open Frame Lab</span>
+      </a>
+    </section>
+  </main>
+</body>
+</html>

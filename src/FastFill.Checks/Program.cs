@@ -1,3 +1,4 @@
+using System.Formats.Tar;
 using System.IO.Compression;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -14,12 +15,14 @@ internal static class Program
         Path.Combine(AppContext.BaseDirectory, "../../../../../artifacts"));
     private static readonly string Goldens = Path.GetFullPath(
         Path.Combine(AppContext.BaseDirectory, "../../../../../tests/goldens"));
+    private static readonly string Samples = Path.GetFullPath(
+        Path.Combine(AppContext.BaseDirectory, "../../../../../tests/samples"));
 
     private static async Task<int> Main(string[] args)
     {
         try
         {
-            if (args.FirstOrDefault() == "--snap-lab")
+            if (args.FirstOrDefault() == "--lab")
             {
                 var url = args.ElementAtOrDefault(1)
                     ?? "http://0.0.0.0:5077";
@@ -100,6 +103,7 @@ internal static class Program
         Assert(processed.Height > 400, "Perspective output is too short.");
         CheckAutoCapture(detection);
         CheckDetectionStabilizer(detection);
+        CheckRecordedDetectionSequence();
         CheckImageSnapFeatures();
 
         var project = CreateProject();
@@ -251,6 +255,21 @@ internal static class Program
             new Point(1220, 681),
             new Scalar(225, 225, 225),
             6);
+
+        // A preview status banner must not consume every Hough line slot.
+        Cv2.Rectangle(
+            image,
+            new Rect(55, 570, 1050, 36),
+            new Scalar(65, 70, 75),
+            -1);
+        Cv2.PutText(
+            image,
+            "Camera preview status",
+            new Point(230, 597),
+            HersheyFonts.HersheySimplex,
+            0.8,
+            new Scalar(230, 230, 230),
+            2);
 
         Assert(
             Cv2.ImEncode(".jpg", image, out var encoded),
@@ -678,6 +697,85 @@ internal static class Program
             "Slow document drift did not reset countdown.");
     }
 
+    private static void CheckRecordedDetectionSequence()
+    {
+        var path = Path.Combine(Samples, "folded-paper-frames.tar");
+        Assert(File.Exists(path), "Recorded detection sequence is missing.");
+        using var stream = File.OpenRead(path);
+        using var reader = new TarReader(stream);
+        var stabilizer = new DocumentDetectionStabilizer();
+        var gate = new AutoCaptureGate();
+        var expected = new CropQuad(
+            new(0.28f, 0.09f),
+            new(0.86f, 0.15f),
+            new(0.86f, 0.89f),
+            new(0.26f, 0.89f));
+        var timestamp = DateTimeOffset.UnixEpoch;
+        var frames = 0;
+        var correctRaw = 0;
+        var wrongRaw = 0;
+        var correctStable = 0;
+        var wrongStable = 0;
+        var captured = false;
+        TarEntry? entry;
+        while ((entry = reader.GetNextEntry()) is not null)
+        {
+            if (entry.EntryType != TarEntryType.RegularFile
+                || entry.DataStream is null
+                || !entry.Name.EndsWith(
+                    ".jpg",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            using var encoded = new MemoryStream();
+            entry.DataStream.CopyTo(encoded);
+            var raw = DocumentDetector.DetectEncoded(
+                encoded.ToArray(),
+                stabilizer.Hint);
+            var stable = stabilizer.Update(raw);
+            CountDetection(raw, ref correctRaw, ref wrongRaw);
+            CountDetection(stable, ref correctStable, ref wrongStable);
+            var state = gate.Evaluate(stable, timestamp);
+            captured |= state is AutoCaptureState.Ready
+                or AutoCaptureState.Captured;
+            frames++;
+            timestamp = timestamp.AddMilliseconds(33);
+        }
+
+        Assert(frames == 224, "Recorded sequence frame count changed.");
+        Assert(correctRaw >= 160, "Recorded raw detection regressed.");
+        Assert(wrongRaw == 0, "Recorded raw detection selected a wrong quad.");
+        Assert(
+            correctStable >= 180,
+            "Recorded stabilized detection regressed.");
+        Assert(
+            wrongStable == 0,
+            "Recorded stabilization selected a wrong quad.");
+        Assert(captured, "Recorded sequence never reached auto-capture.");
+
+        void CountDetection(
+            DocumentDetection detection,
+            ref int correct,
+            ref int wrong)
+        {
+            if (!detection.Found)
+            {
+                return;
+            }
+
+            if (detection.Corners!.MaximumCornerDistance(expected) < 0.1f)
+            {
+                correct++;
+            }
+            else
+            {
+                wrong++;
+            }
+        }
+    }
+
     private static void CheckDetectionStabilizer(
         DocumentDetection detection)
     {
@@ -801,11 +899,11 @@ internal static class Program
         Assert(
             loaded.Project.Pages[0].Annotations.OfType<TextAnnotation>()
                 .Single() is
-                {
-                    IsBold: true,
-                    IsItalic: true,
-                    IsUnderlined: true,
-                },
+            {
+                IsBold: true,
+                IsItalic: true,
+                IsUnderlined: true,
+            },
             "Text styles were not preserved.");
     }
 

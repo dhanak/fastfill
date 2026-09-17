@@ -16,7 +16,7 @@ public sealed record DocumentDetection(
 public static class DocumentDetector
 {
     private const int MaximumDetectionEdge = 1280;
-    private const double MinimumDetectionConfidence = 0.7;
+    private const double MinimumDetectionConfidence = 0.72;
 
     public static DocumentDetection Detect(
         FramePacket frame,
@@ -75,12 +75,30 @@ public static class DocumentDetector
             kernel,
             iterations: 2);
 
+        // Keep strict edges for clean pages and add a sensitive pass for the
+        // soft, low-contrast frames in the recorded laptop-camera corpus.
+        using var sensitiveEdges = new Mat();
+        Cv2.Canny(blurred, sensitiveEdges, 35, 120);
+        Cv2.MorphologyEx(
+            sensitiveEdges,
+            sensitiveEdges,
+            MorphTypes.Close,
+            kernel,
+            iterations: 2);
+
         Cv2.FindContours(
             edges,
             out var contours,
             out _,
             RetrievalModes.List,
             ContourApproximationModes.ApproxSimple);
+        Cv2.FindContours(
+            sensitiveEdges,
+            out var sensitiveContours,
+            out _,
+            RetrievalModes.List,
+            ContourApproximationModes.ApproxSimple);
+        contours = contours.Concat(sensitiveContours).ToArray();
 
         using var color = new Mat();
         if (scaled.Channels() == 4)
@@ -117,6 +135,18 @@ public static class DocumentDetector
             paperMask,
             MorphTypes.Open,
             paperOpenKernel);
+        using var invertedEdges = new Mat();
+        using var edgeDistance = new Mat();
+        Cv2.BitwiseNot(sensitiveEdges, invertedEdges);
+        Cv2.DistanceTransform(
+            invertedEdges,
+            edgeDistance,
+            DistanceTypes.L2,
+            DistanceTransformMasks.Mask3);
+        using var lab = new Mat();
+        using var smoothLab = new Mat();
+        Cv2.CvtColor(color, lab, ColorConversionCodes.BGR2Lab);
+        Cv2.GaussianBlur(lab, smoothLab, new Size(9, 9), 0);
         Cv2.FindContours(
             paperMask,
             out var paperContours,
@@ -161,14 +191,25 @@ public static class DocumentDetector
             }
         }
 
-        candidates.AddRange(FindLineQuadrilaterals(edges));
+        candidates.AddRange(FindLineQuadrilaterals(
+            edges,
+            0.18,
+            70,
+            60));
+        candidates.AddRange(FindLineQuadrilaterals(
+            sensitiveEdges,
+            0.12,
+            50,
+            80));
         foreach (var polygon in candidates)
         {
             var scored = ScoreCandidate(
                 polygon,
                 scaled.Size(),
                 imageArea,
-                paperMask);
+                paperMask,
+                smoothLab,
+                edgeDistance);
             if (scored is null)
             {
                 continue;
@@ -266,7 +307,9 @@ public static class DocumentDetector
         Point[] polygon,
         Size imageSize,
         double imageArea,
-        Mat paperMask)
+        Mat paperMask,
+        Mat smoothLab,
+        Mat edgeDistance)
     {
         var area = Math.Abs(Cv2.ContourArea(polygon));
         var areaRatio = area / imageArea;
@@ -310,7 +353,13 @@ public static class DocumentDetector
             return (score, areaRatio);
         }
 
-        score += PaperBoundaryScore(polygon, paperMask) * 0.4;
+        var boundaryScore = Math.Max(
+            PaperBoundaryScore(polygon, paperMask),
+            ColorBoundaryScore(polygon, smoothLab));
+        score += boundaryScore * 0.4;
+        // An internal divider is not a document bottom when both side edges
+        // continue below it.
+        score -= EdgeContinuationScore(polygon, edgeDistance) * 0.5;
         return (score, areaRatio);
     }
 
@@ -318,14 +367,104 @@ public static class DocumentDetector
         Point[] polygon,
         Mat paperMask)
     {
-        const int samplesPerSide = 20;
+        var contrast = BoundaryScore(
+            polygon,
+            paperMask.Size(),
+            (insideX, insideY, outsideX, outsideY) =>
+            {
+                var inside = paperMask.At<byte>(insideY, insideX) > 0
+                    ? 1
+                    : 0;
+                var outside = paperMask.At<byte>(outsideY, outsideX) > 0
+                    ? 1
+                    : 0;
+                return inside - outside;
+            });
+        return Math.Clamp(contrast / 0.6, 0, 1);
+    }
+
+    private static double EdgeContinuationScore(
+        Point[] polygon,
+        Mat edgeDistance)
+    {
+        var corners = OrderCorners(polygon);
+        var radius = Math.Max(
+            2,
+            Math.Min(edgeDistance.Width, edgeDistance.Height) * 0.006);
+        return Math.Min(
+            EdgeExtension(corners[3], corners[0]),
+            EdgeExtension(corners[2], corners[1]));
+
+        double EdgeExtension(Point corner, Point other) => EdgeSupport(
+            other,
+            corner,
+            edgeDistance,
+            radius,
+            1.04,
+            1.2);
+    }
+
+    private static double EdgeSupport(
+        Point first,
+        Point second,
+        Mat edgeDistance,
+        double radius,
+        double start,
+        double end)
+    {
+        const int sampleCount = 16;
+        var supported = 0;
+        var counted = 0;
+        for (var sample = 0; sample < sampleCount; sample++)
+        {
+            var amount = start
+                + ((end - start) * (sample + 0.5) / sampleCount);
+            var x = (int)Math.Round(
+                first.X + ((second.X - first.X) * amount));
+            var y = (int)Math.Round(
+                first.Y + ((second.Y - first.Y) * amount));
+            if (!Contains(edgeDistance.Size(), x, y))
+            {
+                continue;
+            }
+
+            supported += edgeDistance.At<float>(y, x) <= radius ? 1 : 0;
+            counted++;
+        }
+
+        return counted == 0 ? 0 : supported / (double)counted;
+    }
+
+    private static double ColorBoundaryScore(
+        Point[] polygon,
+        Mat smoothLab) => BoundaryScore(
+        polygon,
+        smoothLab.Size(),
+        (insideX, insideY, outsideX, outsideY) =>
+        {
+            var inside = smoothLab.At<Vec3b>(insideY, insideX);
+            var outside = smoothLab.At<Vec3b>(outsideY, outsideX);
+            var first = inside.Item0 - outside.Item0;
+            var second = inside.Item1 - outside.Item1;
+            var third = inside.Item2 - outside.Item2;
+            var distance = Math.Sqrt(
+                (first * first)
+                + (second * second)
+                + (third * third));
+            return Math.Clamp(distance / 45, 0, 1);
+        });
+
+    private static double BoundaryScore(
+        Point[] polygon,
+        Size imageSize,
+        Func<int, int, int, int, double> sampleScore)
+    {
+        const int samplesPerSide = 24;
         var corners = OrderCorners(polygon);
         var offset = Math.Max(
-            2,
-            Math.Min(paperMask.Width, paperMask.Height) * 0.0125);
-        var insidePaper = 0;
-        var outsidePaper = 0;
-        var sampleCount = 0;
+            3,
+            Math.Min(imageSize.Width, imageSize.Height) * 0.015);
+        var sideScores = new List<double>();
         for (var side = 0; side < corners.Length; side++)
         {
             var first = corners[side];
@@ -338,9 +477,10 @@ public static class DocumentDetector
                 continue;
             }
 
-            // Ordered image coordinates are clockwise; right normal is inward.
             var normalX = -dy / length;
             var normalY = dx / length;
+            var score = 0d;
+            var count = 0;
             for (var sample = 0; sample < samplesPerSide; sample++)
             {
                 var position = (sample + 0.5) / samplesPerSide;
@@ -350,57 +490,57 @@ public static class DocumentDetector
                 var insideY = (int)Math.Round(y + (normalY * offset));
                 var outsideX = (int)Math.Round(x - (normalX * offset));
                 var outsideY = (int)Math.Round(y - (normalY * offset));
-                if (!Contains(paperMask.Size(), insideX, insideY)
-                    || !Contains(paperMask.Size(), outsideX, outsideY))
+                if (!Contains(imageSize, insideX, insideY)
+                    || !Contains(imageSize, outsideX, outsideY))
                 {
                     continue;
                 }
 
-                insidePaper += paperMask.At<byte>(insideY, insideX) > 0
-                    ? 1
-                    : 0;
-                outsidePaper += paperMask.At<byte>(outsideY, outsideX) > 0
-                    ? 1
-                    : 0;
-                sampleCount++;
+                score += sampleScore(
+                    insideX,
+                    insideY,
+                    outsideX,
+                    outsideY);
+                count++;
             }
+
+            sideScores.Add(count == 0 ? 0 : score / count);
         }
 
-        if (sampleCount == 0)
-        {
-            return 0;
-        }
-
-        var contrast = (insidePaper - outsidePaper)
-            / (double)sampleCount;
-        return Math.Clamp(contrast / 0.6, 0, 1);
+        return sideScores.Count == 0
+            ? 0
+            : (sideScores.Average() * 0.6)
+                + (sideScores.Min() * 0.4);
     }
 
     private static bool Contains(Size size, int x, int y) =>
         x >= 0 && x < size.Width && y >= 0 && y < size.Height;
 
-    private static IEnumerable<Point[]> FindLineQuadrilaterals(Mat edges)
+    private static IEnumerable<Point[]> FindLineQuadrilaterals(
+        Mat edges,
+        double minimumLengthRatio,
+        int threshold,
+        double maximumGap)
     {
-        var minimumLength = Math.Min(edges.Width, edges.Height) * 0.18;
+        var minimumLength = Math.Min(edges.Width, edges.Height)
+            * minimumLengthRatio;
         var lines = Cv2.HoughLinesP(
             edges,
             1,
             Math.PI / 180,
-            70,
+            threshold,
             minimumLength,
-            60);
-        var horizontal = lines
-            .Where(line => Math.Abs(line.P2.X - line.P1.X)
-                >= Math.Abs(line.P2.Y - line.P1.Y) * 1.5)
-            .OrderByDescending(LineLength)
-            .Take(14)
-            .ToArray();
-        var vertical = lines
-            .Where(line => Math.Abs(line.P2.Y - line.P1.Y)
-                >= Math.Abs(line.P2.X - line.P1.X) * 1.5)
-            .OrderByDescending(LineLength)
-            .Take(14)
-            .ToArray();
+            maximumGap);
+        var horizontal = SelectDistinctLines(
+            lines.Where(line => Math.Abs(line.P2.X - line.P1.X)
+                >= Math.Abs(line.P2.Y - line.P1.Y) * 1.5),
+            horizontal: true,
+            edges.Size());
+        var vertical = SelectDistinctLines(
+            lines.Where(line => Math.Abs(line.P2.Y - line.P1.Y)
+                >= Math.Abs(line.P2.X - line.P1.X) * 1.5),
+            horizontal: false,
+            edges.Size());
         for (var firstH = 0; firstH < horizontal.Length; firstH++)
         {
             for (var secondH = firstH + 1;
@@ -430,6 +570,79 @@ public static class DocumentDetector
                 }
             }
         }
+    }
+
+    private static LineSegmentPoint[] SelectDistinctLines(
+        IEnumerable<LineSegmentPoint> lines,
+        bool horizontal,
+        Size imageSize)
+    {
+        const int maximumLines = 14;
+        const double maximumAngleDifference = Math.PI / 60;
+        var minimumSpacing = Math.Max(
+            10,
+            Math.Min(imageSize.Width, imageSize.Height) * 0.015);
+        var selected = new List<LineSegmentPoint>();
+        foreach (var line in lines.OrderByDescending(LineLength))
+        {
+            var angle = LineAngle(line);
+            var position = LinePosition(
+                line,
+                horizontal,
+                imageSize);
+            var duplicate = selected.Any(existing =>
+                AngleDistance(angle, LineAngle(existing))
+                    < maximumAngleDifference
+                && Math.Abs(position - LinePosition(
+                    existing,
+                    horizontal,
+                    imageSize)) < minimumSpacing);
+            if (duplicate)
+            {
+                continue;
+            }
+
+            selected.Add(line);
+            if (selected.Count == maximumLines)
+            {
+                break;
+            }
+        }
+
+        return selected.ToArray();
+    }
+
+    private static double LineAngle(LineSegmentPoint line)
+    {
+        var angle = Math.Atan2(
+            line.P2.Y - line.P1.Y,
+            line.P2.X - line.P1.X);
+        return angle < 0 ? angle + Math.PI : angle;
+    }
+
+    private static double AngleDistance(double first, double second)
+    {
+        var distance = Math.Abs(first - second);
+        return Math.Min(distance, Math.PI - distance);
+    }
+
+    private static double LinePosition(
+        LineSegmentPoint line,
+        bool horizontal,
+        Size imageSize)
+    {
+        if (horizontal)
+        {
+            var dx = line.P2.X - line.P1.X;
+            var x = imageSize.Width / 2d;
+            return line.P1.Y
+                + ((x - line.P1.X) * (line.P2.Y - line.P1.Y) / dx);
+        }
+
+        var dy = line.P2.Y - line.P1.Y;
+        var y = imageSize.Height / 2d;
+        return line.P1.X
+            + ((y - line.P1.Y) * (line.P2.X - line.P1.X) / dy);
     }
 
     private static IEnumerable<Point[]> VerticalLinePairs(
@@ -530,11 +743,19 @@ public static class DocumentDetector
 
     private static Point[] OrderCorners(Point[] points)
     {
-        var topLeft = points.MinBy(point => point.X + point.Y);
-        var bottomRight = points.MaxBy(point => point.X + point.Y);
-        var topRight = points.MaxBy(point => point.X - point.Y);
-        var bottomLeft = points.MinBy(point => point.X - point.Y);
-        return [topLeft, topRight, bottomRight, bottomLeft];
+        var centerX = points.Average(point => point.X);
+        var centerY = points.Average(point => point.Y);
+        var clockwise = points
+            .OrderBy(point => Math.Atan2(
+                point.Y - centerY,
+                point.X - centerX))
+            .ToArray();
+        var topLeft = Array.IndexOf(
+            clockwise,
+            clockwise.MinBy(point => point.X + point.Y));
+        return clockwise[topLeft..]
+            .Concat(clockwise[..topLeft])
+            .ToArray();
     }
 
     private static NormalizedPoint Normalize(Point point, Size size) =>
@@ -1331,10 +1552,11 @@ public sealed class AutoCaptureGate
     public AutoCaptureState Evaluate(
         DocumentDetection detection,
         DateTimeOffset timestamp,
-        double minimumSharpness = 45)
+        // Calibrated against recorded 1280x720 laptop-camera frames.
+        double minimumSharpness = 25)
     {
         if (!detection.Found
-            || detection.Confidence < 0.7
+            || detection.Confidence < 0.72
             || detection.AreaRatio < 0.1
             || detection.Sharpness < minimumSharpness)
         {
