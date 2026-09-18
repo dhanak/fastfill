@@ -19,12 +19,18 @@ The pre-push hook rejects unsigned commits newly introduced to a remote.
 ```sh
 make check
 make preview
+make clean
 ```
 
 `make check` builds the pinned .NET 10 container, runs framework-free checks,
 replays the 224-frame camera regression, and compares the rendered page with
 `tests/goldens/annotated-page.png`. Preview outputs land in
 `artifacts/preview/`.
+
+`make clean` removes generated `bin/` and `obj/` directories below `src/`,
+plus disposable check, preview, and scan-analysis outputs below `artifacts/`.
+It preserves captures, test assets, documentation, `artifacts/signing/`, and
+`artifacts/.gitkeep`.
 
 The check covers document detection, perspective correction, filters,
 recorded-sequence auto-capture stability, hit testing, annotation geometry and

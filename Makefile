@@ -1,4 +1,4 @@
-.PHONY: assets check check-xaml lab preview sample-form update-goldens
+.PHONY: assets check check-xaml clean lab preview sample-form update-goldens
 
 IMAGE := fastfill-checks
 ROOT := $(CURDIR)
@@ -15,6 +15,15 @@ check-xaml:
 		echo "XAML event values must remain on one line."; \
 		exit 1; \
 	fi
+
+clean:
+	find src -type d \( -name bin -o -name obj \) -prune \
+		-exec rm -rf {} +
+	rm -rf artifacts/check-workspace \
+		artifacts/preview \
+		artifacts/scan-analysis \
+		artifacts/unsafe-workspace \
+		artifacts/unsafe.docscan
 
 preview: check
 	$(RUN) \
