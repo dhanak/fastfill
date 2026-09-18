@@ -531,27 +531,11 @@
                                 ToolTipService.ToolTip="Navigate page"
                                 AutomationProperties.Name="Navigate page"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <Viewbox Width="24" Height="24">
-                      <Path Fill="Transparent"
-                            Stroke="{Binding Foreground, ElementName=NavTool}"
-                            StrokeThickness="1.5"
-                            StrokeLineJoin="Round"
-                            StrokeStartLineCap="Round"
-                            StrokeEndLineCap="Round"
-                            Data="M6,13 V9
-                              C6,7.9 6.9,7 8,7
-                              C9.1,7 10,7.9 10,9 V11 V6
-                              C10,4.9 10.9,4 12,4
-                              C13.1,4 14,4.9 14,6 V11 V7
-                              C14,5.9 14.9,5 16,5
-                              C17.1,5 18,5.9 18,7 V11 V9
-                              C18,7.9 18.9,7 20,7
-                              C21.1,7 22,7.9 22,9 V14
-                              C22,18.4 18.4,22 14,22 H12
-                              C8.8,22 6.2,20.2 4.8,17.8 L2.5,14
-                              C1.9,13 2.2,11.8 3.2,11.2
-                              C4.2,10.6 5.4,11 6,12 Z" />
-                    </Viewbox>
+                    <FontIcon Width="24"
+                              Height="24"
+                              FontFamily="Segoe MDL2 Assets"
+                              FontSize="20"
+                              Glyph="&#xECE9;" />
                   </ToggleButton>
                   <ToggleButton x:Name="SelectToolButton"
                                 Grid.Column="1"
@@ -562,7 +546,10 @@
                                   "Ctrl: add/snap; Shift: move; Alt: resize"
                                 AutomationProperties.Name="Select and move"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <FontIcon Glyph="&#xE7C9;" FontSize="20" />
+                    <FontIcon Width="24"
+                              Height="24"
+                              FontSize="20"
+                              Glyph="&#xE7C9;" />
                   </ToggleButton>
                   <ToggleButton Grid.Column="2"
                                 Click="ToolButton_Click"
@@ -570,7 +557,10 @@
                                 ToolTipService.ToolTip="Text"
                                 AutomationProperties.Name="Text"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <FontIcon Glyph="&#xE8D2;" FontSize="20" />
+                    <FontIcon Width="24"
+                              Height="24"
+                              FontSize="20"
+                              Glyph="&#xE8D2;" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="1"
                                 Click="ToolButton_Click"
@@ -578,7 +568,10 @@
                                 ToolTipService.ToolTip="Pen"
                                 AutomationProperties.Name="Pen"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <FontIcon Glyph="&#xE76D;" FontSize="20" />
+                    <FontIcon Width="24"
+                              Height="24"
+                              FontSize="20"
+                              Glyph="&#xE76D;" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="1"
                                 Grid.Column="1"
@@ -587,7 +580,10 @@
                                 ToolTipService.ToolTip="Highlighter"
                                 AutomationProperties.Name="Highlighter"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <FontIcon Glyph="&#xE7E6;" FontSize="20" />
+                    <FontIcon Width="24"
+                              Height="24"
+                              FontSize="20"
+                              Glyph="&#xE7E6;" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="1"
                                 Grid.Column="2"
@@ -596,7 +592,11 @@
                                 ToolTipService.ToolTip="Straight line"
                                 AutomationProperties.Name="Straight line"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <TextBlock Text="╱" FontSize="24" />
+                    <FontIcon Width="24"
+                              Height="24"
+                              FontFamily="Segoe UI Symbol"
+                              FontSize="24"
+                              Glyph="&#x2571;" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="2"
                                 Click="ToolButton_Click"
@@ -604,7 +604,11 @@
                                 ToolTipService.ToolTip="Arrow"
                                 AutomationProperties.Name="Arrow"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <TextBlock Text="↗" FontSize="24" />
+                    <FontIcon Width="24"
+                              Height="24"
+                              FontFamily="Segoe UI Symbol"
+                              FontSize="24"
+                              Glyph="&#x2197;" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="2"
                                 Grid.Column="1"
@@ -613,9 +617,11 @@
                                 ToolTipService.ToolTip="Box"
                                 AutomationProperties.Name="Box"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <TextBlock Text="▭"
-                               FontFamily="Segoe UI Symbol"
-                               FontSize="25" />
+                    <FontIcon Width="24"
+                              Height="24"
+                              FontFamily="Segoe UI Symbol"
+                              FontSize="25"
+                              Glyph="&#x25AD;" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="2"
                                 Grid.Column="2"
@@ -624,7 +630,11 @@
                                 ToolTipService.ToolTip="Oval"
                                 AutomationProperties.Name="Oval"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <TextBlock Text="○" FontSize="24" />
+                    <FontIcon Width="24"
+                              Height="24"
+                              FontFamily="Segoe UI Symbol"
+                              FontSize="24"
+                              Glyph="&#x25CB;" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="3"
                                 Click="ToolButton_Click"
@@ -632,7 +642,11 @@
                                 ToolTipService.ToolTip="Checkmark"
                                 AutomationProperties.Name="Checkmark"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <TextBlock Text="✓" FontSize="24" />
+                    <FontIcon Width="24"
+                              Height="24"
+                              FontFamily="Segoe UI Symbol"
+                              FontSize="24"
+                              Glyph="&#x2713;" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="3"
                                 Grid.Column="1"
@@ -641,7 +655,11 @@
                                 ToolTipService.ToolTip="X mark"
                                 AutomationProperties.Name="X mark"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <TextBlock Text="✕" FontSize="22" />
+                    <FontIcon Width="24"
+                              Height="24"
+                              FontFamily="Segoe UI Symbol"
+                              FontSize="22"
+                              Glyph="&#x2715;" />
                   </ToggleButton>
                   <ToggleButton x:Name="SmartSnapToggle"
                                 Grid.Row="3"
