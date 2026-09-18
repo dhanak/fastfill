@@ -105,6 +105,7 @@ internal static class Program
         CheckDetectionStabilizer(detection);
         CheckRecordedDetectionSequence();
         CheckImageSnapFeatures();
+        CheckSampleFormSnapFeatures();
 
         var project = CreateProject();
         var page = project.Pages[0];
@@ -421,6 +422,31 @@ internal static class Program
                 && shortDottedLine.Start.X is > 0.69f and < 0.72f
                 && shortDottedLine.End.X is > 0.73f and < 0.77f,
             "Short dotted text line snap feature was not detected.");
+    }
+
+    private static void CheckSampleFormSnapFeatures()
+    {
+        var bytes = File.ReadAllBytes(
+            Path.Combine(Samples, "sample-form.png"));
+        var features = ImageSnapFeatures.Analyze(bytes);
+        var box = features.FindBox(
+            new NormalizedPoint(113f / 1240, 654f / 1753),
+            0.015f);
+        Assert(
+            box is NormalizedRect detected
+                && detected.Width * 1241 is > 20 and < 40
+                && detected.Height * 1754 is > 20 and < 40,
+            "Checkbox inside a bordered form was not detected.");
+
+        var dottedLine = features.FindHorizontalLine(
+            new NormalizedPoint(980f / 1240, 718f / 1753),
+            0.02f);
+        Assert(
+            dottedLine is not null
+                && dottedLine.Start.X is > 0.64f and < 0.7f
+                && dottedLine.End.X > 0.88f,
+            $"Dotted line inside a bordered form was not detected: "
+                + $"{dottedLine}.");
     }
 
     private static byte[] CreateFormWithoutVisibleBoundary()

@@ -67,6 +67,8 @@ Auto-capture is always on:
 3. Keep the document steady while the ring around the shutter completes its
    two-second countdown. FastFill then takes the photo automatically.
 
+[![Stabilized live framing and capture countdown][shot-camera]][shot-camera]
+
 Tap the shutter at any time for immediate capture. Use the upper-right camera
 button to switch between available front and rear cameras. Use **Back** to
 return without capturing. If detection misses the document, capture manually
@@ -98,6 +100,8 @@ Choosing a color mode, moving contrast, or rotating leaves corner-adjustment
 mode so the processed result is visible. Select **Adjust corners** again to
 return to the source image and handles. **Auto-detect** and **Full frame** are
 shown only while corner adjustment is active.
+
+[![Processed grayscale preview][shot-processed]][shot-processed]
 
 ## Editor layout
 
@@ -163,6 +167,8 @@ Color, thickness, fill, and text style are remembered independently for each
 tool during the session. Selecting existing objects loads their options;
 changing an option applies it to every compatible selected object.
 
+[![Shape selection and style controls][shot-shape-options]][shot-shape-options]
+
 ## Smart snap and text
 
 [![Inline text editing with smart snap][shot-text]][shot-text]
@@ -177,6 +183,8 @@ The magnet button is one shared smart-snap toggle for all compatible tools:
 Smart snap is based on page coordinates, so its result does not depend on
 display zoom. Tap rather than drag when requesting a snap. The magnet state is
 preserved while changing tools and pages during the current session.
+
+[![Marks snapped to boxes][shot-snap-marks]][shot-snap-marks]
 
 Text is edited directly on the page. The translucent blue frame follows the
 rendered text as font or contents change. Press **Enter** or click elsewhere
@@ -206,6 +214,8 @@ apply the value and return focus to the page.
 After creating an object, its handles remain usable even if its drawing tool
 is still active. A press inside that selected bounding box edits the object
 instead of creating another one.
+
+[![Rectangle multi-selection over annotations][shot-multi]][shot-multi]
 
 The permanent controls at the bottom of the right rail:
 
@@ -238,6 +248,8 @@ page cannot be lost outside the viewport.
 ## Keyboard and pointer reference
 
 The same reference is available from **Shortcuts** in the top bar.
+
+[![Keyboard and pointer shortcut window][shot-shortcuts]][shot-shortcuts]
 
 | Context | Shortcut | Function |
 | --- | --- | --- |
@@ -281,11 +293,17 @@ with Windows account and disk security.
 - No cloud synchronization or direct SMTP delivery.
 - Development certificate has no public publisher reputation.
 
-[shot-editor]: screenshots/editor-shapes.png
+[shot-camera]: screenshots/camera-capture.jpg
+[shot-editor]: screenshots/editor-overview.png
 [shot-actions]: screenshots/annotation-actions.png
 [shot-home]: screenshots/home.png
-[shot-review]: screenshots/page-review.png
+[shot-multi]: screenshots/multi-selection.png
+[shot-processed]: screenshots/processed-preview.jpg
+[shot-review]: screenshots/page-review.jpg
 [shot-selection]: screenshots/selection-transform.png
+[shot-shape-options]: screenshots/shape-options.png
+[shot-shortcuts]: screenshots/shortcuts.png
+[shot-snap-marks]: screenshots/smart-snap-marks.png
 [shot-text]: screenshots/text-smart-snap.png
 [shot-tools]: screenshots/annotation-tools.png
 [release]: https://github.com/dhanak/fastfill/releases/latest/download/FastFill-portable.zip

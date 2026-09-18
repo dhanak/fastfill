@@ -838,13 +838,13 @@ public sealed class ImageSnapFeatures
             binary,
             out var contours,
             out _,
-            RetrievalModes.External,
+            RetrievalModes.List,
             ContourApproximationModes.ApproxSimple);
         var minimumSide = Math.Max(
             8,
             Math.Min(image.Width, image.Height) * 0.006);
         var maximumSide = Math.Min(image.Width, image.Height) * 0.12;
-        var boxes = contours
+        var boxBounds = contours
             .Select(contour => new
             {
                 Contour = contour,
@@ -866,8 +866,21 @@ public sealed class ImageSnapFeatures
                 && value.Bounds.Height <= maximumSide
                 && value.Bounds.Width / (double)value.Bounds.Height
                     is >= 0.65 and <= 1.55)
-            .Select(value => Normalize(value.Bounds, image.Size()))
-            .OrderByDescending(value => value.Width * value.Height)
+            .Select(value => value.Bounds)
+            .OrderByDescending(value => value.Width * value.Height);
+        var distinctBoxBounds = new List<Rect>();
+        foreach (var bounds in boxBounds)
+        {
+            if (!distinctBoxBounds.Any(existing => SameBox(
+                    existing,
+                    bounds)))
+            {
+                distinctBoxBounds.Add(bounds);
+            }
+        }
+
+        var boxes = distinctBoxBounds
+            .Select(bounds => Normalize(bounds, image.Size()))
             .ToArray();
 
         var bridgeWidth = Math.Clamp(
@@ -1156,6 +1169,21 @@ public sealed class ImageSnapFeatures
     private static NormalizedPoint Center(NormalizedRect rectangle) => new(
         rectangle.X + (rectangle.Width / 2),
         rectangle.Y + (rectangle.Height / 2));
+
+    private static bool SameBox(Rect first, Rect second)
+    {
+        var left = Math.Max(first.Left, second.Left);
+        var top = Math.Max(first.Top, second.Top);
+        var right = Math.Min(first.Right, second.Right);
+        var bottom = Math.Min(first.Bottom, second.Bottom);
+        var intersection = Math.Max(0, right - left)
+            * Math.Max(0, bottom - top);
+        var smallerArea = Math.Min(
+            first.Width * first.Height,
+            second.Width * second.Height);
+        return smallerArea > 0
+            && intersection / (double)smallerArea >= 0.8;
+    }
 
     private static Mat Resize(Mat source)
     {
