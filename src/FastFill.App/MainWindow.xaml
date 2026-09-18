@@ -525,14 +525,33 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                   </Grid.RowDefinitions>
-                  <ToggleButton Click="ToolButton_Click"
+                  <ToggleButton x:Name="NavTool"
+                                Click="ToolButton_Click"
                                 Tag="Navigate"
                                 ToolTipService.ToolTip="Navigate page"
                                 AutomationProperties.Name="Navigate page"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <TextBlock Text="✋"
-                               FontFamily="Segoe UI Symbol"
-                               FontSize="20" />
+                    <Viewbox Width="24" Height="24">
+                      <Path Fill="Transparent"
+                            Stroke="{Binding Foreground, ElementName=NavTool}"
+                            StrokeThickness="1.5"
+                            StrokeLineJoin="Round"
+                            StrokeStartLineCap="Round"
+                            StrokeEndLineCap="Round"
+                            Data="M6,13 V9
+                              C6,7.9 6.9,7 8,7
+                              C9.1,7 10,7.9 10,9 V11 V6
+                              C10,4.9 10.9,4 12,4
+                              C13.1,4 14,4.9 14,6 V11 V7
+                              C14,5.9 14.9,5 16,5
+                              C17.1,5 18,5.9 18,7 V11 V9
+                              C18,7.9 18.9,7 20,7
+                              C21.1,7 22,7.9 22,9 V14
+                              C22,18.4 18.4,22 14,22 H12
+                              C8.8,22 6.2,20.2 4.8,17.8 L2.5,14
+                              C1.9,13 2.2,11.8 3.2,11.2
+                              C4.2,10.6 5.4,11 6,12 Z" />
+                    </Viewbox>
                   </ToggleButton>
                   <ToggleButton x:Name="SelectToolButton"
                                 Grid.Column="1"
@@ -594,11 +613,9 @@
                                 ToolTipService.ToolTip="Box"
                                 AutomationProperties.Name="Box"
                                 Style="{StaticResource ToolToggleStyle}">
-                    <Rectangle Width="22"
-                               Height="18"
-                               StrokeThickness="2"
-                               Stroke=
-                                 "{ThemeResource TextFillColorPrimaryBrush}" />
+                    <TextBlock Text="▭"
+                               FontFamily="Segoe UI Symbol"
+                               FontSize="25" />
                   </ToggleButton>
                   <ToggleButton Grid.Row="2"
                                 Grid.Column="2"
