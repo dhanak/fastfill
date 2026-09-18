@@ -31,6 +31,14 @@ recorded-sequence auto-capture stability, hit testing, annotation geometry and
 ordering, undo/redo, hostile archive rejection, `.docscan` round trips,
 annotation rendering, and multi-page PDF export.
 
+Regenerate the printable camera and annotation sample form with:
+
+```sh
+make sample-form
+```
+
+The PDF is written to `docs/samples/fastfill-camera-sample-form.pdf`.
+
 ## Interactive detection labs
 
 Test production smart-snap and auto-framing logic on Linux:

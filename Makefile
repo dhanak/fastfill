@@ -1,4 +1,4 @@
-.PHONY: assets check check-xaml lab preview update-goldens
+.PHONY: assets check check-xaml lab preview sample-form update-goldens
 
 IMAGE := fastfill-checks
 ROOT := $(CURDIR)
@@ -39,3 +39,8 @@ assets:
 	$(RUN) \
 		-v "$(ROOT)/src/FastFill.App/Assets:/assets" \
 		$(IMAGE) --make-assets /assets
+
+sample-form:
+	mkdir -p docs/samples
+	uv run --no-project python tools/generate_sample_form.py \
+		docs/samples/fastfill-camera-sample-form.pdf

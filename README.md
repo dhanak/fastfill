@@ -50,6 +50,8 @@ the trust instructions in the [user manual][manual].
 
 See the [complete user manual][manual] for every screen, tool, gesture,
 modifier, project action, file format, and privacy detail.
+For a guided camera and annotation demo, print the [A4 sample form][sample]
+at 100% / actual size.
 
 ## Development
 
@@ -71,5 +73,6 @@ FastFill is available under the [MIT License][license].
 [license-badge]: https://img.shields.io/badge/license-MIT-green
 [manual]: docs/USER_GUIDE.md
 [release]: https://github.com/dhanak/fastfill/releases/latest/download/FastFill-portable.zip
+[sample]: docs/samples/fastfill-camera-sample-form.pdf
 [shot-editor]: docs/screenshots/editor-shapes.png
 [windows-badge]: https://img.shields.io/badge/Windows_10%2F11-x64-0078D4
