@@ -1229,7 +1229,7 @@ public sealed record ProcessedPage(byte[] EncodedPng, int Width, int Height);
 
 public static class ImageProcessor
 {
-    internal static (int Width, int Height) GetProcessedDimensions(
+    public static (int Width, int Height) GetProcessedDimensions(
         int sourceWidth,
         int sourceHeight,
         CropQuad crop,

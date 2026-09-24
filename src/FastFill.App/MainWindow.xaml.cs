@@ -1254,12 +1254,27 @@ public sealed partial class MainWindow : Window
             if (_editingPageIndex is int editIndex)
             {
                 var existing = _project.Pages[editIndex];
+                var dimensions = ImageProcessor.GetProcessedDimensions(
+                    existing.SourcePixelWidth,
+                    existing.SourcePixelHeight,
+                    _pendingCrop,
+                    _pendingRotation);
+                var pageWidth = dimensions.Width
+                    / PdfExporter.DotsPerInch * 72;
+                var pageHeight = dimensions.Height
+                    / PdfExporter.DotsPerInch * 72;
                 var annotations = new List<Annotation>();
                 foreach (var annotation in existing.Annotations)
                 {
+                    var fitted = annotation is TextAnnotation text
+                        ? PageRenderer.FitTextBounds(
+                            text,
+                            pageWidth,
+                            pageHeight)
+                        : annotation;
                     var adjusted = AnnotationGeometry.BringIntoPage(
-                        annotation);
-                    if (adjusted.Transform != annotation.Transform)
+                        fitted);
+                    if (adjusted.Transform != fitted.Transform)
                     {
                         movedAnnotations++;
                     }
@@ -2106,10 +2121,10 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var localCenter = new NormalizedPoint(
-            _textEditBounds.X + (_textEditBounds.Width / 2),
-            _textEditBounds.Y + (_textEditBounds.Height / 2));
-        var transformedCenter = _textEditTransform.Apply(localCenter);
+        var transformedOrigin = _textEditTransform.Apply(
+            new NormalizedPoint(
+                _textEditBounds.X,
+                _textEditBounds.Y));
         var contentWidth = _textEditBounds.Width
             * _editorImageRect.Width;
         var contentHeight = _textEditBounds.Height
@@ -2121,11 +2136,9 @@ public sealed partial class MainWindow : Window
             _editorImageRect.Height,
             Math.Max(40, contentHeight + 4));
         var left = _editorImageRect.Left
-            + (transformedCenter.X * _editorImageRect.Width)
-            - (editorWidth / 2);
+            + (transformedOrigin.X * _editorImageRect.Width);
         var top = _editorImageRect.Top
-            + (transformedCenter.Y * _editorImageRect.Height)
-            - (editorHeight / 2);
+            + (transformedOrigin.Y * _editorImageRect.Height);
         if (_textEditCenterAnchor is NormalizedPoint center)
         {
             left = _editorImageRect.Left
@@ -2220,24 +2233,6 @@ public sealed partial class MainWindow : Window
         }
 
         _textEditBounds = bounds;
-    }
-
-    private void InlineTextEditor_LostFocus(
-        object sender,
-        RoutedEventArgs args)
-    {
-        if (!_closingTextEditor)
-        {
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                if (InlineTextEditor.Visibility == Visibility.Visible
-                    && InlineTextEditor.FocusState
-                        == FocusState.Unfocused)
-                {
-                    CommitInlineTextEdit();
-                }
-            });
-        }
     }
 
     private void InlineTextEditor_KeyDown(
@@ -3142,8 +3137,28 @@ public sealed partial class MainWindow : Window
         if (args.Key == VirtualKey.Enter)
         {
             DispatcherQueue.TryEnqueue(() =>
-                EditorCanvas.Focus(FocusState.Programmatic));
+            {
+                if (CommitInlineTextEdit())
+                {
+                    EditorCanvas.Focus(FocusState.Programmatic);
+                }
+            });
         }
+    }
+
+    private void TextOptions_PreviewKeyDown(
+        object sender,
+        KeyRoutedEventArgs args)
+    {
+        if (args.Key != VirtualKey.Escape
+            || InlineTextEditor.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        args.Handled = true;
+        CancelInlineTextEdit();
+        EditorCanvas.Focus(FocusState.Programmatic);
     }
 
     private void TextStyleToggle_Click(
@@ -3850,6 +3865,15 @@ public sealed partial class MainWindow : Window
         object sender,
         KeyRoutedEventArgs args)
     {
+        if (args.Key == VirtualKey.Escape
+            && InlineTextEditor.Visibility == Visibility.Visible)
+        {
+            args.Handled = true;
+            CancelInlineTextEdit();
+            EditorCanvas.Focus(FocusState.Programmatic);
+            return;
+        }
+
         if (args.Key == VirtualKey.Delete
             && _screen == AppScreen.Editor
             && InlineTextEditor.Visibility != Visibility.Visible)

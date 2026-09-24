@@ -130,6 +130,11 @@ strips. The top bar contains these project-wide actions:
   flattening annotations.
 - **Delete page** removes the current page after confirmation.
 
+Annotations keep their relative page positions when the crop changes; they
+are not projected onto the newly cropped image. For precise alignment, finish
+cropping before annotating. Text is refitted to remain visible, and FastFill
+warns if it must move an annotation back into reach.
+
 A project can contain up to 20 pages. Import is rejected if all incoming PDF
 pages do not fit.
 

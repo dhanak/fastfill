@@ -443,7 +443,6 @@
                          Background="#3000A4EF"
                          Foreground="#FF111827"
                          Padding="4,0"
-                         LostFocus="InlineTextEditor_LostFocus"
                          TextChanging="InlineTextEditor_TextChanging"
                          PreviewKeyDown="InlineTextEditor_KeyDown">
                   <TextBox.Resources>
@@ -801,7 +800,8 @@
                     </Viewbox>
                   </ToggleButton>
                 </Grid>
-                <StackPanel x:Name="ColorOptionsPanel">
+                <StackPanel x:Name="ColorOptionsPanel"
+                            PreviewKeyDown="TextOptions_PreviewKeyDown">
                   <TextBlock Text="Color" Margin="4,10,4,2" />
                   <Grid x:Name="ColorPanel">
                     <Grid.ColumnDefinitions>
@@ -864,7 +864,9 @@
                           StepFrequency="1"
                           ValueChanged="ThicknessSlider_ValueChanged" />
                 </StackPanel>
-                <StackPanel x:Name="FontPanel" Spacing="4">
+                <StackPanel x:Name="FontPanel"
+                            Spacing="4"
+                            PreviewKeyDown="TextOptions_PreviewKeyDown">
                   <ComboBox x:Name="FontFamilyPicker"
                             Header="Typeface"
                             HorizontalAlignment="Stretch"
