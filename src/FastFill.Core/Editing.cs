@@ -411,6 +411,44 @@ public static class AnnotationGeometry
             corners.Max(point => point.Y) - corners.Min(point => point.Y));
     }
 
+    public static Annotation BringIntoPage(
+        Annotation annotation,
+        float inset = 0.05f)
+    {
+        ArgumentNullException.ThrowIfNull(annotation);
+        if (!float.IsFinite(inset) || inset is < 0 or > 0.5f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(inset));
+        }
+
+        var bounds = TransformedBounds(annotation);
+        var offsetX = bounds.Right <= 0
+            ? inset - bounds.Right
+            : bounds.X >= 1
+                ? 1 - inset - bounds.X
+                : 0;
+        var offsetY = bounds.Bottom <= 0
+            ? inset - bounds.Bottom
+            : bounds.Y >= 1
+                ? 1 - inset - bounds.Y
+                : 0;
+        if (offsetX == 0 && offsetY == 0)
+        {
+            return annotation;
+        }
+
+        var transform = AffineTransform.FromMatrix(
+            annotation.Transform.Matrix
+            * Matrix3x2.CreateTranslation(offsetX, offsetY));
+        return annotation switch
+        {
+            FreehandAnnotation ink => ink with { Transform = transform },
+            TextAnnotation text => text with { Transform = transform },
+            ShapeAnnotation shape => shape with { Transform = transform },
+            _ => annotation,
+        };
+    }
+
     public static bool Intersects(
         Annotation annotation,
         NormalizedRect rectangle)

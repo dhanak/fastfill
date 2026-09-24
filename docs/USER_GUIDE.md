@@ -190,6 +190,9 @@ Text is edited directly on the page. The translucent blue frame follows the
 rendered text as font or contents change. Press **Enter** or click elsewhere
 to accept, **Shift+Enter** for a line break, or **Esc** to cancel. Double-click
 or double-tap existing text with Select or Text active to edit it again.
+Commands that leave or output the document first accept active text. If it
+cannot be accepted, the editor stays open until it is corrected or canceled
+with **Esc**.
 
 Text has no corner resize handles. Change its point size in the right rail or
 use the bottom **− / +** buttons. Press **Enter** in the font-size field to
@@ -201,6 +204,8 @@ apply the value and return focus to the page.
   to move it.
 - Drag a corner handle to resize freely. Line and arrow handles move only the
   corresponding endpoint.
+- Objects may extend beyond the page and are clipped in output. Keep at least
+  part of each object's bounding area on the page.
 - Drag the round handle above a supported object to rotate it.
 - **Ctrl+click** toggles one object in a multi-selection. Drag an empty area
   to select intersecting objects; **Ctrl+drag** adds them to the selection.

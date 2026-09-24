@@ -15,6 +15,8 @@ public sealed record RenderOptions(
 public static class PageRenderer
 {
     public const float RotationHandleOffset = 24;
+    public const float PreviewPageWidthPoints = 612;
+    public const int DefaultPreviewMaximumEdge = 1400;
 
     public static TextAnnotation FitTextBounds(
         TextAnnotation annotation,
@@ -45,17 +47,13 @@ public static class PageRenderer
             * font.Size
             * 1.25f
             / pageHeight;
-        var x = Math.Clamp(
-            annotation.Bounds.X,
-            0,
-            Math.Max(0, 1 - width));
-        var y = Math.Clamp(
-            annotation.Bounds.Y,
-            0,
-            Math.Max(0, 1 - height));
         return annotation with
         {
-            Bounds = new NormalizedRect(x, y, width, height),
+            Bounds = annotation.Bounds with
+            {
+                Width = width,
+                Height = height,
+            },
         };
     }
 
@@ -105,15 +103,16 @@ public static class PageRenderer
     public static byte[] RenderPng(
         ProcessedPage background,
         DocumentPage page,
-        int maximumEdge = 1400)
+        int maximumEdge = DefaultPreviewMaximumEdge)
     {
         using var image = SKImage.FromEncodedData(background.EncodedPng)
             ?? throw new InvalidOperationException("Page image is invalid.");
-        var scale = Math.Min(
-            1,
-            maximumEdge / (double)Math.Max(image.Width, image.Height));
-        var width = Math.Max(1, (int)Math.Round(image.Width * scale));
-        var height = Math.Max(1, (int)Math.Round(image.Height * scale));
+        var dimensions = GetPreviewDimensions(
+            image.Width,
+            image.Height,
+            maximumEdge);
+        var width = dimensions.Width;
+        var height = dimensions.Height;
         var info = new SKImageInfo(
             width,
             height,
@@ -128,10 +127,28 @@ public static class PageRenderer
             image,
             page,
             new SKRect(0, 0, width, height),
-            new RenderOptions(612, 612f * height / width));
+            new RenderOptions(
+                PreviewPageWidthPoints,
+                PreviewPageWidthPoints * height / width));
         using var snapshot = surface.Snapshot();
         using var data = snapshot.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
+    }
+
+    internal static (int Width, int Height) GetPreviewDimensions(
+        int imageWidth,
+        int imageHeight,
+        int maximumEdge = DefaultPreviewMaximumEdge)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(imageWidth, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(imageHeight, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maximumEdge, 1);
+        var scale = Math.Min(
+            1,
+            maximumEdge / (double)Math.Max(imageWidth, imageHeight));
+        return (
+            Math.Max(1, (int)Math.Round(imageWidth * scale)),
+            Math.Max(1, (int)Math.Round(imageHeight * scale)));
     }
 
     private static void DrawAnnotation(

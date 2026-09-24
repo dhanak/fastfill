@@ -82,6 +82,10 @@ make update-goldens
 Linux cannot execute WinUI's Windows-only XAML compiler. GitHub Actions runs
 the same checks on Windows and compiles the complete WinUI application.
 
+Known limitation: CI does not currently run the Linux-only pixel-exact
+rendering golden. Run `make check` locally before merging rendering changes or
+preparing a release.
+
 ## Windows development
 
 Requirements: Windows 10 or 11, Visual Studio with WinUI/C# workloads, and

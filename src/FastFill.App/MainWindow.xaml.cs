@@ -6,6 +6,7 @@ using System.Text.Json;
 using FastFill.Core;
 using Microsoft.UI.Input;
 using Microsoft.UI.Text;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -31,6 +32,10 @@ namespace FastFill.App;
     Justification = "WinUI owns Window lifetime; Closed releases resources.")]
 public sealed partial class MainWindow : Window
 {
+    private static readonly string ShareRoot = Path.Combine(
+        Path.GetTempPath(),
+        "FastFill",
+        "shares");
     private static readonly Guid DataTransferManagerId = new(
         0xa5caee9b,
         0x8708,
@@ -47,7 +52,6 @@ public sealed partial class MainWindow : Window
     private readonly UndoBuffer<FastFillProject> _history =
         new(ProjectJson.Clone);
     private readonly AutoCaptureGate _autoCaptureGate = new();
-    private readonly DocumentDetectionStabilizer _detectionStabilizer = new();
     private readonly Dictionary<ToolMode, ToolSettings> _toolSettings =
         CreateToolSettings();
     private readonly string _workspaceRoot;
@@ -56,8 +60,8 @@ public sealed partial class MainWindow : Window
     private string? _projectPath;
     private IReadOnlyList<CameraChoice> _cameraChoices = [];
     private CameraFrameSource? _camera;
+    private CameraDetectionSession? _cameraDetectionSession;
     private int _cameraIndex;
-    private int _detecting;
     private int _capturing;
     private DocumentDetection? _latestDetection;
     private byte[]? _pendingBytes;
@@ -100,6 +104,7 @@ public sealed partial class MainWindow : Window
     private NormalizedRect _textEditBounds;
     private float _textEditMaximumWidth = 0.4f;
     private AffineTransform _textEditTransform = AffineTransform.Identity;
+    private uint _textEditColorArgb;
     private NormalizedPoint? _textEditCenterAnchor;
     private float? _textEditBottomAnchor;
     private bool _closingTextEditor;
@@ -112,18 +117,22 @@ public sealed partial class MainWindow : Window
     private float _gestureStartZoom;
     private Vector2 _gestureStartPan;
     private bool _dirty;
+    private long _projectRevision;
+    private bool _savingProject;
     private bool _updatingPageList;
     private bool _reorderingPages;
     private Guid? _activePageBeforeReorder;
     private bool _updatingToolOptions;
     private bool _controlsReady;
     private DataTransferManager? _dataTransferManager;
-    private StorageFile? _shareFile;
+    private SharePayload? _sharePayload;
+    private bool _sharing;
     private AppScreen _screen = AppScreen.Home;
 
     public MainWindow()
     {
         InitializeComponent();
+        InlineTextEditor.MaxLength = ProjectValidator.MaximumTextLength;
         AppWindow.SetIcon(Path.Combine(
             AppContext.BaseDirectory,
             "Assets",
@@ -134,9 +143,11 @@ public sealed partial class MainWindow : Window
             "FastFill",
             "workspaces");
         Directory.CreateDirectory(_workspaceRoot);
+        _ = Task.Run(CleanupStaleShareDirectories);
         InitializeShare();
         _controlsReady = true;
         ApplyToolOptions();
+        AppWindow.Closing += AppWindow_Closing;
         Closed += MainWindow_Closed;
         VisibilityChanged += MainWindow_VisibilityChanged;
         ShowRecoverIfAvailable();
@@ -154,7 +165,7 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs args)
     {
-        if (!CanAddPage())
+        if (!CommitInlineTextEdit() || !CanAddPage())
         {
             return;
         }
@@ -169,6 +180,11 @@ public sealed partial class MainWindow : Window
     {
         try
         {
+            if (!CommitInlineTextEdit())
+            {
+                return;
+            }
+
             if (string.IsNullOrEmpty(_workspace))
             {
                 CreateProject();
@@ -235,73 +251,86 @@ public sealed partial class MainWindow : Window
         }
 
         SetStatus($"Importing {document.PageCount} PDF pages…");
-        var renderedPages = new List<PdfImportPage>();
-        for (uint index = 0; index < document.PageCount; index++)
+        var importedPages = new List<DocumentPage>();
+        var stagedAssets = new List<string>();
+        try
         {
-            using var page = document.GetPage(index);
-            var width = checked((int)Math.Ceiling(
-                page.Size.Width
-                * PdfExporter.DotsPerInch
-                / 96));
-            var height = checked((int)Math.Ceiling(
-                page.Size.Height
-                * PdfExporter.DotsPerInch
-                / 96));
-            ProjectValidator.ValidateImageInput(1, width, height);
-            using var stream = new InMemoryRandomAccessStream();
-            var options = new PdfPageRenderOptions
+            for (uint index = 0; index < document.PageCount; index++)
             {
-                DestinationWidth = checked((uint)width),
-                DestinationHeight = checked((uint)height),
-                BitmapEncoderId = Windows.Graphics.Imaging.BitmapEncoder
-                    .PngEncoderId,
-            };
-            await page.RenderToStreamAsync(stream, options);
-            if (stream.Size
-                > checked((ulong)ProjectValidator.MaximumImageBytes))
-            {
-                throw new InvalidDataException(
-                    $"Rendered PDF page {index + 1} exceeds 100 MiB.");
+                using var page = document.GetPage(index);
+                var width = checked((int)Math.Ceiling(
+                    page.Size.Width
+                    * PdfExporter.DotsPerInch
+                    / 96));
+                var height = checked((int)Math.Ceiling(
+                    page.Size.Height
+                    * PdfExporter.DotsPerInch
+                    / 96));
+                ProjectValidator.ValidateImageInput(1, width, height);
+                using var stream = new InMemoryRandomAccessStream();
+                var options = new PdfPageRenderOptions
+                {
+                    DestinationWidth = checked((uint)width),
+                    DestinationHeight = checked((uint)height),
+                    BitmapEncoderId = Windows.Graphics.Imaging.BitmapEncoder
+                        .PngEncoderId,
+                };
+                await page.RenderToStreamAsync(stream, options);
+                ProjectValidator.ValidateImageInput(
+                    checked((long)stream.Size),
+                    width,
+                    height);
+
+                var asset = $"{Guid.NewGuid():N}.png";
+                stagedAssets.Add(asset);
+                var assetPath = Path.Combine(
+                    _workspace,
+                    "assets",
+                    asset);
+                await using var input = stream.GetInputStreamAt(0)
+                    .AsStreamForRead();
+                await using (var output = new FileStream(
+                    assetPath,
+                    FileMode.CreateNew,
+                    FileAccess.Write,
+                    FileShare.None,
+                    64 * 1024,
+                    FileOptions.Asynchronous))
+                {
+                    await input.CopyToAsync(output);
+                }
+
+                importedPages.Add(new DocumentPage
+                {
+                    SourceAsset = asset,
+                    SourcePixelWidth = width,
+                    SourcePixelHeight = height,
+                });
+                SetStatus(
+                    $"Importing PDF page {index + 1} of "
+                    + $"{document.PageCount}…");
             }
 
-            var length = checked((uint)stream.Size);
-            using var reader = new DataReader(stream.GetInputStreamAt(0));
-            var loaded = await reader.LoadAsync(length);
-            if (loaded != length)
+            _history.Checkpoint(_project);
+        }
+        catch
+        {
+            foreach (var asset in stagedAssets)
             {
-                throw new InvalidDataException(
-                    $"Could not read rendered PDF page {index + 1}.");
+                try
+                {
+                    File.Delete(Path.Combine(_workspace, "assets", asset));
+                }
+                catch
+                {
+                    // Preserve the import error; orphan cleanup is best effort.
+                }
             }
 
-            var bytes = new byte[checked((int)length)];
-            reader.ReadBytes(bytes);
-            ProjectValidator.ValidateImageInput(
-                bytes.LongLength,
-                width,
-                height);
-            renderedPages.Add(new PdfImportPage(bytes, width, height));
-            SetStatus(
-                $"Importing PDF page {index + 1} of "
-                + $"{document.PageCount}…");
+            throw;
         }
 
         var firstPage = _project.Pages.Count;
-        var importedPages = new List<DocumentPage>();
-        foreach (var rendered in renderedPages)
-        {
-            var asset = $"{Guid.NewGuid():N}.png";
-            await File.WriteAllBytesAsync(
-                Path.Combine(_workspace, "assets", asset),
-                rendered.Bytes);
-            importedPages.Add(new DocumentPage
-            {
-                SourceAsset = asset,
-                SourcePixelWidth = rendered.Width,
-                SourcePixelHeight = rendered.Height,
-            });
-        }
-
-        _history.Checkpoint(_project);
         _project.Pages.AddRange(importedPages);
 
         if (firstPage == 0)
@@ -316,7 +345,7 @@ public sealed partial class MainWindow : Window
         MarkChanged();
         ShowEditor();
         await LoadActivePageAsync();
-        SetStatus($"Imported {renderedPages.Count} PDF pages.");
+        SetStatus($"Imported {importedPages.Count} PDF pages.");
     }
 
     private async void OpenButton_Click(
@@ -346,6 +375,11 @@ public sealed partial class MainWindow : Window
     {
         try
         {
+            if (!CommitInlineTextEdit())
+            {
+                return;
+            }
+
             if (!string.Equals(
                 Path.GetExtension(filePath),
                 ".docscan",
@@ -444,6 +478,20 @@ public sealed partial class MainWindow : Window
         return false;
     }
 
+    private bool CanAddAnnotation()
+    {
+        if (CurrentPage.Annotations.Count
+            < ProjectValidator.MaximumAnnotationsPerPage)
+        {
+            return true;
+        }
+
+        SetStatus(
+            "A page supports up to "
+            + $"{ProjectValidator.MaximumAnnotationsPerPage:N0} objects.");
+        return false;
+    }
+
     private async Task StartCameraAsync()
     {
         try
@@ -451,7 +499,6 @@ public sealed partial class MainWindow : Window
             SetScreen(AppScreen.Capture);
             CaptureStatusText.Text = "Starting camera…";
             await StopCameraAsync();
-            _detectionStabilizer.Reset();
             _latestDetection = null;
             if (_cameraChoices.Count == 0)
             {
@@ -474,24 +521,45 @@ public sealed partial class MainWindow : Window
                 ScaleX = choice.Position == CameraPosition.Front ? -1 : 1,
                 ScaleY = 1,
             };
-            _camera = new CameraFrameSource(choice, CameraPreview);
-            _camera.FrameArrived += Camera_FrameArrived;
-            _camera.Failed += Camera_Failed;
-            await _camera.StartAsync();
+            var camera = new CameraFrameSource(choice, CameraPreview);
+            var session = new CameraDetectionSession(camera);
+            Action<FramePacket> frameHandler = frame =>
+                Camera_FrameArrived(session, frame);
+            Action<string> failureHandler = message =>
+                Camera_Failed(session, message);
+            session.FrameHandler = frameHandler;
+            session.FailureHandler = failureHandler;
+            _camera = camera;
+            _cameraDetectionSession = session;
+            camera.FrameArrived += frameHandler;
+            camera.Failed += failureHandler;
+            await camera.StartAsync();
             CaptureStatusText.Text = "Find document edges";
             _autoCaptureGate.Reset();
             CaptureCountdownRing.Value = 0;
         }
-        catch (UnauthorizedAccessException exception)
-        {
-            await ShowErrorAsync(
-                "Camera permission denied",
-                exception,
-                "Enable camera access in Windows Settings, then retry.");
-        }
         catch (Exception exception)
         {
-            await ShowErrorAsync("Camera failed", exception);
+            try
+            {
+                await StopCameraAsync();
+            }
+            catch
+            {
+                // Preserve the camera startup error.
+            }
+
+            if (exception is UnauthorizedAccessException)
+            {
+                await ShowErrorAsync(
+                    "Camera permission denied",
+                    exception,
+                    "Enable camera access in Windows Settings, then retry.");
+            }
+            else
+            {
+                await ShowErrorAsync("Camera failed", exception);
+            }
         }
     }
 
@@ -543,60 +611,91 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void Camera_FrameArrived(FramePacket frame)
+    private void Camera_FrameArrived(
+        CameraDetectionSession session,
+        FramePacket frame)
     {
-        if (Interlocked.Exchange(ref _detecting, 1) != 0)
+        lock (session.Gate)
         {
-            return;
-        }
+            if (session.Cancellation.IsCancellationRequested
+                || !ReferenceEquals(_cameraDetectionSession, session)
+                || session.DetectionTask is { IsCompleted: false })
+            {
+                return;
+            }
 
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                var rawDetection = DocumentDetector.Detect(
-                    frame,
-                    _detectionStabilizer.Hint);
-                var detection = _detectionStabilizer.Update(rawDetection);
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    _latestDetection = detection;
-                    UpdateDetectionOverlay(frame, detection);
-                    var state = _autoCaptureGate.Evaluate(
-                        detection,
-                        frame.Timestamp);
-                    CaptureCountdownRing.Value =
-                        _autoCaptureGate.Progress * 100;
-                    CaptureStatusText.Text = state switch
-                    {
-                        AutoCaptureState.NoDocument => "Find document edges",
-                        AutoCaptureState.HoldSteady =>
-                            $"Hold steady "
-                            + $"{RemainingCountdownSeconds():0.0}s",
-                        AutoCaptureState.Ready => "Captured",
-                        _ => "Captured",
-                    };
-                    if (state == AutoCaptureState.Ready)
-                    {
-                        _ = CapturePhotoAsync();
-                    }
-                });
-            }
-            catch (Exception exception)
-            {
-                DispatcherQueue.TryEnqueue(() =>
-                {
-                    DetectionPolygon.Points.Clear();
-                    CaptureStatusText.Text =
-                        $"Detection failed: {exception.Message}";
-                });
-            }
-            finally
-            {
-                Interlocked.Exchange(ref _detecting, 0);
-            }
-        });
+            session.DetectionTask = Task.Run(() =>
+                DetectCameraFrame(session, frame));
+        }
     }
+
+    private void DetectCameraFrame(
+        CameraDetectionSession session,
+        FramePacket frame)
+    {
+        try
+        {
+            session.Cancellation.Token.ThrowIfCancellationRequested();
+            var rawDetection = DocumentDetector.Detect(
+                frame,
+                session.Stabilizer.Hint);
+            var detection = session.Stabilizer.Update(rawDetection);
+            session.Cancellation.Token.ThrowIfCancellationRequested();
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!IsCurrentCameraSession(session))
+                {
+                    return;
+                }
+
+                _latestDetection = detection;
+                UpdateDetectionOverlay(frame, detection);
+                var state = _autoCaptureGate.Evaluate(
+                    detection,
+                    frame.Timestamp);
+                CaptureCountdownRing.Value =
+                    _autoCaptureGate.Progress * 100;
+                CaptureStatusText.Text = state switch
+                {
+                    AutoCaptureState.NoDocument => "Find document edges",
+                    AutoCaptureState.HoldSteady =>
+                        $"Hold steady "
+                        + $"{RemainingCountdownSeconds():0.0}s",
+                    AutoCaptureState.Ready => "Captured",
+                    _ => "Captured",
+                };
+                if (state == AutoCaptureState.Ready)
+                {
+                    _ = CapturePhotoAsync();
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            // The camera session ended while detection was running.
+        }
+        catch (Exception exception)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (!IsCurrentCameraSession(session))
+                {
+                    return;
+                }
+
+                DetectionPolygon.Points.Clear();
+                CaptureStatusText.Text =
+                    $"Detection failed: {exception.Message}";
+            });
+        }
+    }
+
+    private bool IsCurrentCameraSession(
+        CameraDetectionSession session) =>
+        ReferenceEquals(_cameraDetectionSession, session)
+        && ReferenceEquals(_camera, session.Camera)
+        && !session.Cancellation.IsCancellationRequested
+        && _screen == AppScreen.Capture;
 
     private double RemainingCountdownSeconds() => Math.Max(
         0,
@@ -649,17 +748,52 @@ public sealed partial class MainWindow : Window
 
     private async Task StopCameraAsync()
     {
-        if (_camera is null)
+        var session = _cameraDetectionSession;
+        _cameraDetectionSession = null;
+        var camera = _camera;
+        _camera = null;
+        if (session is null && camera is null)
         {
             return;
         }
 
-        var camera = _camera;
-        _camera = null;
-        camera.FrameArrived -= Camera_FrameArrived;
-        camera.Failed -= Camera_Failed;
-        await camera.DisposeAsync();
-        DetectionPolygon.Points.Clear();
+        Task? detectionTask = null;
+        if (session is not null)
+        {
+            session.Cancellation.Cancel();
+            if (session.FrameHandler is not null)
+            {
+                session.Camera.FrameArrived -= session.FrameHandler;
+            }
+
+            if (session.FailureHandler is not null)
+            {
+                session.Camera.Failed -= session.FailureHandler;
+            }
+
+            lock (session.Gate)
+            {
+                detectionTask = session.DetectionTask;
+            }
+        }
+
+        try
+        {
+            if (camera is not null)
+            {
+                await camera.DisposeAsync();
+            }
+        }
+        finally
+        {
+            if (detectionTask is not null)
+            {
+                await detectionTask;
+            }
+
+            session?.Dispose();
+            DetectionPolygon.Points.Clear();
+        }
     }
 
     private async Task BeginReviewAsync(
@@ -667,6 +801,7 @@ public sealed partial class MainWindow : Window
         string extension,
         CropQuad? detectionHint = null)
     {
+        ProjectValidator.ValidateEncodedImage(bytes);
         _pendingBytes = bytes;
         _pendingExtension = extension.Equals(
             ".png",
@@ -1112,18 +1247,38 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        var editingExistingPage = _editingPageIndex is not null;
+        var movedAnnotations = 0;
         try
         {
-            _history.Checkpoint(_project);
             if (_editingPageIndex is int editIndex)
             {
                 var existing = _project.Pages[editIndex];
-                _project.Pages[editIndex] = existing with
+                var annotations = new List<Annotation>();
+                foreach (var annotation in existing.Annotations)
+                {
+                    var adjusted = AnnotationGeometry.BringIntoPage(
+                        annotation);
+                    if (adjusted.Transform != annotation.Transform)
+                    {
+                        movedAnnotations++;
+                    }
+
+                    annotations.Add(adjusted);
+                }
+
+                var updatedPage = existing with
                 {
                     Crop = _pendingCrop,
                     Filter = _pendingFilter,
                     RotationQuarterTurns = _pendingRotation,
+                    Annotations = annotations,
                 };
+                var staged = ProjectJson.Clone(_project);
+                staged.Pages[editIndex] = updatedPage;
+                ProjectValidator.Validate(staged);
+                _history.Checkpoint(_project);
+                _project = staged;
                 _pageIndex = editIndex;
             }
             else
@@ -1132,6 +1287,7 @@ public sealed partial class MainWindow : Window
                 await File.WriteAllBytesAsync(
                     Path.Combine(_workspace, "assets", asset),
                     _pendingBytes);
+                _history.Checkpoint(_project);
                 _project.Pages.Add(new DocumentPage
                 {
                     SourceAsset = asset,
@@ -1148,10 +1304,28 @@ public sealed partial class MainWindow : Window
             MarkChanged();
             ShowEditor();
             await LoadActivePageAsync();
+            if (movedAnnotations > 0)
+            {
+                var dialog = new ContentDialog
+                {
+                    Title = "Some annotations were moved",
+                    Content = $"Moved {movedAnnotations} annotation"
+                        + $"{(movedAnnotations == 1 ? "" : "s")} back "
+                        + "onto the page so they remain editable.",
+                    CloseButtonText = "OK",
+                    DefaultButton = ContentDialogButton.Close,
+                    XamlRoot = XamlRoot,
+                };
+                await dialog.ShowAsync();
+            }
         }
         catch (Exception exception)
         {
-            await ShowErrorAsync("Could not add page", exception);
+            await ShowErrorAsync(
+                editingExistingPage
+                    ? "Could not update page"
+                    : "Could not add page",
+                exception);
         }
     }
 
@@ -1207,6 +1381,9 @@ public sealed partial class MainWindow : Window
     private async Task LoadActivePageAsync()
     {
         CancelInlineTextEdit();
+        _selectedAnnotationIds.Clear();
+        ResetSelectionInteraction();
+        ApplyToolOptions();
         if (_project.Pages.Count == 0)
         {
             _processedPage = null;
@@ -1239,8 +1416,6 @@ public sealed partial class MainWindow : Window
             _pageSnapFeatures = snapFeatures;
             _editorBackground?.Dispose();
             _editorBackground = image;
-            _selectedAnnotationIds.Clear();
-            ApplyToolOptions();
             EditorCanvas.Invalidate();
             SetStatus($"Page {_pageIndex + 1} of {_project.Pages.Count}");
         }
@@ -1308,7 +1483,11 @@ public sealed partial class MainWindow : Window
     {
         if (InlineTextEditor.Visibility == Visibility.Visible)
         {
-            CommitInlineTextEdit();
+            if (!CommitInlineTextEdit())
+            {
+                args.Handled = true;
+                return;
+            }
         }
 
         if (HandleNavigationPressed(args))
@@ -1449,7 +1628,19 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
+            if (!CanAddAnnotation())
+            {
+                _pointerStart = null;
+                return;
+            }
+
             EditorCanvas.CapturePointer(args.Pointer);
+            return;
+        }
+
+        if (!CanAddAnnotation())
+        {
+            _pointerStart = null;
             return;
         }
 
@@ -1686,6 +1877,21 @@ public sealed partial class MainWindow : Window
         }
 
         var changed = _interactionSnapshot is not null;
+        if (changed)
+        {
+            try
+            {
+                ValidateEditorInteraction();
+            }
+            catch (InvalidDataException)
+            {
+                CancelEditorInteraction();
+                SetStatus(
+                    "Change canceled because it would make the page invalid.");
+                return;
+            }
+        }
+
         var textStart = _pointerStart.Value;
         var textEnd = default(NormalizedPoint);
         var hasTextEnd = _tool == ToolMode.Text
@@ -1714,6 +1920,53 @@ public sealed partial class MainWindow : Window
         SetEditorIdleStatus();
     }
 
+    private void ValidateEditorInteraction()
+    {
+        if (CurrentPage.Annotations.Count
+            > ProjectValidator.MaximumAnnotationsPerPage)
+        {
+            throw new InvalidDataException(
+                "Page has too many annotations.");
+        }
+
+        var affectedIds = new HashSet<Guid>();
+        if (_draftAnnotationId is Guid draftId)
+        {
+            affectedIds.Add(draftId);
+        }
+
+        if (_dragStartTransforms is not null)
+        {
+            affectedIds.UnionWith(_dragStartTransforms.Keys);
+        }
+
+        if (_resizeStartAnnotation is Annotation resized)
+        {
+            affectedIds.Add(resized.Id);
+        }
+
+        if (_rotatingSelection
+            && SelectedAnnotation is Annotation rotated)
+        {
+            affectedIds.Add(rotated.Id);
+        }
+
+        var affected = CurrentPage.Annotations
+            .Where(annotation => affectedIds.Contains(annotation.Id))
+            .ToArray();
+        if (affectedIds.Count == 0
+            || affected.Length != affectedIds.Count)
+        {
+            throw new InvalidDataException(
+                "Editor interaction state is invalid.");
+        }
+
+        foreach (var annotation in affected)
+        {
+            ProjectValidator.ValidateAnnotation(annotation, CurrentPage);
+        }
+    }
+
     private void BeginNewTextEdit(
         NormalizedPoint start,
         NormalizedPoint end)
@@ -1735,7 +1988,7 @@ public sealed partial class MainWindow : Window
                 / Math.Max(EditorPageHeightPoints(), 1);
             var lineBounds = new NormalizedRect(
                 line.Start.X,
-                Math.Max(0, lineY - initialHeight),
+                lineY - initialHeight,
                 maximumLineWidth,
                 initialHeight);
             BeginInlineTextEdit(
@@ -1752,12 +2005,6 @@ public sealed partial class MainWindow : Window
         var maximumWidth = dragged
             ? Math.Clamp(draggedWidth, 0.16f, 0.6f)
             : 0.4f;
-        if (dragged)
-        {
-            maximumWidth = Math.Min(
-                maximumWidth,
-                Math.Max(0.05f, 1 - start.X));
-        }
         var bounds = new NormalizedRect(
             start.X,
             start.Y,
@@ -1819,8 +2066,18 @@ public sealed partial class MainWindow : Window
         NormalizedPoint? centerAnchor = null,
         float? bottomAnchor = null)
     {
-        CommitInlineTextEdit();
+        if (!CommitInlineTextEdit())
+        {
+            return;
+        }
+
         _textEditAnnotationId = annotationId;
+        _textEditColorArgb = annotationId is Guid existingId
+            && CurrentPage.Annotations.FirstOrDefault(
+                annotation => annotation.Id == existingId)
+                is TextAnnotation existing
+            ? existing.ColorArgb
+            : _toolSettings[ToolMode.Text].Color;
         _textEditBounds = bounds;
         _textEditMaximumWidth = maximumWidth;
         _textEditTransform = transform;
@@ -1849,19 +2106,26 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var corners = BoundsCorners(_textEditBounds)
-            .Select(_textEditTransform.Apply)
-            .ToArray();
+        var localCenter = new NormalizedPoint(
+            _textEditBounds.X + (_textEditBounds.Width / 2),
+            _textEditBounds.Y + (_textEditBounds.Height / 2));
+        var transformedCenter = _textEditTransform.Apply(localCenter);
+        var contentWidth = _textEditBounds.Width
+            * _editorImageRect.Width;
+        var contentHeight = _textEditBounds.Height
+            * _editorImageRect.Height;
+        var editorWidth = Math.Min(
+            _editorImageRect.Width,
+            Math.Max(48, contentWidth + 12));
+        var editorHeight = Math.Min(
+            _editorImageRect.Height,
+            Math.Max(40, contentHeight + 4));
         var left = _editorImageRect.Left
-            + corners.Min(point => point.X) * _editorImageRect.Width;
+            + (transformedCenter.X * _editorImageRect.Width)
+            - (editorWidth / 2);
         var top = _editorImageRect.Top
-            + corners.Min(point => point.Y) * _editorImageRect.Height;
-        var right = _editorImageRect.Left
-            + corners.Max(point => point.X) * _editorImageRect.Width;
-        var bottom = _editorImageRect.Top
-            + corners.Max(point => point.Y) * _editorImageRect.Height;
-        var editorWidth = Math.Max(48, right - left + 12);
-        var editorHeight = Math.Max(40, bottom - top + 4);
+            + (transformedCenter.Y * _editorImageRect.Height)
+            - (editorHeight / 2);
         if (_textEditCenterAnchor is NormalizedPoint center)
         {
             left = _editorImageRect.Left
@@ -1943,24 +2207,15 @@ public sealed partial class MainWindow : Window
         {
             bounds = bounds with
             {
-                X = Math.Clamp(
-                    center.X - (bounds.Width / 2),
-                    0,
-                    Math.Max(0, 1 - bounds.Width)),
-                Y = Math.Clamp(
-                    center.Y - (bounds.Height / 2),
-                    0,
-                    Math.Max(0, 1 - bounds.Height)),
+                X = center.X - (bounds.Width / 2),
+                Y = center.Y - (bounds.Height / 2),
             };
         }
         else if (_textEditBottomAnchor is float bottom)
         {
             bounds = bounds with
             {
-                Y = Math.Clamp(
-                    bottom - bounds.Height,
-                    0,
-                    Math.Max(0, 1 - bounds.Height)),
+                Y = bottom - bounds.Height,
             };
         }
 
@@ -1995,8 +2250,10 @@ public sealed partial class MainWindow : Window
             args.Handled = true;
             DispatcherQueue.TryEnqueue(() =>
             {
-                CommitInlineTextEdit();
-                EditorCanvas.Focus(FocusState.Programmatic);
+                if (CommitInlineTextEdit())
+                {
+                    EditorCanvas.Focus(FocusState.Programmatic);
+                }
             });
             return;
         }
@@ -2011,11 +2268,11 @@ public sealed partial class MainWindow : Window
         EditorCanvas.Focus(FocusState.Programmatic);
     }
 
-    private void CommitInlineTextEdit()
+    private bool CommitInlineTextEdit()
     {
         if (InlineTextEditor.Visibility != Visibility.Visible)
         {
-            return;
+            return true;
         }
 
         var text = InlineTextEditor.Text.Trim();
@@ -2023,66 +2280,96 @@ public sealed partial class MainWindow : Window
         {
             CancelInlineTextEdit();
             EditorCanvas.Invalidate();
-            return;
+            return true;
         }
 
-        _history.Checkpoint(_project);
         var fontFamily = SelectedFontFamily();
         var fontSize = SelectedFontSize();
         var isBold = BoldTextToggle.IsChecked == true;
         var isItalic = ItalicTextToggle.IsChecked == true;
         var isUnderlined = UnderlineTextToggle.IsChecked == true;
-        Guid annotationId;
-        if (_textEditAnnotationId is Guid existingId
+        var existing = _textEditAnnotationId is Guid existingId
             && CurrentPage.Annotations.FirstOrDefault(
                 annotation => annotation.Id == existingId)
-                is TextAnnotation existing)
+                is TextAnnotation existingText
+            ? existingText
+            : null;
+        if (existing is null && !CanAddAnnotation())
         {
-            annotationId = existingId;
-            var updated = PageRenderer.FitTextBounds(
-                existing with
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (InlineTextEditor.Visibility == Visibility.Visible)
                 {
-                    Text = text,
-                    FontFamily = fontFamily,
-                    FontSize = fontSize,
-                    MaximumWidth = _textEditMaximumWidth,
-                    IsBold = isBold,
-                    IsItalic = isItalic,
-                    IsUnderlined = isUnderlined,
-                },
-                EditorPageWidthPoints(),
-                EditorPageHeightPoints());
-            ReplaceAnnotation(existingId, _ => updated);
+                    InlineTextEditor.Focus(FocusState.Programmatic);
+                }
+            });
+            return false;
+        }
+
+        var draft = existing is null
+            ? new TextAnnotation
+            {
+                ColorArgb = _textEditColorArgb,
+                StrokeWidth = 3,
+                Text = text,
+                Bounds = _textEditBounds,
+                FontFamily = fontFamily,
+                FontSize = fontSize,
+                MaximumWidth = _textEditMaximumWidth,
+                IsBold = isBold,
+                IsItalic = isItalic,
+                IsUnderlined = isUnderlined,
+            }
+            : existing with
+            {
+                ColorArgb = _textEditColorArgb,
+                Text = text,
+                FontFamily = fontFamily,
+                FontSize = fontSize,
+                MaximumWidth = _textEditMaximumWidth,
+                IsBold = isBold,
+                IsItalic = isItalic,
+                IsUnderlined = isUnderlined,
+            };
+        var updated = PageRenderer.FitTextBounds(
+            draft,
+            EditorPageWidthPoints(),
+            EditorPageHeightPoints());
+        try
+        {
+            ProjectValidator.ValidateAnnotation(updated, CurrentPage);
+        }
+        catch (InvalidDataException)
+        {
+            SetStatus(
+                "Text must remain at least partly on the page.");
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (InlineTextEditor.Visibility == Visibility.Visible)
+                {
+                    InlineTextEditor.Focus(FocusState.Programmatic);
+                }
+            });
+            return false;
+        }
+
+        _history.Checkpoint(_project);
+        if (existing is null)
+        {
+            CurrentPage.Annotations.Add(updated);
         }
         else
         {
-            var settings = _toolSettings[ToolMode.Text];
-            var annotation = PageRenderer.FitTextBounds(
-                new TextAnnotation
-                {
-                    ColorArgb = settings.Color,
-                    StrokeWidth = 3,
-                    Text = text,
-                    Bounds = _textEditBounds,
-                    FontFamily = fontFamily,
-                    FontSize = fontSize,
-                    MaximumWidth = _textEditMaximumWidth,
-                    IsBold = isBold,
-                    IsItalic = isItalic,
-                    IsUnderlined = isUnderlined,
-                },
-                EditorPageWidthPoints(),
-                EditorPageHeightPoints());
-            CurrentPage.Annotations.Add(annotation);
-            annotationId = annotation.Id;
+            ReplaceAnnotation(existing.Id, _ => updated);
         }
 
         CloseInlineTextEditor();
-        SelectOnly(annotationId);
+        SelectOnly(updated.Id);
         MarkChanged();
         ApplyToolOptions();
         EditorCanvas.Invalidate();
         SetEditorIdleStatus();
+        return true;
     }
 
     private void UpdateEditorDragStatus()
@@ -2170,6 +2457,7 @@ public sealed partial class MainWindow : Window
         }
 
         CloseInlineTextEditor();
+        ApplyToolOptions();
         EditorCanvas.Invalidate();
     }
 
@@ -2316,6 +2604,7 @@ public sealed partial class MainWindow : Window
         }
 
         _interactionSnapshot = ProjectJson.Clone(_project);
+        CancelPendingAutosave();
     }
 
     private void CommitInteractionHistory()
@@ -2331,9 +2620,10 @@ public sealed partial class MainWindow : Window
 
     private void CancelEditorInteraction()
     {
-        if (_interactionSnapshot is not null)
+        var restored = _interactionSnapshot is not null;
+        if (restored)
         {
-            _project = _interactionSnapshot;
+            _project = _interactionSnapshot!;
             _interactionSnapshot = null;
         }
 
@@ -2347,6 +2637,10 @@ public sealed partial class MainWindow : Window
         ApplyToolOptions();
         EditorCanvas.Invalidate();
         SetEditorIdleStatus();
+        if (restored && _dirty)
+        {
+            ScheduleAutosave();
+        }
     }
 
     private bool HandleNavigationPressed(PointerRoutedEventArgs args)
@@ -2537,7 +2831,7 @@ public sealed partial class MainWindow : Window
         const float defaultHeight = 48;
         var target = new NormalizedPoint(
             shape.Start.X + defaultWidth / width,
-            shape.Start.Y + defaultHeight / height).Clamp();
+            shape.Start.Y + defaultHeight / height);
         if (shape.Shape is ShapeKind.Line or ShapeKind.Arrow)
         {
             target = target with { Y = shape.Start.Y };
@@ -2552,16 +2846,10 @@ public sealed partial class MainWindow : Window
     {
         var width = Math.Max(_editorImageRect.Width, 1);
         var height = Math.Max(_editorImageRect.Height, 1);
-        var normalizedWidth = Math.Clamp(sizePixels / width, 0.005f, 1);
-        var normalizedHeight = Math.Clamp(sizePixels / height, 0.005f, 1);
-        var left = Math.Clamp(
-            center.X - (normalizedWidth / 2),
-            0,
-            1 - normalizedWidth);
-        var top = Math.Clamp(
-            center.Y - (normalizedHeight / 2),
-            0,
-            1 - normalizedHeight);
+        var normalizedWidth = Math.Max(sizePixels / width, 0.005f);
+        var normalizedHeight = Math.Max(sizePixels / height, 0.005f);
+        var left = center.X - (normalizedWidth / 2);
+        var top = center.Y - (normalizedHeight / 2);
         return (
             new NormalizedPoint(left, top),
             new NormalizedPoint(
@@ -2582,15 +2870,7 @@ public sealed partial class MainWindow : Window
         var deltaY = (end.Y - start.Y) * height;
         var directionX = deltaX < 0 ? -1 : 1;
         var directionY = deltaY < 0 ? -1 : 1;
-        var availableX = directionX > 0
-            ? (1 - start.X) * width
-            : start.X * width;
-        var availableY = directionY > 0
-            ? (1 - start.Y) * height
-            : start.Y * height;
-        var size = Math.Min(
-            Math.Max(Math.Abs(deltaX), Math.Abs(deltaY)),
-            Math.Min(availableX, availableY));
+        var size = Math.Max(Math.Abs(deltaX), Math.Abs(deltaY));
         return new NormalizedPoint(
             start.X + directionX * size / width,
             start.Y + directionY * size / height);
@@ -2613,25 +2893,9 @@ public sealed partial class MainWindow : Window
         var angle = SnapAngle(MathF.Atan2(deltaY, deltaX));
         var directionX = MathF.Cos(angle);
         var directionY = MathF.Sin(angle);
-        if (Math.Abs(directionX) > 0.001f)
-        {
-            var available = directionX > 0
-                ? (1 - start.X) * width
-                : start.X * width;
-            length = Math.Min(length, available / Math.Abs(directionX));
-        }
-
-        if (Math.Abs(directionY) > 0.001f)
-        {
-            var available = directionY > 0
-                ? (1 - start.Y) * height
-                : start.Y * height;
-            length = Math.Min(length, available / Math.Abs(directionY));
-        }
-
         return new NormalizedPoint(
             start.X + directionX * length / width,
-            start.Y + directionY * length / height).Clamp();
+            start.Y + directionY * length / height);
     }
 
     private static float SnapAngle(float radians) =>
@@ -2655,16 +2919,15 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        CommitInlineTextEdit();
-        _navigationPoints.Clear();
-        foreach (var button in ToolButtonGrid.Children
-            .OfType<ToggleButton>()
-            .Where(button => button.Tag is string))
+        if (!CommitInlineTextEdit())
         {
-            button.IsChecked = ReferenceEquals(button, selected);
+            SetCheckedTool(_tool);
+            return;
         }
 
+        _navigationPoints.Clear();
         _tool = tool;
+        SetCheckedTool(tool);
         if (tool != ToolMode.Select)
         {
             _selectedAnnotationIds.Clear();
@@ -2672,6 +2935,19 @@ public sealed partial class MainWindow : Window
 
         ApplyToolOptions();
         EditorCanvas.Invalidate();
+    }
+
+    private void SetCheckedTool(ToolMode tool)
+    {
+        foreach (var button in ToolButtonGrid.Children
+            .OfType<ToggleButton>()
+            .Where(button => button.Tag is string))
+        {
+            button.IsChecked = Enum.TryParse(
+                button.Tag?.ToString(),
+                out ToolMode buttonTool)
+                && buttonTool == tool;
+        }
     }
 
     private void ColorButton_Click(object sender, RoutedEventArgs args)
@@ -2695,16 +2971,19 @@ public sealed partial class MainWindow : Window
             };
         }
 
+        UpdateColorSelection(color);
+        if (InlineTextEditor.Visibility == Visibility.Visible)
+        {
+            _textEditColorArgb = color;
+            InlineTextEditor.Foreground = new SolidColorBrush(
+                ToWindowsColor(color));
+            return;
+        }
+
         ChangeSelected(annotation => annotation with
         {
             ColorArgb = color,
         });
-        UpdateColorSelection(color);
-        if (InlineTextEditor.Visibility == Visibility.Visible)
-        {
-            InlineTextEditor.Foreground = new SolidColorBrush(
-                ToWindowsColor(color));
-        }
     }
 
     private void ThicknessSlider_ValueChanged(
@@ -3037,12 +3316,17 @@ public sealed partial class MainWindow : Window
 
     private void ResetSelectedRotation()
     {
+        if (!CommitInlineTextEdit())
+        {
+            return;
+        }
+
         var selections = SelectedAnnotations;
         var rotations = selections
             .Where(AnnotationGeometry.SupportsRotation)
             .Select(annotation => new
             {
-                Annotation = annotation,
+                annotation.Id,
                 Radians = AnnotationGeometry.PageRotationRadians(
                     annotation.Transform,
                     EditorPageWidthPoints(),
@@ -3055,54 +3339,56 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _history.Checkpoint(_project);
-        foreach (var value in rotations)
+        var radiansById = rotations.ToDictionary(
+            value => value.Id,
+            value => value.Radians);
+        _ = ChangeSelected(annotation =>
         {
+            if (!radiansById.TryGetValue(annotation.Id, out var radians))
+            {
+                return annotation;
+            }
+
             var operation = AnnotationGeometry.PageRotation(
-                -value.Radians,
-                AnnotationCenter(value.Annotation),
+                -radians,
+                AnnotationCenter(annotation),
                 EditorPageWidthPoints(),
                 EditorPageHeightPoints());
-            ReplaceAnnotation(
-                value.Annotation.Id,
-                annotation => WithTransform(
-                    annotation,
-                    annotation.Transform.Matrix * operation));
-        }
-
-        MarkChanged();
-        EditorCanvas.Invalidate();
+            return WithTransform(
+                annotation,
+                annotation.Transform.Matrix * operation);
+        });
     }
 
     private void ResizeSelected(float factor)
     {
-        var selections = SelectedAnnotations;
-        if (selections.Count == 0)
+        if (!CommitInlineTextEdit())
         {
             return;
         }
 
-        _history.Checkpoint(_project);
-        foreach (var selected in selections)
+        if (SelectedAnnotations.Count == 0)
         {
-            var resized = selected is TextAnnotation text
-                ? PageRenderer.FitTextBounds(
-                    text with
-                    {
-                        FontSize = Math.Clamp(
-                            text.FontSize + (factor < 1 ? -1 : 1),
-                            6,
-                            144),
-                    },
-                    EditorPageWidthPoints(),
-                    EditorPageHeightPoints())
-                : AnnotationGeometry.ResizeByFactor(selected, factor);
-            ReplaceAnnotation(selected.Id, _ => resized);
+            return;
         }
 
-        MarkChanged();
+        if (!ChangeSelected(annotation => annotation is TextAnnotation text
+            ? PageRenderer.FitTextBounds(
+                text with
+                {
+                    FontSize = Math.Clamp(
+                        text.FontSize + (factor < 1 ? -1 : 1),
+                        6,
+                        144),
+                },
+                EditorPageWidthPoints(),
+                EditorPageHeightPoints())
+            : AnnotationGeometry.ResizeByFactor(annotation, factor)))
+        {
+            return;
+        }
+
         ApplyToolOptions();
-        EditorCanvas.Invalidate();
     }
 
     private void SendToBackButton_Click(
@@ -3115,6 +3401,11 @@ public sealed partial class MainWindow : Window
 
     private void ReorderSelectedAnnotations(bool toFront)
     {
+        if (!CommitInlineTextEdit())
+        {
+            return;
+        }
+
         var before = ProjectJson.Clone(_project);
         var changed = toFront
             ? AnnotationOrdering.BringToFront(
@@ -3139,6 +3430,11 @@ public sealed partial class MainWindow : Window
 
     private void DeleteSelectedAnnotations()
     {
+        if (!CommitInlineTextEdit())
+        {
+            return;
+        }
+
         if (_selectedAnnotationIds.Count == 0)
         {
             return;
@@ -3157,6 +3453,11 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs args)
     {
+        if (!CommitInlineTextEdit())
+        {
+            return;
+        }
+
         if (CurrentPage.Annotations.Count == 0)
         {
             return;
@@ -3253,7 +3554,16 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _pageIndex = PageList.SelectedIndex;
+        var selectedIndex = PageList.SelectedIndex;
+        if (!CommitInlineTextEdit())
+        {
+            _updatingPageList = true;
+            PageList.SelectedIndex = _pageIndex;
+            _updatingPageList = false;
+            return;
+        }
+
+        _pageIndex = selectedIndex;
         await LoadActivePageAsync();
     }
 
@@ -3310,6 +3620,11 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (!CommitInlineTextEdit())
+        {
+            return;
+        }
+
         try
         {
             var page = CurrentPage;
@@ -3329,6 +3644,11 @@ public sealed partial class MainWindow : Window
         RoutedEventArgs args)
     {
         if (_project.Pages.Count == 0)
+        {
+            return;
+        }
+
+        if (!CommitInlineTextEdit())
         {
             return;
         }
@@ -3367,6 +3687,11 @@ public sealed partial class MainWindow : Window
     {
         var target = _pageIndex + offset;
         if (target < 0 || target >= _project.Pages.Count)
+        {
+            return;
+        }
+
+        if (!CommitInlineTextEdit())
         {
             return;
         }
@@ -3555,6 +3880,11 @@ public sealed partial class MainWindow : Window
 
     private async Task UndoAsync()
     {
+        if (!CommitInlineTextEdit())
+        {
+            return;
+        }
+
         if (!_history.TryUndo(_project, out var project))
         {
             return;
@@ -3569,6 +3899,11 @@ public sealed partial class MainWindow : Window
 
     private async Task RedoAsync()
     {
+        if (!CommitInlineTextEdit())
+        {
+            return;
+        }
+
         if (!_history.TryRedo(_project, out var project))
         {
             return;
@@ -3623,6 +3958,13 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs args)
     {
+        if (_savingProject || !CommitInlineTextEdit())
+        {
+            return;
+        }
+
+        _savingProject = true;
+        UpdateCommandState();
         try
         {
             if (_projectPath is null)
@@ -3644,16 +3986,33 @@ public sealed partial class MainWindow : Window
                 _projectPath = file.Path;
             }
 
+            var revision = _projectRevision;
+            var project = ProjectJson.Clone(_project);
+            var workspace = _workspace;
+            SetStatus("Saving project...");
             await ProjectArchive.SaveAsync(
-                _project,
-                _workspace,
+                project,
+                workspace,
                 _projectPath);
-            _dirty = false;
-            SetStatus("Project saved.");
+            if (_projectRevision == revision)
+            {
+                _dirty = false;
+                SetStatus("Project saved.");
+            }
+            else
+            {
+                SetStatus(
+                    "Project saved; newer changes remain unsaved.");
+            }
         }
         catch (Exception exception)
         {
             await ShowErrorAsync("Save failed", exception);
+        }
+        finally
+        {
+            _savingProject = false;
+            UpdateCommandState();
         }
     }
 
@@ -3661,6 +4020,11 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs args)
     {
+        if (!CommitInlineTextEdit())
+        {
+            return;
+        }
+
         try
         {
             var picker = new FileSavePicker
@@ -3675,8 +4039,9 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            await ExportPdfAsync(file.Path);
-            SetStatus($"Exported {_project.Pages.Count} page PDF.");
+            var project = ProjectJson.Clone(_project);
+            await ExportPdfAsync(project, _workspace, file.Path);
+            SetStatus($"Exported {project.Pages.Count} page PDF.");
         }
         catch (Exception exception)
         {
@@ -3684,7 +4049,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task ExportPdfAsync(string destination)
+    private static async Task ExportPdfAsync(
+        FastFillProject project,
+        string workspace,
+        string destination)
     {
         var temporary = destination + $".{Guid.NewGuid():N}.tmp";
         try
@@ -3697,9 +4065,9 @@ public sealed partial class MainWindow : Window
                 64 * 1024,
                 FileOptions.Asynchronous | FileOptions.WriteThrough);
             await PdfExporter.ExportAsync(
-                _project,
+                project,
                 (page, token) => WorkspaceStore.ProcessPageAsync(
-                    _workspace,
+                    workspace,
                     page,
                     token),
                 stream);
@@ -3721,19 +4089,40 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs args)
     {
+        if (_sharing || !CommitInlineTextEdit())
+        {
+            return;
+        }
+
+        _sharing = true;
+        UpdateCommandState();
+        var directory = Path.Combine(
+            ShareRoot,
+            Guid.NewGuid().ToString("N"));
         try
         {
-            var path = Path.Combine(
-                Path.GetTempPath(),
-                "FastFill-share.pdf");
-            await ExportPdfAsync(path);
-            _shareFile = await StorageFile.GetFileFromPathAsync(path);
+            Directory.CreateDirectory(directory);
+            var path = Path.Combine(directory, "FastFill.pdf");
+            var project = ProjectJson.Clone(_project);
+            SetStatus("Preparing PDF to share...");
+            await ExportPdfAsync(project, _workspace, path);
+            var file = await StorageFile.GetFileFromPathAsync(path);
+            var payload = new SharePayload(
+                directory,
+                file,
+                project.Title);
+            _sharePayload = payload;
             var interop = DataTransferManager
                 .As<IDataTransferManagerInterop>();
             interop.ShowShareUIForWindow(WindowHandle);
+            _ = ReleaseShareLockAfterDelayAsync(payload);
         }
         catch (Exception exception)
         {
+            _sharePayload = null;
+            _sharing = false;
+            UpdateCommandState();
+            CleanupShareDirectory(directory);
             await ShowErrorAsync("Share failed", exception);
         }
     }
@@ -3752,33 +4141,152 @@ public sealed partial class MainWindow : Window
         DataTransferManager sender,
         DataRequestedEventArgs args)
     {
-        args.Request.Data.Properties.Title = _project.Title;
-        args.Request.Data.Properties.Description =
-            "PDF created with FastFill";
-        if (_shareFile is null)
+        var payload = _sharePayload;
+        if (payload is null)
         {
             args.Request.FailWithDisplayText("PDF is not ready.");
             return;
         }
 
-        args.Request.Data.SetStorageItems([_shareFile]);
+        try
+        {
+            var data = args.Request.Data;
+            data.Properties.Title = payload.Title;
+            data.Properties.Description = "PDF created with FastFill";
+            data.ShareCompleted += (_, _) => FinishShare(payload);
+            var supportsCancellation =
+                OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041);
+            if (supportsCancellation)
+            {
+                data.ShareCanceled += (_, _) => FinishShare(payload);
+            }
+
+            data.SetStorageItems([payload.File]);
+            if (!supportsCancellation)
+            {
+                ReleaseShareLock(payload);
+            }
+        }
+        catch
+        {
+            args.Request.FailWithDisplayText("PDF could not be shared.");
+            FinishShare(payload);
+        }
     }
 
-    private void ChangeSelected(Func<Annotation, Annotation> update)
+    private async Task ReleaseShareLockAfterDelayAsync(
+        SharePayload payload)
+    {
+        await Task.Delay(TimeSpan.FromMinutes(2));
+        ReleaseShareLock(payload);
+    }
+
+    private void ReleaseShareLock(SharePayload payload) =>
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!ReferenceEquals(_sharePayload, payload))
+            {
+                return;
+            }
+
+            _sharePayload = null;
+            _sharing = false;
+            UpdateCommandState();
+        });
+
+    private void FinishShare(SharePayload payload)
+    {
+        ReleaseShareLock(payload);
+        _ = Task.Run(() => CleanupShareDirectory(payload.Directory));
+    }
+
+    private static void CleanupStaleShareDirectories()
+    {
+        try
+        {
+            if (!Directory.Exists(ShareRoot))
+            {
+                return;
+            }
+
+            var cutoff = DateTime.UtcNow.AddDays(-1);
+            foreach (var directory in Directory.EnumerateDirectories(
+                ShareRoot))
+            {
+                if (Directory.GetLastWriteTimeUtc(directory) < cutoff)
+                {
+                    CleanupShareDirectory(directory);
+                }
+            }
+        }
+        catch
+        {
+            // Stale temporary files must not block startup.
+        }
+    }
+
+    private static void CleanupShareDirectory(string directory)
+    {
+        try
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+        catch
+        {
+            // A share target may still have the file open; retry next launch.
+        }
+    }
+
+    private bool ChangeSelected(Func<Annotation, Annotation> update)
     {
         if (_selectedAnnotationIds.Count == 0)
         {
-            return;
+            return true;
+        }
+
+        var updates = SelectedAnnotations
+            .Select(annotation => new
+            {
+                annotation.Id,
+                Updated = update(annotation),
+            })
+            .ToArray();
+        if (updates.Length == 0)
+        {
+            _selectedAnnotationIds.Clear();
+            ApplyToolOptions();
+            return true;
+        }
+
+        try
+        {
+            foreach (var value in updates)
+            {
+                ProjectValidator.ValidateAnnotation(
+                    value.Updated,
+                    CurrentPage);
+            }
+        }
+        catch (InvalidDataException)
+        {
+            SetStatus(
+                "Change would make an object invalid.");
+            ApplyToolOptions();
+            return false;
         }
 
         _history.Checkpoint(_project);
-        foreach (var id in _selectedAnnotationIds)
+        foreach (var value in updates)
         {
-            ReplaceAnnotation(id, update);
+            ReplaceAnnotation(value.Id, _ => value.Updated);
         }
 
         MarkChanged();
         EditorCanvas.Invalidate();
+        return true;
     }
 
     private void ReplaceAnnotation(
@@ -3797,12 +4305,24 @@ public sealed partial class MainWindow : Window
     private void MarkChanged()
     {
         _project = _project with { UpdatedUtc = DateTimeOffset.UtcNow };
+        _projectRevision++;
         _dirty = true;
         UpdateCommandState();
-        _autosaveCancellation?.Cancel();
-        _autosaveCancellation?.Dispose();
+        ScheduleAutosave();
+    }
+
+    private void ScheduleAutosave()
+    {
+        CancelPendingAutosave();
         _autosaveCancellation = new CancellationTokenSource();
         _ = AutosaveAsync(_autosaveCancellation.Token);
+    }
+
+    private void CancelPendingAutosave()
+    {
+        _autosaveCancellation?.Cancel();
+        _autosaveCancellation?.Dispose();
+        _autosaveCancellation = null;
     }
 
     private async Task AutosaveAsync(CancellationToken token)
@@ -3810,9 +4330,11 @@ public sealed partial class MainWindow : Window
         try
         {
             await Task.Delay(400, token);
+            var project = ProjectJson.Clone(_project);
+            var workspace = _workspace;
             await WorkspaceStore.SaveManifestAsync(
-                _project,
-                _workspace,
+                project,
+                workspace,
                 token);
         }
         catch (OperationCanceledException)
@@ -3831,15 +4353,21 @@ public sealed partial class MainWindow : Window
         var hasPages = _project.Pages.Count > 0;
         UndoButton.IsEnabled = _history.CanUndo;
         RedoButton.IsEnabled = _history.CanRedo;
-        SaveButton.IsEnabled = hasPages;
+        SaveButton.IsEnabled = hasPages && !_savingProject;
         ExportButton.IsEnabled = hasPages;
-        ShareButton.IsEnabled = hasPages;
+        ShareButton.IsEnabled = hasPages && !_sharing;
+        CloseProjectButton.IsEnabled = !_savingProject;
     }
 
     private async void CloseProjectButton_Click(
         object sender,
         RoutedEventArgs args)
     {
+        if (!CommitInlineTextEdit())
+        {
+            return;
+        }
+
         var hasUnacceptedCapture = _pendingBytes is not null;
         if ((_dirty && _project.Pages.Count > 0) || hasUnacceptedCapture)
         {
@@ -3862,7 +4390,7 @@ public sealed partial class MainWindow : Window
         await StopCameraAsync();
         CancelInlineTextEdit();
         _renderCancellation?.Cancel();
-        _autosaveCancellation?.Cancel();
+        CancelPendingAutosave();
         ClearReview();
         _processedPage = null;
         _pageSnapFeatures = null;
@@ -3929,10 +4457,21 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void AppWindow_Closing(
+        AppWindow sender,
+        AppWindowClosingEventArgs args)
+    {
+        if (!CommitInlineTextEdit())
+        {
+            args.Cancel = true;
+        }
+    }
+
     private void MainWindow_Closed(object sender, WindowEventArgs args)
     {
+        AppWindow.Closing -= AppWindow_Closing;
         _renderCancellation?.Cancel();
-        _autosaveCancellation?.Cancel();
+        CancelPendingAutosave();
         if (_dirty && !string.IsNullOrEmpty(_workspace))
         {
             try
@@ -3953,7 +4492,6 @@ public sealed partial class MainWindow : Window
         _reviewProcessed?.Dispose();
         _editorBackground?.Dispose();
         _renderCancellation?.Dispose();
-        _autosaveCancellation?.Dispose();
         if (_dataTransferManager is not null)
         {
             _dataTransferManager.DataRequested -= DataTransfer_DataRequested;
@@ -3962,9 +4500,15 @@ public sealed partial class MainWindow : Window
         _ = StopCameraAsync();
     }
 
-    private void Camera_Failed(string message) =>
-        DispatcherQueue.TryEnqueue(() =>
-            CaptureStatusText.Text = $"Camera error: {message}");
+    private void Camera_Failed(
+        CameraDetectionSession session,
+        string message) => DispatcherQueue.TryEnqueue(() =>
+        {
+            if (IsCurrentCameraSession(session))
+            {
+                CaptureStatusText.Text = $"Camera error: {message}";
+            }
+        });
 
     private void ShowRecoverIfAvailable() =>
         RecoverButton.IsEnabled = FindLatestRecoveryManifest() is not null;
@@ -4010,16 +4554,19 @@ public sealed partial class MainWindow : Window
 
     private static async Task<byte[]> ReadStorageFileAsync(StorageFile file)
     {
-        var buffer = await FileIO.ReadBufferAsync(file);
-        if (buffer.Length > ProjectValidator.MaximumImageBytes)
+        var properties = await file.GetBasicPropertiesAsync();
+        if (properties.Size is 0
+            || properties.Size
+                > checked((ulong)ProjectValidator.MaximumImageBytes))
         {
-            throw new InvalidDataException("Image exceeds 100 MiB.");
+            throw new InvalidDataException(
+                "Image must be between 1 byte and 100 MiB.");
         }
 
-        using var reader = DataReader.FromBuffer(buffer);
-        var bytes = new byte[checked((int)buffer.Length)];
-        reader.ReadBytes(bytes);
-        return bytes;
+        await using var stream = await file.OpenStreamForReadAsync();
+        return await ProjectValidator.ReadEncodedImageAsync(
+            stream,
+            checked((long)properties.Size));
     }
 
     private bool TryGetPagePoint(
@@ -4151,11 +4698,9 @@ public sealed partial class MainWindow : Window
 
     private uint SelectedTextColor()
     {
-        if (_textEditAnnotationId is Guid id
-            && CurrentPage.Annotations.FirstOrDefault(
-                annotation => annotation.Id == id) is TextAnnotation text)
+        if (InlineTextEditor.Visibility == Visibility.Visible)
         {
-            return text.ColorArgb;
+            return _textEditColorArgb;
         }
 
         var selections = SelectedAnnotations;
@@ -4194,7 +4739,11 @@ public sealed partial class MainWindow : Window
         List<NormalizedPoint> points,
         NormalizedPoint point)
     {
-        points.Add(point);
+        if (points.Count < ProjectValidator.MaximumInkPoints)
+        {
+            points.Add(point);
+        }
+
         return points;
     }
 
@@ -4261,7 +4810,7 @@ public sealed partial class MainWindow : Window
 
     private DocumentPage CurrentPage => _project.Pages[_pageIndex];
 
-    private IReadOnlyList<Annotation> SelectedAnnotations =>
+    private List<Annotation> SelectedAnnotations =>
         _project.Pages.Count == 0
             ? []
             : CurrentPage.Annotations
@@ -4377,13 +4926,28 @@ public sealed partial class MainWindow : Window
         public override string ToString() => Label;
     }
 
-    private sealed record PdfImportPage(
-        byte[] Bytes,
-        int Width,
-        int Height);
+    private sealed record SharePayload(
+        string Directory,
+        StorageFile File,
+        string Title);
+
+    private sealed class CameraDetectionSession(
+        CameraFrameSource camera) : IDisposable
+    {
+        public CameraFrameSource Camera { get; } = camera;
+        public DocumentDetectionStabilizer Stabilizer { get; } = new();
+        public CancellationTokenSource Cancellation { get; } = new();
+        public object Gate { get; } = new();
+        public Action<FramePacket>? FrameHandler { get; set; }
+        public Action<string>? FailureHandler { get; set; }
+        public Task? DetectionTask { get; set; }
+
+        public void Dispose() => Cancellation.Dispose();
+    }
 
     [ComImport]
-    [Guid("3A3DCD6C-3EAB-43DC-BCDE-45671CE800C8")]
+    [System.Runtime.InteropServices.Guid(
+        "3A3DCD6C-3EAB-43DC-BCDE-45671CE800C8")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IDataTransferManagerInterop
     {

@@ -39,6 +39,7 @@ public static class DocumentDetector
     {
         ArgumentNullException.ThrowIfNull(encodedImage);
         ValidateHint(hint);
+        ProjectValidator.ValidateEncodedImage(encodedImage);
         using var source = Cv2.ImDecode(encodedImage, ImreadModes.Color);
         if (source.Empty())
         {
@@ -800,6 +801,7 @@ public sealed class ImageSnapFeatures
     public static ImageSnapFeatures Analyze(byte[] encodedImage)
     {
         ArgumentNullException.ThrowIfNull(encodedImage);
+        ProjectValidator.ValidateEncodedImage(encodedImage);
         using var source = Cv2.ImDecode(encodedImage, ImreadModes.Grayscale);
         if (source.Empty())
         {
@@ -1227,6 +1229,19 @@ public sealed record ProcessedPage(byte[] EncodedPng, int Width, int Height);
 
 public static class ImageProcessor
 {
+    internal static (int Width, int Height) GetProcessedDimensions(
+        int sourceWidth,
+        int sourceHeight,
+        CropQuad crop,
+        int rotationQuarterTurns)
+    {
+        var dimensions = GetCorrectedDimensions(
+            GetCropPoints(sourceWidth, sourceHeight, crop));
+        return rotationQuarterTurns % 2 == 0
+            ? dimensions
+            : (dimensions.Height, dimensions.Width);
+    }
+
     public static ProcessedPage Process(
         byte[] encodedImage,
         CropQuad crop,
@@ -1248,6 +1263,7 @@ public static class ImageProcessor
                 "Contrast must be between -100 and 100.");
         }
 
+        ProjectValidator.ValidateEncodedImage(encodedImage);
         using var source = Cv2.ImDecode(encodedImage, ImreadModes.Color);
         if (source.Empty())
         {
@@ -1268,19 +1284,10 @@ public static class ImageProcessor
 
     private static Mat CorrectPerspective(Mat source, CropQuad crop)
     {
-        var points = crop.Points
-            .Select(point => new Point2f(
-                point.X * (source.Width - 1),
-                point.Y * (source.Height - 1)))
-            .ToArray();
-        var width = Math.Max(
-            Distance(points[0], points[1]),
-            Distance(points[3], points[2]));
-        var height = Math.Max(
-            Distance(points[0], points[3]),
-            Distance(points[1], points[2]));
-        var outputWidth = Math.Max(1, (int)Math.Round(width));
-        var outputHeight = Math.Max(1, (int)Math.Round(height));
+        var points = GetCropPoints(source.Width, source.Height, crop);
+        var dimensions = GetCorrectedDimensions(points);
+        var outputWidth = dimensions.Width;
+        var outputHeight = dimensions.Height;
         Point2f[] destination =
         [
             new(0, 0),
@@ -1298,6 +1305,29 @@ public static class ImageProcessor
             InterpolationFlags.Cubic,
             BorderTypes.Replicate);
         return result;
+    }
+
+    private static Point2f[] GetCropPoints(
+        int sourceWidth,
+        int sourceHeight,
+        CropQuad crop) => crop.Points
+        .Select(point => new Point2f(
+            point.X * (sourceWidth - 1),
+            point.Y * (sourceHeight - 1)))
+        .ToArray();
+
+    private static (int Width, int Height) GetCorrectedDimensions(
+        Point2f[] points)
+    {
+        var width = Math.Max(
+            Distance(points[0], points[1]),
+            Distance(points[3], points[2]));
+        var height = Math.Max(
+            Distance(points[0], points[3]),
+            Distance(points[1], points[2]));
+        var outputWidth = Math.Max(1, (int)Math.Round(width));
+        var outputHeight = Math.Max(1, (int)Math.Round(height));
+        return (outputWidth, outputHeight);
     }
 
     private static Mat Rotate(Mat source, int quarterTurns)

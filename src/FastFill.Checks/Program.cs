@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using FastFill.Core;
 using OpenCvSharp;
 using SkiaSharp;
@@ -129,6 +130,7 @@ internal static class Program
         CheckUndo(project);
         CheckViewportNavigation();
         CheckAnnotationGeometry();
+        CheckProjectSnapshot(project);
 
         var preview = PageRenderer.RenderPng(processed, page);
         var previewPath = Path.Combine(
@@ -140,6 +142,20 @@ internal static class Program
         await CheckStorageAndPdfAsync(project, source);
         await CheckUnsafeArchiveAsync();
         await CheckReplayAsync(source);
+    }
+
+    private static void CheckProjectSnapshot(FastFillProject project)
+    {
+        var mutable = ProjectJson.Clone(project);
+        var snapshot = ProjectJson.Clone(mutable);
+        var annotationCount = snapshot.Pages[0].Annotations.Count;
+        mutable.Pages[0].Annotations.Add(new TextAnnotation
+        {
+            Text = "Newer edit",
+        });
+        Assert(
+            snapshot.Pages[0].Annotations.Count == annotationCount,
+            "Project snapshot changed with live annotations.");
     }
 
     private static void PrintDetection(string path)
@@ -592,6 +608,28 @@ internal static class Program
             Math.Abs(resized.StrokeWidth - rectangle.StrokeWidth) < 0.001,
             "Annotation resize changed line thickness.");
 
+        var outside = rectangle with
+        {
+            Transform = AffineTransform.FromMatrix(
+                Matrix3x2.CreateTranslation(2, -2)),
+        };
+        var broughtInside = AnnotationGeometry.BringIntoPage(outside);
+        var broughtBounds = AnnotationGeometry.TransformedBounds(
+            broughtInside);
+        Assert(
+            Math.Abs(broughtBounds.X - 0.95f) < 0.001f
+                && Math.Abs(broughtBounds.Bottom - 0.05f) < 0.001f,
+            "Off-page annotation was not moved to an accessible edge.");
+        var partial = rectangle with
+        {
+            Transform = AffineTransform.FromMatrix(
+                Matrix3x2.CreateTranslation(-0.2f, 0)),
+        };
+        Assert(
+            AnnotationGeometry.BringIntoPage(partial).Transform
+                == partial.Transform,
+            "Partly visible annotation was moved unnecessarily.");
+
         var line = new ShapeAnnotation
         {
             Shape = ShapeKind.Arrow,
@@ -931,6 +969,526 @@ internal static class Program
                 IsUnderlined: true,
             },
             "Text styles were not preserved.");
+        await CheckArchiveSaveLimitsAsync(project, workspace);
+        await CheckArchiveImageValidationAsync(project, source, root);
+        await CheckProjectValidationAsync(project, source, root);
+    }
+
+    private static async Task CheckArchiveSaveLimitsAsync(
+        FastFillProject project,
+        string workspace)
+    {
+        var oversized = ProjectJson.Clone(project);
+        var text = new string('x', ProjectValidator.MaximumTextLength);
+        oversized.Pages[0] = oversized.Pages[0] with
+        {
+            Annotations = Enumerable.Range(0, 600)
+                .Select(_ => (Annotation)new TextAnnotation
+                {
+                    Text = text,
+                    Bounds = new(0.1f, 0.1f, 0.4f, 0.1f),
+                })
+                .ToList(),
+        };
+        var destination = Path.Combine(
+            Artifacts,
+            "preview",
+            "oversized-save.docscan");
+        var original = Encoding.UTF8.GetBytes("existing project");
+        await File.WriteAllBytesAsync(destination, original);
+        var rejected = false;
+        try
+        {
+            await ProjectArchive.SaveAsync(
+                oversized,
+                workspace,
+                destination);
+        }
+        catch (InvalidDataException)
+        {
+            rejected = true;
+        }
+
+        Assert(rejected, "Oversized manifest was saved.");
+        Assert(
+            (await File.ReadAllBytesAsync(destination))
+                .SequenceEqual(original),
+            "Rejected save replaced the existing archive.");
+        var pattern = $".{Path.GetFileName(destination)}.*.tmp";
+        Assert(
+            !Directory.EnumerateFiles(
+                Path.GetDirectoryName(destination)!,
+                pattern)
+                .Any(),
+            "Rejected save left a temporary archive.");
+    }
+
+    private static async Task CheckProjectValidationAsync(
+        FastFillProject project,
+        byte[] source,
+        string root)
+    {
+        var invalidFilter = ProjectJson.Clone(project);
+        invalidFilter.Pages[0] = invalidFilter.Pages[0] with
+        {
+            Filter = invalidFilter.Pages[0].Filter with
+            {
+                Mode = (PageFilterMode)999,
+            },
+        };
+        await AssertArchiveRejectedAsync(
+            invalidFilter,
+            source,
+            root,
+            "invalid-filter",
+            "Undefined page filter mode was accepted.");
+
+        var invalidShape = ProjectJson.Clone(project);
+        var shapeIndex = invalidShape.Pages[0].Annotations.FindIndex(
+            annotation => annotation is ShapeAnnotation);
+        var shape = (ShapeAnnotation)invalidShape.Pages[0]
+            .Annotations[shapeIndex];
+        invalidShape.Pages[0].Annotations[shapeIndex] = shape with
+        {
+            Shape = (ShapeKind)999,
+        };
+        await AssertArchiveRejectedAsync(
+            invalidShape,
+            source,
+            root,
+            "invalid-shape",
+            "Undefined shape kind was accepted.");
+
+        var invalidCrop = ProjectJson.Clone(project);
+        invalidCrop.Pages[0] = invalidCrop.Pages[0] with
+        {
+            Crop = invalidCrop.Pages[0].Crop with
+            {
+                TopLeft = new(-1, 0),
+            },
+        };
+        await AssertArchiveRejectedAsync(
+            invalidCrop,
+            source,
+            root,
+            "invalid-crop",
+            "Out-of-page crop geometry was accepted.");
+
+        var invalidTransform = ProjectJson.Clone(project);
+        invalidTransform.Pages[0].Annotations[0] =
+            invalidTransform.Pages[0].Annotations[0] with
+            {
+                Transform = new AffineTransform(
+                    1,
+                    0,
+                    0,
+                    1,
+                    100,
+                    0),
+            };
+        await AssertArchiveRejectedAsync(
+            invalidTransform,
+            source,
+            root,
+            "invalid-transform",
+            "Fully off-page annotation was accepted.");
+
+        var renderOverflow = ProjectJson.Clone(project);
+        var compensatedText = new TextAnnotation
+        {
+            Text = "Visible after translation",
+            Bounds = new(1e37f, 0.2f, 0.1f, 0.1f),
+            Transform = new AffineTransform(
+                1,
+                0,
+                0,
+                1,
+                -1e37f,
+                0),
+        };
+        ProjectValidator.ValidateAnnotation(compensatedText);
+        renderOverflow.Pages[0].Annotations[0] = compensatedText;
+        AssertProjectRejected(
+            renderOverflow,
+            "Renderer-overflowing annotation was accepted.");
+
+        var tooManyAnnotations = ProjectJson.Clone(project);
+        tooManyAnnotations.Pages[0] = tooManyAnnotations.Pages[0] with
+        {
+            Annotations = Enumerable.Range(
+                0,
+                ProjectValidator.MaximumAnnotationsPerPage + 1)
+                .Select(_ => (Annotation)new ShapeAnnotation
+                {
+                    Shape = ShapeKind.Line,
+                    Start = new(0.4f, 0.5f),
+                    End = new(0.6f, 0.5f),
+                })
+                .ToList(),
+        };
+        AssertProjectRejected(
+            tooManyAnnotations,
+            "Excess page annotations were accepted.");
+
+        var tooManyInkPoints = ProjectJson.Clone(project);
+        tooManyInkPoints.Pages[0].Annotations[0] =
+            new FreehandAnnotation
+            {
+                Points = Enumerable.Repeat(
+                    new NormalizedPoint(0.5f, 0.5f),
+                    ProjectValidator.MaximumInkPoints + 1)
+                    .ToList(),
+            };
+        AssertProjectRejected(
+            tooManyInkPoints,
+            "Excess ink points were accepted.");
+
+        await CheckTallPageRotationAsync(root);
+
+        var nonFinite = ProjectJson.Clone(project);
+        nonFinite.Pages[0].Annotations[0] =
+            nonFinite.Pages[0].Annotations[0] with
+            {
+                StrokeWidth = float.NaN,
+            };
+        AssertProjectRejected(
+            nonFinite,
+            "Non-finite annotation geometry was accepted.");
+        CheckAnnotationValidation();
+    }
+
+    private static void CheckAnnotationValidation()
+    {
+        var page = new DocumentPage
+        {
+            SourcePixelWidth = 1_000,
+            SourcePixelHeight = 1_400,
+        };
+        var multiline = PageRenderer.FitTextBounds(
+            new TextAnnotation
+            {
+                Text = string.Join(
+                    "\n",
+                    Enumerable.Repeat("x", 1_000)),
+                Bounds = new(0.1f, 0.1f, 0.4f, 0.1f),
+                FontSize = 14,
+                MaximumWidth = 0.4f,
+            },
+            612,
+            792);
+        Assert(
+            multiline.Bounds.Height > 16,
+            "Multiline regression text no longer exceeds project bounds.");
+        ProjectValidator.ValidateAnnotation(multiline, page);
+
+        var partial = new ShapeAnnotation
+        {
+            Shape = ShapeKind.Rectangle,
+            Start = new(-2, 0.25f),
+            End = new(0.5f, 0.75f),
+        };
+        ProjectValidator.ValidateAnnotation(partial, page);
+
+        Annotation grown = new ShapeAnnotation
+        {
+            Shape = ShapeKind.Rectangle,
+            Start = new(0.4f, 0.4f),
+            End = new(0.6f, 0.6f),
+        };
+        for (var index = 0; index < 50; index++)
+        {
+            grown = AnnotationGeometry.ResizeByFactor(grown, 1.1f);
+        }
+
+        Assert(
+            AnnotationGeometry.Bounds(grown).Width > 16,
+            "Resize regression no longer exceeds the former limit.");
+        ProjectValidator.ValidateAnnotation(grown, page);
+
+        AssertAnnotationRejected(
+            new TextAnnotation
+            {
+                Text = new string(
+                    'x',
+                    ProjectValidator.MaximumTextLength + 1),
+            },
+            "Overlength text was accepted.");
+        AssertAnnotationRejected(
+            new ShapeAnnotation
+            {
+                Shape = ShapeKind.Rectangle,
+                Start = new(-2, -2),
+                End = new(-1, -1),
+            },
+            "Fully off-page annotation was accepted.");
+    }
+
+    private static void AssertAnnotationRejected(
+        Annotation annotation,
+        string message)
+    {
+        try
+        {
+            ProjectValidator.ValidateAnnotation(annotation);
+        }
+        catch (InvalidDataException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(message);
+    }
+
+    private static async Task CheckTallPageRotationAsync(string root)
+    {
+        const int sourceWidth = 21;
+        const int sourceHeight = 401;
+        const float processedWidth = sourceWidth - 1;
+        const float processedHeight = sourceHeight - 1;
+        var rotation = AnnotationGeometry.PageRotation(
+            MathF.PI / 2,
+            new Vector2(0.5f, 0.5f),
+            processedWidth,
+            processedHeight);
+        Assert(
+            Math.Abs(rotation.M21) > 16,
+            "Tall-page regression transform no longer exceeds raw cap.");
+        var project = new FastFillProject
+        {
+            Title = "Tall page rotation",
+            Pages =
+            [
+                new DocumentPage
+                {
+                    SourceAsset = "tall.png",
+                    SourcePixelWidth = sourceWidth,
+                    SourcePixelHeight = sourceHeight,
+                    Annotations =
+                    [
+                        new ShapeAnnotation
+                        {
+                            Shape = ShapeKind.Rectangle,
+                            Start = new(0.4f, 0.4f),
+                            End = new(0.6f, 0.6f),
+                            Transform = AffineTransform.FromMatrix(rotation),
+                        },
+                    ],
+                },
+            ],
+        };
+        using var image = new Mat(
+            sourceHeight,
+            sourceWidth,
+            MatType.CV_8UC3,
+            new Scalar(255, 255, 255));
+        Assert(
+            Cv2.ImEncode(".png", image, out var asset),
+            "Tall-page test image encoding failed.");
+
+        var workspace = WorkspaceStore.Create(root, project.Id);
+        await File.WriteAllBytesAsync(
+            Path.Combine(workspace, "assets", "tall.png"),
+            asset);
+        var archivePath = Path.Combine(
+            Artifacts,
+            "preview",
+            "tall-page-rotation.docscan");
+        await ProjectArchive.SaveAsync(project, workspace, archivePath);
+        var loaded = await ProjectArchive.LoadAsync(
+            archivePath,
+            Path.Combine(root, "tall-page-loaded"));
+        Assert(
+            loaded.Project.Pages[0].Annotations[0].Transform
+                == AffineTransform.FromMatrix(rotation),
+            "Tall-page rotation changed during archive round trip.");
+    }
+
+    private static void AssertProjectRejected(
+        FastFillProject project,
+        string message)
+    {
+        try
+        {
+            ProjectValidator.Validate(project);
+        }
+        catch (InvalidDataException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(message);
+    }
+
+    private static async Task CheckArchiveImageValidationAsync(
+        FastFillProject project,
+        byte[] source,
+        string root)
+    {
+        ProjectValidator.ValidateEncodedImage(source);
+        await CheckBoundedImageReadAsync(source);
+        AssertInvalidImage(
+            SetJpegDimensions(source, 8_000, 7_000),
+            "Oversized encoded dimensions were accepted.");
+        AssertInvalidImage(
+            [0xff, 0xd8, 0xff, 0xd9],
+            "Corrupt image content was accepted.");
+
+        var falseDimensions = ProjectJson.Clone(project);
+        falseDimensions.Pages[0] = falseDimensions.Pages[0] with
+        {
+            SourcePixelWidth = 1,
+            SourcePixelHeight = 1,
+        };
+        await AssertArchiveRejectedAsync(
+            falseDimensions,
+            source,
+            root,
+            "false-dimensions",
+            "Archive image dimensions were trusted.");
+
+        var falseExtension = ProjectJson.Clone(project);
+        falseExtension.Pages[0] = falseExtension.Pages[0] with
+        {
+            SourceAsset = "page-1.png",
+        };
+        await AssertArchiveRejectedAsync(
+            falseExtension,
+            source,
+            root,
+            "false-extension",
+            "Archive image extension was trusted.");
+    }
+
+    private static async Task CheckBoundedImageReadAsync(byte[] source)
+    {
+        await using var valid = new MemoryStream(source, writable: false);
+        var read = await ProjectValidator.ReadEncodedImageAsync(
+            valid,
+            source.LongLength);
+        Assert(read.SequenceEqual(source), "Bounded image read changed data.");
+
+        await using var changed = new MemoryStream(source, writable: false);
+        await AssertImageReadRejectedAsync(
+            changed,
+            source.LongLength - 1,
+            "Changed image size was accepted.");
+        await AssertImageReadRejectedAsync(
+            Stream.Null,
+            ProjectValidator.MaximumImageBytes + 1,
+            "Oversized image stream was accepted.");
+    }
+
+    private static async Task AssertImageReadRejectedAsync(
+        Stream stream,
+        long length,
+        string message)
+    {
+        try
+        {
+            await ProjectValidator.ReadEncodedImageAsync(stream, length);
+        }
+        catch (InvalidDataException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(message);
+    }
+
+    private static void AssertInvalidImage(byte[] bytes, string message)
+    {
+        try
+        {
+            ProjectValidator.ValidateEncodedImage(bytes);
+        }
+        catch (InvalidDataException)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(message);
+    }
+
+    private static byte[] SetJpegDimensions(
+        byte[] source,
+        ushort width,
+        ushort height)
+    {
+        var changed = source.ToArray();
+        for (var index = 0; index + 8 < changed.Length; index++)
+        {
+            if (changed[index] != 0xff
+                || !IsJpegStartOfFrame(changed[index + 1]))
+            {
+                continue;
+            }
+
+            changed[index + 5] = (byte)(height >> 8);
+            changed[index + 6] = (byte)height;
+            changed[index + 7] = (byte)(width >> 8);
+            changed[index + 8] = (byte)width;
+            return changed;
+        }
+
+        throw new InvalidOperationException("JPEG frame header not found.");
+    }
+
+    private static bool IsJpegStartOfFrame(byte marker) => marker is
+        0xc0 or 0xc1 or 0xc2 or 0xc3
+        or 0xc5 or 0xc6 or 0xc7
+        or 0xc9 or 0xca or 0xcb
+        or 0xcd or 0xce or 0xcf;
+
+    private static async Task AssertArchiveRejectedAsync(
+        FastFillProject project,
+        byte[] asset,
+        string root,
+        string name,
+        string message)
+    {
+        var archivePath = Path.Combine(
+            Artifacts,
+            "preview",
+            $"{name}.docscan");
+        await WriteUncheckedArchiveAsync(archivePath, project, asset);
+        var rejected = false;
+        try
+        {
+            await ProjectArchive.LoadAsync(
+                archivePath,
+                Path.Combine(root, name));
+        }
+        catch (InvalidDataException)
+        {
+            rejected = true;
+        }
+
+        Assert(rejected, message);
+    }
+
+    private static async Task WriteUncheckedArchiveAsync(
+        string path,
+        FastFillProject project,
+        byte[] asset)
+    {
+        await using var file = File.Create(path);
+        using var archive = new ZipArchive(
+            file,
+            ZipArchiveMode.Create,
+            leaveOpen: true);
+        var manifest = archive.CreateEntry("project.json");
+        await using (var output = manifest.Open())
+        {
+            await JsonSerializer.SerializeAsync(
+                output,
+                project,
+                ProjectJson.Options);
+        }
+
+        var image = archive.CreateEntry(
+            $"assets/{project.Pages[0].SourceAsset}");
+        await using var imageOutput = image.Open();
+        await imageOutput.WriteAsync(asset);
     }
 
     private static async Task CheckUnsafeArchiveAsync()

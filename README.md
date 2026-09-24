@@ -52,6 +52,12 @@ See the [complete user manual][manual] for every screen, tool, gesture,
 modifier, project action, file format, and privacy detail. For a guided camera
 and annotation demo, print the [A4 sample form][sample] at 100% / actual size.
 
+## ♿ Accessibility scope
+
+FastFill's document workflow is designed for touch, pen, and mouse. Standard
+controls support keyboard navigation, but canvas editing currently requires a
+pointing device and is not yet optimized for screen readers.
+
 ## 🧑‍💻 Development
 
 Core document processing and framework-free checks run on Linux; the WinUI shell
