@@ -1,0 +1,21 @@
+# Rust compiler output. Path is relative to this sync root.
+-dp:rust/target
+
+# C# and Visual Studio build output.
+-d:bin
+-d:obj
+-d:.vs
+-d:AppPackages
+-d:TestResults
+-f:*.user
+-f:*.suo
+-f:*.pfx
+-f:*.cer
+
+# Generated C# check and packaging artifacts. Keep artifacts/reviews synced.
+-dp:artifacts/check-workspace
+-dp:artifacts/preview
+-dp:artifacts/scan-analysis
+-dp:artifacts/signing
+-dp:artifacts/unsafe-workspace
+-fp:artifacts/unsafe.docscan

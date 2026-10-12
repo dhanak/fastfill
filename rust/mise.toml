@@ -1,0 +1,11 @@
+[tools]
+rust = "1.99.0"
+"cargo:trunk" = "0.21.14"
+
+[tasks.web]
+description = "Serve WASM prototype on LAN port 24800"
+env = { NO_COLOR = "true" }
+run = """
+trunk serve --address 0.0.0.0 --port 24800 \
+  --no-autoreload true
+"""
