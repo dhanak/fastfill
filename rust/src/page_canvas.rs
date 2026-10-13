@@ -216,7 +216,12 @@ impl canvas::Program<Message> for PageCanvas<'_> {
             edit_cursor(hit)
         } else if matches!(
             self.annotations.tool(),
-            Tool::Rectangle | Tool::Oval | Tool::Line | Tool::Arrow
+            Tool::Rectangle
+                | Tool::Oval
+                | Tool::Line
+                | Tool::Arrow
+                | Tool::Checkmark
+                | Tool::Cross
         ) {
             mouse::Interaction::Crosshair
         } else {
@@ -379,9 +384,15 @@ fn draw_shape(
             kind: ShapeKind::Oval,
             ..
         } => draw_oval(frame, view, annotation, scale, preview),
+        AnnotationGeometry::Bounded { kind, .. }
+            if matches!(kind, ShapeKind::Checkmark | ShapeKind::Cross) =>
+        {
+            draw_mark(frame, view, annotation, kind, scale, preview);
+        }
         AnnotationGeometry::Linear { .. } => {
             draw_linear(frame, view, annotation, scale, preview);
         }
+        AnnotationGeometry::Bounded { .. } => {}
     }
 }
 
@@ -399,7 +410,14 @@ fn draw_rectangle(
     let origin = view.page_to_view(PagePoint::new(bounds.x, bounds.y));
     let width = bounds.width * scale;
     let height = bounds.height * scale;
-    let stroke = annotation.stroke_width * scale;
+    let Some((outline, stroke)) = inset_outline(
+        Point::new(origin.x, origin.y),
+        width,
+        height,
+        annotation.stroke_width * scale,
+    ) else {
+        return;
+    };
     let half = stroke / 2.0;
     let color = if preview {
         Color::from_rgb8(0, 102, 204)
@@ -414,20 +432,20 @@ fn draw_rectangle(
     // Clip stroke bands explicitly: tiny-skia loses nested frame clips.
     for edge in [
         Rectangle::new(
-            Point::new(origin.x - half, origin.y - half),
-            iced::Size::new(width + stroke, stroke),
+            Point::new(outline.x - half, outline.y - half),
+            iced::Size::new(outline.width + stroke, stroke),
         ),
         Rectangle::new(
-            Point::new(origin.x - half, origin.y + height - half),
-            iced::Size::new(width + stroke, stroke),
+            Point::new(outline.x - half, outline.y + outline.height - half),
+            iced::Size::new(outline.width + stroke, stroke),
         ),
         Rectangle::new(
-            Point::new(origin.x - half, origin.y - half),
-            iced::Size::new(stroke, height + stroke),
+            Point::new(outline.x - half, outline.y - half),
+            iced::Size::new(stroke, outline.height + stroke),
         ),
         Rectangle::new(
-            Point::new(origin.x + width - half, origin.y - half),
-            iced::Size::new(stroke, height + stroke),
+            Point::new(outline.x + outline.width - half, outline.y - half),
+            iced::Size::new(stroke, outline.height + stroke),
         ),
     ] {
         if let Some(edge) = edge.intersection(&clip) {
@@ -446,8 +464,6 @@ fn draw_oval(
     scale: f32,
     preview: bool,
 ) {
-    const SEGMENTS: u16 = 128;
-
     let bounds = annotation.bounds();
     if bounds.width <= 0.0 || bounds.height <= 0.0 {
         return;
@@ -455,9 +471,16 @@ fn draw_oval(
     let origin = view.page_to_view(PagePoint::new(bounds.x, bounds.y));
     let width = bounds.width * scale;
     let height = bounds.height * scale;
-    let stroke = annotation.stroke_width * scale;
+    let Some((outline, stroke)) = inset_outline(
+        Point::new(origin.x, origin.y),
+        width,
+        height,
+        annotation.stroke_width * scale,
+    ) else {
+        return;
+    };
     let half = stroke / 2.0;
-    let center = Point::new(origin.x + width / 2.0, origin.y + height / 2.0);
+    let center = outline.center();
     let page = view.page_rect();
     let clip = Rectangle::new(
         Point::new(page.x + half, page.y + half),
@@ -466,18 +489,23 @@ fn draw_oval(
     if clip.width <= 0.0 || clip.height <= 0.0 {
         return;
     }
-    let step = std::f32::consts::TAU / f32::from(SEGMENTS);
+    let runs =
+        clipped_ellipse_runs(center, outline.width, outline.height, clip);
     let path = canvas::Path::new(|builder| {
-        let mut angle: f32 = 0.0;
-        let mut previous = ellipse_point(center, width, height, angle);
-        for _ in 0..SEGMENTS {
-            angle += step;
-            let current = ellipse_point(center, width, height, angle);
-            if let Some((start, end)) = clip_segment(previous, current, clip) {
-                builder.move_to(start);
-                builder.line_to(end);
+        for run in &runs {
+            let Some(first) = run.first() else {
+                continue;
+            };
+            let closed =
+                run.last().is_some_and(|last| same_point(*first, *last));
+            builder.move_to(*first);
+            let end = run.len() - usize::from(closed);
+            for point in &run[1..end] {
+                builder.line_to(*point);
             }
-            previous = current;
+            if closed {
+                builder.close();
+            }
         }
     });
     let color = if preview {
@@ -489,7 +517,8 @@ fn draw_oval(
         &path,
         canvas::Stroke::default()
             .with_color(color)
-            .with_width(stroke),
+            .with_width(stroke)
+            .with_line_join(canvas::LineJoin::Round),
     );
 }
 
@@ -527,16 +556,28 @@ fn draw_linear(
         return;
     }
     let path = canvas::Path::new(|builder| {
-        let mut add_segment = |start, end| {
-            if let Some((start, end)) = clip_segment(start, end, clip) {
-                builder.move_to(start);
-                builder.line_to(end);
-            }
-        };
-        add_segment(start, end);
+        if let Some((start, end)) = clip_segment(start, end, clip) {
+            builder.move_to(start);
+            builder.line_to(end);
+        }
         if let Some((left, right)) = arrowhead {
-            add_segment(end, left);
-            add_segment(end, right);
+            let first = clip_segment(end, left, clip);
+            let second = clip_segment(end, right, clip);
+            match (first, second) {
+                (Some((join, left)), Some((next, right)))
+                    if same_point(join, next) =>
+                {
+                    builder.move_to(left);
+                    builder.line_to(join);
+                    builder.line_to(right);
+                }
+                (first, second) => {
+                    for (start, end) in [first, second].into_iter().flatten() {
+                        builder.move_to(start);
+                        builder.line_to(end);
+                    }
+                }
+            }
         }
     });
     let color = if preview {
@@ -548,8 +589,130 @@ fn draw_linear(
         &path,
         canvas::Stroke::default()
             .with_color(color)
-            .with_width(stroke),
+            .with_width(stroke)
+            .with_line_join(canvas::LineJoin::Round),
     );
+}
+
+fn draw_mark(
+    frame: &mut canvas::Frame,
+    view: fastfill_rust::geometry::PageView,
+    annotation: ShapeAnnotation,
+    kind: ShapeKind,
+    scale: f32,
+    preview: bool,
+) {
+    let bounds = annotation.bounds();
+    let origin = view.page_to_view(PagePoint::new(bounds.x, bounds.y));
+    let width = bounds.width * scale;
+    let height = bounds.height * scale;
+    let stroke = annotation.stroke_width * scale;
+    if width <= stroke || height <= stroke {
+        return;
+    }
+    let inset = stroke / 2.0;
+    let mark_bounds = Rectangle::new(
+        Point::new(origin.x + inset, origin.y + inset),
+        iced::Size::new(width - stroke, height - stroke),
+    );
+    let points = mark_points(kind, mark_bounds);
+    let page = view.page_rect();
+    let clip = Rectangle::new(
+        Point::new(page.x + inset, page.y + inset),
+        iced::Size::new(page.width - stroke, page.height - stroke),
+    );
+    if clip.width <= 0.0 || clip.height <= 0.0 {
+        return;
+    }
+    let path = canvas::Path::new(|builder| {
+        if kind == ShapeKind::Checkmark {
+            let first = clip_segment(points[0], points[1], clip);
+            let second = clip_segment(points[1], points[2], clip);
+            match (first, second) {
+                (Some((start, join)), Some((next, end)))
+                    if same_point(join, next) =>
+                {
+                    builder.move_to(start);
+                    builder.line_to(join);
+                    builder.line_to(end);
+                }
+                (first, second) => {
+                    for (start, end) in [first, second].into_iter().flatten() {
+                        builder.move_to(start);
+                        builder.line_to(end);
+                    }
+                }
+            }
+        } else {
+            for (start, end) in [(points[0], points[1]), (points[2], points[3])]
+            {
+                if let Some((start, end)) = clip_segment(start, end, clip) {
+                    builder.move_to(start);
+                    builder.line_to(end);
+                }
+            }
+        }
+    });
+    let color = if preview {
+        Color::from_rgb8(0, 102, 204)
+    } else {
+        Color::BLACK
+    };
+    frame.stroke(
+        &path,
+        canvas::Stroke::default()
+            .with_color(color)
+            .with_width(stroke)
+            .with_line_join(canvas::LineJoin::Round),
+    );
+}
+
+fn mark_points(kind: ShapeKind, bounds: Rectangle) -> [Point; 4] {
+    let point = |x: f32, y: f32| {
+        Point::new(bounds.x + x * bounds.width, bounds.y + y * bounds.height)
+    };
+    match kind {
+        ShapeKind::Checkmark => [
+            point(0.0, 0.45),
+            point(0.36, 1.0),
+            point(1.0, 0.0),
+            point(1.0, 0.0),
+        ],
+        ShapeKind::Cross => [
+            point(0.0, 0.0),
+            point(1.0, 1.0),
+            point(1.0, 0.0),
+            point(0.0, 1.0),
+        ],
+        ShapeKind::Rectangle | ShapeKind::Oval => {
+            unreachable!("mark renderer requires a mark kind")
+        }
+    }
+}
+
+fn same_point(first: Point, second: Point) -> bool {
+    (first.x - second.x).abs() <= f32::EPSILON
+        && (first.y - second.y).abs() <= f32::EPSILON
+}
+
+fn inset_outline(
+    origin: Point,
+    width: f32,
+    height: f32,
+    requested_stroke: f32,
+) -> Option<(Rectangle, f32)> {
+    let stroke = requested_stroke.min(width).min(height);
+    if stroke <= 0.0 {
+        return None;
+    }
+    let inset = stroke / 2.0;
+    Some((
+        Rectangle::new(
+            Point::new(origin.x + inset, origin.y + inset),
+            iced::Size::new(width - stroke, height - stroke),
+        ),
+        stroke,
+    ))
 }
 
 fn ellipse_point(center: Point, width: f32, height: f32, angle: f32) -> Point {
@@ -557,6 +720,62 @@ fn ellipse_point(center: Point, width: f32, height: f32, angle: f32) -> Point {
         center.x + width / 2.0 * angle.cos(),
         center.y + height / 2.0 * angle.sin(),
     )
+}
+
+fn clipped_ellipse_runs(
+    center: Point,
+    width: f32,
+    height: f32,
+    clip: Rectangle,
+) -> Vec<Vec<Point>> {
+    const SEGMENTS: u16 = 128;
+
+    let segment_count = usize::from(SEGMENTS);
+    let step = std::f32::consts::TAU / f32::from(SEGMENTS);
+    let first = ellipse_point(center, width, height, 0.0);
+    let mut previous = first;
+    let mut segments = Vec::with_capacity(segment_count);
+    for index in 1..=SEGMENTS {
+        let current = if index == SEGMENTS {
+            first
+        } else {
+            ellipse_point(center, width, height, step * f32::from(index))
+        };
+        segments.push(
+            clip_segment(previous, current, clip)
+                .filter(|(start, end)| !same_point(*start, *end)),
+        );
+        previous = current;
+    }
+
+    let Some(gap) = segments.iter().position(Option::is_none) else {
+        let mut run = Vec::with_capacity(segment_count + 1);
+        run.push(segments[0].unwrap().0);
+        run.extend(segments.into_iter().map(|segment| segment.unwrap().1));
+        return vec![run];
+    };
+
+    let mut runs = Vec::new();
+    let mut run = Vec::new();
+    for offset in 1..=segment_count {
+        match segments[(gap + offset) % segment_count] {
+            Some((start, end)) => {
+                if run.last().is_none_or(|last| !same_point(*last, start)) {
+                    if !run.is_empty() {
+                        runs.push(std::mem::take(&mut run));
+                    }
+                    run.push(start);
+                }
+                run.push(end);
+            }
+            None if !run.is_empty() => runs.push(std::mem::take(&mut run)),
+            None => {}
+        }
+    }
+    if !run.is_empty() {
+        runs.push(run);
+    }
+    runs
 }
 
 fn clip_segment(
@@ -742,5 +961,70 @@ mod tests {
             let diagonal = (diagonal.x - end.x).hypot(diagonal.y - end.y);
             assert!((horizontal - diagonal).abs() < 0.001);
         }
+    }
+
+    #[test]
+    fn mark_points_fill_their_selection_bounds() {
+        let bounds = Rectangle::new(
+            Point::new(10.0, 20.0),
+            iced::Size::new(100.0, 80.0),
+        );
+        let check = mark_points(ShapeKind::Checkmark, bounds);
+        assert_eq!(check[0], Point::new(10.0, 56.0));
+        assert_eq!(check[1], Point::new(46.0, 100.0));
+        assert_eq!(check[2], Point::new(110.0, 20.0));
+
+        let cross = mark_points(ShapeKind::Cross, bounds);
+        assert_eq!(cross[0], Point::new(10.0, 20.0));
+        assert_eq!(cross[1], Point::new(110.0, 100.0));
+        assert_eq!(cross[2], Point::new(110.0, 20.0));
+        assert_eq!(cross[3], Point::new(10.0, 100.0));
+    }
+
+    #[test]
+    fn bounded_outlines_fit_inside_their_selection_frame() {
+        let origin = Point::new(10.0, 20.0);
+        let (outline, stroke) =
+            inset_outline(origin, 100.0, 80.0, 6.0).expect("ordinary outline");
+        assert_eq!(stroke, 6.0);
+        assert_eq!(outline.x - stroke / 2.0, origin.x);
+        assert_eq!(outline.y - stroke / 2.0, origin.y);
+        assert_eq!(outline.x + outline.width + stroke / 2.0, 110.0);
+        assert_eq!(outline.y + outline.height + stroke / 2.0, 100.0);
+
+        let (tiny, stroke) =
+            inset_outline(origin, 2.0, 8.0, 6.0).expect("tiny outline");
+        assert_eq!(stroke, 2.0);
+        assert_eq!(
+            tiny,
+            Rectangle::new(Point::new(11.0, 21.0), iced::Size::new(0.0, 6.0),)
+        );
+    }
+
+    #[test]
+    fn oval_segments_form_continuous_visible_runs() {
+        let center = Point::new(50.0, 50.0);
+        let full = clipped_ellipse_runs(
+            center,
+            80.0,
+            40.0,
+            Rectangle::new(Point::ORIGIN, iced::Size::new(100.0, 100.0)),
+        );
+        assert_eq!(full.len(), 1);
+        assert!(same_point(full[0][0], *full[0].last().unwrap()));
+
+        let clipped = clipped_ellipse_runs(
+            center,
+            80.0,
+            40.0,
+            Rectangle::new(Point::new(50.0, 0.0), iced::Size::new(50.0, 100.0)),
+        );
+        assert_eq!(clipped.len(), 1);
+        assert!(!same_point(clipped[0][0], *clipped[0].last().unwrap()));
+        assert!(
+            clipped[0]
+                .windows(2)
+                .all(|pair| !same_point(pair[0], pair[1]))
+        );
     }
 }

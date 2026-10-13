@@ -36,7 +36,7 @@ to reach TCP port 24800. Trunk watches for changes, but browser auto-reload is
 disabled so the generated page never assumes the development machine is
 `localhost`; refresh the browser after a rebuild.
 
-Checkpoint 3F adds shape, line, and arrow editing with history to the viewer:
+Checkpoint 3G adds shape, line, arrow, and mark editing with history:
 
 - **Rectangle:** drag with the left mouse button or one finger. The blue
   preview becomes a black outline on release. Hold Ctrl to draw a square.
@@ -45,6 +45,8 @@ Checkpoint 3F adds shape, line, and arrow editing with history to the viewer:
   the line to move it or either endpoint handle to change that endpoint.
 - **Arrow:** behaves like a line, with a fixed-proportion head at its ending
   endpoint. Its head does not distort when direction or aspect ratio changes.
+- **Check/Cross:** click or tap the intended center to place a small mark. Drag
+  outward for a larger mark. Both remain square when resized.
 - **Select:** click or touch inside a bounded shape or on a line, then drag to
   move it. Drag a shape's corner to resize or a line endpoint to edit it. Hold
   Ctrl for square/circle/45° constraints, Shift to force movement, or Alt to

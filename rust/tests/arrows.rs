@@ -78,6 +78,21 @@ fn arrowhead_is_part_of_bounds_and_hit_testing() {
     let bounds = annotations.shapes()[0].bounds();
     assert!(bounds.y < 100.0);
     assert!(bounds.y + bounds.height > 100.0);
+    let AnnotationGeometry::Linear { start, end, .. } =
+        annotations.shapes()[0].geometry
+    else {
+        panic!("expected arrow");
+    };
+    let (left, right) = fastfill_rust::annotations::arrowhead_points(
+        start,
+        end,
+        annotations.shapes()[0].stroke_width,
+    )
+    .unwrap();
+    assert!(bounds.y < left.y.min(right.y));
+    assert!(bounds.y + bounds.height > left.y.max(right.y));
+    let half_stroke = annotations.shapes()[0].stroke_width / 2.0;
+    assert!((bounds.x + bounds.width - (end.x + half_stroke)).abs() < 0.001);
     assert_eq!(
         annotations.hit_selected(
             Point::new(279.0, 109.0),

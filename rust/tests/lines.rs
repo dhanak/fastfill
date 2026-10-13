@@ -276,3 +276,22 @@ fn selected_line_moves_from_its_box_and_modifiers_disambiguate() {
         Some(EditHit::Endpoint(LineEndpoint::Start)),
     );
 }
+
+#[test]
+fn line_bounds_contain_the_full_directional_stroke() {
+    let annotations = line();
+    let annotation = annotations.shapes()[0];
+    let half = annotation.stroke_width / 2.0;
+    let diagonal_padding = half / 5.0_f32.sqrt();
+    let bounds = annotation.bounds();
+
+    assert!((bounds.x - (100.0 - diagonal_padding)).abs() < 0.001);
+    assert!((bounds.y - (100.0 - 2.0 * diagonal_padding)).abs() < 0.001);
+    assert!(
+        (bounds.x + bounds.width - (300.0 + diagonal_padding)).abs() < 0.001
+    );
+    assert!(
+        (bounds.y + bounds.height - (200.0 + 2.0 * diagonal_padding)).abs()
+            < 0.001
+    );
+}

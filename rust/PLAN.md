@@ -147,6 +147,15 @@ text. No importing, saving, camera, or annotations were included.
 - [x] Keep zoom, pan, snapping, cancellation, and deletion behavior.
 - [x] User checkpoint: arrow directions, arrowhead shape, editing, and history.
 
+#### 3G. Checkmark and cross stamps — accepted
+
+- [x] Place small default marks centered on a click or tap.
+- [x] Drag outward from the center to create a larger square mark.
+- [x] Keep marks square while resizing, without requiring Ctrl.
+- [x] Render checkmark and cross strokes without a surrounding box.
+- [x] Reuse movement, history, deletion, clipping, and navigation behavior.
+- [x] User checkpoint: placement, sizing, editing, and rendering.
+
 Rotation, other shapes, and multi-selection belong to later slices.
 
 ### 4. Text and toolkit decision gate — not started
@@ -381,6 +390,40 @@ Rotation, other shapes, and multi-selection belong to later slices.
   Clippy, formatting, and a linked Trunk WASM build.
 - User accepted arrow direction, head proportions, editing, clipping, history,
   and navigation behavior.
+
+### 2026-10-13 — checkpoint 3G checkmark and cross stamps
+
+- User accepted checkpoint 3F. Amended the line commit to include arrows as
+  `211bfa3`; future checkpoints remain uncommitted until explicitly requested.
+- TDD red: mark tests failed before checkmark and cross tools existed. Green:
+  centered click placement, outward sizing, fixed-square resize, movement,
+  deletion, history, and bounded geometry pass.
+- Use a page-relative minimum size and center it on the initial pointer. This
+  follows form-filling placement reflexes and avoids oversized default marks.
+- Use a slightly thinner page-relative default stroke for marks. Render only
+  their two defining segments; do not draw a surrounding box.
+- Passed all 81 feature-enabled tests, the dependency-light core suite, strict
+  Clippy, formatting, and a linked Trunk WASM build.
+- Follow-up screenshots exposed inset mark strokes and a split checkmark join.
+  Marks now span their full selection bounds, and the checkmark uses one
+  continuous path through its bottom corner.
+- A second screenshot exposed the checkmark's acute miter outside its frame.
+  Inset mark centerlines by half a stroke and use a round checkmark join so
+  visible ink reaches but does not cross the selection bounds.
+- User accepted centered placement, square resizing, rendering, joins, and
+  containment for both mark tools.
+- Follow-up screenshots exposed centerline-only bounds on lines and arrows.
+  Their frames now union the exact painted bounds of each butt-capped segment,
+  using direction and stroke width while leaving handles on true endpoints.
+- Arrowhead screenshots then exposed three butt-ended paths at the tip. Render
+  both wings as one round-joined polyline and include the rounded tip in its
+  painted bounds.
+- Apply one containment rule to every annotation: visible ink stays inside its
+  selection frame. Rectangle and oval centerlines are now inset by half their
+  effective stroke; undersized frames reduce the stroke instead of leaking.
+- Thick oval strokes exposed the old 128 independent clipping segments. Join
+  visible segments into continuous runs, close complete ovals, and use round
+  joins so clipping does not create a comb-like outline.
 
 ## References
 

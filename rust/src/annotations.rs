@@ -8,6 +8,8 @@ pub enum Tool {
     Oval,
     Line,
     Arrow,
+    Checkmark,
+    Cross,
     Select,
 }
 
@@ -20,6 +22,10 @@ impl Tool {
             Self::Oval => Some(CreationKind::Bounded(ShapeKind::Oval)),
             Self::Line => Some(CreationKind::Linear(LineKind::Line)),
             Self::Arrow => Some(CreationKind::Linear(LineKind::Arrow)),
+            Self::Checkmark => {
+                Some(CreationKind::Bounded(ShapeKind::Checkmark))
+            }
+            Self::Cross => Some(CreationKind::Bounded(ShapeKind::Cross)),
             Self::Navigate | Self::Select => None,
         }
     }
@@ -35,6 +41,14 @@ enum CreationKind {
 pub enum ShapeKind {
     Rectangle,
     Oval,
+    Checkmark,
+    Cross,
+}
+
+impl ShapeKind {
+    const fn is_mark(self) -> bool {
+        matches!(self, Self::Checkmark | Self::Cross)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -217,7 +231,7 @@ impl EditDraft {
                 let bounds = drag_bounds(
                     corner.opposite().position(bounds),
                     Point::new(moving.x + dx, moving.y + dy),
-                    self.square,
+                    self.square || kind.is_mark(),
                 );
                 ShapeAnnotation {
                     geometry: AnnotationGeometry::Bounded { kind, bounds },
@@ -298,10 +312,18 @@ impl Draft {
 
 impl ShapeDraft {
     fn annotation(&self) -> ShapeAnnotation {
+        let is_mark = matches!(
+            self.kind,
+            CreationKind::Bounded(kind) if kind.is_mark()
+        );
         let geometry = match self.kind {
             CreationKind::Bounded(kind) => AnnotationGeometry::Bounded {
                 kind,
-                bounds: drag_bounds(self.start, self.end, self.square),
+                bounds: if kind.is_mark() {
+                    mark_bounds(self.start, self.end, self.page)
+                } else {
+                    drag_bounds(self.start, self.end, self.square)
+                },
             },
             CreationKind::Linear(kind) => AnnotationGeometry::Linear {
                 kind,
@@ -312,7 +334,7 @@ impl ShapeDraft {
         ShapeAnnotation {
             geometry,
             // Keep the default outline proportional to image resolution.
-            stroke_width: self.page.width / 300.0,
+            stroke_width: self.page.width / if is_mark { 400.0 } else { 300.0 },
         }
     }
 }
@@ -803,21 +825,49 @@ fn linear_bounds(
     end: Point,
     stroke_width: f32,
 ) -> Rect {
-    let mut left = start.x.min(end.x);
-    let mut top = start.y.min(end.y);
-    let mut right = start.x.max(end.x);
-    let mut bottom = start.y.max(end.y);
+    let mut bounds = segment_stroke_bounds(start, end, stroke_width);
     if kind == LineKind::Arrow
         && let Some((first, second)) =
             arrowhead_points(start, end, stroke_width)
     {
-        for point in [first, second] {
-            left = left.min(point.x);
-            top = top.min(point.y);
-            right = right.max(point.x);
-            bottom = bottom.max(point.y);
+        for wing in [first, second] {
+            bounds = union_bounds(
+                bounds,
+                segment_stroke_bounds(end, wing, stroke_width),
+            );
         }
+        let half = stroke_width / 2.0;
+        bounds = union_bounds(
+            bounds,
+            Rect::new(end.x - half, end.y - half, stroke_width, stroke_width),
+        );
     }
+    bounds
+}
+
+fn segment_stroke_bounds(start: Point, end: Point, stroke_width: f32) -> Rect {
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+    let length = dx.hypot(dy);
+    if length <= f32::EPSILON {
+        return Rect::new(start.x, start.y, 0.0, 0.0);
+    }
+    let half = stroke_width / 2.0;
+    let x_padding = half * (dy / length).abs();
+    let y_padding = half * (dx / length).abs();
+    Rect::new(
+        start.x.min(end.x) - x_padding,
+        start.y.min(end.y) - y_padding,
+        (end.x - start.x).abs() + x_padding * 2.0,
+        (end.y - start.y).abs() + y_padding * 2.0,
+    )
+}
+
+fn union_bounds(first: Rect, second: Rect) -> Rect {
+    let left = first.x.min(second.x);
+    let top = first.y.min(second.y);
+    let right = (first.x + first.width).max(second.x + second.width);
+    let bottom = (first.y + first.height).max(second.y + second.height);
     Rect::new(left, top, right - left, bottom - top)
 }
 
@@ -835,6 +885,15 @@ fn drag_bounds(start: Point, end: Point, square: bool) -> Rect {
         dx.abs(),
         dy.abs(),
     )
+}
+
+fn mark_bounds(center: Point, end: Point, page: Size) -> Rect {
+    let default_half = page.width / 64.0;
+    let half = (end.x - center.x)
+        .abs()
+        .max((end.y - center.y).abs())
+        .max(default_half);
+    Rect::new(center.x - half, center.y - half, half * 2.0, half * 2.0)
 }
 
 fn keep_reachable(mut bounds: Rect, page: Size) -> Rect {

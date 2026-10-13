@@ -328,6 +328,50 @@ fn arrow_renders_a_directional_head_and_clips_all_segments() {
     );
 }
 
+#[test]
+fn marks_render_as_strokes_without_a_surrounding_box() {
+    let mut state = rendered_page();
+    for (tool, center) in [
+        (Tool::Checkmark, PagePoint::new(300.0, 300.0)),
+        (Tool::Cross, PagePoint::new(400.0, 400.0)),
+    ] {
+        state.annotations.set_tool(tool);
+        state
+            .annotations
+            .begin(Pointer::Mouse, center, page_size(&state));
+        state.annotations.finish(Pointer::Mouse, center, false);
+    }
+    state.annotations.set_tool(Tool::Navigate);
+
+    let pixels = render_document(&state, 1, 1.0);
+    let pixel = |x: usize, y: usize| {
+        let offset = (y * 600 + x) * 4;
+        &pixels[offset..offset + 4]
+    };
+    let dark_near = |x: usize, y: usize| {
+        (y - 2..=y + 2).any(|row| {
+            (x - 2..=x + 2).any(|column| pixels[(row * 600 + column) * 4] < 128)
+        })
+    };
+    assert!(dark_near(298, 305), "checkmark missing");
+    assert!(dark_near(388, 388), "cross missing");
+    assert_eq!(pixel(292, 292), [240, 230, 210, 255]);
+    assert_eq!(pixel(388, 380), [240, 230, 210, 255]);
+    assert_eq!(pixel(298, 310), [240, 230, 210, 255]);
+
+    let viewport = page_viewport(iced::Size::new(600.0, 600.0));
+    let page = page_size(&state);
+    state
+        .navigation
+        .zoom_at(4.0, viewport.center(), page, viewport);
+    let pixels = render_document(&state, 1, 1.0);
+    let pixel = |x: usize, y: usize| {
+        let offset = (y * 600 + x) * 4;
+        &pixels[offset..offset + 4]
+    };
+    assert_eq!(pixel(291, 336), [240, 230, 210, 255]);
+}
+
 fn rendered_page() -> FastFill {
     FastFill {
         page: Some(ImportedImage {
@@ -596,6 +640,8 @@ fn wheel_zooms_around_pointer_in_all_tools() {
         Tool::Oval,
         Tool::Line,
         Tool::Arrow,
+        Tool::Checkmark,
+        Tool::Cross,
     ] {
         let mut state = FastFill::default();
         let _ = update(&mut state, Message::SetTool(tool));
