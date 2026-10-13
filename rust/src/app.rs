@@ -1,10 +1,16 @@
+use crate::appearance::{
+    CONTROL_GAP, CONTROL_HEIGHT, TOOLBAR_HEIGHT, TOOLBAR_PADDING,
+    TOOLBAR_ROW_HEIGHT,
+};
 #[cfg(test)]
 use crate::page_canvas::CanvasState;
 use crate::page_canvas::{PageCanvas, page_viewport};
 use crate::picker::{ImportedImage, pick_image};
 #[cfg(test)]
 use fastfill_rust::annotations::ResizeCorner;
-use fastfill_rust::annotations::{Annotations, DragModifiers, Pointer, Tool};
+use fastfill_rust::annotations::{
+    AnnotationColor, Annotations, DragModifiers, Pointer, Tool,
+};
 use fastfill_rust::geometry::{Navigation, Point as PagePoint};
 use fastfill_rust::geometry::{Rect as PageRect, Size as PageSize};
 use fastfill_rust::interaction::GestureDelta;
@@ -12,13 +18,14 @@ use fastfill_rust::interaction::GestureDelta;
 use iced::touch;
 #[cfg(test)]
 use iced::widget::image::Handle;
-use iced::widget::{button, canvas, column, container, responsive, row, text};
+use iced::widget::{
+    Row, button, canvas, column, container, responsive, row, text,
+};
 #[cfg(test)]
 use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
 use iced::{Element, Fill, Task, keyboard};
 
 const DEFAULT_PAGE: PageSize = PageSize::new(794.0, 1_123.0);
-const TOOLBAR_HEIGHT: f32 = 112.0;
 
 #[derive(Default)]
 struct FastFill {
@@ -50,6 +57,9 @@ pub(crate) enum Message {
     Undo,
     Redo,
     DeleteSelected,
+    SetColor(AnnotationColor),
+    AdjustThickness(f32),
+    ToggleFill,
     DrawPressed(Pointer, PagePoint, f32),
     DrawMoved(Pointer, PagePoint, bool),
     DrawReleased(Pointer, PagePoint, bool),
@@ -158,6 +168,31 @@ impl FastFill {
         }
     }
 
+    fn adjust_thickness(&mut self, delta: f32) {
+        if let Some(style) = self.annotations.current_style() {
+            self.annotations.set_stroke_width(
+                (style.stroke_width + delta).clamp(1.0, 20.0),
+            );
+        }
+    }
+
+    fn begin_interaction(
+        &mut self,
+        pointer: Pointer,
+        point: PagePoint,
+        scale: f32,
+    ) {
+        if self.image_picker == ImagePicker::Idle {
+            self.annotations.begin_interaction(
+                pointer,
+                point,
+                page_size(self),
+                scale,
+                self.modifiers,
+            );
+        }
+    }
+
     fn image_picked(&mut self, result: Result<Option<ImportedImage>, String>) {
         self.image_picker = ImagePicker::Idle;
         match result {
@@ -215,16 +250,17 @@ fn update(state: &mut FastFill, message: Message) -> Task<Message> {
                 state.annotations.delete_selected();
             }
         }
-        Message::DrawPressed(pointer, point, scale) => {
-            if state.image_picker == ImagePicker::Idle {
-                state.annotations.begin_interaction(
-                    pointer,
-                    point,
-                    page_size(state),
-                    scale,
-                    state.modifiers,
-                );
+        Message::SetColor(color) => {
+            state.annotations.set_color(color);
+        }
+        Message::AdjustThickness(delta) => state.adjust_thickness(delta),
+        Message::ToggleFill => {
+            if let Some(style) = state.annotations.current_style() {
+                state.annotations.set_filled(!style.filled);
             }
+        }
+        Message::DrawPressed(pointer, point, scale) => {
+            state.begin_interaction(pointer, point, scale);
         }
         Message::DrawMoved(pointer, point, square) => {
             state.annotations.drag(pointer, point, square);
@@ -328,88 +364,154 @@ fn view(state: &FastFill) -> Element<'_, Message> {
             (available.height - TOOLBAR_HEIGHT).max(1.0),
         );
         let viewport = page_viewport(canvas_size);
-        let center = viewport.center();
-        let zoom_out = Message::ZoomAt {
-            factor: 0.8,
-            anchor: center,
-            viewport,
-        };
-        let zoom_in = Message::ZoomAt {
-            factor: 1.25,
-            anchor: center,
-            viewport,
-        };
-        let controls = row![
-            button("Open image")
-                .on_press_maybe(
-                    (state.image_picker == ImagePicker::Idle)
-                        .then_some(Message::OpenImage),
-                )
-                .height(40),
-            button("Undo")
-                .on_press_maybe(
-                    (state.image_picker == ImagePicker::Idle
-                        && state.annotations.can_undo())
-                    .then_some(Message::Undo),
-                )
-                .height(40),
-            button("Redo")
-                .on_press_maybe(
-                    (state.image_picker == ImagePicker::Idle
-                        && state.annotations.can_redo())
-                    .then_some(Message::Redo),
-                )
-                .height(40),
-            button("−").on_press(zoom_out).height(40),
-            button("+").on_press(zoom_in).height(40),
-            button("1:1")
-                .on_press(Message::OneToOne(viewport))
-                .height(40),
-            button("Fit").on_press(Message::Fit).height(40),
+        column![
+            control_row(state, viewport),
+            tool_row(state, available.width),
+            style_row(state),
+            document(state),
         ]
-        .align_y(iced::Alignment::Center)
-        .height(TOOLBAR_HEIGHT / 2.0)
-        .padding([8, 12])
-        .spacing(8);
-        let mut tools = row![
-            tool_button("Navigate", Tool::Navigate, state.annotations.tool()),
-            tool_button("Select", Tool::Select, state.annotations.tool()),
-            tool_button("Rectangle", Tool::Rectangle, state.annotations.tool()),
-            tool_button("Oval", Tool::Oval, state.annotations.tool()),
-            tool_button("Line", Tool::Line, state.annotations.tool()),
-            tool_button("Arrow", Tool::Arrow, state.annotations.tool()),
-            tool_button("Check", Tool::Checkmark, state.annotations.tool()),
-            tool_button("Cross", Tool::Cross, state.annotations.tool()),
-            button("Delete")
-                .on_press_maybe(
-                    (state.image_picker == ImagePicker::Idle
-                        && state.annotations.selected_index().is_some()
-                        && state.annotations.active_pointer().is_none())
-                    .then_some(Message::DeleteSelected),
-                )
-                .height(40),
-        ];
-        if available.width >= 520.0 {
-            tools = tools.push(
-                text(format!("{} shapes", state.annotations.shapes().len()))
-                    .size(14),
-            );
-        }
-        let tools = tools
-            .align_y(iced::Alignment::Center)
-            .height(TOOLBAR_HEIGHT / 2.0)
-            .padding([8, 12])
-            .spacing(8);
-        column![controls, tools, document(state)]
-            .width(Fill)
-            .height(Fill)
-            .into()
+        .width(Fill)
+        .height(Fill)
+        .into()
     });
 
     column![heading(state), body]
         .width(Fill)
         .height(Fill)
         .into()
+}
+
+fn control_row(state: &FastFill, viewport: PageRect) -> Element<'_, Message> {
+    let zoom = |factor| Message::ZoomAt {
+        factor,
+        anchor: viewport.center(),
+        viewport,
+    };
+    toolbar_row(row![
+        button("Open image")
+            .on_press_maybe(
+                (state.image_picker == ImagePicker::Idle)
+                    .then_some(Message::OpenImage),
+            )
+            .height(CONTROL_HEIGHT),
+        button("Undo")
+            .on_press_maybe(
+                (state.image_picker == ImagePicker::Idle
+                    && state.annotations.can_undo())
+                .then_some(Message::Undo),
+            )
+            .height(CONTROL_HEIGHT),
+        button("Redo")
+            .on_press_maybe(
+                (state.image_picker == ImagePicker::Idle
+                    && state.annotations.can_redo())
+                .then_some(Message::Redo),
+            )
+            .height(CONTROL_HEIGHT),
+        button("−").on_press(zoom(0.8)).height(CONTROL_HEIGHT),
+        button("+").on_press(zoom(1.25)).height(CONTROL_HEIGHT),
+        button("1:1")
+            .on_press(Message::OneToOne(viewport))
+            .height(CONTROL_HEIGHT),
+        button("Fit").on_press(Message::Fit).height(CONTROL_HEIGHT),
+    ])
+    .into()
+}
+
+fn tool_row(state: &FastFill, available_width: f32) -> Element<'_, Message> {
+    let selected = state.annotations.tool();
+    let mut tools = row![
+        tool_button("Navigate", Tool::Navigate, selected),
+        tool_button("Select", Tool::Select, selected),
+        tool_button("Rectangle", Tool::Rectangle, selected),
+        tool_button("Oval", Tool::Oval, selected),
+        tool_button("Line", Tool::Line, selected),
+        tool_button("Arrow", Tool::Arrow, selected),
+        tool_button("Check", Tool::Checkmark, selected),
+        tool_button("Cross", Tool::Cross, selected),
+        tool_button("Pen", Tool::Pen, selected),
+        tool_button("Highlight", Tool::Highlighter, selected),
+        button("Delete")
+            .on_press_maybe(
+                (state.image_picker == ImagePicker::Idle
+                    && state.annotations.selected_index().is_some()
+                    && state.annotations.active_pointer().is_none())
+                .then_some(Message::DeleteSelected),
+            )
+            .height(CONTROL_HEIGHT),
+    ];
+    if available_width >= 520.0 {
+        tools = tools.push(
+            text(format!("{} shapes", state.annotations.shapes().len()))
+                .size(14),
+        );
+    }
+    toolbar_row(tools).into()
+}
+
+fn style_row(state: &FastFill) -> Element<'_, Message> {
+    let Some(style) = state.annotations.current_style() else {
+        return container(iced::widget::Space::new())
+            .height(TOOLBAR_ROW_HEIGHT)
+            .into();
+    };
+    let mut styles = row![
+        color_button("Black", AnnotationColor::Black, style.color),
+        color_button("White", AnnotationColor::White, style.color),
+        color_button("Red", AnnotationColor::Red, style.color),
+        color_button("Blue", AnnotationColor::Blue, style.color),
+        color_button("Green", AnnotationColor::Green, style.color),
+        color_button("Yellow", AnnotationColor::Yellow, style.color),
+        button("−")
+            .on_press_maybe(
+                (style.stroke_width > 1.0)
+                    .then_some(Message::AdjustThickness(-1.0)),
+            )
+            .height(CONTROL_HEIGHT),
+        text(format!("{:.0} px", style.stroke_width)).size(14),
+        button("+")
+            .on_press_maybe(
+                (style.stroke_width < 20.0)
+                    .then_some(Message::AdjustThickness(1.0)),
+            )
+            .height(CONTROL_HEIGHT),
+    ];
+    if state.annotations.fill_available() {
+        styles = styles.push(
+            button(if style.filled { "Fill ✓" } else { "Fill" })
+                .on_press(Message::ToggleFill)
+                .style(if style.filled {
+                    button::primary
+                } else {
+                    button::secondary
+                })
+                .height(CONTROL_HEIGHT),
+        );
+    }
+    toolbar_row(styles).into()
+}
+
+fn toolbar_row(content: Row<'_, Message>) -> Row<'_, Message> {
+    content
+        .align_y(iced::Alignment::Center)
+        .height(TOOLBAR_ROW_HEIGHT)
+        .padding(TOOLBAR_PADDING)
+        .spacing(CONTROL_GAP)
+}
+
+fn color_button(
+    label: &str,
+    color: AnnotationColor,
+    selected: AnnotationColor,
+) -> iced::widget::Button<'_, Message> {
+    button(label)
+        .on_press(Message::SetColor(color))
+        .style(if color == selected {
+            button::primary
+        } else {
+            button::secondary
+        })
+        .height(CONTROL_HEIGHT)
 }
 
 fn document(state: &FastFill) -> Element<'_, Message> {
@@ -448,7 +550,7 @@ fn tool_button(
         } else {
             button::secondary
         })
-        .height(40)
+        .height(CONTROL_HEIGHT)
 }
 
 fn page_size(state: &FastFill) -> PageSize {

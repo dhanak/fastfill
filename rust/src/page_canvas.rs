@@ -1,9 +1,13 @@
 use crate::app::Message;
+use crate::appearance::{
+    PAGE_MARGIN, PAGE_SHADOW_X, PAGE_SHADOW_Y, SELECTION_HANDLE_SIZE,
+    SELECTION_STROKE, accent, annotation_color, canvas_background, page_shadow,
+};
 use crate::picker::ImportedImage;
 use fastfill_rust::annotations::{
-    AnnotationGeometry, Annotations, DragModifiers, EditHit, LineEndpoint,
-    LineKind, Pointer, RESIZE_CORNERS, ResizeCorner, ShapeAnnotation,
-    ShapeKind, Tool, arrowhead_points,
+    AnnotationGeometry, Annotations, DragModifiers, EditHit, InkKind,
+    LineEndpoint, LineKind, Pointer, RESIZE_CORNERS, ResizeCorner,
+    ShapeAnnotation, ShapeKind, Tool, arrowhead_points,
 };
 use fastfill_rust::geometry::{Navigation, Point as PagePoint};
 use fastfill_rust::geometry::{Rect as PageRect, Size as PageSize};
@@ -11,8 +15,6 @@ use fastfill_rust::interaction::{TouchEvent, TouchNavigation};
 use iced::touch;
 use iced::widget::canvas;
 use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
-
-const PAGE_MARGIN: f32 = 36.0;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PageCanvas<'a> {
@@ -139,7 +141,7 @@ impl canvas::Program<Message> for PageCanvas<'_> {
             frame.fill_rectangle(
                 Point::ORIGIN,
                 bounds.size(),
-                Color::from_rgb8(67, 72, 78),
+                canvas_background(),
             );
         }
 
@@ -151,9 +153,9 @@ impl canvas::Program<Message> for PageCanvas<'_> {
             let size = iced::Size::new(page.width, page.height);
             if self.background {
                 frame.fill_rectangle(
-                    Point::new(page.x + 5.0, page.y + 7.0),
+                    Point::new(page.x + PAGE_SHADOW_X, page.y + PAGE_SHADOW_Y),
                     size,
-                    Color::from_rgba8(0, 0, 0, 0.22),
+                    page_shadow(),
                 );
                 frame.fill_rectangle(
                     Point::new(page.x, page.y),
@@ -174,16 +176,16 @@ impl canvas::Program<Message> for PageCanvas<'_> {
                     if self.annotations.edited_index() == Some(index) {
                         continue;
                     }
-                    draw_shape(&mut frame, view, *annotation, scale, false);
+                    draw_shape(&mut frame, view, annotation, scale);
                 }
                 if let Some(preview) = self.annotations.preview() {
-                    draw_shape(&mut frame, view, preview, scale, true);
+                    draw_shape(&mut frame, view, &preview, scale);
                 }
                 if self.annotations.tool() != Tool::Navigate
                     && let Some(annotation) =
                         self.annotations.selection_annotation(scale)
                 {
-                    draw_selection(&mut frame, view, annotation, scale);
+                    draw_selection(&mut frame, view, &annotation, scale);
                 }
             }
         }
@@ -222,6 +224,8 @@ impl canvas::Program<Message> for PageCanvas<'_> {
                 | Tool::Arrow
                 | Tool::Checkmark
                 | Tool::Cross
+                | Tool::Pen
+                | Tool::Highlighter
         ) {
             mouse::Interaction::Crosshair
         } else {
@@ -369,28 +373,30 @@ impl PageCanvas<'_> {
 fn draw_shape(
     frame: &mut canvas::Frame,
     view: fastfill_rust::geometry::PageView,
-    annotation: ShapeAnnotation,
+    annotation: &ShapeAnnotation,
     scale: f32,
-    preview: bool,
 ) {
-    match annotation.geometry {
+    match &annotation.geometry {
         AnnotationGeometry::Bounded {
             kind: ShapeKind::Rectangle,
             ..
         } => {
-            draw_rectangle(frame, view, annotation, scale, preview);
+            draw_rectangle(frame, view, annotation, scale);
         }
         AnnotationGeometry::Bounded {
             kind: ShapeKind::Oval,
             ..
-        } => draw_oval(frame, view, annotation, scale, preview),
+        } => draw_oval(frame, view, annotation, scale),
         AnnotationGeometry::Bounded { kind, .. }
             if matches!(kind, ShapeKind::Checkmark | ShapeKind::Cross) =>
         {
-            draw_mark(frame, view, annotation, kind, scale, preview);
+            draw_mark(frame, view, annotation, *kind, scale);
         }
         AnnotationGeometry::Linear { .. } => {
-            draw_linear(frame, view, annotation, scale, preview);
+            draw_linear(frame, view, annotation, scale);
+        }
+        AnnotationGeometry::Ink { .. } => {
+            draw_ink(frame, view, annotation, scale);
         }
         AnnotationGeometry::Bounded { .. } => {}
     }
@@ -399,9 +405,8 @@ fn draw_shape(
 fn draw_rectangle(
     frame: &mut canvas::Frame,
     view: fastfill_rust::geometry::PageView,
-    annotation: ShapeAnnotation,
+    annotation: &ShapeAnnotation,
     scale: f32,
-    preview: bool,
 ) {
     let bounds = annotation.bounds();
     if bounds.width <= 0.0 || bounds.height <= 0.0 {
@@ -419,16 +424,25 @@ fn draw_rectangle(
         return;
     };
     let half = stroke / 2.0;
-    let color = if preview {
-        Color::from_rgb8(0, 102, 204)
-    } else {
-        Color::BLACK
-    };
+    let color = annotation_color(annotation.color);
     let page = view.page_rect();
     let clip = Rectangle::new(
         Point::new(page.x, page.y),
         iced::Size::new(page.width, page.height),
     );
+    if annotation.filled {
+        let shape = Rectangle::new(
+            Point::new(origin.x, origin.y),
+            iced::Size::new(width, height),
+        );
+        if let Some(shape) = shape.intersection(&clip) {
+            frame.fill(
+                &canvas::Path::rectangle(shape.position(), shape.size()),
+                color,
+            );
+        }
+        return;
+    }
     // Clip stroke bands explicitly: tiny-skia loses nested frame clips.
     for edge in [
         Rectangle::new(
@@ -460,9 +474,8 @@ fn draw_rectangle(
 fn draw_oval(
     frame: &mut canvas::Frame,
     view: fastfill_rust::geometry::PageView,
-    annotation: ShapeAnnotation,
+    annotation: &ShapeAnnotation,
     scale: f32,
-    preview: bool,
 ) {
     let bounds = annotation.bounds();
     if bounds.width <= 0.0 || bounds.height <= 0.0 {
@@ -482,6 +495,30 @@ fn draw_oval(
     let half = stroke / 2.0;
     let center = outline.center();
     let page = view.page_rect();
+    let page_clip = Rectangle::new(
+        Point::new(page.x, page.y),
+        iced::Size::new(page.width, page.height),
+    );
+    let color = annotation_color(annotation.color);
+    if annotation.filled {
+        let center =
+            Point::new(origin.x + width / 2.0, origin.y + height / 2.0);
+        let polygon = clip_polygon_to_rectangle(
+            ellipse_polygon(center, width, height),
+            page_clip,
+        );
+        if polygon.len() >= 3 {
+            let path = canvas::Path::new(|builder| {
+                builder.move_to(polygon[0]);
+                for point in &polygon[1..] {
+                    builder.line_to(*point);
+                }
+                builder.close();
+            });
+            frame.fill(&path, color);
+        }
+        return;
+    }
     let clip = Rectangle::new(
         Point::new(page.x + half, page.y + half),
         iced::Size::new(page.width - stroke, page.height - stroke),
@@ -508,11 +545,6 @@ fn draw_oval(
             }
         }
     });
-    let color = if preview {
-        Color::from_rgb8(0, 102, 204)
-    } else {
-        Color::BLACK
-    };
     frame.stroke(
         &path,
         canvas::Stroke::default()
@@ -525,24 +557,23 @@ fn draw_oval(
 fn draw_linear(
     frame: &mut canvas::Frame,
     view: fastfill_rust::geometry::PageView,
-    annotation: ShapeAnnotation,
+    annotation: &ShapeAnnotation,
     scale: f32,
-    preview: bool,
 ) {
-    let AnnotationGeometry::Linear { kind, start, end } = annotation.geometry
+    let AnnotationGeometry::Linear { kind, start, end } = &annotation.geometry
     else {
         return;
     };
-    let arrowhead = (kind == LineKind::Arrow)
-        .then(|| arrowhead_points(start, end, annotation.stroke_width))
+    let arrowhead = (*kind == LineKind::Arrow)
+        .then(|| arrowhead_points(*start, *end))
         .flatten()
         .map(|(left, right)| {
             let left = view.page_to_view(left);
             let right = view.page_to_view(right);
             (Point::new(left.x, left.y), Point::new(right.x, right.y))
         });
-    let start = view.page_to_view(start);
-    let end = view.page_to_view(end);
+    let start = view.page_to_view(*start);
+    let end = view.page_to_view(*end);
     let start = Point::new(start.x, start.y);
     let end = Point::new(end.x, end.y);
     let stroke = annotation.stroke_width * scale;
@@ -580,11 +611,7 @@ fn draw_linear(
             }
         }
     });
-    let color = if preview {
-        Color::from_rgb8(0, 102, 204)
-    } else {
-        Color::BLACK
-    };
+    let color = annotation_color(annotation.color);
     frame.stroke(
         &path,
         canvas::Stroke::default()
@@ -597,10 +624,9 @@ fn draw_linear(
 fn draw_mark(
     frame: &mut canvas::Frame,
     view: fastfill_rust::geometry::PageView,
-    annotation: ShapeAnnotation,
+    annotation: &ShapeAnnotation,
     kind: ShapeKind,
     scale: f32,
-    preview: bool,
 ) {
     let bounds = annotation.bounds();
     let origin = view.page_to_view(PagePoint::new(bounds.x, bounds.y));
@@ -653,16 +679,95 @@ fn draw_mark(
             }
         }
     });
-    let color = if preview {
-        Color::from_rgb8(0, 102, 204)
-    } else {
-        Color::BLACK
-    };
+    let color = annotation_color(annotation.color);
     frame.stroke(
         &path,
         canvas::Stroke::default()
             .with_color(color)
             .with_width(stroke)
+            .with_line_join(canvas::LineJoin::Round),
+    );
+}
+
+fn draw_ink(
+    frame: &mut canvas::Frame,
+    view: fastfill_rust::geometry::PageView,
+    annotation: &ShapeAnnotation,
+    scale: f32,
+) {
+    let AnnotationGeometry::Ink { kind, points } = &annotation.geometry else {
+        return;
+    };
+    if points.len() < 2 {
+        return;
+    }
+    let points: Vec<Point> = points
+        .iter()
+        .map(|point| {
+            let point = view.page_to_view(*point);
+            Point::new(point.x, point.y)
+        })
+        .collect();
+    let page = view.page_rect();
+    let page_clip = Rectangle::new(
+        Point::new(page.x, page.y),
+        iced::Size::new(page.width, page.height),
+    );
+    let mut color = annotation_color(annotation.color);
+    if *kind == InkKind::Highlighter {
+        color.a = 0.35;
+    }
+    if annotation.filled && points.len() >= 3 {
+        let polygon = clip_polygon_to_rectangle(points.clone(), page_clip);
+        if polygon.len() >= 3 {
+            let path = canvas::Path::new(|builder| {
+                builder.move_to(polygon[0]);
+                for point in &polygon[1..] {
+                    builder.line_to(*point);
+                }
+                builder.close();
+            });
+            frame.fill(&path, color);
+        }
+    }
+
+    let stroke = annotation.stroke_width * scale;
+    let half = stroke / 2.0;
+    let clip = Rectangle::new(
+        Point::new(page.x + half, page.y + half),
+        iced::Size::new(page.width - stroke, page.height - stroke),
+    );
+    if clip.width <= 0.0 || clip.height <= 0.0 {
+        return;
+    }
+    let runs = if annotation.filled {
+        clipped_closed_polyline_runs(&points, clip)
+    } else {
+        clipped_polyline_runs(&points, clip)
+    };
+    let path = canvas::Path::new(|builder| {
+        for run in &runs {
+            let Some(first) = run.first() else {
+                continue;
+            };
+            let closed =
+                run.last().is_some_and(|last| same_point(*first, *last));
+            builder.move_to(*first);
+            let end = run.len() - usize::from(closed);
+            for point in &run[1..end] {
+                builder.line_to(*point);
+            }
+            if closed {
+                builder.close();
+            }
+        }
+    });
+    frame.stroke(
+        &path,
+        canvas::Stroke::default()
+            .with_color(color)
+            .with_width(stroke)
+            .with_line_cap(canvas::LineCap::Round)
             .with_line_join(canvas::LineJoin::Round),
     );
 }
@@ -722,6 +827,86 @@ fn ellipse_point(center: Point, width: f32, height: f32, angle: f32) -> Point {
     )
 }
 
+fn ellipse_polygon(center: Point, width: f32, height: f32) -> Vec<Point> {
+    const SEGMENTS: u16 = 128;
+
+    let step = std::f32::consts::TAU / f32::from(SEGMENTS);
+    (0..SEGMENTS)
+        .map(|index| {
+            ellipse_point(center, width, height, step * f32::from(index))
+        })
+        .collect()
+}
+
+#[derive(Clone, Copy)]
+enum ClipEdge {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+fn clip_polygon_to_rectangle(
+    mut polygon: Vec<Point>,
+    clip: Rectangle,
+) -> Vec<Point> {
+    for edge in [
+        ClipEdge::Left,
+        ClipEdge::Right,
+        ClipEdge::Top,
+        ClipEdge::Bottom,
+    ] {
+        let input = std::mem::take(&mut polygon);
+        let Some(mut previous) = input.last().copied() else {
+            break;
+        };
+        let mut previous_inside = point_inside_edge(previous, edge, clip);
+        for current in input {
+            let current_inside = point_inside_edge(current, edge, clip);
+            if current_inside != previous_inside {
+                polygon.push(edge_intersection(previous, current, edge, clip));
+            }
+            if current_inside {
+                polygon.push(current);
+            }
+            previous = current;
+            previous_inside = current_inside;
+        }
+    }
+    polygon
+}
+
+fn point_inside_edge(point: Point, edge: ClipEdge, clip: Rectangle) -> bool {
+    match edge {
+        ClipEdge::Left => point.x >= clip.x,
+        ClipEdge::Right => point.x <= clip.x + clip.width,
+        ClipEdge::Top => point.y >= clip.y,
+        ClipEdge::Bottom => point.y <= clip.y + clip.height,
+    }
+}
+
+fn edge_intersection(
+    start: Point,
+    end: Point,
+    edge: ClipEdge,
+    clip: Rectangle,
+) -> Point {
+    let vertical = matches!(edge, ClipEdge::Left | ClipEdge::Right);
+    let boundary = match edge {
+        ClipEdge::Left => clip.x,
+        ClipEdge::Right => clip.x + clip.width,
+        ClipEdge::Top => clip.y,
+        ClipEdge::Bottom => clip.y + clip.height,
+    };
+    if vertical {
+        let ratio = (boundary - start.x) / (end.x - start.x);
+        Point::new(boundary, start.y + ratio * (end.y - start.y))
+    } else {
+        let ratio = (boundary - start.y) / (end.y - start.y);
+        Point::new(start.x + ratio * (end.x - start.x), boundary)
+    }
+}
+
 fn clipped_ellipse_runs(
     center: Point,
     width: f32,
@@ -774,6 +959,60 @@ fn clipped_ellipse_runs(
     }
     if !run.is_empty() {
         runs.push(run);
+    }
+    runs
+}
+
+fn clipped_polyline_runs(points: &[Point], clip: Rectangle) -> Vec<Vec<Point>> {
+    let mut runs = Vec::new();
+    let mut run = Vec::new();
+    for segment in points.windows(2) {
+        let clipped = clip_segment(segment[0], segment[1], clip)
+            .filter(|(start, end)| !same_point(*start, *end));
+        match clipped {
+            Some((start, end)) => {
+                if run.last().is_none_or(|last| !same_point(*last, start)) {
+                    if !run.is_empty() {
+                        runs.push(std::mem::take(&mut run));
+                    }
+                    run.push(start);
+                }
+                run.push(end);
+            }
+            None if !run.is_empty() => runs.push(std::mem::take(&mut run)),
+            None => {}
+        }
+    }
+    if !run.is_empty() {
+        runs.push(run);
+    }
+    runs
+}
+
+fn clipped_closed_polyline_runs(
+    points: &[Point],
+    clip: Rectangle,
+) -> Vec<Vec<Point>> {
+    let Some(first) = points.first() else {
+        return Vec::new();
+    };
+    let mut closed = Vec::with_capacity(points.len() + 1);
+    closed.extend_from_slice(points);
+    closed.push(*first);
+    let mut runs = clipped_polyline_runs(&closed, clip);
+
+    if runs.len() > 1 {
+        let joins_at_start = runs
+            .last()
+            .and_then(|run| run.last())
+            .zip(runs.first().and_then(|run| run.first()))
+            .is_some_and(|(last, first)| same_point(*last, *first));
+        if joins_at_start {
+            let mut last = runs.pop().expect("run exists");
+            let first = runs.remove(0);
+            last.extend_from_slice(&first[1..]);
+            runs.insert(0, last);
+        }
     }
     runs
 }
@@ -836,10 +1075,10 @@ fn edit_cursor(hit: EditHit) -> mouse::Interaction {
 fn draw_selection(
     frame: &mut canvas::Frame,
     view: fastfill_rust::geometry::PageView,
-    annotation: ShapeAnnotation,
+    annotation: &ShapeAnnotation,
     scale: f32,
 ) {
-    let blue = Color::from_rgb8(0, 102, 204);
+    let blue = accent();
     let controls = annotation.bounds();
     let origin = view.page_to_view(PagePoint::new(controls.x, controls.y));
     let path = canvas::Path::rectangle(
@@ -847,31 +1086,36 @@ fn draw_selection(
         iced::Size::new(controls.width * scale, controls.height * scale),
     );
     frame.stroke(&path, canvas::Stroke::default().with_color(blue));
-    let handles: Vec<Point> = match annotation.geometry {
-        AnnotationGeometry::Bounded { .. } => RESIZE_CORNERS
-            .into_iter()
-            .map(|corner| {
-                let point = view.page_to_view(corner.position(controls));
-                Point::new(point.x, point.y)
-            })
-            .collect(),
+    let handles: Vec<Point> = match &annotation.geometry {
+        AnnotationGeometry::Bounded { .. } | AnnotationGeometry::Ink { .. } => {
+            RESIZE_CORNERS
+                .into_iter()
+                .map(|corner| {
+                    let point = view.page_to_view(corner.position(controls));
+                    Point::new(point.x, point.y)
+                })
+                .collect()
+        }
         AnnotationGeometry::Linear { start, end, .. } => [start, end]
             .into_iter()
             .map(|point| {
-                let point = view.page_to_view(point);
+                let point = view.page_to_view(*point);
                 Point::new(point.x, point.y)
             })
             .collect(),
     };
     for center in handles {
+        let half = SELECTION_HANDLE_SIZE / 2.0;
         let path = canvas::Path::rectangle(
-            Point::new(center.x - 7.0, center.y - 7.0),
-            iced::Size::new(14.0, 14.0),
+            Point::new(center.x - half, center.y - half),
+            iced::Size::new(SELECTION_HANDLE_SIZE, SELECTION_HANDLE_SIZE),
         );
         frame.fill(&path, Color::WHITE);
         frame.stroke(
             &path,
-            canvas::Stroke::default().with_color(blue).with_width(2.0),
+            canvas::Stroke::default()
+                .with_color(blue)
+                .with_width(SELECTION_STROKE),
         );
     }
 }
@@ -942,15 +1186,50 @@ mod tests {
     }
 
     #[test]
+    fn polyline_clipping_keeps_every_run_inside_the_page() {
+        let clip =
+            Rectangle::new(Point::new(10.0, 20.0), iced::Size::new(30.0, 40.0));
+        let points = [
+            Point::new(0.0, 30.0),
+            Point::new(20.0, 30.0),
+            Point::new(50.0, 50.0),
+            Point::new(20.0, 70.0),
+        ];
+        let runs = clipped_polyline_runs(&points, clip);
+
+        assert_eq!(runs.len(), 2);
+        assert!(runs.iter().flatten().all(|point| {
+            point.x >= clip.x
+                && point.x <= clip.x + clip.width
+                && point.y >= clip.y
+                && point.y <= clip.y + clip.height
+        }));
+    }
+
+    #[test]
+    fn closed_polyline_keeps_its_start_as_a_join_not_two_caps() {
+        let clip =
+            Rectangle::new(Point::new(0.0, 0.0), iced::Size::new(100.0, 100.0));
+        let points = [
+            Point::new(10.0, 10.0),
+            Point::new(90.0, 10.0),
+            Point::new(50.0, 90.0),
+        ];
+        let runs = clipped_closed_polyline_runs(&points, clip);
+
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].first(), runs[0].last());
+    }
+
+    #[test]
     fn arrowhead_dimensions_do_not_depend_on_direction_or_box_aspect() {
         let end = PagePoint::new(200.0, 200.0);
         let horizontal =
-            arrowhead_points(PagePoint::new(0.0, 200.0), end, 3.0).unwrap();
+            arrowhead_points(PagePoint::new(0.0, 200.0), end).unwrap();
         let diagonal_offset = 200.0 / 2.0_f32.sqrt();
         let diagonal = arrowhead_points(
             PagePoint::new(end.x - diagonal_offset, end.y - diagonal_offset),
             end,
-            3.0,
         )
         .unwrap();
         for (horizontal, diagonal) in [horizontal.0, horizontal.1]
@@ -1026,5 +1305,28 @@ mod tests {
                 .windows(2)
                 .all(|pair| !same_point(pair[0], pair[1]))
         );
+    }
+
+    #[test]
+    fn filled_polygon_clipping_keeps_every_point_inside_the_page() {
+        let clip =
+            Rectangle::new(Point::new(0.0, 0.0), iced::Size::new(10.0, 10.0));
+        let polygon = clip_polygon_to_rectangle(
+            vec![
+                Point::new(-5.0, -5.0),
+                Point::new(15.0, -5.0),
+                Point::new(15.0, 15.0),
+                Point::new(-5.0, 15.0),
+            ],
+            clip,
+        );
+
+        assert_eq!(polygon.len(), 4);
+        assert!(polygon.into_iter().all(|point| {
+            point.x >= clip.x
+                && point.x <= clip.x + clip.width
+                && point.y >= clip.y
+                && point.y <= clip.y + clip.height
+        }));
     }
 }

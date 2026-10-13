@@ -50,7 +50,7 @@ fn creation_selects_the_object_and_body_hit_selects_topmost() {
 #[test]
 fn move_preview_does_not_modify_the_object_until_release() {
     let mut annotations = sample();
-    let original = annotations.shapes()[0];
+    let original = annotations.shapes()[0].clone();
     annotations.begin_interaction(
         MOUSE,
         Point::new(180.0, 150.0),
@@ -89,7 +89,7 @@ fn every_corner_resizes_freely_without_changing_stroke() {
             PLAIN,
         );
         annotations.finish(MOUSE, Point::new(end.0, end.1), false);
-        let object = annotations.shapes()[0];
+        let object = &annotations.shapes()[0];
         assert_eq!(object.stroke_width, stroke);
         assert_eq!(
             object.bounds(),
@@ -126,7 +126,7 @@ fn resize_can_cross_the_opposite_corner_and_ctrl_can_toggle_live() {
 fn cancel_and_tool_change_restore_original_move_or_resize() {
     for start in [Point::new(180.0, 150.0), Point::new(300.0, 200.0)] {
         let mut annotations = sample();
-        let original = annotations.shapes()[0];
+        let original = annotations.shapes()[0].clone();
         annotations.begin_interaction(MOUSE, start, PAGE, 1.0, PLAIN);
         annotations.drag(MOUSE, Point::new(400.0, 400.0), false);
         annotations.cancel();
@@ -142,7 +142,7 @@ fn cancel_and_tool_change_restore_original_move_or_resize() {
 #[test]
 fn invalid_release_reverts_and_other_pointers_cannot_take_over() {
     let mut annotations = sample();
-    let original = annotations.shapes()[0];
+    let original = annotations.shapes()[0].clone();
     let finger = Pointer::Touch(1);
     annotations.begin_interaction(
         finger,
@@ -344,7 +344,7 @@ fn create_move_and_delete_undo_and_redo_in_order() {
     annotations.set_tool(Tool::Rectangle);
     annotations.begin(MOUSE, Point::new(100.0, 100.0), PAGE);
     annotations.finish(MOUSE, Point::new(300.0, 200.0), false);
-    let original = annotations.shapes()[0];
+    let original = annotations.shapes()[0].clone();
 
     annotations.set_tool(Tool::Select);
     annotations.begin_interaction(
@@ -355,15 +355,15 @@ fn create_move_and_delete_undo_and_redo_in_order() {
         PLAIN,
     );
     annotations.finish(MOUSE, Point::new(230.0, 170.0), false);
-    let moved = annotations.shapes()[0];
+    let moved = annotations.shapes()[0].clone();
     assert!(annotations.delete_selected());
     assert_eq!(annotations.shapes(), []);
 
     assert!(annotations.undo());
-    assert_eq!(annotations.shapes(), [moved]);
+    assert_eq!(annotations.shapes(), std::slice::from_ref(&moved));
     assert_eq!(annotations.selected_index(), Some(0));
     assert!(annotations.undo());
-    assert_eq!(annotations.shapes(), [original]);
+    assert_eq!(annotations.shapes(), std::slice::from_ref(&original));
     assert!(annotations.undo());
     assert_eq!(annotations.shapes(), []);
     assert!(!annotations.undo());
@@ -433,7 +433,7 @@ fn oval_edit_and_history_preserve_shape_kind() {
     annotations.set_tool(Tool::Oval);
     annotations.begin(MOUSE, Point::new(100.0, 100.0), PAGE);
     annotations.finish(MOUSE, Point::new(300.0, 200.0), false);
-    let original = annotations.shapes()[0];
+    let original = annotations.shapes()[0].clone();
     assert_eq!(original.kind(), Some(ShapeKind::Oval));
 
     annotations.set_tool(Tool::Select);

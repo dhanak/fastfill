@@ -156,7 +156,42 @@ text. No importing, saving, camera, or annotations were included.
 - [x] Reuse movement, history, deletion, clipping, and navigation behavior.
 - [x] User checkpoint: placement, sizing, editing, and rendering.
 
-Rotation, other shapes, and multi-selection belong to later slices.
+#### 3H. Annotation styles and filled shapes — accepted
+
+- [x] Store color, stroke thickness, and compatible fill state per object.
+- [x] Remember independent style defaults for each drawing tool.
+- [x] Offer black, white, red, blue, green, and yellow controls.
+- [x] Apply 1–20 thickness to outlines, marks, lines, and arrows.
+- [x] Fill rectangles and ovals without painting outside their frames.
+- [x] Apply compatible style changes to the selected object with undo/redo.
+- [x] User checkpoint: style memory, selection updates, fill, and rendering.
+
+#### 3I. Freehand pen and highlighter — accepted
+
+- [x] Capture pointer samples in page coordinates for mouse and touch.
+- [x] Add an opaque pen and translucent highlighter with constant thickness.
+- [x] Let Fill close and fill pen paths; keep highlighter unfilled.
+- [x] Move and resize paths without scaling stroke thickness.
+- [x] Reuse clipping, selection, cancellation, deletion, and history.
+- [x] User checkpoint: drawing quality, touch input, editing, and fill.
+
+#### 3J. Rotation — not started
+
+- [ ] Add a separate rotation handle for supported bounded objects and ink.
+- [ ] Keep lines and arrows endpoint-edited without rotation.
+- [ ] Hold Ctrl to snap rotation to 45-degree increments.
+- [ ] Add reset-to-zero rotation and preserve rotation through history.
+- [ ] Keep painted geometry inside its rotated selection frame.
+- [ ] User checkpoint: handle use, snapping, reset, and rendering.
+
+#### 3K. Multi-selection, layers, and bulk deletion — not started
+
+- [ ] Ctrl-click to toggle objects and drag an empty-area selection rectangle.
+- [ ] Move selections together and apply compatible style changes in bulk.
+- [ ] Delete selected objects and delete all with confirmation.
+- [ ] Send selected objects to back or bring them to front.
+- [ ] Preserve selection and layer order through undo/redo.
+- [ ] User checkpoint: mixed-object selection, layers, and bulk operations.
 
 ### 4. Text and toolkit decision gate — not started
 
@@ -424,6 +459,59 @@ Rotation, other shapes, and multi-selection belong to later slices.
 - Thick oval strokes exposed the old 128 independent clipping segments. Join
   visible segments into continuous runs, close complete ovals, and use round
   joins so clipping does not create a comb-like outline.
+
+### 2026-10-13 — checkpoint 3H annotation styles and fill
+
+- Corrected the plan before checkpoint 4: styles, freehand tools, rotation,
+  multi-selection, layers, and bulk deletion remain part of phase 3.
+- Preserved the prematurely started inline-text prototype in Git stash
+  `wip/rust: Phase 4 inline text prototype` for later checkpoint 4 work.
+- TDD red: style tests failed before per-tool defaults and object styles
+  existed; renderer checks then showed ignored colors and fill state.
+- Store six fixed colors, 1–20 stroke width, and compatible fill state on each
+  object. Keep independent session defaults for every current drawing tool.
+- Apply style changes in Select mode as undoable document edits. Tool-default
+  changes affect only subsequently created objects and do not pollute history.
+- Clip solid rectangles directly and solid ovals as polygons, retaining both
+  page clipping and the rule that ink remains inside its selection frame.
+- Added a third functional toolbar row for colors, thickness, and compatible
+  fill controls. Visual polish remains checkpoint 7 work.
+- Centralized UI dimensions, canvas colors, annotation colors, and selection
+  metrics in `appearance.rs`. Split the toolbar into control, tool, and style
+  rows so checkpoint 7 can restyle components without touching interactions.
+- Follow-up testing found that style controls targeted only tool defaults while
+  a just-created object remained selected. Compatible selected objects now
+  receive the change and the tool remembers it for the next object.
+- Draft and edit previews now use their actual annotation color. Active edits
+  remain temporarily above siblings for visibility, then return to layer order.
+- Decoupled arrowhead geometry from stroke thickness. A thicker arrow changes
+  only its painted stroke, not the arrowhead's centerline length or spread.
+- Passed 90 all-feature tests, 61 core-only tests, strict Clippy, formatting,
+  native and WASM compilation, and a linked Trunk WASM build.
+
+### 2026-10-13 — checkpoint 3I pen and highlighter
+
+- User accepted checkpoint 3H after the selected-object, preview-color, and
+  arrowhead-thickness follow-up fixes.
+- TDD red: ink tests failed before pen/highlighter tools and owned point paths
+  existed. Filled-path interior selection also failed before polygon testing.
+- Store sampled mouse or touch points in page coordinates. Ignore duplicate
+  samples and events from pointers that do not own the active stroke.
+- Render pen paths with round caps and joins. Render highlighter paths with a
+  fixed translucent alpha while retaining their selected color and thickness.
+- Let Pen Fill close the sampled polygon while retaining its outline. Keep
+  highlighter unfilled and give it an independent yellow, 12 px default.
+- Move or freely resize whole paths while keeping stroke thickness unchanged.
+  Include visible stroke in bounds so ink stays inside its selection frame.
+- Clip filled polygons and stroked path runs at page boundaries. Selection,
+  cancel, delete, undo, redo, and reachability reuse existing annotation flow.
+- Close a filled pen's outline as a joined path instead of leaving round caps
+  at its start and end. Preserve separate runs where the page clips the path.
+- User accepted drawing, editing, filling, and interior selection after the
+  filled-outline join fix. Thick off-page clipping remains an accepted edge
+  case for this checkpoint.
+- Passed 98 all-feature tests, 66 core-only tests, strict Clippy, formatting,
+  native and WASM compilation, and a linked Trunk WASM build.
 
 ## References
 

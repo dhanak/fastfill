@@ -54,7 +54,7 @@ fn resizing_a_mark_stays_square_without_ctrl_and_keeps_its_stroke() {
     let mut annotations = mark(Tool::Cross);
     annotations.begin(MOUSE, Point::new(300.0, 400.0), PAGE);
     annotations.finish(MOUSE, Point::new(340.0, 420.0), false);
-    let original = annotations.shapes()[0];
+    let original = annotations.shapes()[0].clone();
     annotations.set_tool(Tool::Select);
 
     let corner = Point::new(340.0, 440.0);
@@ -66,7 +66,7 @@ fn resizing_a_mark_stays_square_without_ctrl_and_keeps_its_stroke() {
         DragModifiers::default(),
     ));
     annotations.finish(MOUSE, Point::new(380.0, 460.0), false);
-    let resized = annotations.shapes()[0];
+    let resized = annotations.shapes()[0].clone();
     assert_eq!(resized.bounds().width, resized.bounds().height);
     assert!(resized.bounds().width > original.bounds().width);
     assert_eq!(resized.stroke_width, original.stroke_width);
@@ -78,7 +78,7 @@ fn mark_movement_and_deletion_participate_in_history() {
     let mut annotations = mark(Tool::Checkmark);
     annotations.begin(MOUSE, Point::new(300.0, 400.0), PAGE);
     annotations.finish(MOUSE, Point::new(300.0, 400.0), false);
-    let original = annotations.shapes()[0];
+    let original = annotations.shapes()[0].clone();
     annotations.set_tool(Tool::Select);
 
     annotations.begin_interaction(
@@ -89,7 +89,7 @@ fn mark_movement_and_deletion_participate_in_history() {
         DragModifiers::default(),
     );
     annotations.finish(MOUSE, Point::new(350.0, 450.0), false);
-    let moved = annotations.shapes()[0];
+    let moved = annotations.shapes()[0].clone();
     assert!(annotations.delete_selected());
     assert!(annotations.undo());
     assert_eq!(annotations.shapes(), [moved]);

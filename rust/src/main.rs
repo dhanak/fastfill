@@ -1,4 +1,5 @@
 mod app;
+mod appearance;
 mod page_canvas;
 mod picker;
 

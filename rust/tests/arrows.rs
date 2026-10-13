@@ -8,9 +8,13 @@ const PAGE: Size = Size::new(800.0, 1_100.0);
 const MOUSE: Pointer = Pointer::Mouse;
 
 fn linear_geometry(annotations: &Annotations) -> (LineKind, Point, Point) {
-    match annotations.shapes()[0].geometry {
-        AnnotationGeometry::Linear { kind, start, end } => (kind, start, end),
-        AnnotationGeometry::Bounded { .. } => panic!("expected arrow"),
+    match &annotations.shapes()[0].geometry {
+        AnnotationGeometry::Linear { kind, start, end } => {
+            (*kind, *start, *end)
+        }
+        AnnotationGeometry::Bounded { .. } | AnnotationGeometry::Ink { .. } => {
+            panic!("expected arrow")
+        }
     }
 }
 
@@ -37,7 +41,7 @@ fn arrow_kind_survives_move_endpoint_edit_and_history() {
     annotations.set_tool(Tool::Arrow);
     annotations.begin(MOUSE, Point::new(100.0, 100.0), PAGE);
     annotations.finish(MOUSE, Point::new(300.0, 200.0), false);
-    let original = annotations.shapes()[0];
+    let original = annotations.shapes()[0].clone();
 
     annotations.set_tool(Tool::Select);
     annotations.begin_interaction(
@@ -79,16 +83,12 @@ fn arrowhead_is_part_of_bounds_and_hit_testing() {
     assert!(bounds.y < 100.0);
     assert!(bounds.y + bounds.height > 100.0);
     let AnnotationGeometry::Linear { start, end, .. } =
-        annotations.shapes()[0].geometry
+        &annotations.shapes()[0].geometry
     else {
         panic!("expected arrow");
     };
-    let (left, right) = fastfill_rust::annotations::arrowhead_points(
-        start,
-        end,
-        annotations.shapes()[0].stroke_width,
-    )
-    .unwrap();
+    let (left, right) =
+        fastfill_rust::annotations::arrowhead_points(*start, *end).unwrap();
     assert!(bounds.y < left.y.min(right.y));
     assert!(bounds.y + bounds.height > left.y.max(right.y));
     let half_stroke = annotations.shapes()[0].stroke_width / 2.0;
@@ -102,4 +102,17 @@ fn arrowhead_is_part_of_bounds_and_hit_testing() {
         ),
         Some(EditHit::Move),
     );
+}
+
+#[test]
+fn arrowhead_uses_a_fixed_length() {
+    let start = Point::new(0.0, 100.0);
+    let end = Point::new(200.0, 100.0);
+    let (left, right) =
+        fastfill_rust::annotations::arrowhead_points(start, end).unwrap();
+
+    assert!((left.x - 176.0).abs() < 0.001);
+    assert!((right.x - 176.0).abs() < 0.001);
+    assert!((left.y - 110.8).abs() < 0.001);
+    assert!((right.y - 89.2).abs() < 0.001);
 }

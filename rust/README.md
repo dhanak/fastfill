@@ -36,21 +36,27 @@ to reach TCP port 24800. Trunk watches for changes, but browser auto-reload is
 disabled so the generated page never assumes the development machine is
 `localhost`; refresh the browser after a rebuild.
 
-Checkpoint 3G adds shape, line, arrow, and mark editing with history:
+Checkpoint 3I adds styled shapes and freehand annotation with history:
 
-- **Rectangle:** drag with the left mouse button or one finger. The blue
-  preview becomes a black outline on release. Hold Ctrl to draw a square.
+- **Rectangle:** drag with the left mouse button or one finger. The preview
+  uses the chosen style immediately. Hold Ctrl to draw a square.
 - **Oval:** drag like a rectangle. Hold Ctrl to draw a circle.
 - **Line:** drag between endpoints. Hold Ctrl to snap to 45° increments. Drag
   the line to move it or either endpoint handle to change that endpoint.
-- **Arrow:** behaves like a line, with a fixed-proportion head at its ending
-  endpoint. Its head does not distort when direction or aspect ratio changes.
+- **Arrow:** behaves like a line, with a stable-size head at its ending
+  endpoint. Its head does not distort or grow with line thickness.
 - **Check/Cross:** click or tap the intended center to place a small mark. Drag
   outward for a larger mark. Both remain square when resized.
-- **Select:** click or touch inside a bounded shape or on a line, then drag to
-  move it. Drag a shape's corner to resize or a line endpoint to edit it. Hold
-  Ctrl for square/circle/45° constraints, Shift to force movement, or Alt to
-  force resizing.
+- **Pen:** draw an opaque freehand path. Fill closes and fills the path while
+  retaining its outline.
+- **Highlighter:** draw a translucent freehand path. Its color and thickness
+  are adjustable, but it remains unfilled.
+- **Styles:** choose black, white, red, blue, green, or yellow. Use −/+ for
+  stroke widths from 1–20. Rectangle, Oval, and Pen offer Fill. Each tool
+  remembers its own settings; Select changes the chosen object with undo.
+- **Select:** click or touch a shape, line, or ink path, then drag to move it.
+  Drag a shape or ink corner to resize or a line endpoint to edit it. Hold Ctrl
+  for square/circle/45° constraints, Shift to move, or Alt to resize.
 - Drawing modes can edit the selected object from its body or handles.
   Starting elsewhere draws a new object of the active type.
 - **Delete:** remove the selection with the button or Delete key.
@@ -67,6 +73,6 @@ Checkpoint 3G adds shape, line, arrow, and mark editing with history:
 - Opening another image asks before discarding annotations. Canceling the
   picker or choosing an invalid image preserves the current page.
 
-Annotations and history are temporary. Other tools, projects, and saving are
-not implemented yet. Android browser rendering is currently slow; native
+Annotations and history are temporary. Text, projects, and saving are not
+implemented yet. Android browser rendering is currently slow; native
 touchscreen performance still needs hardware testing.

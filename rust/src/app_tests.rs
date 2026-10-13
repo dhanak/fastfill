@@ -3,11 +3,11 @@ use super::*;
 #[test]
 fn undo_redo_messages_apply_only_to_committed_edits() {
     let mut state = annotated_page();
-    let rectangle = state.annotations.shapes()[0];
+    let rectangle = state.annotations.shapes()[0].clone();
     let _ = update(&mut state, Message::Undo);
     assert_eq!(state.annotations.shapes(), []);
     let _ = update(&mut state, Message::Redo);
-    assert_eq!(state.annotations.shapes(), [rectangle]);
+    assert_eq!(state.annotations.shapes(), std::slice::from_ref(&rectangle),);
 
     state.annotations.begin_interaction(
         Pointer::Mouse,
@@ -54,7 +54,7 @@ fn keyboard_shortcuts_map_to_history_and_edit_commands() {
 fn select_drag_is_pending_escape_reverts_and_delete_removes_selection() {
     let mut state = annotated_page();
     let _ = update(&mut state, Message::SetTool(Tool::Select));
-    let original = state.annotations.shapes()[0];
+    let original = state.annotations.shapes()[0].clone();
     let start = screen_point(&state, PagePoint::new(30.0, 45.0));
     let end = Point::new(start.x + 20.0, start.y + 30.0);
     let mut canvas_state = CanvasState::default();
@@ -81,7 +81,7 @@ fn select_drag_is_pending_escape_reverts_and_delete_removes_selection() {
 #[test]
 fn rectangle_mode_can_resize_selected_object_through_its_handle() {
     let mut state = annotated_page();
-    let original = state.annotations.shapes()[0];
+    let original = state.annotations.shapes()[0].clone();
     let view = state
         .navigation
         .view(DEFAULT_PAGE, page_viewport(CANVAS.size()))
@@ -107,7 +107,7 @@ fn rectangle_mode_can_resize_selected_object_through_its_handle() {
         end,
     );
     assert_eq!(state.annotations.shapes().len(), 1);
-    let resized = state.annotations.shapes()[0];
+    let resized = &state.annotations.shapes()[0];
     assert!(resized.bounds().width > original.bounds().width);
     assert!(resized.bounds().height > original.bounds().height);
     assert_eq!(resized.stroke_width, original.stroke_width);
@@ -117,7 +117,7 @@ fn rectangle_mode_can_resize_selected_object_through_its_handle() {
 fn lost_touch_in_select_mode_reverts_edit_without_navigating() {
     let mut state = annotated_page();
     let _ = update(&mut state, Message::SetTool(Tool::Select));
-    let original = state.annotations.shapes()[0];
+    let original = state.annotations.shapes()[0].clone();
     let navigation = state.navigation;
     let start = screen_point(&state, PagePoint::new(30.0, 45.0));
     let end = Point::new(start.x + 20.0, start.y + 30.0);
@@ -235,6 +235,45 @@ fn edit_preview_replaces_the_committed_outline() {
     };
     assert_eq!(pixel(124, 150), [240, 230, 210, 255]);
     assert_ne!(pixel(300, 344), [240, 230, 210, 255]);
+}
+
+#[test]
+fn draft_and_edit_preview_use_the_annotation_color() {
+    let mut state = rendered_page();
+    state.annotations.set_tool(Tool::Rectangle);
+    state.annotations.set_color(AnnotationColor::Red);
+    state.annotations.set_filled(true);
+    state.annotations.begin(
+        Pointer::Mouse,
+        PagePoint::new(100.0, 100.0),
+        page_size(&state),
+    );
+    state
+        .annotations
+        .drag(Pointer::Mouse, PagePoint::new(200.0, 200.0), false);
+
+    let pixels = render_document(&state, 1, 1.0);
+    assert_eq!(&pixels[(168 * 600 + 168) * 4..][..4], [220, 32, 32, 255]);
+
+    state.annotations.finish(
+        Pointer::Mouse,
+        PagePoint::new(200.0, 200.0),
+        false,
+    );
+    assert!(state.annotations.set_color(AnnotationColor::Green));
+    assert!(state.annotations.begin_interaction(
+        Pointer::Mouse,
+        PagePoint::new(150.0, 150.0),
+        page_size(&state),
+        0.88,
+        DragModifiers::default(),
+    ));
+    state
+        .annotations
+        .drag(Pointer::Mouse, PagePoint::new(250.0, 250.0), false);
+
+    let pixels = render_document(&state, 1, 1.0);
+    assert_eq!(&pixels[(256 * 600 + 256) * 4..][..4], [0, 160, 72, 255]);
 }
 
 #[test]
@@ -370,6 +409,110 @@ fn marks_render_as_strokes_without_a_surrounding_box() {
         &pixels[offset..offset + 4]
     };
     assert_eq!(pixel(291, 336), [240, 230, 210, 255]);
+}
+
+#[test]
+fn colors_and_filled_shapes_render_without_filling_oval_corners() {
+    let mut state = rendered_page();
+    state.annotations.set_tool(Tool::Rectangle);
+    state.annotations.set_color(AnnotationColor::Red);
+    state.annotations.set_filled(true);
+    state.annotations.begin(
+        Pointer::Mouse,
+        PagePoint::new(100.0, 100.0),
+        page_size(&state),
+    );
+    state.annotations.finish(
+        Pointer::Mouse,
+        PagePoint::new(200.0, 200.0),
+        false,
+    );
+    state.annotations.set_tool(Tool::Oval);
+    state.annotations.set_color(AnnotationColor::Green);
+    state.annotations.set_filled(true);
+    state.annotations.begin(
+        Pointer::Mouse,
+        PagePoint::new(300.0, 100.0),
+        page_size(&state),
+    );
+    state.annotations.finish(
+        Pointer::Mouse,
+        PagePoint::new(500.0, 200.0),
+        false,
+    );
+    state.annotations.set_tool(Tool::Navigate);
+
+    let pixels = render_document(&state, 1, 1.0);
+    let pixel = |x: usize, y: usize| {
+        let offset = (y * 600 + x) * 4;
+        &pixels[offset..offset + 4]
+    };
+    let red = pixel(150, 150);
+    assert!(
+        i16::from(red[0]) > i16::from(red[1]) + 100 && red[2] < 80,
+        "red rectangle fill missing: {red:?}",
+    );
+    let green = pixel(400, 150);
+    assert!(
+        i16::from(green[1]) > i16::from(green[0]) + 80 && green[2] < 140,
+        "green oval fill missing: {green:?}",
+    );
+    assert_eq!(
+        pixel(310, 110),
+        [240, 230, 210, 255],
+        "oval fill must not paint its rectangular corner",
+    );
+}
+
+#[test]
+fn pen_fill_and_translucent_highlighter_render_over_the_page() {
+    let mut state = rendered_page();
+    state.annotations.set_tool(Tool::Pen);
+    state.annotations.set_color(AnnotationColor::Blue);
+    state.annotations.set_filled(true);
+    state.annotations.begin(
+        Pointer::Mouse,
+        PagePoint::new(100.0, 100.0),
+        page_size(&state),
+    );
+    state
+        .annotations
+        .drag(Pointer::Mouse, PagePoint::new(200.0, 100.0), false);
+    state.annotations.finish(
+        Pointer::Mouse,
+        PagePoint::new(150.0, 200.0),
+        false,
+    );
+
+    state.annotations.set_tool(Tool::Highlighter);
+    state.annotations.begin(
+        Pointer::Mouse,
+        PagePoint::new(300.0, 100.0),
+        page_size(&state),
+    );
+    state.annotations.finish(
+        Pointer::Mouse,
+        PagePoint::new(500.0, 100.0),
+        false,
+    );
+    state.annotations.set_tool(Tool::Navigate);
+
+    let pixels = render_document(&state, 1, 1.0);
+    let pixel = |x: usize, y: usize| {
+        let offset = (y * 600 + x) * 4;
+        &pixels[offset..offset + 4]
+    };
+    assert_eq!(pixel(168, 150), [0, 102, 204, 255]);
+    let highlight = pixel(388, 124);
+    assert!(highlight[0] >= 240, "highlight red: {highlight:?}");
+    assert!(
+        (195..230).contains(&highlight[1]),
+        "highlight green: {highlight:?}",
+    );
+    assert!(
+        (100..200).contains(&highlight[2]),
+        "highlight blue: {highlight:?}",
+    );
 }
 
 fn rendered_page() -> FastFill {

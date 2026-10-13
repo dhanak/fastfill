@@ -21,17 +21,19 @@ fn line() -> Annotations {
 }
 
 fn endpoints(annotations: &Annotations) -> (Point, Point) {
-    match annotations.shapes()[0].geometry {
+    match &annotations.shapes()[0].geometry {
         AnnotationGeometry::Linear {
             kind: LineKind::Line,
             start,
             end,
-        } => (start, end),
+        } => (*start, *end),
         AnnotationGeometry::Linear {
             kind: LineKind::Arrow,
             ..
         } => panic!("expected line, found arrow"),
-        AnnotationGeometry::Bounded { .. } => panic!("expected line"),
+        AnnotationGeometry::Bounded { .. } | AnnotationGeometry::Ink { .. } => {
+            panic!("expected line")
+        }
     }
 }
 
@@ -167,7 +169,7 @@ fn ctrl_snaps_endpoint_edit_around_the_fixed_endpoint() {
 #[test]
 fn line_edits_participate_in_cancel_delete_and_history() {
     let mut annotations = line();
-    let original = annotations.shapes()[0];
+    let original = annotations.shapes()[0].clone();
     annotations.set_tool(Tool::Select);
     annotations.begin_interaction(
         MOUSE,
@@ -188,7 +190,7 @@ fn line_edits_participate_in_cancel_delete_and_history() {
         PLAIN,
     );
     annotations.finish(MOUSE, Point::new(250.0, 175.0), false);
-    let moved = annotations.shapes()[0];
+    let moved = annotations.shapes()[0].clone();
     assert_ne!(moved, original);
     assert!(annotations.delete_selected());
     assert!(annotations.undo());
@@ -280,7 +282,7 @@ fn selected_line_moves_from_its_box_and_modifiers_disambiguate() {
 #[test]
 fn line_bounds_contain_the_full_directional_stroke() {
     let annotations = line();
-    let annotation = annotations.shapes()[0];
+    let annotation = &annotations.shapes()[0];
     let half = annotation.stroke_width / 2.0;
     let diagonal_padding = half / 5.0_f32.sqrt();
     let bounds = annotation.bounds();

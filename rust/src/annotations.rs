@@ -10,6 +10,8 @@ pub enum Tool {
     Arrow,
     Checkmark,
     Cross,
+    Pen,
+    Highlighter,
     Select,
 }
 
@@ -26,8 +28,80 @@ impl Tool {
                 Some(CreationKind::Bounded(ShapeKind::Checkmark))
             }
             Self::Cross => Some(CreationKind::Bounded(ShapeKind::Cross)),
+            Self::Pen => Some(CreationKind::Ink(InkKind::Pen)),
+            Self::Highlighter => Some(CreationKind::Ink(InkKind::Highlighter)),
             Self::Navigate | Self::Select => None,
         }
+    }
+
+    const fn style_index(self) -> Option<usize> {
+        match self {
+            Self::Rectangle => Some(0),
+            Self::Oval => Some(1),
+            Self::Line => Some(2),
+            Self::Arrow => Some(3),
+            Self::Checkmark => Some(4),
+            Self::Cross => Some(5),
+            Self::Pen => Some(6),
+            Self::Highlighter => Some(7),
+            Self::Navigate | Self::Select => None,
+        }
+    }
+
+    const fn supports_fill(self) -> bool {
+        matches!(self, Self::Rectangle | Self::Oval | Self::Pen)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AnnotationColor {
+    #[default]
+    Black,
+    White,
+    Red,
+    Blue,
+    Green,
+    Yellow,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AnnotationStyle {
+    pub color: AnnotationColor,
+    pub stroke_width: f32,
+    pub filled: bool,
+}
+
+impl Default for AnnotationStyle {
+    fn default() -> Self {
+        Self {
+            color: AnnotationColor::Black,
+            stroke_width: 3.0,
+            filled: false,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ToolStyles([AnnotationStyle; 8]);
+
+impl Default for ToolStyles {
+    fn default() -> Self {
+        let mut styles = [AnnotationStyle::default(); 8];
+        styles[4].stroke_width = 2.0;
+        styles[5].stroke_width = 2.0;
+        styles[7].color = AnnotationColor::Yellow;
+        styles[7].stroke_width = 12.0;
+        Self(styles)
+    }
+}
+
+impl ToolStyles {
+    fn get(&self, tool: Tool) -> Option<AnnotationStyle> {
+        tool.style_index().map(|index| self.0[index])
+    }
+
+    fn get_mut(&mut self, tool: Tool) -> Option<&mut AnnotationStyle> {
+        tool.style_index().map(|index| &mut self.0[index])
     }
 }
 
@@ -35,6 +109,26 @@ impl Tool {
 enum CreationKind {
     Bounded(ShapeKind),
     Linear(LineKind),
+    Ink(InkKind),
+}
+
+impl CreationKind {
+    fn matches(self, annotation: &ShapeAnnotation) -> bool {
+        match (self, &annotation.geometry) {
+            (
+                Self::Bounded(expected),
+                AnnotationGeometry::Bounded { kind, .. },
+            ) => *kind == expected,
+            (
+                Self::Linear(expected),
+                AnnotationGeometry::Linear { kind, .. },
+            ) => *kind == expected,
+            (Self::Ink(expected), AnnotationGeometry::Ink { kind, .. }) => {
+                *kind == expected
+            }
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -55,6 +149,12 @@ impl ShapeKind {
 pub enum LineKind {
     Line,
     Arrow,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InkKind {
+    Pen,
+    Highlighter,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -115,7 +215,7 @@ pub enum EditHit {
     Endpoint(LineEndpoint),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AnnotationGeometry {
     Bounded {
         kind: ShapeKind,
@@ -125,6 +225,10 @@ pub enum AnnotationGeometry {
         kind: LineKind,
         start: Point,
         end: Point,
+    },
+    Ink {
+        kind: InkKind,
+        points: Vec<Point>,
     },
 }
 
@@ -143,36 +247,64 @@ impl LineEndpoint {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ShapeAnnotation {
     pub geometry: AnnotationGeometry,
     pub stroke_width: f32,
+    pub color: AnnotationColor,
+    pub filled: bool,
 }
 
 impl ShapeAnnotation {
     #[must_use]
-    pub fn bounds(self) -> Rect {
-        match self.geometry {
-            AnnotationGeometry::Bounded { bounds, .. } => bounds,
+    pub const fn style(&self) -> AnnotationStyle {
+        AnnotationStyle {
+            color: self.color,
+            stroke_width: self.stroke_width,
+            filled: self.filled,
+        }
+    }
+
+    #[must_use]
+    pub fn bounds(&self) -> Rect {
+        match &self.geometry {
+            AnnotationGeometry::Bounded { bounds, .. } => *bounds,
             AnnotationGeometry::Linear { kind, start, end } => {
-                linear_bounds(kind, start, end, self.stroke_width)
+                linear_bounds(*kind, *start, *end, self.stroke_width)
+            }
+            AnnotationGeometry::Ink { points, .. } => {
+                ink_bounds(points, self.stroke_width)
             }
         }
     }
 
     #[must_use]
-    pub fn kind(self) -> Option<ShapeKind> {
-        match self.geometry {
-            AnnotationGeometry::Bounded { kind, .. } => Some(kind),
-            AnnotationGeometry::Linear { .. } => None,
+    pub fn kind(&self) -> Option<ShapeKind> {
+        match &self.geometry {
+            AnnotationGeometry::Bounded { kind, .. } => Some(*kind),
+            AnnotationGeometry::Linear { .. }
+            | AnnotationGeometry::Ink { .. } => None,
         }
     }
 
-    fn translated(self, dx: f32, dy: f32) -> Self {
-        let geometry = match self.geometry {
+    fn supports_fill(&self) -> bool {
+        matches!(
+            self.geometry,
+            AnnotationGeometry::Bounded {
+                kind: ShapeKind::Rectangle | ShapeKind::Oval,
+                ..
+            } | AnnotationGeometry::Ink {
+                kind: InkKind::Pen,
+                ..
+            }
+        )
+    }
+
+    fn translated(&self, dx: f32, dy: f32) -> Self {
+        let geometry = match &self.geometry {
             AnnotationGeometry::Bounded { kind, bounds } => {
                 AnnotationGeometry::Bounded {
-                    kind,
+                    kind: *kind,
                     bounds: Rect::new(
                         bounds.x + dx,
                         bounds.y + dy,
@@ -183,13 +315,27 @@ impl ShapeAnnotation {
             }
             AnnotationGeometry::Linear { kind, start, end } => {
                 AnnotationGeometry::Linear {
-                    kind,
+                    kind: *kind,
                     start: Point::new(start.x + dx, start.y + dy),
                     end: Point::new(end.x + dx, end.y + dy),
                 }
             }
+            AnnotationGeometry::Ink { kind, points } => {
+                AnnotationGeometry::Ink {
+                    kind: *kind,
+                    points: points
+                        .iter()
+                        .map(|point| Point::new(point.x + dx, point.y + dy))
+                        .collect(),
+                }
+            }
         };
-        Self { geometry, ..self }
+        Self {
+            geometry,
+            stroke_width: self.stroke_width,
+            color: self.color,
+            filled: self.filled,
+        }
     }
 }
 
@@ -201,6 +347,8 @@ struct ShapeDraft {
     end: Point,
     square: bool,
     page: Size,
+    style: AnnotationStyle,
+    points: Vec<Point>,
 }
 
 #[derive(Debug)]
@@ -222,35 +370,60 @@ impl EditDraft {
         let annotation = match self.hit {
             EditHit::Move => self.original.translated(dx, dy),
             EditHit::Resize(corner) => {
-                let AnnotationGeometry::Bounded { kind, bounds } =
-                    self.original.geometry
-                else {
-                    return self.original;
-                };
-                let moving = corner.position(bounds);
-                let bounds = drag_bounds(
-                    corner.opposite().position(bounds),
+                let controls = self.original.bounds();
+                let moving = corner.position(controls);
+                let square = self.square
+                    || matches!(
+                        &self.original.geometry,
+                        AnnotationGeometry::Bounded { kind, .. }
+                            if kind.is_mark()
+                    );
+                let resized = drag_bounds(
+                    corner.opposite().position(controls),
                     Point::new(moving.x + dx, moving.y + dy),
-                    self.square || kind.is_mark(),
+                    square,
                 );
+                let geometry = match &self.original.geometry {
+                    AnnotationGeometry::Bounded { kind, .. } => {
+                        AnnotationGeometry::Bounded {
+                            kind: *kind,
+                            bounds: resized,
+                        }
+                    }
+                    AnnotationGeometry::Ink { kind, points } => {
+                        AnnotationGeometry::Ink {
+                            kind: *kind,
+                            points: resize_ink_points(
+                                points,
+                                resized,
+                                self.original.stroke_width,
+                            ),
+                        }
+                    }
+                    AnnotationGeometry::Linear { .. } => {
+                        return self.original.clone();
+                    }
+                };
                 ShapeAnnotation {
-                    geometry: AnnotationGeometry::Bounded { kind, bounds },
-                    ..self.original
+                    geometry,
+                    stroke_width: self.original.stroke_width,
+                    color: self.original.color,
+                    filled: self.original.filled,
                 }
             }
             EditHit::Endpoint(endpoint) => {
                 let AnnotationGeometry::Linear { kind, start, end } =
-                    self.original.geometry
+                    &self.original.geometry
                 else {
-                    return self.original;
+                    return self.original.clone();
                 };
                 let fixed = match endpoint.opposite() {
-                    LineEndpoint::Start => start,
-                    LineEndpoint::End => end,
+                    LineEndpoint::Start => *start,
+                    LineEndpoint::End => *end,
                 };
                 let moving = match endpoint {
-                    LineEndpoint::Start => start,
-                    LineEndpoint::End => end,
+                    LineEndpoint::Start => *start,
+                    LineEndpoint::End => *end,
                 };
                 let moving = Point::new(moving.x + dx, moving.y + dy);
                 let moving = constrain_line(fixed, moving, self.square);
@@ -259,12 +432,18 @@ impl EditDraft {
                     LineEndpoint::End => (fixed, moving),
                 };
                 ShapeAnnotation {
-                    geometry: AnnotationGeometry::Linear { kind, start, end },
-                    ..self.original
+                    geometry: AnnotationGeometry::Linear {
+                        kind: *kind,
+                        start,
+                        end,
+                    },
+                    stroke_width: self.original.stroke_width,
+                    color: self.original.color,
+                    filled: self.original.filled,
                 }
             }
         };
-        keep_annotation_reachable(annotation, self.page)
+        keep_annotation_reachable(&annotation, self.page)
     }
 }
 
@@ -294,6 +473,14 @@ impl Draft {
             Self::Create(draft) => {
                 draft.end = point;
                 draft.square = square;
+                if matches!(draft.kind, CreationKind::Ink(_))
+                    && draft
+                        .points
+                        .last()
+                        .is_none_or(|last| distance(*last, point) >= 0.5)
+                {
+                    draft.points.push(point);
+                }
             }
             Self::Edit(draft) => {
                 draft.end = point;
@@ -330,11 +517,21 @@ impl ShapeDraft {
                 start: self.start,
                 end: constrain_line(self.start, self.end, self.square),
             },
+            CreationKind::Ink(kind) => AnnotationGeometry::Ink {
+                kind,
+                points: self.points.clone(),
+            },
         };
         ShapeAnnotation {
             geometry,
-            // Keep the default outline proportional to image resolution.
-            stroke_width: self.page.width / if is_mark { 400.0 } else { 300.0 },
+            stroke_width: self.style.stroke_width,
+            color: self.style.color,
+            filled: self.style.filled
+                && !is_mark
+                && !matches!(
+                    self.kind,
+                    CreationKind::Ink(InkKind::Highlighter)
+                ),
         }
     }
 }
@@ -348,6 +545,7 @@ struct Snapshot {
 #[derive(Debug, Default)]
 pub struct Annotations {
     tool: Tool,
+    styles: ToolStyles,
     shapes: Vec<ShapeAnnotation>,
     draft: Option<Draft>,
     selected: Option<usize>,
@@ -364,6 +562,132 @@ impl Annotations {
     pub fn set_tool(&mut self, tool: Tool) {
         self.cancel();
         self.tool = tool;
+    }
+
+    #[must_use]
+    pub fn current_style(&self) -> Option<AnnotationStyle> {
+        if let Some(index) = self.style_target_index() {
+            let annotation = self.shapes.get(index)?;
+            return Some(annotation.style());
+        }
+        self.styles.get(self.tool)
+    }
+
+    #[must_use]
+    pub fn fill_available(&self) -> bool {
+        if let Some(index) = self.style_target_index() {
+            return self
+                .shapes
+                .get(index)
+                .is_some_and(ShapeAnnotation::supports_fill);
+        }
+        self.tool.supports_fill()
+    }
+
+    pub fn set_color(&mut self, color: AnnotationColor) -> bool {
+        if self.draft.is_some() {
+            return false;
+        }
+        let target = self.style_target_index();
+        let object_changed =
+            target.is_some_and(|index| self.shapes[index].color != color);
+        let default_changed = self
+            .styles
+            .get(self.tool)
+            .is_some_and(|style| style.color != color);
+        if !object_changed && !default_changed {
+            return false;
+        }
+        if let Some(index) = target.filter(|_| object_changed) {
+            self.record_change();
+            self.shapes[index].color = color;
+        }
+        if let Some(style) = self.styles.get_mut(self.tool) {
+            style.color = color;
+        }
+        true
+    }
+
+    pub fn set_stroke_width(&mut self, stroke_width: f32) -> bool {
+        if self.draft.is_some()
+            || !stroke_width.is_finite()
+            || !(1.0..=20.0).contains(&stroke_width)
+        {
+            return false;
+        }
+        let target = self.style_target_index();
+        let object_changed = target.is_some_and(|index| {
+            (self.shapes[index].stroke_width - stroke_width).abs()
+                > f32::EPSILON
+        });
+        let default_changed = self.styles.get(self.tool).is_some_and(|style| {
+            (style.stroke_width - stroke_width).abs() > f32::EPSILON
+        });
+        if !object_changed && !default_changed {
+            return false;
+        }
+        if let Some(index) = target.filter(|_| object_changed) {
+            self.record_change();
+            self.shapes[index].stroke_width = stroke_width;
+        }
+        if let Some(style) = self.styles.get_mut(self.tool) {
+            style.stroke_width = stroke_width;
+        }
+        true
+    }
+
+    pub fn set_filled(&mut self, filled: bool) -> bool {
+        if self.draft.is_some() {
+            return false;
+        }
+        let target = self.style_target_index();
+        if let Some(index) = target
+            && !self.shapes[index].supports_fill()
+        {
+            return false;
+        }
+        if self.tool == Tool::Select {
+            let Some(index) = target else {
+                return false;
+            };
+            if self.shapes[index].filled == filled {
+                return false;
+            }
+            self.record_change();
+            self.shapes[index].filled = filled;
+            return true;
+        }
+        if !self.tool.supports_fill() {
+            return false;
+        }
+        let object_changed =
+            target.is_some_and(|index| self.shapes[index].filled != filled);
+        let default_changed = self
+            .styles
+            .get(self.tool)
+            .is_some_and(|style| style.filled != filled);
+        if !object_changed && !default_changed {
+            return false;
+        }
+        if let Some(index) = target.filter(|_| object_changed) {
+            self.record_change();
+            self.shapes[index].filled = filled;
+        }
+        if let Some(style) = self.styles.get_mut(self.tool) {
+            style.filled = filled;
+        }
+        true
+    }
+
+    fn style_target_index(&self) -> Option<usize> {
+        let index = self.selected?;
+        let annotation = self.shapes.get(index)?;
+        (self.tool == Tool::Select
+            || self
+                .tool
+                .creation_kind()
+                .is_some_and(|kind| kind.matches(annotation)))
+        .then_some(index)
     }
 
     #[must_use]
@@ -439,7 +763,7 @@ impl Annotations {
         let annotation = if self.edited_index() == Some(index) {
             self.preview()?
         } else {
-            *self.shapes.get(index)?
+            self.shapes.get(index)?.clone()
         };
         Some(annotation)
     }
@@ -447,7 +771,7 @@ impl Annotations {
     #[must_use]
     pub fn selection_bounds(&self, scale: f32) -> Option<Rect> {
         self.selection_annotation(scale)
-            .map(ShapeAnnotation::bounds)
+            .map(|annotation| annotation.bounds())
     }
 
     #[must_use]
@@ -465,7 +789,7 @@ impl Annotations {
         let annotation = if self.edited_index() == Some(index) {
             self.preview()?
         } else {
-            *self.shapes.get(index)?
+            self.shapes.get(index)?.clone()
         };
         let controls = annotation.bounds();
         let radius = match pointer {
@@ -482,7 +806,7 @@ impl Annotations {
                     (LineEndpoint::End, distance(point, end))
                 };
             let near_line = annotation_contains(
-                annotation,
+                &annotation,
                 point,
                 line_hit_radius(pointer) / scale,
             );
@@ -550,7 +874,7 @@ impl Annotations {
         if self.tool == Tool::Select && !handle_hit && !forced_move {
             let tolerance = line_hit_radius(pointer) / scale;
             let selected = self.shapes.iter().rposition(|object| {
-                annotation_contains(*object, point, tolerance)
+                annotation_contains(object, point, tolerance)
             });
             if selected.is_some() || hit.is_none() {
                 self.selected = selected;
@@ -561,7 +885,7 @@ impl Annotations {
             self.draft = Some(Draft::Edit(EditDraft {
                 pointer,
                 index,
-                original: self.shapes[index],
+                original: self.shapes[index].clone(),
                 start: point,
                 end: point,
                 square: modifiers.square,
@@ -616,6 +940,8 @@ impl Annotations {
             end: point,
             square: false,
             page,
+            style: self.styles.get(self.tool).unwrap_or_default(),
+            points: vec![point],
         }));
         true
     }
@@ -653,7 +979,7 @@ impl Annotations {
             || !valid(Point::new(bounds.x, bounds.y))
             || !bounds.width.is_finite()
             || !bounds.height.is_finite()
-            || !valid_annotation_size(annotation)
+            || !valid_annotation_size(&annotation)
             || bounds.x + bounds.width <= 0.0
             || bounds.y + bounds.height <= 0.0
         {
@@ -740,37 +1066,67 @@ fn line_hit_radius(pointer: Pointer) -> f32 {
 }
 
 fn annotation_contains(
-    annotation: ShapeAnnotation,
+    annotation: &ShapeAnnotation,
     point: Point,
     line_tolerance: f32,
 ) -> bool {
-    match annotation.geometry {
-        AnnotationGeometry::Bounded { bounds, .. } => contains(bounds, point),
+    match &annotation.geometry {
+        AnnotationGeometry::Bounded { bounds, .. } => contains(*bounds, point),
         AnnotationGeometry::Linear { kind, start, end } => {
-            let shaft = point_segment_distance(point, start, end);
+            let shaft = point_segment_distance(point, *start, *end);
             if shaft <= line_tolerance {
                 return true;
             }
-            kind == LineKind::Arrow
-                && arrowhead_points(start, end, annotation.stroke_width)
-                    .is_some_and(|(left, right)| {
-                        point_segment_distance(point, end, left)
+            *kind == LineKind::Arrow
+                && arrowhead_points(*start, *end).is_some_and(
+                    |(left, right)| {
+                        point_segment_distance(point, *end, left)
                             <= line_tolerance
-                            || point_segment_distance(point, end, right)
+                            || point_segment_distance(point, *end, right)
                                 <= line_tolerance
-                    })
+                    },
+                )
+        }
+        AnnotationGeometry::Ink { points, .. } => {
+            (annotation.filled && point_in_polygon(point, points))
+                || points.windows(2).any(|segment| {
+                    point_segment_distance(point, segment[0], segment[1])
+                        <= line_tolerance + annotation.stroke_width / 2.0
+                })
         }
     }
 }
 
-fn valid_annotation_size(annotation: ShapeAnnotation) -> bool {
-    match annotation.geometry {
+fn point_in_polygon(point: Point, polygon: &[Point]) -> bool {
+    let Some(mut previous) = polygon.last().copied() else {
+        return false;
+    };
+    let mut inside = false;
+    for current in polygon {
+        let crosses = (current.y > point.y) != (previous.y > point.y)
+            && point.x
+                < (previous.x - current.x) * (point.y - current.y)
+                    / (previous.y - current.y)
+                    + current.x;
+        if crosses {
+            inside = !inside;
+        }
+        previous = *current;
+    }
+    inside
+}
+
+fn valid_annotation_size(annotation: &ShapeAnnotation) -> bool {
+    match &annotation.geometry {
         AnnotationGeometry::Bounded { bounds, .. } => {
             bounds.width >= 1.0 && bounds.height >= 1.0
         }
         AnnotationGeometry::Linear { start, end, .. } => {
-            distance(start, end) >= 1.0
+            distance(*start, *end) >= 1.0
         }
+        AnnotationGeometry::Ink { points, .. } => points
+            .windows(2)
+            .any(|segment| distance(segment[0], segment[1]) >= 1.0),
     }
 }
 
@@ -793,21 +1149,15 @@ fn constrain_line(start: Point, end: Point, enabled: bool) -> Point {
 }
 
 #[must_use]
-pub fn arrowhead_points(
-    start: Point,
-    end: Point,
-    stroke_width: f32,
-) -> Option<(Point, Point)> {
+pub fn arrowhead_points(start: Point, end: Point) -> Option<(Point, Point)> {
     let dx = end.x - start.x;
     let dy = end.y - start.y;
     let length = dx.hypot(dy);
-    if length <= f32::EPSILON
-        || !stroke_width.is_finite()
-        || stroke_width <= 0.0
-    {
+    if length <= f32::EPSILON {
         return None;
     }
-    let head = (stroke_width * 8.0).min(length * 0.8);
+    // Keep arrowhead geometry independent from line thickness.
+    let head = 24.0_f32.min(length * 0.8);
     let ux = dx / length;
     let uy = dy / length;
     let base = Point::new(end.x - ux * head, end.y - uy * head);
@@ -827,8 +1177,7 @@ fn linear_bounds(
 ) -> Rect {
     let mut bounds = segment_stroke_bounds(start, end, stroke_width);
     if kind == LineKind::Arrow
-        && let Some((first, second)) =
-            arrowhead_points(start, end, stroke_width)
+        && let Some((first, second)) = arrowhead_points(start, end)
     {
         for wing in [first, second] {
             bounds = union_bounds(
@@ -861,6 +1210,63 @@ fn segment_stroke_bounds(start: Point, end: Point, stroke_width: f32) -> Rect {
         (end.x - start.x).abs() + x_padding * 2.0,
         (end.y - start.y).abs() + y_padding * 2.0,
     )
+}
+
+fn point_bounds(points: &[Point]) -> Rect {
+    let Some(first) = points.first() else {
+        return Rect::new(0.0, 0.0, 0.0, 0.0);
+    };
+    let mut left = first.x;
+    let mut top = first.y;
+    let mut right = first.x;
+    let mut bottom = first.y;
+    for point in &points[1..] {
+        left = left.min(point.x);
+        top = top.min(point.y);
+        right = right.max(point.x);
+        bottom = bottom.max(point.y);
+    }
+    Rect::new(left, top, right - left, bottom - top)
+}
+
+fn ink_bounds(points: &[Point], stroke_width: f32) -> Rect {
+    let bounds = point_bounds(points);
+    let half = stroke_width / 2.0;
+    Rect::new(
+        bounds.x - half,
+        bounds.y - half,
+        bounds.width + stroke_width,
+        bounds.height + stroke_width,
+    )
+}
+
+fn resize_ink_points(
+    points: &[Point],
+    target: Rect,
+    stroke_width: f32,
+) -> Vec<Point> {
+    let source = point_bounds(points);
+    let half = stroke_width / 2.0;
+    let width = (target.width - stroke_width).max(1.0);
+    let height = (target.height - stroke_width).max(1.0);
+    let left = target.x + half;
+    let top = target.y + half;
+    points
+        .iter()
+        .map(|point| {
+            let x = if source.width <= f32::EPSILON {
+                left + width / 2.0
+            } else {
+                left + (point.x - source.x) / source.width * width
+            };
+            let y = if source.height <= f32::EPSILON {
+                top + height / 2.0
+            } else {
+                top + (point.y - source.y) / source.height * height
+            };
+            Point::new(x, y)
+        })
+        .collect()
 }
 
 fn union_bounds(first: Rect, second: Rect) -> Rect {
@@ -910,7 +1316,7 @@ fn keep_reachable(mut bounds: Rect, page: Size) -> Rect {
 }
 
 fn keep_annotation_reachable(
-    annotation: ShapeAnnotation,
+    annotation: &ShapeAnnotation,
     page: Size,
 ) -> ShapeAnnotation {
     let bounds = annotation.bounds();
