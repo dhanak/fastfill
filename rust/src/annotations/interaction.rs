@@ -33,6 +33,61 @@ pub(super) struct EditDraft {
     pub(super) page: Size,
 }
 
+#[derive(Debug)]
+pub(super) struct GroupMoveDraft {
+    pub(super) pointer: Pointer,
+    pub(super) originals: Vec<(usize, ShapeAnnotation)>,
+    pub(super) start: Point,
+    pub(super) end: Point,
+    pub(super) page: Size,
+}
+
+impl GroupMoveDraft {
+    pub(super) fn annotations(&self) -> Vec<(usize, ShapeAnnotation)> {
+        let (left_limit, right_limit, top_limit, bottom_limit) =
+            self.originals.iter().fold(
+                (
+                    f32::NEG_INFINITY,
+                    f32::INFINITY,
+                    f32::NEG_INFINITY,
+                    f32::INFINITY,
+                ),
+                |(left, right, top, bottom), (_, annotation)| {
+                    let bounds = annotation.visible_bounds();
+                    let visible_x =
+                        1.0_f32.min(bounds.width).min(self.page.width);
+                    let visible_y =
+                        1.0_f32.min(bounds.height).min(self.page.height);
+                    (
+                        left.max(visible_x - bounds.width - bounds.x),
+                        right.min(self.page.width - visible_x - bounds.x),
+                        top.max(visible_y - bounds.height - bounds.y),
+                        bottom.min(self.page.height - visible_y - bounds.y),
+                    )
+                },
+            );
+        let dx = (self.end.x - self.start.x).clamp(left_limit, right_limit);
+        let dy = (self.end.y - self.start.y).clamp(top_limit, bottom_limit);
+        self.originals
+            .iter()
+            .map(|(index, annotation)| (*index, annotation.translated(dx, dy)))
+            .collect()
+    }
+}
+
+#[derive(Debug)]
+pub(super) struct SelectionDraft {
+    pub(super) pointer: Pointer,
+    pub(super) start: Point,
+    pub(super) end: Point,
+}
+
+impl SelectionDraft {
+    pub(super) fn bounds(&self) -> Rect {
+        drag_bounds(self.start, self.end, false)
+    }
+}
+
 impl EditDraft {
     pub(super) fn annotation(&self) -> ShapeAnnotation {
         let dx = self.end.x - self.start.x;
@@ -163,6 +218,8 @@ impl EditDraft {
 pub(super) enum Draft {
     Create(ShapeDraft),
     Edit(EditDraft),
+    GroupMove(GroupMoveDraft),
+    Selection(SelectionDraft),
 }
 
 impl Draft {
@@ -170,13 +227,31 @@ impl Draft {
         match self {
             Self::Create(draft) => draft.pointer,
             Self::Edit(draft) => draft.pointer,
+            Self::GroupMove(draft) => draft.pointer,
+            Self::Selection(draft) => draft.pointer,
         }
     }
 
-    pub(super) fn annotation(&self) -> ShapeAnnotation {
+    pub(super) fn annotation(&self) -> Option<ShapeAnnotation> {
         match self {
-            Self::Create(draft) => draft.annotation(),
-            Self::Edit(draft) => draft.annotation(),
+            Self::Create(draft) => Some(draft.annotation()),
+            Self::Edit(draft) => Some(draft.annotation()),
+            Self::GroupMove(_) | Self::Selection(_) => None,
+        }
+    }
+
+    pub(super) fn previews(&self) -> Vec<(Option<usize>, ShapeAnnotation)> {
+        match self {
+            Self::Create(draft) => vec![(None, draft.annotation())],
+            Self::Edit(draft) => {
+                vec![(Some(draft.index), draft.annotation())]
+            }
+            Self::GroupMove(draft) => draft
+                .annotations()
+                .into_iter()
+                .map(|(index, annotation)| (Some(index), annotation))
+                .collect(),
+            Self::Selection(_) => Vec::new(),
         }
     }
 
@@ -198,6 +273,8 @@ impl Draft {
                 draft.end = point;
                 draft.square = square;
             }
+            Self::GroupMove(draft) => draft.end = point,
+            Self::Selection(draft) => draft.end = point,
         }
     }
 
@@ -205,12 +282,13 @@ impl Draft {
         match self {
             Self::Create(draft) => draft.square = square,
             Self::Edit(draft) => draft.square = square,
+            Self::GroupMove(_) | Self::Selection(_) => {}
         }
     }
 }
 
 impl ShapeDraft {
-    fn annotation(&self) -> ShapeAnnotation {
+    pub(super) fn annotation(&self) -> ShapeAnnotation {
         let is_mark = matches!(
             self.kind,
             CreationKind::Bounded(kind) if kind.is_mark()

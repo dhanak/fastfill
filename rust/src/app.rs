@@ -37,6 +37,7 @@ struct FastFill {
     image_picker: ImagePicker,
     status: String,
     status_is_error: bool,
+    confirm_delete_all: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -58,6 +59,11 @@ pub(crate) enum Message {
     Redo,
     ResetRotation,
     DeleteSelected,
+    AskDeleteAll,
+    ConfirmDeleteAll,
+    KeepAll,
+    SendToBack,
+    BringToFront,
     SetColor(AnnotationColor),
     AdjustThickness(f32),
     ToggleFill,
@@ -229,6 +235,11 @@ impl FastFill {
 }
 
 fn update(state: &mut FastFill, message: Message) -> Task<Message> {
+    if handle_delete_confirmation(state, &message)
+        || handle_navigation(state, &message)
+    {
+        return Task::none();
+    }
     match message {
         Message::OpenImage => {
             if state.image_picker == ImagePicker::Idle {
@@ -258,13 +269,31 @@ fn update(state: &mut FastFill, message: Message) -> Task<Message> {
                 state.annotations.delete_selected();
             }
         }
+        Message::AskDeleteAll => {
+            if state.image_picker == ImagePicker::Idle
+                && state.annotations.active_pointer().is_none()
+                && !state.annotations.shapes().is_empty()
+            {
+                state.confirm_delete_all = true;
+            }
+        }
+        Message::SendToBack => {
+            if state.image_picker == ImagePicker::Idle {
+                state.annotations.send_selected_to_back();
+            }
+        }
+        Message::BringToFront => {
+            if state.image_picker == ImagePicker::Idle {
+                state.annotations.bring_selected_to_front();
+            }
+        }
         Message::SetColor(color) => {
             state.annotations.set_color(color);
         }
         Message::AdjustThickness(delta) => state.adjust_thickness(delta),
         Message::ToggleFill => {
-            if let Some(style) = state.annotations.current_style() {
-                state.annotations.set_filled(!style.filled);
+            if let Some(filled) = state.annotations.current_fill() {
+                state.annotations.set_filled(!filled);
             }
         }
         Message::DrawPressed(pointer, point, scale) => {
@@ -290,17 +319,53 @@ fn update(state: &mut FastFill, message: Message) -> Task<Message> {
             state.cancel_interaction();
             state.modifiers = DragModifiers::default();
         }
+        Message::ConfirmDeleteAll
+        | Message::KeepAll
+        | Message::Fit
+        | Message::OneToOne(_)
+        | Message::Pan(_)
+        | Message::ZoomAt { .. }
+        | Message::TouchGesture { .. } => {}
+    }
+
+    Task::none()
+}
+
+fn handle_delete_confirmation(state: &mut FastFill, message: &Message) -> bool {
+    if !state.confirm_delete_all {
+        return false;
+    }
+    match message {
+        Message::ConfirmDeleteAll => {
+            state.confirm_delete_all = false;
+            state.annotations.delete_all();
+        }
+        Message::KeepAll | Message::CancelInteraction => {
+            state.confirm_delete_all = false;
+        }
+        Message::FocusLost => {
+            state.confirm_delete_all = false;
+            state.cancel_interaction();
+            state.modifiers = DragModifiers::default();
+        }
+        _ => {}
+    }
+    true
+}
+
+fn handle_navigation(state: &mut FastFill, message: &Message) -> bool {
+    match message {
         Message::Fit => {
             state.cancel_interaction();
             state.navigation.fit();
         }
         Message::OneToOne(viewport) => {
             state.cancel_interaction();
-            state.navigation.one_to_one(page_size(state), viewport);
+            state.navigation.one_to_one(page_size(state), *viewport);
         }
         Message::Pan(delta) => {
             state.annotations.cancel();
-            state.navigation.pan_by(delta);
+            state.navigation.pan_by(*delta);
         }
         Message::ZoomAt {
             factor,
@@ -309,10 +374,10 @@ fn update(state: &mut FastFill, message: Message) -> Task<Message> {
         } => {
             state.annotations.cancel();
             state.navigation.zoom_at(
-                factor,
-                anchor,
+                *factor,
+                *anchor,
                 page_size(state),
-                viewport,
+                *viewport,
             );
         }
         Message::TouchGesture { delta, viewport } => {
@@ -321,13 +386,13 @@ fn update(state: &mut FastFill, message: Message) -> Task<Message> {
                 delta.zoom_factor,
                 delta.zoom_anchor,
                 page_size(state),
-                viewport,
+                *viewport,
             );
             state.navigation.pan_by(delta.pan);
         }
+        _ => return false,
     }
-
-    Task::none()
+    true
 }
 
 fn heading(state: &FastFill) -> Element<'_, Message> {
@@ -354,6 +419,21 @@ fn heading(state: &FastFill) -> Element<'_, Message> {
                         .width(Fill),
                     button("Keep page").on_press(Message::KeepPage),
                     button("Replace").on_press(Message::ReplacePage),
+                ]
+                .align_y(iced::Alignment::Center)
+                .spacing(8),
+            )
+            .padding(8)
+            .style(container::warning),
+        );
+    }
+    if state.confirm_delete_all {
+        heading = heading.push(
+            container(
+                row![
+                    text("Delete every annotation on this page?").width(Fill),
+                    button("Keep all").on_press(Message::KeepAll),
+                    button("Delete all").on_press(Message::ConfirmDeleteAll),
                 ]
                 .align_y(iced::Alignment::Center)
                 .spacing(8),
@@ -449,9 +529,33 @@ fn tool_row(state: &FastFill, available_width: f32) -> Element<'_, Message> {
         button("Delete")
             .on_press_maybe(
                 (state.image_picker == ImagePicker::Idle
-                    && state.annotations.selected_index().is_some()
+                    && !state.annotations.selected_indices().is_empty()
                     && state.annotations.active_pointer().is_none())
                 .then_some(Message::DeleteSelected),
+            )
+            .height(CONTROL_HEIGHT),
+        button("Delete all")
+            .on_press_maybe(
+                (state.image_picker == ImagePicker::Idle
+                    && !state.annotations.shapes().is_empty()
+                    && state.annotations.active_pointer().is_none())
+                .then_some(Message::AskDeleteAll),
+            )
+            .height(CONTROL_HEIGHT),
+        button("To back")
+            .on_press_maybe(
+                (state.image_picker == ImagePicker::Idle
+                    && !state.annotations.selected_indices().is_empty()
+                    && state.annotations.active_pointer().is_none())
+                .then_some(Message::SendToBack),
+            )
+            .height(CONTROL_HEIGHT),
+        button("To front")
+            .on_press_maybe(
+                (state.image_picker == ImagePicker::Idle
+                    && !state.annotations.selected_indices().is_empty()
+                    && state.annotations.active_pointer().is_none())
+                .then_some(Message::BringToFront),
             )
             .height(CONTROL_HEIGHT),
     ];
@@ -493,14 +597,18 @@ fn style_row(state: &FastFill) -> Element<'_, Message> {
     ];
     if state.annotations.fill_available() {
         styles = styles.push(
-            button(if style.filled { "Fill ✓" } else { "Fill" })
-                .on_press(Message::ToggleFill)
-                .style(if style.filled {
-                    button::primary
-                } else {
-                    button::secondary
-                })
-                .height(CONTROL_HEIGHT),
+            button(if state.annotations.current_fill() == Some(true) {
+                "Fill ✓"
+            } else {
+                "Fill"
+            })
+            .on_press(Message::ToggleFill)
+            .style(if state.annotations.current_fill() == Some(true) {
+                button::primary
+            } else {
+                button::secondary
+            })
+            .height(CONTROL_HEIGHT),
         );
     }
     toolbar_row(styles).into()
@@ -536,7 +644,8 @@ fn document(state: &FastFill) -> Element<'_, Message> {
         page_size: page_size(state),
         annotations: &state.annotations,
         input_epoch: state.input_epoch,
-        input_enabled: state.image_picker == ImagePicker::Idle,
+        input_enabled: state.image_picker == ImagePicker::Idle
+            && !state.confirm_delete_all,
         modifiers: state.modifiers,
         background: false,
     };

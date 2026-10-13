@@ -1,5 +1,6 @@
 use super::{
-    CanvasState, PageCanvas, draw_selection, draw_shape, page_viewport,
+    CanvasState, PageCanvas, draw_group_member, draw_group_selection,
+    draw_marquee, draw_selection, draw_shape, page_viewport,
 };
 use crate::app::Message;
 use crate::appearance::{
@@ -184,19 +185,37 @@ impl canvas::Program<Message> for PageCanvas<'_> {
                 for (index, annotation) in
                     self.annotations.shapes().iter().enumerate()
                 {
-                    if self.annotations.edited_index() == Some(index) {
+                    if self.annotations.is_edited(index) {
                         continue;
                     }
                     draw_shape(&mut frame, view, annotation, scale);
                 }
-                if let Some(preview) = self.annotations.preview() {
+                for preview in self.annotations.previews() {
                     draw_shape(&mut frame, view, &preview, scale);
                 }
-                if self.annotations.tool() != Tool::Navigate
-                    && let Some(annotation) =
+                if self.annotations.tool() != Tool::Navigate {
+                    if let Some(annotation) =
                         self.annotations.selection_annotation(scale)
-                {
-                    draw_selection(&mut frame, view, &annotation, scale);
+                    {
+                        draw_selection(&mut frame, view, &annotation, scale);
+                    } else if let Some(bounds) =
+                        self.annotations.selection_bounds(scale)
+                    {
+                        for annotation in
+                            self.annotations.selection_annotations(scale)
+                        {
+                            draw_group_member(
+                                &mut frame,
+                                view,
+                                &annotation,
+                                scale,
+                            );
+                        }
+                        draw_group_selection(&mut frame, view, bounds);
+                    }
+                    if let Some(bounds) = self.annotations.selection_box() {
+                        draw_marquee(&mut frame, view, bounds);
+                    }
                 }
             }
         }

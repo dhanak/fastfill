@@ -1,7 +1,4 @@
-use crate::appearance::{
-    PAGE_MARGIN, SELECTION_HANDLE_SIZE, SELECTION_STROKE, accent,
-    annotation_color,
-};
+use crate::appearance::{PAGE_MARGIN, annotation_color};
 use crate::picker::ImportedImage;
 use fastfill_rust::annotations::{
     AnnotationGeometry, Annotations, DragModifiers, InkKind, LineKind,
@@ -11,9 +8,14 @@ use fastfill_rust::geometry::{Navigation, Point as PagePoint};
 use fastfill_rust::geometry::{Rect as PageRect, Size as PageSize};
 use fastfill_rust::interaction::TouchNavigation;
 use iced::widget::canvas;
-use iced::{Color, Point, Rectangle, mouse};
+use iced::{Point, Rectangle, mouse};
 
 mod program;
+mod selection;
+
+use selection::{
+    draw_group_member, draw_group_selection, draw_marquee, draw_selection,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct PageCanvas<'a> {
@@ -666,94 +668,6 @@ fn clip_segment(
         Point::new(start.x + first * dx, start.y + first * dy),
         Point::new(start.x + last * dx, start.y + last * dy),
     ))
-}
-
-fn draw_selection(
-    frame: &mut canvas::Frame,
-    view: fastfill_rust::geometry::PageView,
-    annotation: &ShapeAnnotation,
-    scale: f32,
-) {
-    let blue = accent();
-    let controls = annotation.bounds();
-    let frame_points = annotation.frame_corners().map(|corners| {
-        corners.map(|point| {
-            let point = view.page_to_view(point);
-            Point::new(point.x, point.y)
-        })
-    });
-    let path = frame_points.map_or_else(
-        || {
-            let origin =
-                view.page_to_view(PagePoint::new(controls.x, controls.y));
-            canvas::Path::rectangle(
-                Point::new(origin.x, origin.y),
-                iced::Size::new(
-                    controls.width * scale,
-                    controls.height * scale,
-                ),
-            )
-        },
-        |points| closed_path(&points),
-    );
-    frame.stroke(&path, canvas::Stroke::default().with_color(blue));
-    let handles: Vec<Point> = match &annotation.geometry {
-        AnnotationGeometry::Bounded { .. } | AnnotationGeometry::Ink { .. } => {
-            frame_points
-                .expect("rotatable annotation has frame corners")
-                .into_iter()
-                .collect()
-        }
-        AnnotationGeometry::Linear { start, end, .. } => [start, end]
-            .into_iter()
-            .map(|point| {
-                let point = view.page_to_view(*point);
-                Point::new(point.x, point.y)
-            })
-            .collect(),
-    };
-    if let (Some(corners), Some(handle)) = (
-        annotation.frame_corners(),
-        annotation.rotation_handle(scale),
-    ) {
-        let top = PagePoint::new(
-            corners[0].x.midpoint(corners[1].x),
-            corners[0].y.midpoint(corners[1].y),
-        );
-        let top = view.page_to_view(top);
-        let handle = view.page_to_view(handle);
-        let top = Point::new(top.x, top.y);
-        let handle = Point::new(handle.x, handle.y);
-        let stem = canvas::Path::line(top, handle);
-        frame.stroke(
-            &stem,
-            canvas::Stroke::default()
-                .with_color(blue)
-                .with_width(SELECTION_STROKE),
-        );
-        let knob = canvas::Path::circle(handle, SELECTION_HANDLE_SIZE / 2.0);
-        frame.fill(&knob, Color::WHITE);
-        frame.stroke(
-            &knob,
-            canvas::Stroke::default()
-                .with_color(blue)
-                .with_width(SELECTION_STROKE),
-        );
-    }
-    for center in handles {
-        let half = SELECTION_HANDLE_SIZE / 2.0;
-        let path = canvas::Path::rectangle(
-            Point::new(center.x - half, center.y - half),
-            iced::Size::new(SELECTION_HANDLE_SIZE, SELECTION_HANDLE_SIZE),
-        );
-        frame.fill(&path, Color::WHITE);
-        frame.stroke(
-            &path,
-            canvas::Stroke::default()
-                .with_color(blue)
-                .with_width(SELECTION_STROKE),
-        );
-    }
 }
 
 pub(crate) fn page_viewport(size: iced::Size) -> PageRect {

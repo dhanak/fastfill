@@ -562,6 +562,60 @@ fn rotated_rectangle_renders_around_its_frame_center() {
     );
 }
 
+#[test]
+fn group_membership_changes_are_visually_distinct() {
+    let mut state = rendered_page();
+    state.annotations.set_tool(Tool::Rectangle);
+    assert!(state.annotations.set_color(AnnotationColor::White));
+    for x in [100.0, 400.0, 250.0] {
+        assert!(state.annotations.begin(
+            Pointer::Mouse,
+            PagePoint::new(x, 100.0),
+            page_size(&state),
+        ));
+        assert!(state.annotations.finish(
+            Pointer::Mouse,
+            PagePoint::new(x + 50.0, 150.0),
+            false,
+        ));
+    }
+    state.annotations.set_tool(Tool::Select);
+    let ctrl = DragModifiers {
+        square: true,
+        ..DragModifiers::default()
+    };
+    for point in [
+        PagePoint::new(275.0, 125.0),
+        PagePoint::new(125.0, 125.0),
+        PagePoint::new(425.0, 125.0),
+    ] {
+        assert!(state.annotations.begin_interaction(
+            Pointer::Mouse,
+            point,
+            page_size(&state),
+            1.0,
+            ctrl,
+        ));
+    }
+    assert_eq!(state.annotations.selected_indices(), [0, 1]);
+    let without_middle = render_document(&state, 1, 1.0);
+
+    assert!(state.annotations.begin_interaction(
+        Pointer::Mouse,
+        PagePoint::new(275.0, 125.0),
+        page_size(&state),
+        1.0,
+        ctrl,
+    ));
+    assert_eq!(state.annotations.selected_indices(), [0, 1, 2]);
+    let with_middle = render_document(&state, 1, 1.0);
+
+    assert!(
+        without_middle != with_middle,
+        "toggling an interior group member must change selection rendering",
+    );
+}
+
 fn rendered_page() -> FastFill {
     FastFill {
         page: Some(ImportedImage {
@@ -679,6 +733,36 @@ fn successful_import_resets_annotations_and_retains_tool() {
 }
 
 #[test]
+fn delete_all_requires_confirmation_and_remains_undoable() {
+    let mut state = annotated_page();
+    let _ = update(&mut state, Message::AskDeleteAll);
+    assert!(state.confirm_delete_all);
+    assert_eq!(state.annotations.shapes().len(), 1);
+
+    let _ = update(&mut state, Message::Undo);
+    assert_eq!(state.annotations.shapes().len(), 1);
+    let _ = update(&mut state, Message::KeepAll);
+    assert!(!state.confirm_delete_all);
+
+    let _ = update(&mut state, Message::AskDeleteAll);
+    let _ = update(&mut state, Message::ConfirmDeleteAll);
+    assert!(!state.confirm_delete_all);
+    assert_eq!(state.annotations.shapes(), []);
+    let _ = update(&mut state, Message::Undo);
+    assert_eq!(state.annotations.shapes().len(), 1);
+}
+
+#[test]
+fn escape_closes_delete_all_confirmation_without_deleting() {
+    let mut state = annotated_page();
+    let _ = update(&mut state, Message::AskDeleteAll);
+    let _ = update(&mut state, Message::CancelInteraction);
+
+    assert!(!state.confirm_delete_all);
+    assert_eq!(state.annotations.shapes().len(), 1);
+}
+
+#[test]
 fn cancel_and_navigation_changes_never_commit_a_draft() {
     let viewport = PageRect::new(36.0, 36.0, 1_000.0, 600.0);
     for message in [
@@ -729,7 +813,8 @@ fn canvas_event(
         page_size: page_size(state),
         annotations: &state.annotations,
         input_epoch: state.input_epoch,
-        input_enabled: state.image_picker == ImagePicker::Idle,
+        input_enabled: state.image_picker == ImagePicker::Idle
+            && !state.confirm_delete_all,
         modifiers: state.modifiers,
         background: false,
     };

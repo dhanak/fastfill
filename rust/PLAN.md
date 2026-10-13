@@ -184,14 +184,14 @@ text. No importing, saving, camera, or annotations were included.
 - [x] Keep painted geometry inside its rotated selection frame.
 - [x] User checkpoint: handle use, snapping, reset, and rendering.
 
-#### 3K. Multi-selection, layers, and bulk deletion — not started
+#### 3K. Multi-selection, layers, and bulk deletion — accepted
 
-- [ ] Ctrl-click to toggle objects and drag an empty-area selection rectangle.
-- [ ] Move selections together and apply compatible style changes in bulk.
-- [ ] Delete selected objects and delete all with confirmation.
-- [ ] Send selected objects to back or bring them to front.
-- [ ] Preserve selection and layer order through undo/redo.
-- [ ] User checkpoint: mixed-object selection, layers, and bulk operations.
+- [x] Ctrl-click to toggle objects and drag an empty-area selection rectangle.
+- [x] Move selections together and apply compatible style changes in bulk.
+- [x] Delete selected objects and delete all with confirmation.
+- [x] Send selected objects to back or bring them to front.
+- [x] Preserve selection and layer order through undo/redo.
+- [x] User checkpoint: mixed-object selection, layers, and bulk operations.
 
 ### 4. Text and toolkit decision gate — not started
 
@@ -533,6 +533,35 @@ text. No importing, saving, camera, or annotations were included.
   native and WASM compilation, and a linked Trunk WASM build.
 - User accepted mouse rotation, snapping, reset, editing, and rendering after
   the refactor. Touch-specific rotation remains deferred for later hardware.
+
+### 2026-10-13 — checkpoint 3K multi-selection and layers
+
+- User accepted checkpoint 3J and its source split. Committed it as `e2ad857`
+  before starting multi-selection; touch rotation remains assumed for now.
+- TDD red: the multi-selection tests failed before selection sets, marquee
+  drafts, grouped movement, bulk styles/deletion, and layer commands existed.
+  Delete-all application tests failed before a confirmation state existed.
+- Keep selected object indices sorted. Ctrl-click toggles one object; dragging
+  from empty page space selects every object intersecting the marquee.
+- Move a selected group with one shared constrained translation so every
+  object retains a reachable part. Render active group edits above siblings.
+- Apply color and thickness to every selected object. Apply Fill only to
+  compatible rectangles, ovals, and pen paths.
+- Delete a selection in one history entry. Require explicit confirmation for
+  Delete all. Preserve selection and relative layer order through undo/redo.
+- Send selected objects behind or in front of unselected objects while
+  preserving the relative order within both groups.
+- Split style, selection, and selection-rendering code into focused modules;
+  keep UI dimensions and colors centralized for checkpoint 7 restyling.
+- User accepted marquee and Ctrl-click selection, grouped movement, bulk
+  styles, layers, both deletion paths, edge reachability, and history. Native
+  touch behavior remains deferred for later hardware.
+- Follow-up feedback exposed ambiguous membership for objects inside a group
+  boundary. Draw a faint frame around every member beneath the strong outer
+  frame; a headless renderer regression toggles an interior member while the
+  group boundary remains unchanged.
+- Passed 113 all-feature tests, 79 core-only tests, strict Clippy, formatting,
+  native and WASM compilation, and a linked Trunk WASM build.
 
 ## References
 

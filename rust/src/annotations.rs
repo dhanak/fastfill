@@ -2,13 +2,17 @@ use crate::geometry::{Point, Rect};
 
 mod geometry;
 mod interaction;
+mod selection;
 mod state;
+mod style;
 
 pub use geometry::arrowhead_points;
 use geometry::{
     ink_bounds, linear_bounds, point_bounds, rotate_point, valid_scale,
 };
-use interaction::{Draft, EditDraft, ShapeDraft};
+use interaction::{
+    Draft, EditDraft, GroupMoveDraft, SelectionDraft, ShapeDraft,
+};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Tool {
@@ -398,7 +402,7 @@ impl ShapeAnnotation {
 #[derive(Clone, Debug)]
 struct Snapshot {
     shapes: Vec<ShapeAnnotation>,
-    selected: Option<usize>,
+    selected: Vec<usize>,
 }
 
 #[derive(Debug, Default)]
@@ -407,7 +411,7 @@ pub struct Annotations {
     styles: ToolStyles,
     shapes: Vec<ShapeAnnotation>,
     draft: Option<Draft>,
-    selected: Option<usize>,
+    selected: Vec<usize>,
     undo: Vec<Snapshot>,
     redo: Vec<Snapshot>,
 }

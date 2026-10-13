@@ -36,7 +36,7 @@ to reach TCP port 24800. Trunk watches for changes, but browser auto-reload is
 disabled so the generated page never assumes the development machine is
 `localhost`; refresh the browser after a rebuild.
 
-Checkpoint 3J adds rotation to styled shapes and freehand annotations:
+Checkpoint 3K adds multi-selection and layers to styled annotations:
 
 - **Rectangle:** drag with the left mouse button or one finger. The preview
   uses the chosen style immediately. Hold Ctrl to draw a square.
@@ -55,14 +55,21 @@ Checkpoint 3J adds rotation to styled shapes and freehand annotations:
   stroke widths from 1–20. Rectangle, Oval, and Pen offer Fill. Each tool
   remembers its own settings; Select changes the chosen object with undo.
 - **Select:** click or touch a shape, line, or ink path, then drag to move it.
-  Drag a shape or ink corner to resize or a line endpoint to edit it. Hold Ctrl
-  for square/circle/45° constraints, Shift to move, or Alt to resize.
+  Drag empty page space to select every intersecting object. Ctrl-click toggles
+  individual objects. Drag any selected object to move the whole selection.
+  Faint member frames identify each object inside the strong group boundary.
+  A single selection retains resize, endpoint, and rotation controls.
+- **Bulk styles:** color and thickness apply to every selected object. Fill
+  applies only to compatible rectangles, ovals, and pen paths.
+- **Layers:** To back and To front move the selection behind or ahead of
+  unselected objects while preserving relative order.
 - **Rotate:** drag the round handle above a selected rectangle, oval, mark, or
   ink path. Hold Ctrl to snap to 45° increments. Lines and arrows remain
   endpoint-edited. Rotation 0° resets the selected object and supports undo.
 - Drawing modes can edit the selected object from its body or handles.
   Starting elsewhere draws a new object of the active type.
-- **Delete:** remove the selection with the button or Delete key.
+- **Delete:** remove the selection with the button or Delete key. Delete all
+  requires confirmation and can be undone.
 - **Undo/Redo:** use the buttons, Ctrl+Z, Ctrl+Y, or Ctrl+Shift+Z. On macOS,
   use Command instead of Ctrl. Canceled and unchanged edits are not recorded.
 - **Escape:** cancel an unfinished draw or edit. Switching tools, changing the
