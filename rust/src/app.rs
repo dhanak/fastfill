@@ -56,6 +56,7 @@ pub(crate) enum Message {
     SetTool(Tool),
     Undo,
     Redo,
+    ResetRotation,
     DeleteSelected,
     SetColor(AnnotationColor),
     AdjustThickness(f32),
@@ -168,6 +169,12 @@ impl FastFill {
         }
     }
 
+    fn reset_rotation(&mut self) {
+        if self.image_picker == ImagePicker::Idle {
+            self.annotations.reset_rotation();
+        }
+    }
+
     fn adjust_thickness(&mut self, delta: f32) {
         if let Some(style) = self.annotations.current_style() {
             self.annotations.set_stroke_width(
@@ -245,6 +252,7 @@ fn update(state: &mut FastFill, message: Message) -> Task<Message> {
         }
         Message::Undo => state.undo(),
         Message::Redo => state.redo(),
+        Message::ResetRotation => state.reset_rotation(),
         Message::DeleteSelected => {
             if state.image_picker == ImagePicker::Idle {
                 state.annotations.delete_selected();
@@ -406,6 +414,13 @@ fn control_row(state: &FastFill, viewport: PageRect) -> Element<'_, Message> {
                 (state.image_picker == ImagePicker::Idle
                     && state.annotations.can_redo())
                 .then_some(Message::Redo),
+            )
+            .height(CONTROL_HEIGHT),
+        button("Rotation 0°")
+            .on_press_maybe(
+                (state.image_picker == ImagePicker::Idle
+                    && state.annotations.can_reset_rotation())
+                .then_some(Message::ResetRotation),
             )
             .height(CONTROL_HEIGHT),
         button("−").on_press(zoom(0.8)).height(CONTROL_HEIGHT),

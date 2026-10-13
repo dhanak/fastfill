@@ -515,6 +515,53 @@ fn pen_fill_and_translucent_highlighter_render_over_the_page() {
     );
 }
 
+#[test]
+fn rotated_rectangle_renders_around_its_frame_center() {
+    let mut state = rendered_page();
+    state.annotations.set_tool(Tool::Rectangle);
+    state.annotations.begin(
+        Pointer::Mouse,
+        PagePoint::new(100.0, 100.0),
+        page_size(&state),
+    );
+    state.annotations.finish(
+        Pointer::Mouse,
+        PagePoint::new(300.0, 200.0),
+        false,
+    );
+    state.annotations.set_tool(Tool::Select);
+    let handle = state.annotations.shapes()[0].rotation_handle(1.0).unwrap();
+    state.annotations.begin_interaction(
+        Pointer::Mouse,
+        handle,
+        page_size(&state),
+        1.0,
+        DragModifiers::default(),
+    );
+    state.annotations.finish(
+        Pointer::Mouse,
+        PagePoint::new(282.0, 150.0),
+        false,
+    );
+    state.annotations.set_tool(Tool::Navigate);
+
+    let pixels = render_document(&state, 1, 1.0);
+    let pixel = |x: usize, y: usize| {
+        let offset = (y * 600 + x) * 4;
+        &pixels[offset..offset + 4]
+    };
+    assert!(
+        pixel(255, 150)[0] < 64,
+        "rotated edge must be visible: {:?}",
+        pixel(255, 150),
+    );
+    assert_eq!(
+        pixel(150, 124),
+        [240, 230, 210, 255],
+        "unrotated edge must disappear",
+    );
+}
+
 fn rendered_page() -> FastFill {
     FastFill {
         page: Some(ImportedImage {

@@ -175,14 +175,14 @@ text. No importing, saving, camera, or annotations were included.
 - [x] Reuse clipping, selection, cancellation, deletion, and history.
 - [x] User checkpoint: drawing quality, touch input, editing, and fill.
 
-#### 3J. Rotation — not started
+#### 3J. Rotation — accepted
 
-- [ ] Add a separate rotation handle for supported bounded objects and ink.
-- [ ] Keep lines and arrows endpoint-edited without rotation.
-- [ ] Hold Ctrl to snap rotation to 45-degree increments.
-- [ ] Add reset-to-zero rotation and preserve rotation through history.
-- [ ] Keep painted geometry inside its rotated selection frame.
-- [ ] User checkpoint: handle use, snapping, reset, and rendering.
+- [x] Add a separate rotation handle for supported bounded objects and ink.
+- [x] Keep lines and arrows endpoint-edited without rotation.
+- [x] Hold Ctrl to snap rotation to 45-degree increments.
+- [x] Add reset-to-zero rotation and preserve rotation through history.
+- [x] Keep painted geometry inside its rotated selection frame.
+- [x] User checkpoint: handle use, snapping, reset, and rendering.
 
 #### 3K. Multi-selection, layers, and bulk deletion — not started
 
@@ -512,6 +512,27 @@ text. No importing, saving, camera, or annotations were included.
   case for this checkpoint.
 - Passed 98 all-feature tests, 66 core-only tests, strict Clippy, formatting,
   native and WASM compilation, and a linked Trunk WASM build.
+
+### 2026-10-13 — checkpoint 3J rotation
+
+- User accepted checkpoint 3I after the filled pen outline became one closed,
+  round-joined path instead of two capped ends.
+- TDD red: rotation tests failed before objects stored an angle, exposed a
+  handle, and supported reset/history. A renderer check then failed until
+  bounded geometry was transformed about its frame center.
+- Rotate rectangles, ovals, marks, pen, and highlighter from a separate handle
+  above the frame. Keep line and arrow editing limited to their endpoints.
+- Hold Ctrl for 45-degree snapping. Preserve rotation through move, local-axis
+  resize, cancel, undo, and redo; Rotation 0° records an undoable reset.
+- Rotate painted geometry and oriented selection controls together. Continue
+  clipping fills and stroke centerlines at the page boundary.
+- Split annotation math, draft interaction, and state into focused modules.
+  Split canvas event handling from rendering and move renderer tests out of
+  the implementation file before starting another feature stage.
+- Passed 102 all-feature tests, 71 core-only tests, strict Clippy, formatting,
+  native and WASM compilation, and a linked Trunk WASM build.
+- User accepted mouse rotation, snapping, reset, editing, and rendering after
+  the refactor. Touch-specific rotation remains deferred for later hardware.
 
 ## References
 
