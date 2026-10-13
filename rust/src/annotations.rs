@@ -6,23 +6,41 @@ pub enum Tool {
     Navigate,
     Rectangle,
     Oval,
+    Line,
+    Arrow,
     Select,
 }
 
 impl Tool {
-    const fn shape_kind(self) -> Option<ShapeKind> {
+    const fn creation_kind(self) -> Option<CreationKind> {
         match self {
-            Self::Rectangle => Some(ShapeKind::Rectangle),
-            Self::Oval => Some(ShapeKind::Oval),
+            Self::Rectangle => {
+                Some(CreationKind::Bounded(ShapeKind::Rectangle))
+            }
+            Self::Oval => Some(CreationKind::Bounded(ShapeKind::Oval)),
+            Self::Line => Some(CreationKind::Linear(LineKind::Line)),
+            Self::Arrow => Some(CreationKind::Linear(LineKind::Arrow)),
             Self::Navigate | Self::Select => None,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum CreationKind {
+    Bounded(ShapeKind),
+    Linear(LineKind),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShapeKind {
     Rectangle,
     Oval,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LineKind {
+    Line,
+    Arrow,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,19 +98,91 @@ pub const RESIZE_CORNERS: [ResizeCorner; 4] = [
 pub enum EditHit {
     Move,
     Resize(ResizeCorner),
+    Endpoint(LineEndpoint),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum AnnotationGeometry {
+    Bounded {
+        kind: ShapeKind,
+        bounds: Rect,
+    },
+    Linear {
+        kind: LineKind,
+        start: Point,
+        end: Point,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LineEndpoint {
+    Start,
+    End,
+}
+
+impl LineEndpoint {
+    fn opposite(self) -> Self {
+        match self {
+            Self::Start => Self::End,
+            Self::End => Self::Start,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ShapeAnnotation {
-    pub kind: ShapeKind,
-    pub bounds: Rect,
+    pub geometry: AnnotationGeometry,
     pub stroke_width: f32,
+}
+
+impl ShapeAnnotation {
+    #[must_use]
+    pub fn bounds(self) -> Rect {
+        match self.geometry {
+            AnnotationGeometry::Bounded { bounds, .. } => bounds,
+            AnnotationGeometry::Linear { kind, start, end } => {
+                linear_bounds(kind, start, end, self.stroke_width)
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn kind(self) -> Option<ShapeKind> {
+        match self.geometry {
+            AnnotationGeometry::Bounded { kind, .. } => Some(kind),
+            AnnotationGeometry::Linear { .. } => None,
+        }
+    }
+
+    fn translated(self, dx: f32, dy: f32) -> Self {
+        let geometry = match self.geometry {
+            AnnotationGeometry::Bounded { kind, bounds } => {
+                AnnotationGeometry::Bounded {
+                    kind,
+                    bounds: Rect::new(
+                        bounds.x + dx,
+                        bounds.y + dy,
+                        bounds.width,
+                        bounds.height,
+                    ),
+                }
+            }
+            AnnotationGeometry::Linear { kind, start, end } => {
+                AnnotationGeometry::Linear {
+                    kind,
+                    start: Point::new(start.x + dx, start.y + dy),
+                    end: Point::new(end.x + dx, end.y + dy),
+                }
+            }
+        };
+        Self { geometry, ..self }
+    }
 }
 
 #[derive(Debug)]
 struct ShapeDraft {
     pointer: Pointer,
-    kind: ShapeKind,
+    kind: CreationKind,
     start: Point,
     end: Point,
     square: bool,
@@ -115,27 +205,52 @@ impl EditDraft {
     fn annotation(&self) -> ShapeAnnotation {
         let dx = self.end.x - self.start.x;
         let dy = self.end.y - self.start.y;
-        let bounds = self.original.bounds;
-        let bounds = match self.hit {
-            EditHit::Move => Rect::new(
-                bounds.x + dx,
-                bounds.y + dy,
-                bounds.width,
-                bounds.height,
-            ),
+        let annotation = match self.hit {
+            EditHit::Move => self.original.translated(dx, dy),
             EditHit::Resize(corner) => {
+                let AnnotationGeometry::Bounded { kind, bounds } =
+                    self.original.geometry
+                else {
+                    return self.original;
+                };
                 let moving = corner.position(bounds);
-                drag_bounds(
+                let bounds = drag_bounds(
                     corner.opposite().position(bounds),
                     Point::new(moving.x + dx, moving.y + dy),
                     self.square,
-                )
+                );
+                ShapeAnnotation {
+                    geometry: AnnotationGeometry::Bounded { kind, bounds },
+                    ..self.original
+                }
+            }
+            EditHit::Endpoint(endpoint) => {
+                let AnnotationGeometry::Linear { kind, start, end } =
+                    self.original.geometry
+                else {
+                    return self.original;
+                };
+                let fixed = match endpoint.opposite() {
+                    LineEndpoint::Start => start,
+                    LineEndpoint::End => end,
+                };
+                let moving = match endpoint {
+                    LineEndpoint::Start => start,
+                    LineEndpoint::End => end,
+                };
+                let moving = Point::new(moving.x + dx, moving.y + dy);
+                let moving = constrain_line(fixed, moving, self.square);
+                let (start, end) = match endpoint {
+                    LineEndpoint::Start => (moving, fixed),
+                    LineEndpoint::End => (fixed, moving),
+                };
+                ShapeAnnotation {
+                    geometry: AnnotationGeometry::Linear { kind, start, end },
+                    ..self.original
+                }
             }
         };
-        ShapeAnnotation {
-            bounds: keep_reachable(bounds, self.page),
-            ..self.original
-        }
+        keep_annotation_reachable(annotation, self.page)
     }
 }
 
@@ -183,9 +298,19 @@ impl Draft {
 
 impl ShapeDraft {
     fn annotation(&self) -> ShapeAnnotation {
+        let geometry = match self.kind {
+            CreationKind::Bounded(kind) => AnnotationGeometry::Bounded {
+                kind,
+                bounds: drag_bounds(self.start, self.end, self.square),
+            },
+            CreationKind::Linear(kind) => AnnotationGeometry::Linear {
+                kind,
+                start: self.start,
+                end: constrain_line(self.start, self.end, self.square),
+            },
+        };
         ShapeAnnotation {
-            kind: self.kind,
-            bounds: drag_bounds(self.start, self.end, self.square),
+            geometry,
             // Keep the default outline proportional to image resolution.
             stroke_width: self.page.width / 300.0,
         }
@@ -284,7 +409,7 @@ impl Annotations {
     }
 
     #[must_use]
-    pub fn selection_bounds(&self, scale: f32) -> Option<Rect> {
+    pub fn selection_annotation(&self, scale: f32) -> Option<ShapeAnnotation> {
         if !valid_scale(scale) || matches!(self.draft, Some(Draft::Create(_))) {
             return None;
         }
@@ -294,8 +419,13 @@ impl Annotations {
         } else {
             *self.shapes.get(index)?
         };
-        let bounds = annotation.bounds;
-        Some(bounds)
+        Some(annotation)
+    }
+
+    #[must_use]
+    pub fn selection_bounds(&self, scale: f32) -> Option<Rect> {
+        self.selection_annotation(scale)
+            .map(ShapeAnnotation::bounds)
     }
 
     #[must_use]
@@ -309,11 +439,43 @@ impl Annotations {
         if !valid(point) {
             return None;
         }
-        let controls = self.selection_bounds(scale)?;
+        let index = self.selected?;
+        let annotation = if self.edited_index() == Some(index) {
+            self.preview()?
+        } else {
+            *self.shapes.get(index)?
+        };
+        let controls = annotation.bounds();
         let radius = match pointer {
             Pointer::Mouse => 12.0,
             Pointer::Touch(_) => 22.0,
         } / scale;
+        if let AnnotationGeometry::Linear { start, end, .. } =
+            annotation.geometry
+        {
+            let (endpoint, endpoint_distance) =
+                if distance(point, start) <= distance(point, end) {
+                    (LineEndpoint::Start, distance(point, start))
+                } else {
+                    (LineEndpoint::End, distance(point, end))
+                };
+            let near_line = annotation_contains(
+                annotation,
+                point,
+                line_hit_radius(pointer) / scale,
+            );
+            let inside = contains(controls, point);
+            if endpoint_distance > radius && !near_line && !inside {
+                return None;
+            }
+            return if modifiers.force_move {
+                Some(EditHit::Move)
+            } else if modifiers.force_resize || endpoint_distance <= radius {
+                Some(EditHit::Endpoint(endpoint))
+            } else {
+                Some(EditHit::Move)
+            };
+        }
         let nearest = RESIZE_CORNERS.into_iter().min_by(|a, b| {
             distance(point, a.position(controls))
                 .total_cmp(&distance(point, b.position(controls)))
@@ -360,14 +522,17 @@ impl Annotations {
         }
         let hit = self.hit_selected(point, pointer, scale, modifiers);
         // Handles take priority; otherwise Select picks the topmost full box.
-        if self.tool == Tool::Select
-            && !matches!(hit, Some(EditHit::Resize(_)))
-            && !(modifiers.force_move && hit.is_some())
-        {
-            self.selected = self
-                .shapes
-                .iter()
-                .rposition(|object| contains(object.bounds, point));
+        let handle_hit =
+            matches!(hit, Some(EditHit::Resize(_) | EditHit::Endpoint(_)));
+        let forced_move = modifiers.force_move && hit.is_some();
+        if self.tool == Tool::Select && !handle_hit && !forced_move {
+            let tolerance = line_hit_radius(pointer) / scale;
+            let selected = self.shapes.iter().rposition(|object| {
+                annotation_contains(*object, point, tolerance)
+            });
+            if selected.is_some() || hit.is_none() {
+                self.selected = selected;
+            }
         }
         let hit = self.hit_selected(point, pointer, scale, modifiers);
         if let (Some(index), Some(hit)) = (self.selected, hit) {
@@ -383,7 +548,7 @@ impl Annotations {
             }));
             return true;
         }
-        if self.tool.shape_kind().is_some() {
+        if self.tool.creation_kind().is_some() {
             return self.begin(pointer, point, page);
         }
         false
@@ -408,7 +573,7 @@ impl Annotations {
         point: Point,
         page: Size,
     ) -> bool {
-        let Some(kind) = self.tool.shape_kind() else {
+        let Some(kind) = self.tool.creation_kind() else {
             return false;
         };
         if self.draft.is_some()
@@ -461,13 +626,12 @@ impl Annotations {
             return false;
         };
         let annotation = draft.annotation();
-        let bounds = annotation.bounds;
+        let bounds = annotation.bounds();
         if !valid(point)
             || !valid(Point::new(bounds.x, bounds.y))
             || !bounds.width.is_finite()
             || !bounds.height.is_finite()
-            || bounds.width < 1.0
-            || bounds.height < 1.0
+            || !valid_annotation_size(annotation)
             || bounds.x + bounds.width <= 0.0
             || bounds.y + bounds.height <= 0.0
         {
@@ -530,6 +694,133 @@ fn distance(a: Point, b: Point) -> f32 {
     (a.x - b.x).hypot(a.y - b.y)
 }
 
+fn point_segment_distance(point: Point, start: Point, end: Point) -> f32 {
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+    let length_squared = dx * dx + dy * dy;
+    if length_squared <= f32::EPSILON {
+        return distance(point, start);
+    }
+    let projection =
+        ((point.x - start.x) * dx + (point.y - start.y) * dy) / length_squared;
+    let projection = projection.clamp(0.0, 1.0);
+    distance(
+        point,
+        Point::new(start.x + projection * dx, start.y + projection * dy),
+    )
+}
+
+fn line_hit_radius(pointer: Pointer) -> f32 {
+    match pointer {
+        Pointer::Mouse => 7.0,
+        Pointer::Touch(_) => 18.0,
+    }
+}
+
+fn annotation_contains(
+    annotation: ShapeAnnotation,
+    point: Point,
+    line_tolerance: f32,
+) -> bool {
+    match annotation.geometry {
+        AnnotationGeometry::Bounded { bounds, .. } => contains(bounds, point),
+        AnnotationGeometry::Linear { kind, start, end } => {
+            let shaft = point_segment_distance(point, start, end);
+            if shaft <= line_tolerance {
+                return true;
+            }
+            kind == LineKind::Arrow
+                && arrowhead_points(start, end, annotation.stroke_width)
+                    .is_some_and(|(left, right)| {
+                        point_segment_distance(point, end, left)
+                            <= line_tolerance
+                            || point_segment_distance(point, end, right)
+                                <= line_tolerance
+                    })
+        }
+    }
+}
+
+fn valid_annotation_size(annotation: ShapeAnnotation) -> bool {
+    match annotation.geometry {
+        AnnotationGeometry::Bounded { bounds, .. } => {
+            bounds.width >= 1.0 && bounds.height >= 1.0
+        }
+        AnnotationGeometry::Linear { start, end, .. } => {
+            distance(start, end) >= 1.0
+        }
+    }
+}
+
+fn constrain_line(start: Point, end: Point, enabled: bool) -> Point {
+    if !enabled {
+        return end;
+    }
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+    let length = dx.hypot(dy);
+    if length <= f32::EPSILON {
+        return end;
+    }
+    let step = std::f32::consts::FRAC_PI_4;
+    let angle = (dy.atan2(dx) / step).round() * step;
+    Point::new(
+        start.x + length * angle.cos(),
+        start.y + length * angle.sin(),
+    )
+}
+
+#[must_use]
+pub fn arrowhead_points(
+    start: Point,
+    end: Point,
+    stroke_width: f32,
+) -> Option<(Point, Point)> {
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+    let length = dx.hypot(dy);
+    if length <= f32::EPSILON
+        || !stroke_width.is_finite()
+        || stroke_width <= 0.0
+    {
+        return None;
+    }
+    let head = (stroke_width * 8.0).min(length * 0.8);
+    let ux = dx / length;
+    let uy = dy / length;
+    let base = Point::new(end.x - ux * head, end.y - uy * head);
+    let half_width = head * 0.45;
+    let offset = Point::new(-uy * half_width, ux * half_width);
+    Some((
+        Point::new(base.x + offset.x, base.y + offset.y),
+        Point::new(base.x - offset.x, base.y - offset.y),
+    ))
+}
+
+fn linear_bounds(
+    kind: LineKind,
+    start: Point,
+    end: Point,
+    stroke_width: f32,
+) -> Rect {
+    let mut left = start.x.min(end.x);
+    let mut top = start.y.min(end.y);
+    let mut right = start.x.max(end.x);
+    let mut bottom = start.y.max(end.y);
+    if kind == LineKind::Arrow
+        && let Some((first, second)) =
+            arrowhead_points(start, end, stroke_width)
+    {
+        for point in [first, second] {
+            left = left.min(point.x);
+            top = top.min(point.y);
+            right = right.max(point.x);
+            bottom = bottom.max(point.y);
+        }
+    }
+    Rect::new(left, top, right - left, bottom - top)
+}
+
 fn drag_bounds(start: Point, end: Point, square: bool) -> Rect {
     let mut dx = end.x - start.x;
     let mut dy = end.y - start.y;
@@ -557,4 +848,13 @@ fn keep_reachable(mut bounds: Rect, page: Size) -> Rect {
         .y
         .clamp(visible_y - bounds.height, page.height - visible_y);
     bounds
+}
+
+fn keep_annotation_reachable(
+    annotation: ShapeAnnotation,
+    page: Size,
+) -> ShapeAnnotation {
+    let bounds = annotation.bounds();
+    let kept = keep_reachable(bounds, page);
+    annotation.translated(kept.x - bounds.x, kept.y - bounds.y)
 }

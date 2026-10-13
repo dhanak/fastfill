@@ -128,6 +128,25 @@ text. No importing, saving, camera, or annotations were included.
 - [x] Split launch, application, page canvas, and picker responsibilities.
 - [x] User checkpoint: oval drawing, editing, clipping, and history.
 
+#### 3E. Straight-line annotations — accepted
+
+- [x] Store explicit endpoints instead of deriving lines from a box.
+- [x] Draw horizontal, vertical, diagonal, and reverse-direction lines.
+- [x] Hold Ctrl while drawing or editing an endpoint to snap to 45°.
+- [x] Select and move a line; edit either endpoint without changing its stroke.
+- [x] Reuse cancellation, deletion, history, reachability, and navigation.
+- [x] Clip rendered lines at page edges.
+- [x] User checkpoint: line drawing, endpoint editing, snapping, and history.
+
+#### 3F. Arrow annotations — accepted
+
+- [x] Reuse explicit endpoints and straight-line editing for arrows.
+- [x] Keep the arrowhead angle and side lengths independent of box aspect.
+- [x] Preserve arrow type through movement, endpoint edits, and history.
+- [x] Clip the shaft and arrowhead at page edges.
+- [x] Keep zoom, pan, snapping, cancellation, and deletion behavior.
+- [x] User checkpoint: arrow directions, arrowhead shape, editing, and history.
+
 Rotation, other shapes, and multi-selection belong to later slices.
 
 ### 4. Text and toolkit decision gate — not started
@@ -327,6 +346,41 @@ Rotation, other shapes, and multi-selection belong to later slices.
   Clippy, formatting, and a linked Trunk WASM build.
 - User accepted oval creation, constrained circles, editing, clipping,
   navigation, and history behavior.
+
+### 2026-10-13 — checkpoint 3E straight-line annotations
+
+- User accepted checkpoint 3D. Committed history, ovals, and the source split
+  as `479eeb8` before starting this slice.
+- TDD red: line tests failed before explicit line geometry, tools, and endpoint
+  hits existed. Green: creation in every direction, live Ctrl snapping,
+  selection, movement, endpoint editing, cancellation, deletion, history,
+  reachability, and zoom-independent hit widths pass.
+- Store directed line endpoints in the shared annotation geometry enum. Do not
+  derive endpoints from a bounding rectangle or add arrow-specific state yet.
+- Reuse the existing interaction and snapshot history. Endpoint edits keep the
+  opposite endpoint fixed unless reachability correction is required.
+- Render and clip one constant-width segment. Display only two endpoint handles
+  while retaining the line's tight bounding frame for movement feedback.
+- Passed all 68 feature-enabled tests, the dependency-light core suite, strict
+  Clippy, formatting, and a linked Trunk WASM build.
+- User accepted line creation, snapping, endpoint editing, history, and
+  navigation behavior.
+
+### 2026-10-13 — checkpoint 3F arrow annotations
+
+- User accepted checkpoint 3E. Committed editable straight lines as `cefaeb1`
+  before starting this slice.
+- TDD red: arrow tests failed before arrow tools and linear kinds existed. A
+  later check proved the arrowhead was missing from bounds and hit testing.
+- Reuse directed endpoints, editing, snapping, cancellation, history, and
+  reachability for both straight lines and arrows.
+- Derive arrowhead wings from a normalized shaft direction and stroke width.
+  Include them in bounds and hit testing without storing redundant geometry.
+- Clip the shaft and both arrowhead sides independently at the page boundary.
+- Passed all 73 feature-enabled tests, the dependency-light core suite, strict
+  Clippy, formatting, and a linked Trunk WASM build.
+- User accepted arrow direction, head proportions, editing, clipping, history,
+  and navigation behavior.
 
 ## References
 

@@ -1,8 +1,9 @@
 use crate::app::Message;
 use crate::picker::ImportedImage;
 use fastfill_rust::annotations::{
-    Annotations, DragModifiers, EditHit, Pointer, RESIZE_CORNERS, ResizeCorner,
-    ShapeAnnotation, ShapeKind, Tool,
+    AnnotationGeometry, Annotations, DragModifiers, EditHit, LineEndpoint,
+    LineKind, Pointer, RESIZE_CORNERS, ResizeCorner, ShapeAnnotation,
+    ShapeKind, Tool, arrowhead_points,
 };
 use fastfill_rust::geometry::{Navigation, Point as PagePoint};
 use fastfill_rust::geometry::{Rect as PageRect, Size as PageSize};
@@ -179,10 +180,10 @@ impl canvas::Program<Message> for PageCanvas<'_> {
                     draw_shape(&mut frame, view, preview, scale, true);
                 }
                 if self.annotations.tool() != Tool::Navigate
-                    && let Some(controls) =
-                        self.annotations.selection_bounds(scale)
+                    && let Some(annotation) =
+                        self.annotations.selection_annotation(scale)
                 {
-                    draw_selection(&mut frame, view, controls, scale);
+                    draw_selection(&mut frame, view, annotation, scale);
                 }
             }
         }
@@ -215,7 +216,7 @@ impl canvas::Program<Message> for PageCanvas<'_> {
             edit_cursor(hit)
         } else if matches!(
             self.annotations.tool(),
-            Tool::Rectangle | Tool::Oval
+            Tool::Rectangle | Tool::Oval | Tool::Line | Tool::Arrow
         ) {
             mouse::Interaction::Crosshair
         } else {
@@ -367,11 +368,20 @@ fn draw_shape(
     scale: f32,
     preview: bool,
 ) {
-    match annotation.kind {
-        ShapeKind::Rectangle => {
+    match annotation.geometry {
+        AnnotationGeometry::Bounded {
+            kind: ShapeKind::Rectangle,
+            ..
+        } => {
             draw_rectangle(frame, view, annotation, scale, preview);
         }
-        ShapeKind::Oval => draw_oval(frame, view, annotation, scale, preview),
+        AnnotationGeometry::Bounded {
+            kind: ShapeKind::Oval,
+            ..
+        } => draw_oval(frame, view, annotation, scale, preview),
+        AnnotationGeometry::Linear { .. } => {
+            draw_linear(frame, view, annotation, scale, preview);
+        }
     }
 }
 
@@ -382,7 +392,7 @@ fn draw_rectangle(
     scale: f32,
     preview: bool,
 ) {
-    let bounds = annotation.bounds;
+    let bounds = annotation.bounds();
     if bounds.width <= 0.0 || bounds.height <= 0.0 {
         return;
     }
@@ -438,7 +448,7 @@ fn draw_oval(
 ) {
     const SEGMENTS: u16 = 128;
 
-    let bounds = annotation.bounds;
+    let bounds = annotation.bounds();
     if bounds.width <= 0.0 || bounds.height <= 0.0 {
         return;
     }
@@ -468,6 +478,65 @@ fn draw_oval(
                 builder.line_to(end);
             }
             previous = current;
+        }
+    });
+    let color = if preview {
+        Color::from_rgb8(0, 102, 204)
+    } else {
+        Color::BLACK
+    };
+    frame.stroke(
+        &path,
+        canvas::Stroke::default()
+            .with_color(color)
+            .with_width(stroke),
+    );
+}
+
+fn draw_linear(
+    frame: &mut canvas::Frame,
+    view: fastfill_rust::geometry::PageView,
+    annotation: ShapeAnnotation,
+    scale: f32,
+    preview: bool,
+) {
+    let AnnotationGeometry::Linear { kind, start, end } = annotation.geometry
+    else {
+        return;
+    };
+    let arrowhead = (kind == LineKind::Arrow)
+        .then(|| arrowhead_points(start, end, annotation.stroke_width))
+        .flatten()
+        .map(|(left, right)| {
+            let left = view.page_to_view(left);
+            let right = view.page_to_view(right);
+            (Point::new(left.x, left.y), Point::new(right.x, right.y))
+        });
+    let start = view.page_to_view(start);
+    let end = view.page_to_view(end);
+    let start = Point::new(start.x, start.y);
+    let end = Point::new(end.x, end.y);
+    let stroke = annotation.stroke_width * scale;
+    let half = stroke / 2.0;
+    let page = view.page_rect();
+    let clip = Rectangle::new(
+        Point::new(page.x + half, page.y + half),
+        iced::Size::new(page.width - stroke, page.height - stroke),
+    );
+    if clip.width <= 0.0 || clip.height <= 0.0 {
+        return;
+    }
+    let path = canvas::Path::new(|builder| {
+        let mut add_segment = |start, end| {
+            if let Some((start, end)) = clip_segment(start, end, clip) {
+                builder.move_to(start);
+                builder.line_to(end);
+            }
+        };
+        add_segment(start, end);
+        if let Some((left, right)) = arrowhead {
+            add_segment(end, left);
+            add_segment(end, right);
         }
     });
     let color = if preview {
@@ -539,24 +608,43 @@ fn edit_cursor(hit: EditHit) -> mouse::Interaction {
         EditHit::Resize(ResizeCorner::TopRight | ResizeCorner::BottomLeft) => {
             mouse::Interaction::ResizingDiagonallyUp
         }
+        EditHit::Endpoint(LineEndpoint::Start | LineEndpoint::End) => {
+            mouse::Interaction::Crosshair
+        }
     }
 }
 
 fn draw_selection(
     frame: &mut canvas::Frame,
     view: fastfill_rust::geometry::PageView,
-    controls: PageRect,
+    annotation: ShapeAnnotation,
     scale: f32,
 ) {
     let blue = Color::from_rgb8(0, 102, 204);
+    let controls = annotation.bounds();
     let origin = view.page_to_view(PagePoint::new(controls.x, controls.y));
     let path = canvas::Path::rectangle(
         Point::new(origin.x, origin.y),
         iced::Size::new(controls.width * scale, controls.height * scale),
     );
     frame.stroke(&path, canvas::Stroke::default().with_color(blue));
-    for corner in RESIZE_CORNERS {
-        let center = view.page_to_view(corner.position(controls));
+    let handles: Vec<Point> = match annotation.geometry {
+        AnnotationGeometry::Bounded { .. } => RESIZE_CORNERS
+            .into_iter()
+            .map(|corner| {
+                let point = view.page_to_view(corner.position(controls));
+                Point::new(point.x, point.y)
+            })
+            .collect(),
+        AnnotationGeometry::Linear { start, end, .. } => [start, end]
+            .into_iter()
+            .map(|point| {
+                let point = view.page_to_view(point);
+                Point::new(point.x, point.y)
+            })
+            .collect(),
+    };
+    for center in handles {
         let path = canvas::Path::rectangle(
             Point::new(center.x - 7.0, center.y - 7.0),
             iced::Size::new(14.0, 14.0),
@@ -632,5 +720,27 @@ mod tests {
             clip_segment(Point::new(0.0, 10.0), Point::new(50.0, 10.0), clip),
             None,
         );
+    }
+
+    #[test]
+    fn arrowhead_dimensions_do_not_depend_on_direction_or_box_aspect() {
+        let end = PagePoint::new(200.0, 200.0);
+        let horizontal =
+            arrowhead_points(PagePoint::new(0.0, 200.0), end, 3.0).unwrap();
+        let diagonal_offset = 200.0 / 2.0_f32.sqrt();
+        let diagonal = arrowhead_points(
+            PagePoint::new(end.x - diagonal_offset, end.y - diagonal_offset),
+            end,
+            3.0,
+        )
+        .unwrap();
+        for (horizontal, diagonal) in [horizontal.0, horizontal.1]
+            .into_iter()
+            .zip([diagonal.0, diagonal.1])
+        {
+            let horizontal = (horizontal.x - end.x).hypot(horizontal.y - end.y);
+            let diagonal = (diagonal.x - end.x).hypot(diagonal.y - end.y);
+            assert!((horizontal - diagonal).abs() < 0.001);
+        }
     }
 }

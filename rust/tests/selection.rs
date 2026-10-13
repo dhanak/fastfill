@@ -61,12 +61,12 @@ fn move_preview_does_not_modify_the_object_until_release() {
     annotations.drag(MOUSE, Point::new(230.0, 170.0), false);
     assert_eq!(annotations.shapes()[0], original);
     assert_eq!(
-        annotations.preview().unwrap().bounds,
+        annotations.preview().unwrap().bounds(),
         Rect::new(150.0, 120.0, 200.0, 100.0),
     );
     assert!(annotations.finish(MOUSE, Point::new(240.0, 175.0), false));
     assert_eq!(
-        annotations.shapes()[0].bounds,
+        annotations.shapes()[0].bounds(),
         Rect::new(160.0, 125.0, 200.0, 100.0),
     );
 }
@@ -92,7 +92,7 @@ fn every_corner_resizes_freely_without_changing_stroke() {
         let object = annotations.shapes()[0];
         assert_eq!(object.stroke_width, stroke);
         assert_eq!(
-            object.bounds,
+            object.bounds(),
             Rect::new(expected.0, expected.1, expected.2, expected.3),
         );
     }
@@ -110,16 +110,16 @@ fn resize_can_cross_the_opposite_corner_and_ctrl_can_toggle_live() {
     );
     annotations.drag(MOUSE, Point::new(80.0, 70.0), false);
     assert_eq!(
-        annotations.preview().unwrap().bounds,
+        annotations.preview().unwrap().bounds(),
         Rect::new(80.0, 70.0, 20.0, 30.0),
     );
     annotations.constrain_square(true);
     assert_eq!(
-        annotations.preview().unwrap().bounds,
+        annotations.preview().unwrap().bounds(),
         Rect::new(70.0, 70.0, 30.0, 30.0),
     );
     annotations.finish(MOUSE, Point::new(80.0, 70.0), false);
-    assert_eq!(annotations.shapes()[0].bounds.width, 20.0);
+    assert_eq!(annotations.shapes()[0].bounds().width, 20.0);
 }
 
 #[test]
@@ -176,7 +176,7 @@ fn partial_off_page_moves_are_preserved_and_fully_off_page_stays_reachable() {
         PLAIN,
     );
     annotations.finish(MOUSE, Point::new(30.0, 150.0), false);
-    assert_eq!(annotations.shapes()[0].bounds.x, -50.0);
+    assert_eq!(annotations.shapes()[0].bounds().x, -50.0);
     annotations.begin_interaction(
         MOUSE,
         Point::new(20.0, 150.0),
@@ -185,7 +185,7 @@ fn partial_off_page_moves_are_preserved_and_fully_off_page_stays_reachable() {
         PLAIN,
     );
     annotations.finish(MOUSE, Point::new(-1_000.0, 150.0), false);
-    let bounds = annotations.shapes()[0].bounds;
+    let bounds = annotations.shapes()[0].bounds();
     assert!(bounds.x < 0.0 && bounds.x + bounds.width > 0.0);
     assert_eq!(bounds.width, 200.0);
 }
@@ -203,16 +203,16 @@ fn reachability_limit_is_continuous_when_crossing_and_reversing() {
         );
 
         annotations.drag(MOUSE, Point::new(-118.0, 150.0), false);
-        assert_eq!(annotations.preview().unwrap().bounds.x, -198.0);
+        assert_eq!(annotations.preview().unwrap().bounds().x, -198.0);
         annotations.drag(MOUSE, Point::new(-120.0, 150.0), false);
-        assert_eq!(annotations.preview().unwrap().bounds.x, -199.0);
+        assert_eq!(annotations.preview().unwrap().bounds().x, -199.0);
         annotations.drag(MOUSE, Point::new(-300.0, 150.0), false);
-        assert_eq!(annotations.preview().unwrap().bounds.x, -199.0);
+        assert_eq!(annotations.preview().unwrap().bounds().x, -199.0);
 
         annotations.drag(MOUSE, Point::new(-119.0, 150.0), false);
-        assert_eq!(annotations.preview().unwrap().bounds.x, -199.0);
+        assert_eq!(annotations.preview().unwrap().bounds().x, -199.0);
         annotations.drag(MOUSE, Point::new(-110.0, 150.0), false);
-        assert_eq!(annotations.preview().unwrap().bounds.x, -190.0);
+        assert_eq!(annotations.preview().unwrap().bounds().x, -190.0);
     }
 }
 
@@ -292,7 +292,7 @@ fn shift_can_select_and_move_another_object() {
     ));
     annotations.finish(MOUSE, Point::new(190.0, 160.0), false);
     assert_eq!(annotations.selected_index(), Some(0));
-    assert_eq!(annotations.shapes()[0].bounds.x, 110.0);
+    assert_eq!(annotations.shapes()[0].bounds().x, 110.0);
 }
 
 #[test]
@@ -434,7 +434,7 @@ fn oval_edit_and_history_preserve_shape_kind() {
     annotations.begin(MOUSE, Point::new(100.0, 100.0), PAGE);
     annotations.finish(MOUSE, Point::new(300.0, 200.0), false);
     let original = annotations.shapes()[0];
-    assert_eq!(original.kind, ShapeKind::Oval);
+    assert_eq!(original.kind(), Some(ShapeKind::Oval));
 
     annotations.set_tool(Tool::Select);
     annotations.begin_interaction(
@@ -445,7 +445,7 @@ fn oval_edit_and_history_preserve_shape_kind() {
         PLAIN,
     );
     annotations.finish(MOUSE, Point::new(230.0, 170.0), false);
-    assert_eq!(annotations.shapes()[0].kind, ShapeKind::Oval);
+    assert_eq!(annotations.shapes()[0].kind(), Some(ShapeKind::Oval));
     assert!(annotations.undo());
     assert_eq!(annotations.shapes(), [original]);
 }

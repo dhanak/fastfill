@@ -108,8 +108,8 @@ fn rectangle_mode_can_resize_selected_object_through_its_handle() {
     );
     assert_eq!(state.annotations.shapes().len(), 1);
     let resized = state.annotations.shapes()[0];
-    assert!(resized.bounds.width > original.bounds.width);
-    assert!(resized.bounds.height > original.bounds.height);
+    assert!(resized.bounds().width > original.bounds().width);
+    assert!(resized.bounds().height > original.bounds().height);
     assert_eq!(resized.stroke_width, original.stroke_width);
 }
 
@@ -261,6 +261,71 @@ fn oval_renders_a_curved_unfilled_outline() {
     assert_eq!(pixel(124, 124), [240, 230, 210, 255]);
     assert!(pixel(168, 124)[0] < 64);
     assert_eq!(pixel(168, 168), [240, 230, 210, 255]);
+}
+
+#[test]
+fn line_renders_above_the_page_and_clips_at_its_edge() {
+    let mut state = rendered_page();
+    state.annotations.set_tool(Tool::Line);
+    state.annotations.begin(
+        Pointer::Mouse,
+        PagePoint::new(100.0, 100.0),
+        page_size(&state),
+    );
+    state.annotations.finish(
+        Pointer::Mouse,
+        PagePoint::new(500.0, 500.0),
+        false,
+    );
+    state.annotations.begin(
+        Pointer::Mouse,
+        PagePoint::new(20.0, 300.0),
+        page_size(&state),
+    );
+    state.annotations.finish(
+        Pointer::Mouse,
+        PagePoint::new(-100.0, 300.0),
+        false,
+    );
+    state.annotations.set_tool(Tool::Navigate);
+
+    let pixels = render_document(&state, 1, 1.0);
+    let pixel = |x: usize, y: usize| {
+        let offset = (y * 600 + x) * 4;
+        &pixels[offset..offset + 4]
+    };
+    assert!(pixel(300, 300)[0] < 64);
+    assert_eq!(pixel(20, 300), [67, 72, 78, 255]);
+}
+
+#[test]
+fn arrow_renders_a_directional_head_and_clips_all_segments() {
+    let mut state = rendered_page();
+    state.annotations.set_tool(Tool::Arrow);
+    for (start, end) in [
+        (PagePoint::new(100.0, 300.0), PagePoint::new(500.0, 300.0)),
+        (PagePoint::new(20.0, 400.0), PagePoint::new(-100.0, 400.0)),
+    ] {
+        state
+            .annotations
+            .begin(Pointer::Mouse, start, page_size(&state));
+        state.annotations.finish(Pointer::Mouse, end, false);
+    }
+    state.annotations.set_tool(Tool::Navigate);
+
+    let pixels = render_document(&state, 1, 1.0);
+    let dark_near = |x: usize, y: usize| {
+        (y - 2..=y + 2).any(|row| {
+            (x - 2..=x + 2).any(|column| pixels[(row * 600 + column) * 4] < 128)
+        })
+    };
+    assert!(dark_near(300, 300), "arrow shaft missing");
+    assert!(dark_near(462, 294), "upper arrowhead side missing");
+    assert!(dark_near(462, 306), "lower arrowhead side missing");
+    assert_eq!(
+        &pixels[(388 * 600 + 20) * 4..(388 * 600 + 20) * 4 + 4],
+        [67, 72, 78, 255],
+    );
 }
 
 fn rendered_page() -> FastFill {
@@ -475,7 +540,7 @@ fn mouse_drawing_uses_canvas_offset_and_ctrl_without_panning() {
             ..DragModifiers::default()
         }),
     );
-    let preview = state.annotations.preview().unwrap().bounds;
+    let preview = state.annotations.preview().unwrap().bounds();
     assert!((preview.width - preview.height).abs() < 0.001);
     canvas_event(
         &mut state,
@@ -486,7 +551,7 @@ fn mouse_drawing_uses_canvas_offset_and_ctrl_without_panning() {
         end,
     );
     assert_eq!(state.navigation, navigation);
-    let rectangle = state.annotations.shapes()[0].bounds;
+    let rectangle = state.annotations.shapes()[0].bounds();
     assert!((rectangle.x - 100.0).abs() < 0.001);
     assert!((rectangle.y - 200.0).abs() < 0.001);
     assert!((rectangle.width - 120.0).abs() < 0.001);
@@ -524,7 +589,14 @@ fn right_drag_pans_in_rectangle_mode_without_creating_an_object() {
 
 #[test]
 fn wheel_zooms_around_pointer_in_all_tools() {
-    for tool in [Tool::Navigate, Tool::Select, Tool::Rectangle, Tool::Oval] {
+    for tool in [
+        Tool::Navigate,
+        Tool::Select,
+        Tool::Rectangle,
+        Tool::Oval,
+        Tool::Line,
+        Tool::Arrow,
+    ] {
         let mut state = FastFill::default();
         let _ = update(&mut state, Message::SetTool(tool));
         let mut canvas_state = CanvasState::default();
@@ -606,7 +678,7 @@ fn mouse_release_outside_canvas_keeps_partial_page_geometry() {
         )),
         end,
     );
-    assert!(state.annotations.shapes()[0].bounds.x < 0.0);
+    assert!(state.annotations.shapes()[0].bounds().x < 0.0);
     assert!(state.annotations.active_pointer().is_none());
 }
 

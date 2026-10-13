@@ -19,9 +19,9 @@ fn bounded_shape_tools_commit_their_shape_kind() {
         let mut annotations = Annotations::default();
         annotations.set_tool(tool);
         annotations.begin(MOUSE, Point::new(100.0, 100.0), PAGE);
-        assert_eq!(annotations.preview().unwrap().kind, kind);
+        assert_eq!(annotations.preview().unwrap().kind(), Some(kind));
         annotations.finish(MOUSE, Point::new(200.0, 150.0), false);
-        assert_eq!(annotations.shapes()[0].kind, kind);
+        assert_eq!(annotations.shapes()[0].kind(), Some(kind));
     }
 }
 
@@ -39,7 +39,7 @@ fn preview_is_pending_until_release_in_each_drag_direction() {
 
         let preview = annotations.preview().expect("pending rectangle");
         assert_eq!(
-            preview.bounds,
+            preview.bounds(),
             Rect::new(end.x.min(100.0), end.y.min(100.0), 20.0, 40.0),
         );
         assert_eq!(annotations.shapes(), []);
@@ -56,7 +56,7 @@ fn release_position_is_used_without_an_intermediate_move() {
 
     assert!(annotations.finish(MOUSE, Point::new(50.0, 70.0), false));
     assert_eq!(
-        annotations.shapes()[0].bounds,
+        annotations.shapes()[0].bounds(),
         Rect::new(10.0, 20.0, 40.0, 50.0),
     );
 }
@@ -68,18 +68,18 @@ fn square_constraint_can_change_without_moving_the_pointer() {
     annotations.drag(MOUSE, Point::new(70.0, 150.0), false);
     annotations.constrain_square(true);
     assert_eq!(
-        annotations.preview().unwrap().bounds,
+        annotations.preview().unwrap().bounds(),
         Rect::new(50.0, 100.0, 50.0, 50.0),
     );
 
     annotations.constrain_square(false);
     assert_eq!(
-        annotations.preview().unwrap().bounds,
+        annotations.preview().unwrap().bounds(),
         Rect::new(70.0, 100.0, 30.0, 50.0),
     );
     annotations.finish(MOUSE, Point::new(70.0, 150.0), true);
     assert_eq!(
-        annotations.shapes()[0].bounds,
+        annotations.shapes()[0].bounds(),
         Rect::new(50.0, 100.0, 50.0, 50.0),
     );
 }
@@ -127,7 +127,7 @@ fn partial_off_page_rectangle_keeps_its_unclipped_geometry() {
     annotations.begin(MOUSE, Point::new(10.0, 20.0), PAGE);
     assert!(annotations.finish(MOUSE, Point::new(-30.0, -40.0), false));
     assert_eq!(
-        annotations.shapes()[0].bounds,
+        annotations.shapes()[0].bounds(),
         Rect::new(-30.0, -40.0, 40.0, 60.0),
     );
 }
@@ -183,7 +183,7 @@ fn drawing_maps_to_the_same_page_coordinates_at_different_zooms() {
             view.view_to_page(view.page_to_view(end)),
             false,
         );
-        let bounds = annotations.shapes()[0].bounds;
+        let bounds = annotations.shapes()[0].bounds();
         assert!((bounds.x - start.x).abs() < 0.001);
         assert!((bounds.y - start.y).abs() < 0.001);
         assert!((bounds.width - 150.0).abs() < 0.001);

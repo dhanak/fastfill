@@ -376,6 +376,8 @@ fn view(state: &FastFill) -> Element<'_, Message> {
             tool_button("Select", Tool::Select, state.annotations.tool()),
             tool_button("Rectangle", Tool::Rectangle, state.annotations.tool()),
             tool_button("Oval", Tool::Oval, state.annotations.tool()),
+            tool_button("Line", Tool::Line, state.annotations.tool()),
+            tool_button("Arrow", Tool::Arrow, state.annotations.tool()),
             button("Delete")
                 .on_press_maybe(
                     (state.image_picker == ImagePicker::Idle
