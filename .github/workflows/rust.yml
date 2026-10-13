@@ -38,8 +38,8 @@ jobs:
         run: cargo +1.99.0 fmt --check
       - name: Test platform-independent logic
         run: cargo +1.99.0 test --no-default-features
-      - name: Check native GUI
-        run: cargo +1.99.0 check
+      - name: Test application state and GUI input
+        run: cargo +1.99.0 test --all-features
       - name: Lint
         if: matrix.os == 'ubuntu-latest'
         run: >-

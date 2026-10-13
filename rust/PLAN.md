@@ -74,7 +74,7 @@ text. No importing, saving, camera, or annotations were included.
       Windows touch remains deferred until better touchscreen hardware is
       available.
 
-### 3. Editable annotations and history — not started
+### 3. Editable annotations and history — in progress
 
 - Split into small slices: rectangle; select/move/resize; undo/redo; other
   shapes and endpoint editing; then multi-selection and layers.
@@ -82,6 +82,32 @@ text. No importing, saving, camera, or annotations were included.
   placement without making wholly inaccessible objects uneditable.
 - Test state transitions, modifiers, hit regions, rotation, and history.
 - User checkpoint after each slice, not after all annotation tools.
+
+#### 3A. Draw rectangles — accepted
+
+- [x] Add a tested rectangle draft separate from committed annotations.
+- [x] Draw with mouse or one finger, with live preview and Ctrl-to-square.
+- [x] Cancel drafts on Escape, lost input, tool changes, or navigation changes.
+- [x] Keep geometry attached to the page through zoom, pan, and window resize.
+- [x] Clip partial off-page objects when rendering; retain their geometry.
+- [x] Confirm replacement of a page containing annotations.
+- [x] User checkpoint: drawing, constraints, cancellation, and navigation.
+
+#### 3B. Select, move, resize, and delete — ready for user check
+
+- [x] Select the topmost rectangle by clicking anywhere inside its box.
+- [x] Move by dragging its body; resize freely using four corner handles.
+- [x] Keep outlines unchanged when resizing; Ctrl constrains resizing to square.
+- [x] Keep touch targets usable at different zooms and for small objects.
+- [x] Use Shift to force moving and Alt to force resizing when ambiguous.
+- [x] Allow temporary editing of the selected rectangle in Rectangle mode.
+- [x] Keep partial off-page placement; prevent wholly inaccessible edits.
+- [x] Commit edits on release; cancel on Escape, lost input, or tool/view
+      change.
+- [x] Delete the selection with a button or Delete key.
+- [ ] User checkpoint: selection, drag edits, modifiers, and deletion.
+
+Undo/redo, rotation, other shapes, and multi-selection belong to later slices.
 
 ### 4. Text and toolkit decision gate — not started
 
@@ -115,6 +141,8 @@ text. No importing, saving, camera, or annotations were included.
 
 ### 7. Packaging and replacement decision — not started
 
+- Polish the UI for regular use: cohesive visual styling, tool icons, touch
+  layout, and confirmations that overlay the canvas without resizing it.
 - Separate prototype artifacts from existing C# release names/assets.
 - Portable Windows build, documented Linux dependencies/package, icons,
   diagnostics, file opening, help, and user documentation.
@@ -183,6 +211,65 @@ text. No importing, saving, camera, or annotations were included.
   native performance result. Repeat on better touchscreen hardware later.
 - Checkpoint 2 is closed. Stop here by user request; checkpoint 3 remains
   unstarted.
+
+### 2026-10-13 — checkpoint 3A rectangle drawing
+
+- User confirmed the initial Rust CI passed after pushing checkpoint 2.
+- Start the first annotation slice. Keep the next user checkpoint limited to
+  drawing rectangles and isolating drawing input from navigation.
+- TDD red: annotation tests failed before the annotation module existed;
+  application tests then failed before drawing and replacement states existed.
+  Green: eight core tests and eight application/input tests cover drafts,
+  constraints, coordinates, pointer ownership, cancellation, and replacement.
+- Added Navigate and Rectangle tools, blue drawing previews, black committed
+  outlines, Ctrl-to-square, Escape cancellation, and a rectangle counter.
+  Right-drag and idle mouse-wheel zoom work in either tool; touch navigation
+  belongs to Navigate.
+- Keep annotations in image coordinates. Draw partial off-page objects through
+  clipped stroke bands, without modifying their stored bounds.
+- Added a headless software-rendering test at 100% and 200% scale. It exposed
+  iced's image-over-stroke ordering and lost nested stroke clips. Use separate
+  stack layers and explicit band clipping to cover both renderers.
+- CI now runs application/input/rendering tests on Linux, Windows, and macOS
+  as well as the independent core tests and WASM compilation.
+- Passed all 30 tests, the independent core test run, strict Clippy, formatting,
+  and a linked Trunk WASM build locally. The expanded native CI awaits a push.
+- Annotations remain temporary; selection, object resizing, deletion, and
+  history await later slices. Stop at the 3A user check before adding them.
+- User accepted the drawing checkpoint. Touch drawing can wait for better
+  hardware.
+- Follow-up: enable pointer-anchored wheel zoom in both tools while idle, and
+  ignore it during drawing/panning. Two regression tests first reproduced the
+  missing rectangle-tool zoom and unwanted zoom during a navigation drag.
+- Follow-up validation passed: all 32 tests, strict Clippy, formatting, and
+  the linked WASM build.
+- User accepts the temporary confirmation bar shrinking the canvas. Record a
+  stable confirmation overlay and a full visual-polish pass for checkpoint 7.
+
+### 2026-10-13 — checkpoint 3B rectangle editing
+
+- TDD red: selection tests failed before edit state and hit testing existed.
+  Green: tests cover topmost selection, pending move/resize, all four corners,
+  modifiers, cancellation, deletion, small targets, and off-page edits.
+- Added Select and Delete controls. Drag anywhere in a selected box to move;
+  drag a corner handle to resize. Rectangle mode temporarily edits its selected
+  object when the pointer starts within its controls and draws elsewhere.
+- Keep each edit separate from committed state until release. Escape, lost
+  input, tool changes, and view changes restore the original rectangle.
+- Keep stroke width independent of resize geometry. Ctrl constrains a resize
+  to a square, Shift forces movement, and Alt forces the nearest-corner resize.
+- Allow partly off-page edits while continuously retaining a small reachable
+  portion instead of forcing full containment.
+- Added a software-renderer regression check proving an edit preview replaces
+  the committed outline instead of leaving a ghost at its old position.
+- Passed all 49 feature-enabled tests, the dependency-light core suite, strict
+  Clippy, formatting, and a linked Trunk WASM build.
+- Follow-up: continuously clamp one document unit while dragging off-page.
+  Tests cover crossing and reversing without a jump at three zoom levels.
+- Follow-up: keep the visible selection frame snug to small objects. Retain
+  larger mouse/touch hit regions invisibly around the actual corner handles.
+- Next: user checks selection, handles, modifiers, cancellation, deletion, and
+  coordinates through zoom/pan before checkpoint 3C undo/redo begins.
 
 ## References
 
