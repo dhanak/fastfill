@@ -36,27 +36,30 @@ to reach TCP port 24800. Trunk watches for changes, but browser auto-reload is
 disabled so the generated page never assumes the development machine is
 `localhost`; refresh the browser after a rebuild.
 
-Checkpoint 3B adds rectangle drawing and editing to the image viewer:
+Checkpoint 3D adds bounded-shape drawing, editing, and history to the viewer:
 
 - **Rectangle:** drag with the left mouse button or one finger. The blue
   preview becomes a black outline on release. Hold Ctrl to draw a square.
-- **Select:** click or touch anywhere inside a rectangle, then drag to move it.
-  Drag one of its four handles to resize freely. Hold Ctrl for a square, Shift
-  to force movement, or Alt to force the nearest-corner resize.
-- Rectangle mode can move or resize the selected object from its box or
-  handles. Starting elsewhere draws a new rectangle.
+- **Oval:** drag like a rectangle. Hold Ctrl to draw a circle.
+- **Select:** click or touch anywhere inside a shape's box, then drag to move
+  it. Drag one of its four handles to resize freely. Hold Ctrl for a square or
+  circle, Shift to force movement, or Alt to force nearest-corner resizing.
+- Rectangle and Oval modes can move or resize the selected object from its box
+  or handles. Starting elsewhere draws a new shape of the active type.
 - **Delete:** remove the selection with the button or Delete key.
+- **Undo/Redo:** use the buttons, Ctrl+Z, Ctrl+Y, or Ctrl+Shift+Z. On macOS,
+  use Command instead of Ctrl. Canceled and unchanged edits are not recorded.
 - **Escape:** cancel an unfinished draw or edit. Switching tools, changing the
   view, losing focus, or losing touch also restores the pending edit.
 - **Navigate:** drag or pan/pinch with touch. Right-drag pans in either tool.
   The mouse wheel zooms in every tool while idle; it is ignored during a draw,
   edit, or navigation gesture. Fit, 1:1, and zoom buttons work in every tool.
-- Rectangles stay attached to the page while zooming, panning, or resizing the
+- Shapes stay attached to the page while zooming, panning, or resizing the
   window. Parts outside the page are clipped, while a small reachable part is
   kept on-page.
 - Opening another image asks before discarding rectangles. Canceling the
   picker or choosing an invalid image preserves the current page.
 
-Annotations are temporary. Undo/redo, other shapes, projects, and saving are
+Annotations and history are temporary. Other shapes, projects, and saving are
 not implemented yet. Android browser rendering is currently slow; native
 touchscreen performance still needs hardware testing.

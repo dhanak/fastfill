@@ -93,7 +93,7 @@ text. No importing, saving, camera, or annotations were included.
 - [x] Confirm replacement of a page containing annotations.
 - [x] User checkpoint: drawing, constraints, cancellation, and navigation.
 
-#### 3B. Select, move, resize, and delete — ready for user check
+#### 3B. Select, move, resize, and delete — accepted
 
 - [x] Select the topmost rectangle by clicking anywhere inside its box.
 - [x] Move by dragging its body; resize freely using four corner handles.
@@ -105,9 +105,30 @@ text. No importing, saving, camera, or annotations were included.
 - [x] Commit edits on release; cancel on Escape, lost input, or tool/view
       change.
 - [x] Delete the selection with a button or Delete key.
-- [ ] User checkpoint: selection, drag edits, modifiers, and deletion.
+- [x] User checkpoint: selection, drag edits, modifiers, and deletion.
 
-Undo/redo, rotation, other shapes, and multi-selection belong to later slices.
+#### 3C. Undo and redo — accepted
+
+- [x] Record rectangle creation, movement, resizing, and deletion.
+- [x] Keep drafts pending and omit canceled or unchanged edits from history.
+- [x] Restore object geometry and selection through undo and redo.
+- [x] Clear redo when a new committed change follows undo.
+- [x] Add buttons, Ctrl+Z, Ctrl+Y, and Ctrl+Shift+Z.
+- [x] Preserve history when page replacement is canceled; clear it after a
+      successful replacement.
+- [x] User checkpoint: mixed edit sequence, cancellation, and shortcuts.
+
+#### 3D. Oval annotations — accepted
+
+- [x] Generalize rectangle storage to bounded shapes with explicit kinds.
+- [x] Draw ovals with mouse or touch; Ctrl constrains them to circles.
+- [x] Reuse selection, movement, free resize, deletion, and history behavior.
+- [x] Render smooth unfilled oval outlines and clip them at page edges.
+- [x] Keep wheel zoom and right-button pan available in Oval mode.
+- [x] Split launch, application, page canvas, and picker responsibilities.
+- [x] User checkpoint: oval drawing, editing, clipping, and history.
+
+Rotation, other shapes, and multi-selection belong to later slices.
 
 ### 4. Text and toolkit decision gate — not started
 
@@ -270,6 +291,42 @@ Undo/redo, rotation, other shapes, and multi-selection belong to later slices.
   larger mouse/touch hit regions invisibly around the actual corner handles.
 - Next: user checks selection, handles, modifiers, cancellation, deletion, and
   coordinates through zoom/pan before checkpoint 3C undo/redo begins.
+
+### 2026-10-13 — checkpoint 3C undo and redo
+
+- User accepted selection, movement, resizing, deletion, off-page clamping,
+  and snug selection frames. Committed checkpoints 3A and 3B as `f8003bd`.
+- TDD red: history tests failed before undo, redo, and availability APIs
+  existed. Green: creation, movement, resizing, deletion, pending drafts,
+  no-op edits, selection restoration, and redo invalidation pass.
+- Store full rectangle snapshots for now. This is the smallest reliable model
+  for the one-page rectangle prototype; structured history can wait until
+  document and annotation types justify it.
+- Added Undo and Redo buttons plus platform-command Z, Shift+Z, and Y. On
+  Windows and Linux the platform command is Ctrl; on macOS it is Command.
+- Canceled page replacement preserves history. Successful replacement starts
+  a new empty history with the new page.
+- Passed all 54 feature-enabled tests, the dependency-light core suite, strict
+  Clippy, formatting, and a linked Trunk WASM build.
+
+### 2026-10-13 — checkpoint 3D oval annotations
+
+- User accepted mixed undo/redo sequences, shortcuts, draft cancellation, and
+  redo invalidation after a new edit.
+- TDD red: model tests failed before oval kinds existed; the headless renderer
+  then showed a rectangular outline for an oval. Green: shape kind, editing,
+  history, curved outline, and segment clipping checks pass.
+- Generalized the bounded annotation model to Rectangle and Oval without
+  duplicating selection, editing, reachability, or history code.
+- Approximate oval outlines with 128 segments and clip each segment explicitly.
+  This avoids iced's known lost nested clip in the software renderer.
+- Split the former monolithic entry point into a seven-line `main.rs`, app
+  state in `app.rs`, app checks in `app_tests.rs`, canvas input/rendering in
+  `page_canvas.rs`, and validated image selection in `picker.rs`.
+- Passed all 58 feature-enabled tests, the dependency-light core suite, strict
+  Clippy, formatting, and a linked Trunk WASM build.
+- User accepted oval creation, constrained circles, editing, clipping,
+  navigation, and history behavior.
 
 ## References
 

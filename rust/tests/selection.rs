@@ -1,5 +1,5 @@
 use fastfill_rust::annotations::{
-    Annotations, DragModifiers, EditHit, Pointer, ResizeCorner, Tool,
+    Annotations, DragModifiers, EditHit, Pointer, ResizeCorner, ShapeKind, Tool,
 };
 use fastfill_rust::geometry::{Point, Rect, Size};
 
@@ -50,7 +50,7 @@ fn creation_selects_the_object_and_body_hit_selects_topmost() {
 #[test]
 fn move_preview_does_not_modify_the_object_until_release() {
     let mut annotations = sample();
-    let original = annotations.rectangles()[0];
+    let original = annotations.shapes()[0];
     annotations.begin_interaction(
         MOUSE,
         Point::new(180.0, 150.0),
@@ -59,14 +59,14 @@ fn move_preview_does_not_modify_the_object_until_release() {
         PLAIN,
     );
     annotations.drag(MOUSE, Point::new(230.0, 170.0), false);
-    assert_eq!(annotations.rectangles()[0], original);
+    assert_eq!(annotations.shapes()[0], original);
     assert_eq!(
         annotations.preview().unwrap().bounds,
         Rect::new(150.0, 120.0, 200.0, 100.0),
     );
     assert!(annotations.finish(MOUSE, Point::new(240.0, 175.0), false));
     assert_eq!(
-        annotations.rectangles()[0].bounds,
+        annotations.shapes()[0].bounds,
         Rect::new(160.0, 125.0, 200.0, 100.0),
     );
 }
@@ -80,7 +80,7 @@ fn every_corner_resizes_freely_without_changing_stroke() {
         ((100.0, 200.0), (80.0, 250.0), (80.0, 100.0, 220.0, 150.0)),
     ] {
         let mut annotations = sample();
-        let stroke = annotations.rectangles()[0].stroke_width;
+        let stroke = annotations.shapes()[0].stroke_width;
         annotations.begin_interaction(
             MOUSE,
             Point::new(start.0, start.1),
@@ -89,7 +89,7 @@ fn every_corner_resizes_freely_without_changing_stroke() {
             PLAIN,
         );
         annotations.finish(MOUSE, Point::new(end.0, end.1), false);
-        let object = annotations.rectangles()[0];
+        let object = annotations.shapes()[0];
         assert_eq!(object.stroke_width, stroke);
         assert_eq!(
             object.bounds,
@@ -119,30 +119,30 @@ fn resize_can_cross_the_opposite_corner_and_ctrl_can_toggle_live() {
         Rect::new(70.0, 70.0, 30.0, 30.0),
     );
     annotations.finish(MOUSE, Point::new(80.0, 70.0), false);
-    assert_eq!(annotations.rectangles()[0].bounds.width, 20.0);
+    assert_eq!(annotations.shapes()[0].bounds.width, 20.0);
 }
 
 #[test]
 fn cancel_and_tool_change_restore_original_move_or_resize() {
     for start in [Point::new(180.0, 150.0), Point::new(300.0, 200.0)] {
         let mut annotations = sample();
-        let original = annotations.rectangles()[0];
+        let original = annotations.shapes()[0];
         annotations.begin_interaction(MOUSE, start, PAGE, 1.0, PLAIN);
         annotations.drag(MOUSE, Point::new(400.0, 400.0), false);
         annotations.cancel();
-        assert_eq!(annotations.rectangles()[0], original);
+        assert_eq!(annotations.shapes()[0], original);
         assert_eq!(annotations.selected_index(), Some(0));
         annotations.begin_interaction(MOUSE, start, PAGE, 1.0, PLAIN);
         annotations.set_tool(Tool::Rectangle);
         assert!(annotations.preview().is_none());
-        assert_eq!(annotations.rectangles()[0], original);
+        assert_eq!(annotations.shapes()[0], original);
     }
 }
 
 #[test]
 fn invalid_release_reverts_and_other_pointers_cannot_take_over() {
     let mut annotations = sample();
-    let original = annotations.rectangles()[0];
+    let original = annotations.shapes()[0];
     let finger = Pointer::Touch(1);
     annotations.begin_interaction(
         finger,
@@ -161,7 +161,7 @@ fn invalid_release_reverts_and_other_pointers_cannot_take_over() {
     assert!(!annotations.finish(MOUSE, Point::new(400.0, 400.0), false));
     assert_eq!(annotations.active_pointer(), Some(finger));
     assert!(!annotations.finish(finger, Point::new(f32::NAN, 400.0), false));
-    assert_eq!(annotations.rectangles()[0], original);
+    assert_eq!(annotations.shapes()[0], original);
     assert!(annotations.active_pointer().is_none());
 }
 
@@ -176,7 +176,7 @@ fn partial_off_page_moves_are_preserved_and_fully_off_page_stays_reachable() {
         PLAIN,
     );
     annotations.finish(MOUSE, Point::new(30.0, 150.0), false);
-    assert_eq!(annotations.rectangles()[0].bounds.x, -50.0);
+    assert_eq!(annotations.shapes()[0].bounds.x, -50.0);
     annotations.begin_interaction(
         MOUSE,
         Point::new(20.0, 150.0),
@@ -185,7 +185,7 @@ fn partial_off_page_moves_are_preserved_and_fully_off_page_stays_reachable() {
         PLAIN,
     );
     annotations.finish(MOUSE, Point::new(-1_000.0, 150.0), false);
-    let bounds = annotations.rectangles()[0].bounds;
+    let bounds = annotations.shapes()[0].bounds;
     assert!(bounds.x < 0.0 && bounds.x + bounds.width > 0.0);
     assert_eq!(bounds.width, 200.0);
 }
@@ -292,7 +292,7 @@ fn shift_can_select_and_move_another_object() {
     ));
     annotations.finish(MOUSE, Point::new(190.0, 160.0), false);
     assert_eq!(annotations.selected_index(), Some(0));
-    assert_eq!(annotations.rectangles()[0].bounds.x, 110.0);
+    assert_eq!(annotations.shapes()[0].bounds.x, 110.0);
 }
 
 #[test]
@@ -307,7 +307,7 @@ fn rectangle_tool_edits_selected_object_and_draws_elsewhere() {
         PLAIN,
     );
     annotations.finish(MOUSE, Point::new(190.0, 160.0), false);
-    assert_eq!(annotations.rectangles().len(), 1);
+    assert_eq!(annotations.shapes().len(), 1);
     annotations.begin_interaction(
         MOUSE,
         Point::new(500.0, 500.0),
@@ -316,7 +316,7 @@ fn rectangle_tool_edits_selected_object_and_draws_elsewhere() {
         PLAIN,
     );
     annotations.finish(MOUSE, Point::new(550.0, 550.0), false);
-    assert_eq!(annotations.rectangles().len(), 2);
+    assert_eq!(annotations.shapes().len(), 2);
     assert_eq!(annotations.selected_index(), Some(1));
 }
 
@@ -333,7 +333,119 @@ fn delete_removes_only_selected_object_and_is_disabled_during_a_drag() {
     assert!(!annotations.delete_selected());
     annotations.cancel();
     assert!(annotations.delete_selected());
-    assert_eq!(annotations.rectangles(), []);
+    assert_eq!(annotations.shapes(), []);
     assert_eq!(annotations.selected_index(), None);
     assert!(!annotations.delete_selected());
+}
+
+#[test]
+fn create_move_and_delete_undo_and_redo_in_order() {
+    let mut annotations = Annotations::default();
+    annotations.set_tool(Tool::Rectangle);
+    annotations.begin(MOUSE, Point::new(100.0, 100.0), PAGE);
+    annotations.finish(MOUSE, Point::new(300.0, 200.0), false);
+    let original = annotations.shapes()[0];
+
+    annotations.set_tool(Tool::Select);
+    annotations.begin_interaction(
+        MOUSE,
+        Point::new(180.0, 150.0),
+        PAGE,
+        1.0,
+        PLAIN,
+    );
+    annotations.finish(MOUSE, Point::new(230.0, 170.0), false);
+    let moved = annotations.shapes()[0];
+    assert!(annotations.delete_selected());
+    assert_eq!(annotations.shapes(), []);
+
+    assert!(annotations.undo());
+    assert_eq!(annotations.shapes(), [moved]);
+    assert_eq!(annotations.selected_index(), Some(0));
+    assert!(annotations.undo());
+    assert_eq!(annotations.shapes(), [original]);
+    assert!(annotations.undo());
+    assert_eq!(annotations.shapes(), []);
+    assert!(!annotations.undo());
+
+    assert!(annotations.redo());
+    assert_eq!(annotations.shapes(), [original]);
+    assert!(annotations.redo());
+    assert_eq!(annotations.shapes(), [moved]);
+    assert!(annotations.redo());
+    assert_eq!(annotations.shapes(), []);
+    assert!(!annotations.redo());
+}
+
+#[test]
+fn drafts_and_noop_edits_do_not_create_history() {
+    let mut annotations = Annotations::default();
+    annotations.set_tool(Tool::Rectangle);
+    annotations.begin(MOUSE, Point::new(100.0, 100.0), PAGE);
+    annotations.drag(MOUSE, Point::new(300.0, 200.0), false);
+    let preview = annotations.preview();
+    assert!(!annotations.undo());
+    assert_eq!(annotations.preview(), preview);
+    annotations.cancel();
+    assert!(!annotations.can_undo());
+
+    annotations.begin(MOUSE, Point::new(100.0, 100.0), PAGE);
+    annotations.finish(MOUSE, Point::new(300.0, 200.0), false);
+    annotations.set_tool(Tool::Select);
+    annotations.begin_interaction(
+        MOUSE,
+        Point::new(180.0, 150.0),
+        PAGE,
+        1.0,
+        PLAIN,
+    );
+    annotations.finish(MOUSE, Point::new(180.0, 150.0), false);
+
+    assert!(annotations.undo());
+    assert_eq!(annotations.shapes(), []);
+    assert!(!annotations.can_undo());
+}
+
+#[test]
+fn a_new_change_after_undo_clears_redo() {
+    let mut annotations = Annotations::default();
+    annotations.set_tool(Tool::Rectangle);
+    for (start, end) in [
+        (Point::new(100.0, 100.0), Point::new(200.0, 200.0)),
+        (Point::new(300.0, 300.0), Point::new(400.0, 400.0)),
+    ] {
+        annotations.begin(MOUSE, start, PAGE);
+        annotations.finish(MOUSE, end, false);
+    }
+    assert!(annotations.undo());
+    assert!(annotations.can_redo());
+
+    annotations.begin(MOUSE, Point::new(500.0, 500.0), PAGE);
+    annotations.finish(MOUSE, Point::new(600.0, 600.0), false);
+    assert!(!annotations.can_redo());
+    assert!(!annotations.redo());
+    assert_eq!(annotations.shapes().len(), 2);
+}
+
+#[test]
+fn oval_edit_and_history_preserve_shape_kind() {
+    let mut annotations = Annotations::default();
+    annotations.set_tool(Tool::Oval);
+    annotations.begin(MOUSE, Point::new(100.0, 100.0), PAGE);
+    annotations.finish(MOUSE, Point::new(300.0, 200.0), false);
+    let original = annotations.shapes()[0];
+    assert_eq!(original.kind, ShapeKind::Oval);
+
+    annotations.set_tool(Tool::Select);
+    annotations.begin_interaction(
+        MOUSE,
+        Point::new(180.0, 150.0),
+        PAGE,
+        1.0,
+        PLAIN,
+    );
+    annotations.finish(MOUSE, Point::new(230.0, 170.0), false);
+    assert_eq!(annotations.shapes()[0].kind, ShapeKind::Oval);
+    assert!(annotations.undo());
+    assert_eq!(annotations.shapes(), [original]);
 }

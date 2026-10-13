@@ -5,7 +5,24 @@ pub enum Tool {
     #[default]
     Navigate,
     Rectangle,
+    Oval,
     Select,
+}
+
+impl Tool {
+    const fn shape_kind(self) -> Option<ShapeKind> {
+        match self {
+            Self::Rectangle => Some(ShapeKind::Rectangle),
+            Self::Oval => Some(ShapeKind::Oval),
+            Self::Navigate | Self::Select => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShapeKind {
+    Rectangle,
+    Oval,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -66,14 +83,16 @@ pub enum EditHit {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct RectangleAnnotation {
+pub struct ShapeAnnotation {
+    pub kind: ShapeKind,
     pub bounds: Rect,
     pub stroke_width: f32,
 }
 
 #[derive(Debug)]
-struct RectangleDraft {
+struct ShapeDraft {
     pointer: Pointer,
+    kind: ShapeKind,
     start: Point,
     end: Point,
     square: bool,
@@ -84,7 +103,7 @@ struct RectangleDraft {
 struct EditDraft {
     pointer: Pointer,
     index: usize,
-    original: RectangleAnnotation,
+    original: ShapeAnnotation,
     start: Point,
     end: Point,
     square: bool,
@@ -93,7 +112,7 @@ struct EditDraft {
 }
 
 impl EditDraft {
-    fn annotation(&self) -> RectangleAnnotation {
+    fn annotation(&self) -> ShapeAnnotation {
         let dx = self.end.x - self.start.x;
         let dy = self.end.y - self.start.y;
         let bounds = self.original.bounds;
@@ -113,7 +132,7 @@ impl EditDraft {
                 )
             }
         };
-        RectangleAnnotation {
+        ShapeAnnotation {
             bounds: keep_reachable(bounds, self.page),
             ..self.original
         }
@@ -122,7 +141,7 @@ impl EditDraft {
 
 #[derive(Debug)]
 enum Draft {
-    Create(RectangleDraft),
+    Create(ShapeDraft),
     Edit(EditDraft),
 }
 
@@ -134,7 +153,7 @@ impl Draft {
         }
     }
 
-    fn annotation(&self) -> RectangleAnnotation {
+    fn annotation(&self) -> ShapeAnnotation {
         match self {
             Self::Create(draft) => draft.annotation(),
             Self::Edit(draft) => draft.annotation(),
@@ -162,9 +181,10 @@ impl Draft {
     }
 }
 
-impl RectangleDraft {
-    fn annotation(&self) -> RectangleAnnotation {
-        RectangleAnnotation {
+impl ShapeDraft {
+    fn annotation(&self) -> ShapeAnnotation {
+        ShapeAnnotation {
+            kind: self.kind,
             bounds: drag_bounds(self.start, self.end, self.square),
             // Keep the default outline proportional to image resolution.
             stroke_width: self.page.width / 300.0,
@@ -172,12 +192,20 @@ impl RectangleDraft {
     }
 }
 
+#[derive(Clone, Debug)]
+struct Snapshot {
+    shapes: Vec<ShapeAnnotation>,
+    selected: Option<usize>,
+}
+
 #[derive(Debug, Default)]
 pub struct Annotations {
     tool: Tool,
-    rectangles: Vec<RectangleAnnotation>,
+    shapes: Vec<ShapeAnnotation>,
     draft: Option<Draft>,
     selected: Option<usize>,
+    undo: Vec<Snapshot>,
+    redo: Vec<Snapshot>,
 }
 
 impl Annotations {
@@ -192,12 +220,12 @@ impl Annotations {
     }
 
     #[must_use]
-    pub fn rectangles(&self) -> &[RectangleAnnotation] {
-        &self.rectangles
+    pub fn shapes(&self) -> &[ShapeAnnotation] {
+        &self.shapes
     }
 
     #[must_use]
-    pub fn preview(&self) -> Option<RectangleAnnotation> {
+    pub fn preview(&self) -> Option<ShapeAnnotation> {
         self.draft.as_ref().map(Draft::annotation)
     }
 
@@ -209,6 +237,42 @@ impl Annotations {
     #[must_use]
     pub const fn selected_index(&self) -> Option<usize> {
         self.selected
+    }
+
+    #[must_use]
+    pub fn can_undo(&self) -> bool {
+        self.draft.is_none() && !self.undo.is_empty()
+    }
+
+    #[must_use]
+    pub fn can_redo(&self) -> bool {
+        self.draft.is_none() && !self.redo.is_empty()
+    }
+
+    pub fn undo(&mut self) -> bool {
+        if self.draft.is_some() {
+            return false;
+        }
+        let Some(snapshot) = self.undo.pop() else {
+            return false;
+        };
+        let current = self.snapshot();
+        self.restore(snapshot);
+        self.redo.push(current);
+        true
+    }
+
+    pub fn redo(&mut self) -> bool {
+        if self.draft.is_some() {
+            return false;
+        }
+        let Some(snapshot) = self.redo.pop() else {
+            return false;
+        };
+        let current = self.snapshot();
+        self.restore(snapshot);
+        self.undo.push(current);
+        true
     }
 
     #[must_use]
@@ -228,7 +292,7 @@ impl Annotations {
         let annotation = if self.edited_index() == Some(index) {
             self.preview()?
         } else {
-            *self.rectangles.get(index)?
+            *self.shapes.get(index)?
         };
         let bounds = annotation.bounds;
         Some(bounds)
@@ -301,7 +365,7 @@ impl Annotations {
             && !(modifiers.force_move && hit.is_some())
         {
             self.selected = self
-                .rectangles
+                .shapes
                 .iter()
                 .rposition(|object| contains(object.bounds, point));
         }
@@ -310,7 +374,7 @@ impl Annotations {
             self.draft = Some(Draft::Edit(EditDraft {
                 pointer,
                 index,
-                original: self.rectangles[index],
+                original: self.shapes[index],
                 start: point,
                 end: point,
                 square: modifiers.square,
@@ -319,7 +383,7 @@ impl Annotations {
             }));
             return true;
         }
-        if self.tool == Tool::Rectangle {
+        if self.tool.shape_kind().is_some() {
             return self.begin(pointer, point, page);
         }
         false
@@ -329,10 +393,12 @@ impl Annotations {
         if self.draft.is_some() {
             return false;
         }
-        let Some(index) = self.selected.take() else {
+        let Some(index) = self.selected else {
             return false;
         };
-        self.rectangles.remove(index);
+        self.record_change();
+        self.shapes.remove(index);
+        self.selected = None;
         true
     }
 
@@ -342,8 +408,10 @@ impl Annotations {
         point: Point,
         page: Size,
     ) -> bool {
-        if self.tool != Tool::Rectangle
-            || self.draft.is_some()
+        let Some(kind) = self.tool.shape_kind() else {
+            return false;
+        };
+        if self.draft.is_some()
             || !valid(point)
             || !page.width.is_finite()
             || !page.height.is_finite()
@@ -354,8 +422,9 @@ impl Annotations {
         {
             return false;
         }
-        self.draft = Some(Draft::Create(RectangleDraft {
+        self.draft = Some(Draft::Create(ShapeDraft {
             pointer,
+            kind,
             start: point,
             end: point,
             square: false,
@@ -406,16 +475,39 @@ impl Annotations {
         }
         match draft {
             Draft::Create(_) => {
-                self.rectangles.push(annotation);
-                self.selected = Some(self.rectangles.len() - 1);
+                self.record_change();
+                self.shapes.push(annotation);
+                self.selected = Some(self.shapes.len() - 1);
             }
-            Draft::Edit(draft) => self.rectangles[draft.index] = annotation,
+            Draft::Edit(draft) => {
+                if self.shapes[draft.index] != annotation {
+                    self.record_change();
+                    self.shapes[draft.index] = annotation;
+                }
+            }
         }
         true
     }
 
     pub fn cancel(&mut self) {
         self.draft = None;
+    }
+
+    fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            shapes: self.shapes.clone(),
+            selected: self.selected,
+        }
+    }
+
+    fn restore(&mut self, snapshot: Snapshot) {
+        self.shapes = snapshot.shapes;
+        self.selected = snapshot.selected;
+    }
+
+    fn record_change(&mut self) {
+        self.undo.push(self.snapshot());
+        self.redo.clear();
     }
 }
 
