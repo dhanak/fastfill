@@ -1,5 +1,8 @@
 mod controller;
 mod pages;
+mod project;
+mod project_io;
+mod project_view;
 mod rail;
 mod text;
 mod view;
@@ -30,16 +33,18 @@ use iced::{Color, Point, Rectangle, Renderer, Theme};
 #[cfg(test)]
 use iced::{mouse, touch};
 use pages::{PageDrag, Pages};
+use project::ProjectSession;
 #[cfg(test)]
 use view::document;
 use view::view;
 
-const DEFAULT_PAGE: PageSize = PageSize::new(794.0, 1_123.0);
+const DEFAULT_PAGE: PageSize = PageSize::new(612.0, 612.0 * 1_123.0 / 794.0);
 const TEXT_EDITOR_ID: &str = "inline-text-editor";
 
 #[derive(Default)]
 struct FastFill {
     pages: Pages,
+    project: ProjectSession,
     navigation: Navigation,
     modifiers: DragModifiers,
     input_epoch: u64,
@@ -84,6 +89,19 @@ enum ImagePicker {
 
 #[derive(Clone, Debug)]
 pub(crate) enum Message {
+    NewProject,
+    OpenProject,
+    SaveProject,
+    SaveProjectAs,
+    DiscardProject,
+    SaveBeforeLeave,
+    KeepProject,
+    CloseRequested(iced::window::Id),
+    ProjectOpened(
+        u64,
+        Result<Option<std::sync::Arc<project_io::OpenedProject>>, String>,
+    ),
+    ProjectSaved(u64, Result<Option<project_io::SaveReceipt>, String>),
     AddPage,
     AskReplacePage,
     ConfirmReplacePage,
@@ -141,11 +159,25 @@ pub(crate) enum Message {
 
 pub(crate) fn run() -> iced::Result {
     iced::application(FastFill::default, update, view)
-        .title("FastFill Rust prototype")
+        .title(|state: &FastFill| {
+            format!(
+                "FastFill — {}{}",
+                state.project.name,
+                if state.project.is_dirty(&state.pages) {
+                    " *"
+                } else {
+                    ""
+                }
+            )
+        })
         .window_size((1_200.0, 800.0))
         .antialiasing(true)
+        .exit_on_close_request(false)
         .subscription(|_| {
-            iced::event::listen_with(|event, _, _| match event {
+            iced::event::listen_with(|event, _, id| match event {
+                iced::Event::Window(iced::window::Event::CloseRequested) => {
+                    Some(Message::CloseRequested(id))
+                }
                 iced::Event::Window(iced::window::Event::Unfocused) => {
                     Some(Message::FocusLost)
                 }
@@ -171,7 +203,7 @@ pub(crate) fn run() -> iced::Result {
 }
 
 fn page_size(state: &FastFill) -> PageSize {
-    state.image().map_or(DEFAULT_PAGE, |page| page.size)
+    state.pages.current().size
 }
 
 #[cfg(test)]

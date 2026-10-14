@@ -666,6 +666,39 @@ fn pen_fill_and_translucent_highlighter_render_over_the_page() {
 }
 
 #[test]
+fn custom_shape_alpha_is_not_multiplied_twice_by_the_canvas() {
+    let mut state = rendered_page();
+    state.annotations_mut().set_tool(Tool::Rectangle);
+    state
+        .annotations_mut()
+        .set_color(AnnotationColor::Argb(0x8000_0000));
+    state.annotations_mut().set_filled(true);
+    let page = page_size(&state);
+    state.annotations_mut().begin(
+        Pointer::Mouse,
+        PagePoint::new(100.0, 100.0),
+        page,
+    );
+    state.annotations_mut().finish(
+        Pointer::Mouse,
+        PagePoint::new(200.0, 200.0),
+        false,
+    );
+    state.annotations_mut().set_tool(Tool::Navigate);
+    let pixels = render_document(&state, 1, 1.0);
+    let offset = (150 * 600 + 150) * 4;
+    for (actual, background) in
+        pixels[offset..offset + 3].iter().zip([240_u8, 230, 210])
+    {
+        let expected = u16::from(background) * 127 / 255;
+        assert!(
+            u16::from(*actual).abs_diff(expected) <= 1,
+            "alpha should apply once: {actual}, expected {expected}"
+        );
+    }
+}
+
+#[test]
 fn rotated_rectangle_renders_around_its_frame_center() {
     let mut state = rendered_page();
     state.annotations_mut().set_tool(Tool::Rectangle);
@@ -995,6 +1028,8 @@ fn pixel_indices_for_page_rect(
 
 fn rendered_page() -> FastFill {
     let mut state = FastFill::default();
+    // Renderer fixtures use one page unit per viewport pixel for exact checks.
+    state.pages.current_mut().size = PageSize::new(600.0, 600.0);
     state.pages.current_mut().image = Some(ImportedImage {
         handle: Handle::from_rgba(
             600,
@@ -1003,6 +1038,11 @@ fn rendered_page() -> FastFill {
         ),
         name: "paper.png".into(),
         size: PageSize::new(600.0, 600.0),
+        info: fastfill_rust::image_input::ImageInfo {
+            width: 600,
+            height: 600,
+            format: fastfill_rust::image_input::ImageFormatKind::Png,
+        },
         directory: None,
     });
     state
@@ -1142,6 +1182,11 @@ fn successful_import_resets_annotations_and_retains_tool() {
         handle: Handle::from_rgba(1, 1, vec![255; 4]),
         name: "replacement.png".into(),
         size: PageSize::new(1.0, 1.0),
+        info: fastfill_rust::image_input::ImageInfo {
+            width: 1,
+            height: 1,
+            format: fastfill_rust::image_input::ImageFormatKind::Png,
+        },
         directory: None,
     };
     let _ = update(&mut state, Message::AskReplacePage);

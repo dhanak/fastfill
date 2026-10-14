@@ -13,9 +13,11 @@ fn plain_text_stays_pending_until_non_empty_acceptance() {
     let anchor = Point::new(300.0, 400.0);
 
     assert!(annotations.begin_text(anchor, PAGE, 1.0));
+    let id = annotations.text_preview().unwrap().id;
     assert_eq!(
         annotations.text_preview(),
         Some(TextAnnotation {
+            id,
             text: String::new(),
             bounds: Rect::new(300.0, 384.4, 48.0, 24.0 * 1.3),
             format: TextFormat::default(),
@@ -30,6 +32,7 @@ fn plain_text_stays_pending_until_non_empty_acceptance() {
     assert_eq!(
         annotations.texts(),
         [TextAnnotation {
+            id,
             text: "Applicant name".into(),
             bounds: Rect::new(300.0, 384.4, 180.0, 31.2),
             format: TextFormat::default(),
@@ -79,7 +82,11 @@ fn text_placement_is_independent_of_zoom() {
     second.set_tool(Tool::Text);
     assert!(second.begin_text(point, PAGE, 2.0));
 
-    assert_eq!(first.text_preview(), second.text_preview());
+    let first = first.text_preview().unwrap();
+    let mut second = second.text_preview().unwrap();
+    assert_ne!(first.id, second.id);
+    second.id = first.id;
+    assert_eq!(first, second);
 }
 
 #[test]

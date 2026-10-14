@@ -33,7 +33,10 @@ fn heading(state: &FastFill) -> Element<'_, Message> {
         text(status).size(14).into()
     };
     let mut heading =
-        column![text("FastFill").size(24), status_line].spacing(4);
+        column![super::project_view::controls(state), status_line].spacing(4);
+    if let Some(confirmation) = super::project_view::confirmation(state) {
+        heading = heading.push(confirmation);
+    }
     if state.image_picker == ImagePicker::ConfirmReplace {
         heading = heading.push(
             container(
@@ -230,7 +233,7 @@ fn style_row(state: &FastFill) -> Element<'_, Message> {
                     .then_some(Message::AdjustThickness(-1.0)),
             )
             .height(CONTROL_HEIGHT),
-        text(format!("{:.0} px", style.stroke_width)).size(14),
+        text(format!("{:.0} pt", style.stroke_width)).size(14),
         button("+")
             .on_press_maybe(
                 (style.stroke_width < 20.0)
@@ -361,6 +364,7 @@ pub(super) fn document(state: &FastFill) -> Element<'_, Message> {
             annotations: state.annotations(),
             input_epoch: state.input_epoch,
             input_enabled: state.image_picker == ImagePicker::Idle
+                && state.project.is_idle()
                 && !state.confirm_delete_all
                 && !state.confirm_delete_page
                 && state.dragged_page.is_none(),

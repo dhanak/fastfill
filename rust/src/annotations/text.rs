@@ -65,6 +65,7 @@ pub enum TextEditHit {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextAnnotation {
+    pub id: uuid::Uuid,
     pub text: String,
     pub bounds: Rect,
     pub format: TextFormat,
@@ -355,6 +356,7 @@ impl Annotations {
         self.selected_text = None;
         self.text_draft = Some(TextDraft {
             annotation: TextAnnotation {
+                id: uuid::Uuid::new_v4(),
                 text: String::new(),
                 bounds: text_placement(point, self.text_format.font_size),
                 format: self.text_format,
@@ -577,7 +579,7 @@ fn text_placement(point: Point, font_size: f32) -> Rect {
 }
 
 fn valid_text_format(format: TextFormat) -> bool {
-    format.font_size.is_finite() && (8.0..=144.0).contains(&format.font_size)
+    format.font_size.is_finite() && (6.0..=144.0).contains(&format.font_size)
 }
 
 fn valid_text_size(size: Size) -> bool {

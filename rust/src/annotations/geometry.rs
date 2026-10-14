@@ -90,6 +90,7 @@ impl ShapeAnnotation {
             }
         };
         Self {
+            id: self.id,
             geometry,
             stroke_width: self.stroke_width,
             color: self.color,

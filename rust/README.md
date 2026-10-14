@@ -58,6 +58,45 @@ Checkpoint 5C adds multiple image pages:
   Deleting the last page leaves one blank editable page. Undo/Redo currently
   applies to active-page annotations; page operations cannot yet be undone.
 
+Checkpoint 5D2 connects project files:
+
+- **New / Open:** start a blank project or choose a `.docscan`. Unsaved
+  changes prompt Save, Discard, or Cancel. Failed/canceled opens keep the
+  current pages and history; successful opens start fresh annotation history.
+- **Save / Save as:** the first save chooses a destination; later Save writes
+  that file atomically. Save as chooses another destination. Use `.docscan`
+  filenames. Original PNG/JPEG bytes remain intact; blank pages save as white
+  PNGs. Save accepts pending text and cancels unfinished shape drags.
+- **Dirty marker:** `*` beside the filename means unsaved content. Page
+  imports, replacement, deletion, reorder, and annotation changes count.
+  Selection, navigation, and tool defaults do not. Undo back to the saved
+  revision clears the marker; redo restores it.
+- **Close:** the native window's close button also guards unsaved changes.
+  Save failures/cancellation never continue New, Open, or Close. Escape
+  cancels the confirmation; changing focus does not discard it.
+- **Shortcuts:** Ctrl+N New, Ctrl+O Open, Ctrl+S Save, Ctrl+Shift+S Save as.
+  Use Command instead of Ctrl on macOS.
+
+Project dialogs remember their last successful folder during the run. File
+operations block editing until finished. Page geometry, fonts, and strokes use
+point units; 1:1 still matches the imported image's original pixels. Saving
+does not resize or recompress imported images.
+
+In browsers, Open uploads a file and Save/Save as downloads a `.docscan`; no
+original path can be reused. Download completion means the browser accepted
+the download request, not verified disk persistence. Closing/reloading the
+browser tab is not guarded; save first. Large archive/image processing can
+still pause the browser. These are harness limits, not native behavior.
+
+Editable conversion currently accepts full-frame, unfiltered, unrotated pages,
+rigid annotation rotation/translation, and the three mapped font families.
+It rejects crop/filter corrections, affine scaling/shear, other fonts, and
+legacy soft-wrap settings instead of silently altering them. The archive API
+still preserves complete schema-v1 data; these are temporary editor limits,
+not a permanent v1 compatibility policy. Generic font rendering is not promised
+to be pixel-identical to C#. Schema-v2 output is allowed when needed; this
+checkpoint retains v1 output. Test existing projects with copies, not originals.
+
 Available annotation tools:
 
 The tool row scrolls horizontally in narrower windows.
@@ -86,8 +125,9 @@ The tool row scrolls horizontally in narrower windows.
   text apply immediately and support undo. Scroll over the size selector to
   step through sizes.
 - **Styles:** choose black, white, red, blue, green, or yellow. Use −/+ for
-  stroke widths from 1–20. Rectangle, Oval, and Pen offer Fill. Each tool
-  remembers its own settings; Select changes the chosen object with undo.
+  stroke widths from 1–20 points. Rectangle, Oval, and Pen offer Fill.
+  Each tool remembers its own settings; Select changes the chosen object
+  with undo.
 - **Select:** click or touch a shape, line, ink path, or text, then drag to
   move it. Drag empty page space to select every intersecting shape. Ctrl-click
   toggles individual shapes. Drag any selected shape to move the whole shape

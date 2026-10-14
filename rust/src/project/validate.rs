@@ -39,7 +39,9 @@ pub(super) fn validate_project(
     Ok(())
 }
 
-fn validate_page(page: &ProjectPage) -> Result<(), ProjectLoadError> {
+pub(super) fn validate_page(
+    page: &ProjectPage,
+) -> Result<(), ProjectLoadError> {
     validate_asset_name(&page.source_asset)?;
     if page.source_pixel_width <= 0
         || page.source_pixel_height <= 0

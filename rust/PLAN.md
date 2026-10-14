@@ -12,8 +12,9 @@
   Start with one package containing a library and an optional GUI binary.
 - Use explicit interaction states and separate pending edits from committed
   document state. Preserve Escape, undo, and save semantics.
-- Retain `.docscan` compatibility. Until compatibility and atomic-save tests
-  pass, do not overwrite existing projects from the Rust application.
+- Keep schema-v1 `.docscan` readable. Schema-v2 output is allowed when it
+  adds meaningful capabilities or precision; the old C# app need not read it.
+  Until conversion and atomic-save tests pass, do not overwrite projects.
 - Reuse existing images, forms, camera sequences, and behavioral checks as
   acceptance fixtures. Do not blindly port the old controller or its bugs.
 - Add dependencies only when their checkpoint needs them. Defer OpenCV,
@@ -293,6 +294,45 @@ text. No importing, saving, camera, or annotations were included.
 
 The next slice connects project open/save UI and editable archive conversion,
 including dirty revisions. PDF import/export and recovery follow that slice.
+
+#### 5D1. Editable schema bridge and save-state identity — accepted
+
+- [x] Give annotations stable IDs through drafts, edits, layers, and history.
+- [x] Track committed content revisions without counting selection or defaults.
+- [x] Convert full-frame, uncorrected pages to the C# 612-point coordinate
+      system, preserving layer order, styles, alpha, IDs, and rigid rotations.
+- [x] Preserve untouched schema metadata and reject unsupported crops,
+      filters, affine distortion, and text layout explicitly.
+- [x] Round-trip all current tools through editor-schema-editor and ZIP tests.
+- [x] Keep rendering and WebAssembly checks green; GUI behavior unchanged.
+- [x] Host checkpoint: all-feature tests passed; no new manual UI behavior.
+
+5D2 connects this bridge to open/save dialogs and dirty-document confirmation.
+It also moves imported page geometry to point units while preserving image
+pixel-based 1:1 navigation. Keep this foundation separate from the UI
+checkpoint.
+
+612 points is a coordinate-unit convention (8.5 inches at 72 points/inch), not
+an image resize. Original image bytes and dimensions remain unchanged. Edited
+geometry may accumulate small `f32` round-off; unchanged schema objects retain
+their original values exactly. Keep schema-v1 output for this checkpoint;
+introduce v2 only when a concrete requirement justifies it.
+
+#### 5D2. Project UI, dirty guards, and point geometry — accepted
+
+- [x] Add New, Open, Save, Save as, and standard command-key shortcuts.
+- [x] Load editable v1 pages transactionally; keep current data on failure.
+- [x] Snapshot saves and use the atomic writer; cancel/failure stays dirty.
+- [x] Track page identity/order and annotation revisions against the last
+      save.
+- [x] Guard new/open/window close with Save, Discard, and Cancel.
+- [x] Accept pending text, cancel shape drafts, and block editing during I/O.
+- [x] Use point units consistently, retaining image-pixel 1:1 navigation.
+- [x] Keep WASM open/download-save buildable; document browser limitations.
+- [x] Test file/geometry paths, archive round trips, and existing rendering.
+- [x] User checkpoint: native dialogs, dirty guard choices, reopen fidelity,
+      image 1:1, and browser upload/download where available. See checklist
+      below.
 
 ### 6. Correction, snapping, and camera — not started
 
@@ -902,6 +942,100 @@ including dirty revisions. PDF import/export and recovery follow that slice.
 - User confirmed the behavior; 5C is accepted. Record the requested animated
   floating-thumbnail/gap reorder under Phase 7. Keep the current labels until
   that rail redesign; no further UI implementation in this checkpoint.
+
+### 2026-10-14 — checkpoint 5D1 editable schema bridge
+
+- Commit accepted 5B/5C progress as `81489b8`, unsigned and without pushing.
+- Split 5D into a core conversion checkpoint and a later open/save UI slice.
+  Keep the current image-pixel GUI coordinate system unchanged until 5D2.
+- TDD red: bridge APIs, object IDs, and content revisions did not exist.
+  Green: all current tools preserve identity/order/styles through conversion
+  and a real ZIP round-trip. Rotated rectangles, ovals, marks, and ink retain
+  physical corners on portrait pages; loading starts with empty history.
+- Generate IDs once per draft. Preserve them through editing, translation,
+  rotation, layer changes, and history. Use the existing UUID dependency's
+  native RNG/Web Crypto support rather than a new ID mechanism.
+- Track only committed content revisions. Cancel, selection, and tool defaults
+  do not dirty the document; undo/redo restores the previous revision, and
+  a new branch receives a distinct revision.
+- Preserve unchanged schema objects exactly, including unused metadata. Map
+  arbitrary ARGB colors without reducing them to the palette; combine alpha
+  and highlighter transparency once in backend-neutral paint. A software
+  renderer test also verifies alpha is not multiplied twice on the canvas.
+- Reject pending edits and unsupported crops, page rotation, filters, affine
+  scaling/shear, fonts, and soft-wrap settings. The archive loader continues
+  to preserve full schema-v1 projects. These are temporary editable-conversion
+  limits, not the final v1 import policy; font metrics are not pixel-identical
+  across the old and new renderers.
+- TDD red also exposed finite normalized coordinates overflowing to NaN/Inf
+  after point conversion. Reject geometry outside the editor's numeric range.
+- Record user approval for meaningful schema-v2 output, retaining v1 import.
+  No schema change in this foundation; original image bytes are never resized.
+- Passed 190 all-feature tests, 123 core-only tests, strict Clippy, formatting,
+  all-feature WebAssembly compilation, and a linked Trunk build locally.
+- Next: host tests, then connect open/save dialogs, point-space page geometry,
+  and dirty-document confirmation in 5D2. No new UI check in 5D1.
+
+### 2026-10-14 — checkpoint 5D2 native project workflow
+
+- User confirmed the 5D1 host tests; mark that foundation accepted.
+- TDD red: project controller/actions were absent. Green: accept pending text,
+  cancel drafts, prompt on dirty New/Open/Close, and retain the current pages
+  on cancellation, unsupported content, or failed load/save. A successful
+  Save-before-leave resumes its intended action; failed/canceled saves do not.
+- Keep project transaction state, file I/O, and project UI in focused modules.
+  Image/ZIP processing and native archive I/O run through background tasks;
+  bounded schema/editor conversion stays in the controller. Install loaded
+  pages only after the whole project is editable. Use request IDs to
+  reject stale completions; preserve numbering across New.
+- Show the filename and dirty `*` in the heading/title. Add New/Open/Save/Save
+  as and Ctrl/Command+N/O/S/Shift+S. Native close requests use the same guard.
+  Keep confirmation state on focus loss; Escape keeps the project.
+- Identify saved content by ordered page IDs plus annotation revisions.
+  Replacement gets a new page ID; selection/navigation/defaults do not count.
+  Undo/redo restores dirty identity. Page operations still are not undoable.
+- Snapshot all pages, retain original PNG/JPEG bytes, and encode blank pages
+  as white PNGs. Use the tested atomic writer for native Save and Save as.
+  Restore clean state/path only after success; retain successful folder choices.
+- Use a 612-point width for image and blank pages. Retain exact source pixel
+  dimensions in image metadata, and derive 1:1 from those pixels rather than
+  point units. Update thickness labels to points. Renderer fixtures explicitly
+  keep pixel-aligned test units so old raster assertions stay meaningful.
+- Cover real ZIP save/reload, multiple pages, byte equality, stable IDs,
+  fresh loaded history, native disk writing, page reorder/replacement dirty
+  state, platform command keys, and command-key release during save.
+- Keep browser upload/download-save buildable using the existing dialog API.
+  Enable existing dependency features for file-size checks before browser reads
+  and UTC time without unsupported WASM system-clock calls. A download receipt
+  is not proof of disk persistence; browser tab closing remains unguarded.
+  Browser archive/image processing still runs on its event thread.
+- Full v1 archives remain readable, but editable imports retain 5D1's temporary
+  crop/filter/affine/font/layout restrictions. Do not silently flatten/drop
+  them.
+  No new schema yet. User confirmed the manual file-workflow checkpoint;
+  mark 5D2 accepted.
+- Passed 206 all-feature tests, 123 core-only tests, strict Clippy, formatting,
+  all-feature WebAssembly compilation, and a linked Trunk build locally.
+
+Manual checkpoint — accepted (use copies for legacy files):
+
+1. Annotate the blank page with shapes, rotated/multiline formatted text, and
+   ink. Save, New, and reopen; compare placement, styles, layers, and text.
+2. Create several imported image pages with annotations. Reorder and save;
+   reopen and check order, page-specific annotations, switching, Fit, and 1:1.
+3. Save an edit; make another edit and undo/redo. Check that the dirty `*`
+   clears only at the saved revision. Selection/zoom/default changes stay clean.
+4. Test New/Open/native window close while dirty: Cancel, Discard, and Save.
+   Cancel the save dialog; verify the old project remains open. Save as creates
+   another file; later Save updates it without another destination picker.
+5. Try a corrupt/unsupported project and an unwritable save destination;
+   verify a visible error, unchanged current data, and unchanged old save file.
+6. Check Ctrl+N/O/S/Shift+S (Command on macOS), remembered project folders,
+   and ordinary mouse editing. Browser upload/download is optional; save before
+   closing/reloading its tab. Native touch remains a hardware checkpoint.
+
+Stop here at the user's request. Resume with PDF import next, then matching
+PDF export and recovery. No next-slice implementation in this checkpoint.
 
 ## References
 

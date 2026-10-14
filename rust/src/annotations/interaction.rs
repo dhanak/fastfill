@@ -8,9 +8,11 @@ use super::{
     LineEndpoint, Pointer, ShapeAnnotation,
 };
 use crate::geometry::{Point, Rect, Size};
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub(super) struct ShapeDraft {
+    pub(super) id: Uuid,
     pub(super) pointer: Pointer,
     pub(super) kind: CreationKind,
     pub(super) start: Point,
@@ -151,6 +153,7 @@ impl EditDraft {
             }
         };
         ShapeAnnotation {
+            id: self.original.id,
             geometry,
             stroke_width: self.original.stroke_width,
             color: self.original.color,
@@ -185,6 +188,7 @@ impl EditDraft {
             LineEndpoint::End => (fixed, moving),
         };
         ShapeAnnotation {
+            id: self.original.id,
             geometry: AnnotationGeometry::Linear {
                 kind: *kind,
                 start,
@@ -313,6 +317,7 @@ impl ShapeDraft {
             },
         };
         ShapeAnnotation {
+            id: self.id,
             geometry,
             stroke_width: self.style.stroke_width,
             color: self.style.color,

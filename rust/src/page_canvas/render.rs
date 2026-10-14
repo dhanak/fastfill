@@ -218,9 +218,8 @@ fn draw_underlines(
 }
 
 fn scene_color(paint: ScenePaint) -> Color {
-    let mut color = annotation_color(paint.color);
-    color.a *= paint.opacity;
-    color
+    let [red, green, blue] = paint.color.rgb();
+    Color::from_rgba8(red, green, blue, paint.opacity)
 }
 
 fn view_points(view: PageView, points: &[PagePoint]) -> Vec<Point> {

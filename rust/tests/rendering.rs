@@ -35,6 +35,7 @@ fn unfilled_rectangle_layout_insets_its_stroke_inside_the_frame() {
 #[test]
 fn arrows_and_filled_ink_expose_complete_backend_neutral_paths() {
     let arrow = ShapeAnnotation {
+        id: uuid::Uuid::new_v4(),
         geometry: AnnotationGeometry::Linear {
             kind: LineKind::Arrow,
             start: Point::new(10.0, 20.0),
@@ -63,6 +64,7 @@ fn arrows_and_filled_ink_expose_complete_backend_neutral_paths() {
     );
 
     let ink = ShapeAnnotation {
+        id: uuid::Uuid::new_v4(),
         geometry: AnnotationGeometry::Ink {
             kind: InkKind::Pen,
             points: vec![
@@ -110,6 +112,7 @@ fn mark_layout_fills_its_inset_frame() {
 #[test]
 fn text_layout_preserves_the_measured_model_object() {
     let text = TextAnnotation {
+        id: uuid::Uuid::new_v4(),
         text: "Shared layout".into(),
         bounds: Rect::new(20.0, 30.0, 140.0, 31.2),
         format: TextFormat::default(),
@@ -124,6 +127,34 @@ fn text_layout_preserves_the_measured_model_object() {
     assert_eq!(layout, &text);
 }
 
+#[test]
+fn custom_alpha_applies_once_and_combines_with_highlighter_opacity() {
+    let mut shape = bounded_shape(ShapeKind::Rectangle, true);
+    shape.color = AnnotationColor::from_argb(0x8000_66cc);
+    let RenderAnnotation::Paths(paths) =
+        layout_annotation(AnnotationRef::Shape(0, &shape))
+    else {
+        panic!("rectangle must produce paths");
+    };
+    let opacity = 128.0 / 255.0;
+    assert!((paths[0].fill.unwrap().opacity - opacity).abs() < f32::EPSILON);
+    shape.geometry = AnnotationGeometry::Ink {
+        kind: InkKind::Highlighter,
+        points: vec![Point::new(10.0, 20.0), Point::new(110.0, 20.0)],
+    };
+    shape.filled = false;
+    let RenderAnnotation::Paths(paths) =
+        layout_annotation(AnnotationRef::Shape(0, &shape))
+    else {
+        panic!("highlighter must produce paths");
+    };
+    assert!(
+        (paths[0].stroke.as_ref().unwrap().paint.opacity - opacity * 0.35)
+            .abs()
+            < f32::EPSILON
+    );
+}
+
 fn bounded_shape(kind: ShapeKind, filled: bool) -> ShapeAnnotation {
     let style = AnnotationStyle {
         color: AnnotationColor::Black,
@@ -131,6 +162,7 @@ fn bounded_shape(kind: ShapeKind, filled: bool) -> ShapeAnnotation {
         filled,
     };
     ShapeAnnotation {
+        id: uuid::Uuid::new_v4(),
         geometry: AnnotationGeometry::Bounded {
             kind,
             bounds: Rect::new(10.0, 20.0, 100.0, 80.0),

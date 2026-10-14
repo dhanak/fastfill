@@ -11,6 +11,25 @@ pub(super) fn shortcut_message(
 ) -> Option<Message> {
     match key {
         keyboard::Key::Character(value)
+            if modifiers.command() && value.eq_ignore_ascii_case("n") =>
+        {
+            Some(Message::NewProject)
+        }
+        keyboard::Key::Character(value)
+            if modifiers.command() && value.eq_ignore_ascii_case("o") =>
+        {
+            Some(Message::OpenProject)
+        }
+        keyboard::Key::Character(value)
+            if modifiers.command() && value.eq_ignore_ascii_case("s") =>
+        {
+            Some(if modifiers.shift() {
+                Message::SaveProjectAs
+            } else {
+                Message::SaveProject
+            })
+        }
+        keyboard::Key::Character(value)
             if modifiers.command()
                 && modifiers.shift()
                 && value.eq_ignore_ascii_case("z") =>
@@ -159,6 +178,9 @@ impl FastFill {
 }
 
 pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
+    if let Some(task) = super::project::update(state, &message) {
+        return task;
+    }
     if let Some(task) = super::pages::update(state, &message) {
         return task;
     }
@@ -228,33 +250,8 @@ pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
             state.cancel_interaction();
             state.modifiers = DragModifiers::default();
         }
-        Message::ConfirmDeleteAll
-        | Message::KeepAll
-        | Message::Fit
-        | Message::OneToOne(_)
-        | Message::Pan(_)
-        | Message::ZoomAt { .. }
-        | Message::TouchGesture { .. }
-        | Message::SetTextTypeface(_)
-        | Message::SetTextSize(_)
-        | Message::ToggleTextBold
-        | Message::ToggleTextItalic
-        | Message::ToggleTextUnderline
-        | Message::AddPage
-        | Message::AskReplacePage
-        | Message::ConfirmReplacePage
-        | Message::KeepPage
-        | Message::ImagePicked(..)
-        | Message::SelectPage(_)
-        | Message::MovePageLeft
-        | Message::MovePageRight
-        | Message::PageDragStarted(_)
-        | Message::PageDragEntered(_)
-        | Message::PageDragFinished(_)
-        | Message::PageDragCanceled
-        | Message::ScrollPages(_)
-        | Message::AskDeletePage
-        | Message::ConfirmDeletePage => {}
+        // Page, project, navigation, and format handlers own these messages.
+        _ => {}
     }
 
     Task::none()
@@ -336,7 +333,9 @@ fn handle_navigation(state: &mut FastFill, message: &Message) -> bool {
         Message::OneToOne(viewport) => {
             state.accept_text();
             state.cancel_interaction();
-            state.navigation.one_to_one(page_size(state), *viewport);
+            let pixels =
+                state.image().map_or(page_size(state), |image| image.size);
+            state.navigation.one_to_one(pixels, *viewport);
         }
         Message::Pan(delta) => {
             state.accept_text();

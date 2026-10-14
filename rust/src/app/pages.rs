@@ -2,7 +2,14 @@ use super::{FastFill, ImagePicker, Message, PickPurpose};
 use crate::picker::ImportedImage;
 use crate::picker::pick_image;
 use fastfill_rust::annotations::Annotations;
+use fastfill_rust::geometry::Size;
+use fastfill_rust::image_input::ImageFormatKind;
+use fastfill_rust::project::{
+    CropQuad, PageFilterSettings, ProjectPage, decode_editor_page,
+    editor_page_size,
+};
 use iced::Task;
+use uuid::Uuid;
 
 pub(super) const MAXIMUM_PAGES: usize = 20;
 
@@ -15,10 +22,56 @@ pub(super) struct PageDrag {
     pub(super) target: usize,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(super) struct EditorPage {
     pub(super) image: Option<ImportedImage>,
     pub(super) annotations: Annotations,
+    pub(super) metadata: ProjectPage,
+    pub(super) size: Size,
+}
+
+impl Default for EditorPage {
+    fn default() -> Self {
+        Self {
+            image: None,
+            annotations: Annotations::default(),
+            metadata: page_metadata(794, 1_123, "png"),
+            size: super::DEFAULT_PAGE,
+        }
+    }
+}
+
+impl EditorPage {
+    fn from_image(image: ImportedImage) -> Self {
+        let extension = match image.info.format {
+            ImageFormatKind::Png => "png",
+            ImageFormatKind::Jpeg => "jpg",
+        };
+        let metadata =
+            page_metadata(image.info.width, image.info.height, extension);
+        let size = editor_page_size(&metadata).expect("validated image size");
+        Self {
+            image: Some(image),
+            annotations: Annotations::default(),
+            metadata,
+            size,
+        }
+    }
+}
+
+fn page_metadata(width: u32, height: u32, extension: &str) -> ProjectPage {
+    let id = Uuid::new_v4();
+    ProjectPage {
+        id,
+        source_asset: format!("{id}.{extension}"),
+        source_pixel_width: i32::try_from(width).expect("bounded image width"),
+        source_pixel_height: i32::try_from(height)
+            .expect("bounded image height"),
+        crop: CropQuad::default(),
+        rotation_quarter_turns: 0,
+        filter: PageFilterSettings::default(),
+        annotations: Vec::new(),
+    }
 }
 
 #[derive(Debug)]
@@ -37,6 +90,40 @@ impl Default for Pages {
 }
 
 impl Pages {
+    pub(super) fn identity(&self) -> Vec<(Uuid, u64)> {
+        self.items
+            .iter()
+            .map(|page| (page.metadata.id, page.annotations.revision()))
+            .collect()
+    }
+
+    pub(super) fn from_opened(
+        opened: &super::project_io::OpenedProject,
+    ) -> Result<Self, String> {
+        if opened.project.pages.len() != opened.images.len() {
+            return Err("Page image count does not match the document.".into());
+        }
+        let items = opened
+            .project
+            .pages
+            .iter()
+            .zip(&opened.images)
+            .map(|(metadata, image)| {
+                Ok(EditorPage {
+                    image: Some(image.clone()),
+                    annotations: decode_editor_page(metadata)
+                        .map_err(|error| error.to_string())?,
+                    size: editor_page_size(metadata)
+                        .map_err(|error| error.to_string())?,
+                    metadata: metadata.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        if items.is_empty() {
+            return Ok(Self::default());
+        }
+        Ok(Self { items, active: 0 })
+    }
     pub(super) fn iter(&self) -> impl Iterator<Item = &EditorPage> {
         self.items.iter()
     }
@@ -68,32 +155,23 @@ impl Pages {
             && self.current().image.is_none()
             && self.current().annotations.is_empty()
         {
-            self.current_mut().image = Some(image);
+            self.replace_image(image);
             return true;
         }
 
         let settings = self.current().annotations.settings();
-        let mut annotations = Annotations::default();
-        annotations.apply_settings(&settings);
+        let mut page = EditorPage::from_image(image);
+        page.annotations.apply_settings(&settings);
         self.active += 1;
-        self.items.insert(
-            self.active,
-            EditorPage {
-                image: Some(image),
-                annotations,
-            },
-        );
+        self.items.insert(self.active, page);
         true
     }
 
     pub(super) fn replace_image(&mut self, image: ImportedImage) {
         let settings = self.current().annotations.settings();
-        let mut annotations = Annotations::default();
-        annotations.apply_settings(&settings);
-        self.items[self.active] = EditorPage {
-            image: Some(image),
-            annotations,
-        };
+        let mut page = EditorPage::from_image(image);
+        page.annotations.apply_settings(&settings);
+        self.items[self.active] = page;
     }
 
     pub(super) fn select(&mut self, index: usize) -> bool {

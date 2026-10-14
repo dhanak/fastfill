@@ -1,11 +1,36 @@
 use super::geometry::{valid, valid_annotation_size};
 use super::{
-    AnnotationRef, AnnotationSettings, Annotations, Draft, Layer, Pointer,
-    ShapeAnnotation, ShapeDraft, Snapshot, Tool,
+    AnnotationRef, AnnotationSettings, Annotations, Draft, Layer,
+    OwnedAnnotation, Pointer, ShapeAnnotation, ShapeDraft, Snapshot, Tool,
 };
 use crate::geometry::{Point, Rect, Size};
 
 impl Annotations {
+    pub(crate) fn from_ordered(
+        annotations: impl IntoIterator<Item = OwnedAnnotation>,
+    ) -> Self {
+        let mut state = Self::default();
+        for annotation in annotations {
+            match annotation {
+                OwnedAnnotation::Shape(shape) => {
+                    state.layers.push(Layer::Shape(state.shapes.len()));
+                    state.shapes.push(shape);
+                }
+                OwnedAnnotation::Text(text) => {
+                    state.layers.push(Layer::Text(state.texts.len()));
+                    state.texts.push(text);
+                }
+            }
+        }
+        state
+    }
+
+    /// Committed content identity; undo restores the previous identity.
+    #[must_use]
+    pub const fn revision(&self) -> u64 {
+        self.revision
+    }
+
     #[must_use]
     pub fn settings(&self) -> AnnotationSettings {
         AnnotationSettings {
@@ -158,6 +183,7 @@ impl Annotations {
         }
         self.selected_text = None;
         self.draft = Some(Draft::Create(ShapeDraft {
+            id: uuid::Uuid::new_v4(),
             pointer,
             kind,
             start: point,
@@ -271,6 +297,7 @@ impl Annotations {
 
     fn snapshot(&self) -> Snapshot {
         Snapshot {
+            revision: self.revision,
             shapes: self.shapes.clone(),
             texts: self.texts.clone(),
             layers: self.layers.clone(),
@@ -280,6 +307,7 @@ impl Annotations {
     }
 
     fn restore(&mut self, snapshot: Snapshot) {
+        self.revision = snapshot.revision;
         self.shapes = snapshot.shapes;
         self.texts = snapshot.texts;
         self.layers = snapshot.layers;
@@ -290,6 +318,8 @@ impl Annotations {
     pub(super) fn record_change(&mut self) {
         self.undo.push(self.snapshot());
         self.redo.clear();
+        self.next_revision += 1;
+        self.revision = self.next_revision;
     }
 
     pub(super) fn remove_shape_layers(&mut self, removed: &[usize]) {

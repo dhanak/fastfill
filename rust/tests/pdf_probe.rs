@@ -10,6 +10,7 @@ use fastfill_rust::pdf_probe::{PdfProbeError, render_page};
 #[test]
 fn vector_annotations_produce_one_pdf_page() {
     let rectangle = ShapeAnnotation {
+        id: uuid::Uuid::new_v4(),
         geometry: AnnotationGeometry::Bounded {
             kind: ShapeKind::Rectangle,
             bounds: Rect::new(10.0, 20.0, 100.0, 80.0),
@@ -20,6 +21,7 @@ fn vector_annotations_produce_one_pdf_page() {
         rotation: 0.25,
     };
     let highlighter = ShapeAnnotation {
+        id: uuid::Uuid::new_v4(),
         geometry: AnnotationGeometry::Ink {
             kind: InkKind::Highlighter,
             points: vec![Point::new(20.0, 130.0), Point::new(100.0, 150.0)],
@@ -46,6 +48,7 @@ fn vector_annotations_produce_one_pdf_page() {
 #[test]
 fn text_reports_that_exact_output_requires_flattening() {
     let text = TextAnnotation {
+        id: uuid::Uuid::new_v4(),
         text: "Rotated formatted text".into(),
         bounds: Rect::new(20.0, 30.0, 180.0, 40.0),
         format: TextFormat {

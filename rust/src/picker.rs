@@ -1,6 +1,5 @@
 use fastfill_rust::geometry::Size as PageSize;
 use fastfill_rust::image_input::ImageInfo;
-#[cfg(not(target_arch = "wasm32"))]
 use fastfill_rust::image_input::MAX_IMAGE_BYTES;
 use fastfill_rust::image_input::{validate_image, validate_image_length};
 use iced::widget::image::Handle;
@@ -11,6 +10,7 @@ pub(crate) struct ImportedImage {
     pub(crate) handle: Handle,
     pub(crate) name: String,
     pub(crate) size: PageSize,
+    pub(crate) info: ImageInfo,
     pub(crate) directory: Option<PathBuf>,
 }
 
@@ -42,18 +42,45 @@ pub(crate) async fn pick_image(
             return Err("The image file is larger than 100 MiB.".into());
         }
     }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let limit = u32::try_from(MAX_IMAGE_BYTES).expect("100 MiB fits u32");
+        if file.inner().size() > f64::from(limit) {
+            return Err("The image file is larger than 100 MiB.".into());
+        }
+    }
 
     let name = file.file_name();
     let bytes = file.read().await;
-    validate_image_length(bytes.len()).map_err(|error| error.to_string())?;
-    let info = validate_image(&bytes).map_err(|error| error.to_string())?;
+    ImportedImage::from_bytes(name, bytes, directory).map(Some)
+}
 
-    Ok(Some(ImportedImage {
-        handle: Handle::from_bytes(bytes),
-        name,
-        size: page_size_from_pixels(info),
-        directory,
-    }))
+impl ImportedImage {
+    pub(crate) fn from_bytes(
+        name: String,
+        bytes: Vec<u8>,
+        directory: Option<PathBuf>,
+    ) -> Result<Self, String> {
+        validate_image_length(bytes.len())
+            .map_err(|error| error.to_string())?;
+        let info = validate_image(&bytes).map_err(|error| error.to_string())?;
+        Ok(Self::from_validated(name, bytes, info, directory))
+    }
+
+    pub(crate) fn from_validated(
+        name: String,
+        bytes: Vec<u8>,
+        info: ImageInfo,
+        directory: Option<PathBuf>,
+    ) -> Self {
+        Self {
+            handle: Handle::from_bytes(bytes),
+            name,
+            size: page_size_from_pixels(info),
+            info,
+            directory,
+        }
+    }
 }
 
 #[allow(clippy::cast_precision_loss)]

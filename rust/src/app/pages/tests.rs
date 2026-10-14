@@ -151,6 +151,11 @@ fn test_image(name: &str) -> ImportedImage {
         handle: Handle::from_rgba(1, 1, vec![255; 4]),
         name: format!("{name}.png"),
         size: PageSize::new(600.0, 600.0),
+        info: fastfill_rust::image_input::ImageInfo {
+            width: 600,
+            height: 600,
+            format: fastfill_rust::image_input::ImageFormatKind::Png,
+        },
         directory: None,
     }
 }

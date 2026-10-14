@@ -37,8 +37,14 @@ pub enum AnnotationRef<'a> {
     Text(usize, &'a TextAnnotation),
 }
 
+pub(crate) enum OwnedAnnotation {
+    Shape(ShapeAnnotation),
+    Text(TextAnnotation),
+}
+
 #[derive(Clone, Debug)]
 struct Snapshot {
+    revision: u64,
     shapes: Vec<ShapeAnnotation>,
     texts: Vec<TextAnnotation>,
     layers: Vec<Layer>,
@@ -48,6 +54,8 @@ struct Snapshot {
 
 #[derive(Debug, Default)]
 pub struct Annotations {
+    revision: u64,
+    next_revision: u64,
     tool: Tool,
     styles: ToolStyles,
     shapes: Vec<ShapeAnnotation>,

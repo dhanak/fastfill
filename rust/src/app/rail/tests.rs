@@ -240,6 +240,12 @@ fn three_pages() -> FastFill {
                     handle: Handle::from_rgba(1, 1, vec![255; 4]),
                     name: format!("{index}.png"),
                     size: PageSize::new(1.0, 1.0),
+                    info: fastfill_rust::image_input::ImageInfo {
+                        width: 1,
+                        height: 1,
+                        format:
+                            fastfill_rust::image_input::ImageFormatKind::Png,
+                    },
                     directory: None,
                 })),
             ),

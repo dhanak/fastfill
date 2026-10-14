@@ -11,6 +11,7 @@ const ELLIPSE_SEGMENTS: u16 = 128;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScenePaint {
     pub color: AnnotationColor,
+    /// Effective alpha, including the color's alpha and tool transparency.
     pub opacity: f32,
 }
 
@@ -234,7 +235,7 @@ fn subpath(
 fn paint(annotation: &ShapeAnnotation, opacity: f32) -> ScenePaint {
     ScenePaint {
         color: annotation.color,
-        opacity,
+        opacity: opacity * annotation.color.opacity(),
     }
 }
 

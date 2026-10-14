@@ -1,4 +1,5 @@
 use crate::geometry::{Point, Rect};
+use uuid::Uuid;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum AnnotationColor {
@@ -9,6 +10,7 @@ pub enum AnnotationColor {
     Blue,
     Green,
     Yellow,
+    Argb(u32),
 }
 
 impl AnnotationColor {
@@ -21,7 +23,39 @@ impl AnnotationColor {
             Self::Blue => [0, 102, 204],
             Self::Green => [0, 160, 72],
             Self::Yellow => [245, 196, 0],
+            Self::Argb(value) => {
+                let [_, red, green, blue] = value.to_be_bytes();
+                [red, green, blue]
+            }
         }
+    }
+
+    #[must_use]
+    pub const fn to_argb(self) -> u32 {
+        if let Self::Argb(value) = self {
+            value
+        } else {
+            let [red, green, blue] = self.rgb();
+            u32::from_be_bytes([255, red, green, blue])
+        }
+    }
+
+    #[must_use]
+    pub const fn from_argb(value: u32) -> Self {
+        match value {
+            0xff00_0000 => Self::Black,
+            0xffff_ffff => Self::White,
+            0xffdc_2020 => Self::Red,
+            0xff00_66cc => Self::Blue,
+            0xff00_a048 => Self::Green,
+            0xfff5_c400 => Self::Yellow,
+            _ => Self::Argb(value),
+        }
+    }
+
+    #[must_use]
+    pub fn opacity(self) -> f32 {
+        f32::from(self.to_argb().to_be_bytes()[0]) / 255.0
     }
 }
 
@@ -163,6 +197,7 @@ impl LineEndpoint {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShapeAnnotation {
+    pub id: Uuid,
     pub geometry: AnnotationGeometry,
     pub stroke_width: f32,
     pub color: AnnotationColor,

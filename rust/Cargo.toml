@@ -22,12 +22,16 @@ image = { version = "0.25.8", default-features = false, features = [
     "png",
 ] }
 krilla = { version = "0.8.2", default-features = false, optional = true }
-rfd = { version = "0.16.0", optional = true }
+rfd = { version = "0.16.0", optional = true, features = [
+    "file-handle-inner",
+] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.154"
 serde_repr = "0.1.21"
-time = { version = "0.3.55", features = ["serde-well-known"] }
-uuid = { version = "1.28.0", features = ["serde"] }
+time = { version = "0.3.55", features = [
+    "serde-well-known", "wasm-bindgen",
+] }
+uuid = { version = "1.28.0", features = ["serde", "v4", "js"] }
 zip = { version = "9.0.3", default-features = false, features = [
     "deflate-flate2-zlib-rs",
 ] }

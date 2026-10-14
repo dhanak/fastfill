@@ -17,6 +17,7 @@ pub(super) fn slot_top(index: usize) -> f32 {
 
 pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
     let enabled = state.image_picker == ImagePicker::Idle
+        && state.project.is_idle()
         && !state.confirm_delete_all
         && !state.confirm_delete_page
         && state.dragged_page.is_none();
@@ -223,6 +224,7 @@ impl canvas::Program<Message> for Rail<'_> {
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
         if self.app.image_picker != ImagePicker::Idle
+            || !self.app.project.is_idle()
             || self.app.confirm_delete_all
             || self.app.confirm_delete_page
         {
