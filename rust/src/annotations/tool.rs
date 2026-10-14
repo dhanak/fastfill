@@ -15,11 +15,12 @@ pub enum Tool {
     Cross,
     Pen,
     Highlighter,
+    Text,
     Select,
 }
 
 impl Tool {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Navigate,
         Self::Select,
         Self::Rectangle,
@@ -28,6 +29,7 @@ impl Tool {
         Self::Arrow,
         Self::Checkmark,
         Self::Cross,
+        Self::Text,
         Self::Pen,
         Self::Highlighter,
     ];
@@ -43,6 +45,7 @@ impl Tool {
             Self::Arrow => "Arrow",
             Self::Checkmark => "Check",
             Self::Cross => "Cross",
+            Self::Text => "Text",
             Self::Pen => "Pen",
             Self::Highlighter => "Highlight",
         }
@@ -55,7 +58,7 @@ impl Tool {
 
     #[must_use]
     pub const fn creates_annotations(self) -> bool {
-        self.creation_kind().is_some()
+        self.creation_kind().is_some() || matches!(self, Self::Text)
     }
 
     pub(super) const fn creation_kind(self) -> Option<CreationKind> {
@@ -72,7 +75,7 @@ impl Tool {
             Self::Cross => Some(CreationKind::Bounded(ShapeKind::Cross)),
             Self::Pen => Some(CreationKind::Ink(InkKind::Pen)),
             Self::Highlighter => Some(CreationKind::Ink(InkKind::Highlighter)),
-            Self::Navigate | Self::Select => None,
+            Self::Navigate | Self::Select | Self::Text => None,
         }
     }
 
@@ -90,6 +93,7 @@ impl Tool {
             }
             Self::Navigate
             | Self::Select
+            | Self::Text
             | Self::Rectangle
             | Self::Oval
             | Self::Line
@@ -108,7 +112,7 @@ impl Default for ToolStyles {
         Self(
             Tool::ALL
                 .into_iter()
-                .filter(|tool| tool.creates_annotations())
+                .filter(|tool| tool.creation_kind().is_some())
                 .map(|tool| (tool, tool.default_style()))
                 .collect(),
         )

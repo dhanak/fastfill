@@ -51,6 +51,142 @@ fn keyboard_shortcuts_map_to_history_and_edit_commands() {
 }
 
 #[test]
+fn plain_text_messages_accept_cancel_and_commit_on_click_away() {
+    let mut state = FastFill::default();
+    let first = PagePoint::new(300.0, 400.0);
+    let second = PagePoint::new(400.0, 600.0);
+    let _ = update(&mut state, Message::SetTool(Tool::Text));
+
+    let _ =
+        update(&mut state, Message::DrawPressed(Pointer::Mouse, first, 1.0));
+    paste_text(&mut state, "Cancel me");
+    let first_bounds = state.annotations.text_preview().unwrap().bounds;
+    assert_eq!(first_bounds.x, first.x);
+    assert!(first_bounds.y < first.y);
+    let _ = update(&mut state, Message::CancelInteraction);
+    assert_eq!(state.annotations.texts(), []);
+    assert!(!state.annotations.can_undo());
+
+    let _ =
+        update(&mut state, Message::DrawPressed(Pointer::Mouse, first, 1.0));
+    paste_text(&mut state, "First");
+    let _ = update(
+        &mut state,
+        Message::DrawPressed(Pointer::Mouse, second, 1.0),
+    );
+    assert_eq!(state.annotations.texts()[0].text, "First");
+    assert_eq!(state.annotations.text_preview().unwrap().bounds.x, second.x,);
+
+    paste_text(&mut state, "Second");
+    let _ = update(&mut state, Message::AcceptText);
+    assert_eq!(state.annotations.texts().len(), 2);
+    assert!(state.annotations.text_preview().is_none());
+}
+
+#[test]
+fn switching_tools_accepts_pending_text() {
+    let mut state = FastFill::default();
+    let _ = update(&mut state, Message::SetTool(Tool::Text));
+    let _ = update(
+        &mut state,
+        Message::DrawPressed(Pointer::Mouse, PagePoint::new(300.0, 400.0), 1.0),
+    );
+    paste_text(&mut state, "Accepted");
+
+    let _ = update(&mut state, Message::SetTool(Tool::Rectangle));
+    assert_eq!(state.annotations.texts()[0].text, "Accepted");
+    assert_eq!(state.annotations.tool(), Tool::Rectangle);
+}
+
+#[test]
+fn multiline_text_reopens_from_text_and_selects_with_select_tool() {
+    let mut state = FastFill::default();
+    let point = PagePoint::new(300.0, 400.0);
+    let _ = update(&mut state, Message::SetTool(Tool::Text));
+    let _ =
+        update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
+    paste_text(&mut state, "First");
+    let _ = update(
+        &mut state,
+        Message::TextAction(text_editor::Action::Edit(
+            text_editor::Edit::Enter,
+        )),
+    );
+    paste_text(&mut state, "Second");
+    let preview = state.annotations.text_preview().unwrap();
+    assert_eq!(preview.text, "First\nSecond");
+    assert!(preview.bounds.height > 24.0 * 1.3);
+    let _ = update(&mut state, Message::AcceptText);
+
+    let _ =
+        update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
+    assert!(state.annotations.has_text_edit());
+    let _ = update(&mut state, Message::CancelInteraction);
+
+    let _ = update(&mut state, Message::SetTool(Tool::Select));
+    let _ =
+        update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
+    let _ = update(
+        &mut state,
+        Message::DrawReleased(Pointer::Mouse, point, false),
+    );
+    assert!(!state.annotations.has_text_edit());
+    assert!(state.annotations.selected_text_annotation().is_some());
+}
+
+#[test]
+fn text_format_messages_stay_pending_until_acceptance() {
+    let mut state = FastFill::default();
+    let point = PagePoint::new(300.0, 400.0);
+    let _ = update(&mut state, Message::SetTool(Tool::Text));
+    let _ =
+        update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
+    paste_text(&mut state, "Format me");
+    let _ = update(&mut state, Message::AcceptText);
+    let original = state.annotations.texts()[0].clone();
+
+    let _ =
+        update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
+    let _ = update(&mut state, Message::SetTextTypeface(TextTypeface::Serif));
+    let _ = update(&mut state, Message::SetTextSize(40.0));
+    let _ = update(&mut state, Message::ToggleTextBold);
+    let _ = update(&mut state, Message::ToggleTextItalic);
+    let _ = update(&mut state, Message::ToggleTextUnderline);
+    let _ = update(&mut state, Message::SetColor(AnnotationColor::Blue));
+    let preview = state.annotations.text_preview().unwrap();
+    assert_eq!(preview.format.typeface, TextTypeface::Serif);
+    assert_eq!(preview.format.font_size, 40.0);
+    assert!(preview.format.bold);
+    assert!(preview.format.italic);
+    assert!(preview.format.underline);
+    assert_eq!(preview.format.color, AnnotationColor::Blue);
+    assert!(preview.bounds.height > original.bounds.height);
+    assert_eq!(state.annotations.texts(), std::slice::from_ref(&original),);
+
+    let _ = update(&mut state, Message::CancelInteraction);
+    assert_eq!(state.annotations.texts(), [original]);
+}
+
+#[test]
+fn accepted_text_requires_confirmation_before_page_replacement() {
+    let mut state = FastFill::default();
+    state.annotations.set_tool(Tool::Text);
+    state.annotations.begin_text(
+        PagePoint::new(300.0, 400.0),
+        page_size(&state),
+        1.0,
+    );
+    state
+        .annotations
+        .update_text("Keep me", PageSize::new(100.0, 31.2));
+    state.annotations.accept_text();
+
+    let _ = update(&mut state, Message::OpenImage);
+    assert_eq!(state.image_picker, ImagePicker::ConfirmReplace);
+    assert_eq!(state.annotations.texts()[0].text, "Keep me");
+}
+
+#[test]
 fn select_drag_is_pending_escape_reverts_and_delete_removes_selection() {
     let mut state = annotated_page();
     let _ = update(&mut state, Message::SetTool(Tool::Select));
@@ -616,6 +752,227 @@ fn group_membership_changes_are_visually_distinct() {
     );
 }
 
+#[test]
+fn accepted_text_renders_over_the_page() {
+    let mut state = rendered_page();
+    state.annotations.set_tool(Tool::Text);
+    let _ = update(
+        &mut state,
+        Message::DrawPressed(Pointer::Mouse, PagePoint::new(300.0, 300.0), 1.0),
+    );
+    paste_text(&mut state, "FastFill");
+    let _ = update(&mut state, Message::AcceptText);
+    state.annotations.set_tool(Tool::Navigate);
+
+    let pixels = render_document(&state, 1, 1.0);
+    let dark = (280..=320)
+        .any(|y| (250..=350).any(|x| pixels[(y * 600 + x) * 4] < 128));
+    assert!(dark, "accepted text must be visible near its anchor");
+}
+
+#[test]
+fn text_and_shapes_follow_shared_layer_order() {
+    let mut state = rendered_page();
+    state.annotations.set_tool(Tool::Text);
+    let point = PagePoint::new(250.0, 250.0);
+    let _ =
+        update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
+    paste_text(&mut state, "Layer");
+    let _ = update(&mut state, Message::AcceptText);
+    let text = state.annotations.texts()[0].clone();
+    state.annotations.set_tool(Tool::Navigate);
+
+    let text_only = render_document(&state, 1, 1.0);
+    let pixels = text_only.as_chunks::<4>().0;
+    let glyphs: Vec<_> = pixel_indices_for_page_rect(&state, text.bounds)
+        .into_iter()
+        .filter(|index| dark_pixel(pixels[*index]))
+        .collect();
+    assert!(!glyphs.is_empty(), "test text must produce dark pixels");
+
+    state.annotations.set_tool(Tool::Rectangle);
+    assert!(state.annotations.set_color(AnnotationColor::Yellow));
+    assert!(state.annotations.set_filled(true));
+    let margin = 10.0;
+    let start = PagePoint::new(text.bounds.x - margin, text.bounds.y - margin);
+    let end = PagePoint::new(
+        text.bounds.x + text.bounds.width + margin,
+        text.bounds.y + text.bounds.height + margin,
+    );
+    assert!(
+        state
+            .annotations
+            .begin(Pointer::Mouse, start, page_size(&state))
+    );
+    assert!(state.annotations.finish(Pointer::Mouse, end, false));
+    state.annotations.set_tool(Tool::Navigate);
+    let covered = render_document(&state, 1, 1.0);
+    assert_eq!(dark_pixels_at(&covered, &glyphs), 0);
+
+    state.annotations.set_tool(Tool::Text);
+    assert!(state.annotations.begin_text_edit(
+        text.bounds.center(),
+        page_size(&state),
+        1.0,
+    ));
+    assert!(state.annotations.accept_text());
+    state.annotations.set_tool(Tool::Select);
+    assert!(state.annotations.bring_selected_to_front());
+    state.annotations.set_tool(Tool::Navigate);
+    let raised = render_document(&state, 1, 1.0);
+    assert!(dark_pixels_at(&raised, &glyphs) > glyphs.len() / 2);
+
+    assert!(state.annotations.send_selected_to_back());
+    let lowered = render_document(&state, 1, 1.0);
+    assert_eq!(dark_pixels_at(&lowered, &glyphs), 0);
+}
+
+#[test]
+fn formatted_text_color_and_rotation_reach_canvas_rendering() {
+    let mut state = rendered_page();
+    state.annotations.set_tool(Tool::Text);
+    let point = PagePoint::new(250.0, 250.0);
+    let _ =
+        update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
+    paste_text(&mut state, "Rotate");
+    let _ = update(&mut state, Message::SetTextSize(40.0));
+    let _ = update(&mut state, Message::ToggleTextBold);
+    let _ = update(&mut state, Message::ToggleTextItalic);
+    let _ = update(&mut state, Message::ToggleTextUnderline);
+    let _ = update(&mut state, Message::SetColor(AnnotationColor::Blue));
+    let _ = update(&mut state, Message::AcceptText);
+
+    state.annotations.set_tool(Tool::Select);
+    let text = state.annotations.texts()[0].clone();
+    let handle = text.rotation_handle(1.0).unwrap();
+    let center = text.bounds.center();
+    assert!(state.annotations.begin_text_move(
+        Pointer::Mouse,
+        handle,
+        page_size(&state),
+        1.0,
+    ));
+    let end = PagePoint::new(center.x + 100.0, center.y);
+    assert!(state.annotations.finish(Pointer::Mouse, end, false));
+    state.annotations.set_tool(Tool::Navigate);
+
+    let pixels = render_document(&state, 1, 1.0);
+    let mut bounds: Option<(usize, usize, usize, usize)> = None;
+    for (index, pixel) in pixels.as_chunks::<4>().0.iter().enumerate() {
+        if pixel[0] >= 80 || pixel[2] <= 120 {
+            continue;
+        }
+        let point = (index % 600, index / 600);
+        bounds = Some(match bounds {
+            None => (point.0, point.1, point.0, point.1),
+            Some((left, top, right, bottom)) => (
+                left.min(point.0),
+                top.min(point.1),
+                right.max(point.0),
+                bottom.max(point.1),
+            ),
+        });
+    }
+    let (left, top, right, bottom) = bounds.expect("blue text must render");
+    assert!(bottom - top > right - left, "quarter-turn must be vertical");
+}
+
+#[test]
+fn inline_editor_and_accepted_text_share_glyph_bounds() {
+    for content in ["hello", "First\nSecond"] {
+        let mut state = rendered_page();
+        state.annotations.set_tool(Tool::Text);
+        let view = state
+            .navigation
+            .view(page_size(&state), page_viewport(CANVAS.size()))
+            .unwrap();
+        let scale = view.page_rect().width / page_size(&state).width;
+        let _ = update(
+            &mut state,
+            Message::DrawPressed(
+                Pointer::Mouse,
+                PagePoint::new(300.0, 300.0),
+                scale,
+            ),
+        );
+        paste_text(&mut state, content);
+        let editing = dark_pixel_bounds(&render_document(&state, 1, 1.0));
+
+        let _ = update(&mut state, Message::AcceptText);
+        let accepted = dark_pixel_bounds(&render_document(&state, 1, 1.0));
+
+        assert_eq!(editing, accepted, "text layout changed for {content:?}");
+    }
+}
+
+fn paste_text(state: &mut FastFill, text: &str) {
+    let action = text_editor::Action::Edit(text_editor::Edit::Paste(
+        std::sync::Arc::new(text.to_owned()),
+    ));
+    let _ = update(state, Message::TextAction(action));
+}
+
+fn dark_pixel_bounds(pixels: &[u8]) -> Option<(usize, usize, usize, usize)> {
+    let mut bounds: Option<(usize, usize, usize, usize)> = None;
+    for (index, pixel) in pixels.as_chunks::<4>().0.iter().enumerate() {
+        if pixel[0] >= 40 || pixel[1] >= 40 || pixel[2] >= 40 {
+            continue;
+        }
+        let point = (index % 600, index / 600);
+        bounds = Some(match bounds {
+            None => (point.0, point.1, point.0, point.1),
+            Some((left, top, right, bottom)) => (
+                left.min(point.0),
+                top.min(point.1),
+                right.max(point.0),
+                bottom.max(point.1),
+            ),
+        });
+    }
+    bounds
+}
+
+fn dark_pixel(pixel: [u8; 4]) -> bool {
+    pixel[0] < 100 && pixel[1] < 100 && pixel[2] < 100
+}
+
+fn dark_pixels_at(pixels: &[u8], indices: &[usize]) -> usize {
+    let pixels = pixels.as_chunks::<4>().0;
+    indices
+        .iter()
+        .filter(|index| dark_pixel(pixels[**index]))
+        .count()
+}
+
+fn pixel_indices_for_page_rect(
+    state: &FastFill,
+    bounds: fastfill_rust::geometry::Rect,
+) -> Vec<usize> {
+    let view = state
+        .navigation
+        .view(
+            page_size(state),
+            page_viewport(iced::Size::new(600.0, 600.0)),
+        )
+        .unwrap();
+    let start = view.page_to_view(PagePoint::new(bounds.x, bounds.y));
+    let end = view.page_to_view(PagePoint::new(
+        bounds.x + bounds.width,
+        bounds.y + bounds.height,
+    ));
+    let left = start.x.floor().max(0.0);
+    let top = start.y.floor().max(0.0);
+    let right = end.x.ceil().min(600.0);
+    let bottom = end.y.ceil().min(600.0);
+    (0..600 * 600)
+        .filter(|index| {
+            let x = f32::from(u16::try_from(index % 600).unwrap());
+            let y = f32::from(u16::try_from(index / 600).unwrap());
+            x >= left && x < right && y >= top && y < bottom
+        })
+        .collect()
+}
+
 fn rendered_page() -> FastFill {
     FastFill {
         page: Some(ImportedImage {
@@ -816,7 +1173,7 @@ fn canvas_event(
         input_enabled: state.image_picker == ImagePicker::Idle
             && !state.confirm_delete_all,
         modifiers: state.modifiers,
-        background: false,
+        layer: crate::page_canvas::CanvasLayer::Overlay,
     };
     let message = canvas::Program::update(
         &page,

@@ -1,5 +1,5 @@
 use fastfill_rust::annotations::{
-    AnnotationColor, Annotations, DragModifiers, Pointer, Tool,
+    AnnotationColor, AnnotationRef, Annotations, DragModifiers, Pointer, Tool,
 };
 use fastfill_rust::geometry::{Point, Size};
 
@@ -227,22 +227,24 @@ fn layer_commands_keep_relative_order_and_selection_through_history() {
     assert_eq!(annotations.selected_indices(), [1, 3]);
 
     assert!(annotations.send_selected_to_back());
-    let xs: Vec<_> = annotations
-        .shapes()
-        .iter()
-        .map(|shape| shape.bounds().x)
-        .collect();
+    let xs = ordered_shape_xs(&annotations);
     assert_eq!(xs, [200.0, 400.0, 100.0, 300.0]);
-    assert_eq!(annotations.selected_indices(), [0, 1]);
+    assert_eq!(annotations.selected_indices(), [1, 3]);
 
     assert!(annotations.undo());
     assert_eq!(annotations.selected_indices(), [1, 3]);
     assert!(annotations.bring_selected_to_front());
-    let xs: Vec<_> = annotations
-        .shapes()
-        .iter()
-        .map(|shape| shape.bounds().x)
-        .collect();
+    let xs = ordered_shape_xs(&annotations);
     assert_eq!(xs, [100.0, 300.0, 200.0, 400.0]);
-    assert_eq!(annotations.selected_indices(), [2, 3]);
+    assert_eq!(annotations.selected_indices(), [1, 3]);
+}
+
+fn ordered_shape_xs(annotations: &Annotations) -> Vec<f32> {
+    annotations
+        .ordered_annotations()
+        .filter_map(|annotation| match annotation {
+            AnnotationRef::Shape(_, shape) => Some(shape.bounds().x),
+            AnnotationRef::Text(_, _) => None,
+        })
+        .collect()
 }

@@ -23,6 +23,7 @@ fn tool_catalog_has_one_entry_for_every_tool() {
             Tool::Arrow,
             Tool::Checkmark,
             Tool::Cross,
+            Tool::Text,
             Tool::Pen,
             Tool::Highlighter,
         ],

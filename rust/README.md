@@ -36,7 +36,7 @@ to reach TCP port 24800. Trunk watches for changes, but browser auto-reload is
 disabled so the generated page never assumes the development machine is
 `localhost`; refresh the browser after a rebuild.
 
-Checkpoint 3K adds multi-selection and layers to styled annotations:
+Checkpoint 4C adds formatted, rotatable text to the annotation tools:
 
 - **Rectangle:** drag with the left mouse button or one finger. The preview
   uses the chosen style immediately. Hold Ctrl to draw a square.
@@ -51,21 +51,33 @@ Checkpoint 3K adds multi-selection and layers to styled annotations:
   retaining its outline.
 - **Highlighter:** draw a translucent freehand path. Its color and thickness
   are adjustable, but it remains unfilled.
+- **Text:** click or tap where typing should start and type directly over the
+  page. The editor grows with its content and uses only explicit line breaks;
+  it does not wrap at the paper edge. Shift+Enter inserts a line break; Enter
+  or clicking elsewhere accepts non-empty text. Escape cancels pending
+  changes. Click accepted text with Text to reopen it. Select clicks select
+  text without opening the editor; drag to move it or use its rotation handle.
+  Choose Sans, Serif, or Monospace; size; bold; italic; underline; and color.
+  Editor changes remain pending until acceptance; changes to inactive selected
+  text apply immediately and support undo. Scroll over the size selector to
+  step through sizes.
 - **Styles:** choose black, white, red, blue, green, or yellow. Use −/+ for
   stroke widths from 1–20. Rectangle, Oval, and Pen offer Fill. Each tool
   remembers its own settings; Select changes the chosen object with undo.
-- **Select:** click or touch a shape, line, or ink path, then drag to move it.
-  Drag empty page space to select every intersecting object. Ctrl-click toggles
-  individual objects. Drag any selected object to move the whole selection.
-  Faint member frames identify each object inside the strong group boundary.
-  A single selection retains resize, endpoint, and rotation controls.
+- **Select:** click or touch a shape, line, ink path, or text, then drag to
+  move it. Drag empty page space to select every intersecting shape. Ctrl-click
+  toggles individual shapes. Drag any selected shape to move the whole shape
+  selection. Faint member frames identify each shape inside the strong group
+  boundary. A single shape retains resize, endpoint, and rotation controls.
 - **Bulk styles:** color and thickness apply to every selected object. Fill
   applies only to compatible rectangles, ovals, and pen paths.
-- **Layers:** To back and To front move the selection behind or ahead of
-  unselected objects while preserving relative order.
-- **Rotate:** drag the round handle above a selected rectangle, oval, mark, or
-  ink path. Hold Ctrl to snap to 45° increments. Lines and arrows remain
-  endpoint-edited. Rotation 0° resets the selected object and supports undo.
+- **Layers:** To back and To front move selected text or shapes behind or
+  ahead of unselected objects while preserving relative order.
+- **Rotate:** drag the round handle above selected text, rectangle, oval, mark,
+  or ink path. Hold Ctrl to snap to 45° increments. A rotated text editor stays
+  horizontal and uses the object's unrotated measured size. Lines and arrows
+  remain endpoint-edited. Rotation 0° resets the selected object and supports
+  undo.
 - Drawing modes can edit the selected object from its body or handles.
   Starting elsewhere draws a new object of the active type.
 - **Delete:** remove the selection with the button or Delete key. Delete all
@@ -83,6 +95,8 @@ Checkpoint 3K adds multi-selection and layers to styled annotations:
 - Opening another image asks before discarding annotations. Canceling the
   picker or choosing an invalid image preserves the current page.
 
-Annotations and history are temporary. Text, projects, and saving are not
-implemented yet. Android browser rendering is currently slow; native
-touchscreen performance still needs hardware testing.
+Annotations and history are temporary. Mixed text/shape multi-selection,
+projects, and saving are not implemented. Minimal Linux or WASM environments
+without requested generic or italic fonts fall back to bundled Fira Sans.
+Android browser rendering is currently slow; native touchscreen performance
+still needs hardware testing.

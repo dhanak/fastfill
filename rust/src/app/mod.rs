@@ -1,4 +1,5 @@
 mod controller;
+mod text;
 mod view;
 
 #[cfg(test)]
@@ -10,7 +11,8 @@ use controller::{shortcut_message, update};
 #[cfg(test)]
 use fastfill_rust::annotations::ResizeCorner;
 use fastfill_rust::annotations::{
-    AnnotationColor, Annotations, DragModifiers, Pointer, Tool,
+    AnnotationColor, Annotations, DragModifiers, Pointer, TextFormat,
+    TextTypeface, Tool,
 };
 use fastfill_rust::geometry::{Navigation, Point as PagePoint};
 use fastfill_rust::geometry::{Rect as PageRect, Size as PageSize};
@@ -22,6 +24,7 @@ use iced::touch;
 use iced::widget::canvas;
 #[cfg(test)]
 use iced::widget::image::Handle;
+use iced::widget::text_editor;
 #[cfg(test)]
 use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
 #[cfg(test)]
@@ -29,6 +32,7 @@ use view::document;
 use view::view;
 
 const DEFAULT_PAGE: PageSize = PageSize::new(794.0, 1_123.0);
+const TEXT_EDITOR_ID: &str = "inline-text-editor";
 
 #[derive(Default)]
 struct FastFill {
@@ -41,6 +45,7 @@ struct FastFill {
     status: String,
     status_is_error: bool,
     confirm_delete_all: bool,
+    text_content: text_editor::Content,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -68,8 +73,15 @@ pub(crate) enum Message {
     SendToBack,
     BringToFront,
     SetColor(AnnotationColor),
+    SetTextTypeface(TextTypeface),
+    SetTextSize(f32),
+    ToggleTextBold,
+    ToggleTextItalic,
+    ToggleTextUnderline,
     AdjustThickness(f32),
     ToggleFill,
+    TextAction(text_editor::Action),
+    AcceptText,
     DrawPressed(Pointer, PagePoint, f32),
     DrawMoved(Pointer, PagePoint, bool),
     DrawReleased(Pointer, PagePoint, bool),

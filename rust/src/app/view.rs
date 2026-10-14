@@ -1,15 +1,22 @@
-use super::{FastFill, ImagePicker, Message, page_size};
+use super::{FastFill, ImagePicker, Message, TEXT_EDITOR_ID, page_size};
 use crate::appearance::{
     CONTROL_GAP, CONTROL_HEIGHT, TOOLBAR_HEIGHT, TOOLBAR_PADDING,
-    TOOLBAR_ROW_HEIGHT,
+    TOOLBAR_ROW_HEIGHT, annotation_color, text_font,
 };
-use crate::page_canvas::{PageCanvas, page_viewport};
-use fastfill_rust::annotations::{AnnotationColor, Tool};
-use fastfill_rust::geometry::Rect as PageRect;
+use crate::page_canvas::{CanvasLayer, PageCanvas, page_viewport};
+use fastfill_rust::annotations::{
+    AnnotationColor, TEXT_EDITOR_HORIZONTAL_PADDING,
+    TEXT_EDITOR_VERTICAL_PADDING, TEXT_LINE_HEIGHT, TextFormat, TextTypeface,
+    Tool,
+};
+use fastfill_rust::geometry::{Point as PagePoint, Rect as PageRect};
 use iced::widget::{
-    Row, button, canvas, column, container, responsive, row, text,
+    Row, button, canvas, column, container, mouse_area, pick_list, responsive,
+    row, text, text_editor,
 };
-use iced::{Element, Fill};
+use iced::{
+    Background, Border, Color, Element, Fill, Padding, keyboard, mouse,
+};
 
 fn heading(state: &FastFill) -> Element<'_, Message> {
     let status = if state.status.is_empty() {
@@ -140,7 +147,8 @@ fn tool_row(state: &FastFill, available_width: f32) -> Element<'_, Message> {
             button("Delete")
                 .on_press_maybe(
                     (state.image_picker == ImagePicker::Idle
-                        && !state.annotations.selected_indices().is_empty()
+                        && state.annotations.has_selection()
+                        && !state.annotations.has_text_edit()
                         && state.annotations.active_pointer().is_none())
                     .then_some(Message::DeleteSelected),
                 )
@@ -150,7 +158,7 @@ fn tool_row(state: &FastFill, available_width: f32) -> Element<'_, Message> {
             button("Delete all")
                 .on_press_maybe(
                     (state.image_picker == ImagePicker::Idle
-                        && !state.annotations.shapes().is_empty()
+                        && !state.annotations.is_empty()
                         && state.annotations.active_pointer().is_none())
                     .then_some(Message::AskDeleteAll),
                 )
@@ -160,7 +168,8 @@ fn tool_row(state: &FastFill, available_width: f32) -> Element<'_, Message> {
             button("To back")
                 .on_press_maybe(
                     (state.image_picker == ImagePicker::Idle
-                        && !state.annotations.selected_indices().is_empty()
+                        && state.annotations.has_selection()
+                        && !state.annotations.has_text_edit()
                         && state.annotations.active_pointer().is_none())
                     .then_some(Message::SendToBack),
                 )
@@ -170,7 +179,8 @@ fn tool_row(state: &FastFill, available_width: f32) -> Element<'_, Message> {
             button("To front")
                 .on_press_maybe(
                     (state.image_picker == ImagePicker::Idle
-                        && !state.annotations.selected_indices().is_empty()
+                        && state.annotations.has_selection()
+                        && !state.annotations.has_text_edit()
                         && state.annotations.active_pointer().is_none())
                     .then_some(Message::BringToFront),
                 )
@@ -178,14 +188,16 @@ fn tool_row(state: &FastFill, available_width: f32) -> Element<'_, Message> {
         );
     if available_width >= 520.0 {
         tools = tools.push(
-            text(format!("{} shapes", state.annotations.shapes().len()))
-                .size(14),
+            text(format!("{} annotations", state.annotations.len())).size(14),
         );
     }
     toolbar_row(tools).into()
 }
 
 fn style_row(state: &FastFill) -> Element<'_, Message> {
+    if let Some(format) = state.annotations.current_text_format() {
+        return text_style_row(format);
+    }
     let Some(style) = state.annotations.current_style() else {
         return container(iced::widget::Space::new())
             .height(TOOLBAR_ROW_HEIGHT)
@@ -231,6 +243,77 @@ fn style_row(state: &FastFill) -> Element<'_, Message> {
     toolbar_row(styles).into()
 }
 
+const TEXT_SIZES: [f32; 10] =
+    [8.0, 10.0, 12.0, 16.0, 20.0, 24.0, 32.0, 40.0, 48.0, 64.0];
+
+fn text_style_row(format: TextFormat) -> Element<'static, Message> {
+    let toggle = |label, enabled, message| {
+        button(label)
+            .on_press(message)
+            .style(if enabled {
+                button::primary
+            } else {
+                button::secondary
+            })
+            .height(CONTROL_HEIGHT)
+    };
+    let styles = row![
+        pick_list(
+            TextTypeface::ALL,
+            Some(format.typeface),
+            Message::SetTextTypeface,
+        )
+        .width(130),
+        mouse_area(
+            pick_list(
+                TEXT_SIZES,
+                Some(format.font_size),
+                Message::SetTextSize,
+            )
+            .width(75),
+        )
+        .on_scroll(move |delta| {
+            Message::SetTextSize(text_size_after_scroll(
+                format.font_size,
+                delta,
+            ))
+        }),
+        toggle("B", format.bold, Message::ToggleTextBold),
+        toggle("I", format.italic, Message::ToggleTextItalic),
+        toggle("U", format.underline, Message::ToggleTextUnderline),
+        color_button("Black", AnnotationColor::Black, format.color),
+        color_button("White", AnnotationColor::White, format.color),
+        color_button("Red", AnnotationColor::Red, format.color),
+        color_button("Blue", AnnotationColor::Blue, format.color),
+        color_button("Green", AnnotationColor::Green, format.color),
+        color_button("Yellow", AnnotationColor::Yellow, format.color),
+    ];
+    toolbar_row(styles).into()
+}
+
+fn text_size_after_scroll(current: f32, delta: mouse::ScrollDelta) -> f32 {
+    let y = match delta {
+        mouse::ScrollDelta::Lines { y, .. }
+        | mouse::ScrollDelta::Pixels { y, .. } => y,
+    };
+    if y > 0.0 {
+        TEXT_SIZES
+            .iter()
+            .copied()
+            .find(|size| *size > current)
+            .unwrap_or(current)
+    } else if y < 0.0 {
+        TEXT_SIZES
+            .iter()
+            .copied()
+            .rev()
+            .find(|size| *size < current)
+            .unwrap_or(current)
+    } else {
+        current
+    }
+}
+
 fn toolbar_row(content: Row<'_, Message>) -> Row<'_, Message> {
     content
         .align_y(iced::Alignment::Center)
@@ -255,28 +338,115 @@ fn color_button(
 }
 
 pub(super) fn document(state: &FastFill) -> Element<'_, Message> {
-    let page = PageCanvas {
-        image: state.page.as_ref(),
-        navigation: state.navigation,
-        page_size: page_size(state),
-        annotations: &state.annotations,
-        input_epoch: state.input_epoch,
-        input_enabled: state.image_picker == ImagePicker::Idle
-            && !state.confirm_delete_all,
-        modifiers: state.modifiers,
-        background: false,
-    };
-    // iced batches images above paths within one layer. Stack the overlay.
-    let background = PageCanvas {
-        background: true,
-        input_enabled: false,
-        ..page
-    };
-    iced::widget::stack![
-        canvas(background).width(Fill).height(Fill),
-        canvas(page).width(Fill).height(Fill),
-    ]
+    responsive(move |available| {
+        let page_size = page_size(state);
+        let page = PageCanvas {
+            image: state.page.as_ref(),
+            navigation: state.navigation,
+            page_size,
+            annotations: &state.annotations,
+            input_epoch: state.input_epoch,
+            input_enabled: state.image_picker == ImagePicker::Idle
+                && !state.confirm_delete_all,
+            modifiers: state.modifiers,
+            layer: CanvasLayer::Overlay,
+        };
+        // iced batches unlike primitives within one canvas. Stack each layer.
+        let background = PageCanvas {
+            layer: CanvasLayer::Background,
+            input_enabled: false,
+            ..page
+        };
+        let mut layers =
+            iced::widget::stack![canvas(background).width(Fill).height(Fill),];
+        for annotation in state.annotations.ordered_annotations() {
+            let annotation = PageCanvas {
+                layer: CanvasLayer::Annotation(annotation),
+                input_enabled: false,
+                ..page
+            };
+            layers = layers.push(canvas(annotation).width(Fill).height(Fill));
+        }
+        layers = layers.push(canvas(page).width(Fill).height(Fill));
+        if let Some((_, bounds, format, _)) = state.annotations.text_edit()
+            && let Some(view) =
+                state.navigation.view(page_size, page_viewport(available))
+        {
+            let page = view.page_rect();
+            let scale = page.width / page_size.width;
+            let position =
+                view.page_to_view(PagePoint::new(bounds.x, bounds.y));
+            let width =
+                bounds.width * scale + 2.0 * TEXT_EDITOR_HORIZONTAL_PADDING;
+            let height =
+                bounds.height * scale + 2.0 * TEXT_EDITOR_VERTICAL_PADDING;
+            let left = position.x - TEXT_EDITOR_HORIZONTAL_PADDING;
+            let top = position.y - TEXT_EDITOR_VERTICAL_PADDING;
+            let editor = text_editor(&state.text_content)
+                .id(TEXT_EDITOR_ID)
+                .placeholder("Text")
+                .on_action(Message::TextAction)
+                .key_binding(text_key_binding)
+                .padding([
+                    TEXT_EDITOR_VERTICAL_PADDING,
+                    TEXT_EDITOR_HORIZONTAL_PADDING,
+                ])
+                .font(text_font(format))
+                .size(format.font_size * scale)
+                .line_height(TEXT_LINE_HEIGHT)
+                .wrapping(iced::advanced::text::Wrapping::None)
+                .width(width)
+                .height(height)
+                .style(move |theme, status| {
+                    inline_text_style(theme, status, format.color)
+                });
+            layers = layers.push(
+                container(editor).width(Fill).height(Fill).padding(Padding {
+                    top,
+                    left,
+                    ..Padding::ZERO
+                }),
+            );
+        }
+        layers.width(Fill).height(Fill).clip(true).into()
+    })
     .into()
+}
+
+fn inline_text_style(
+    theme: &iced::Theme,
+    status: text_editor::Status,
+    color: AnnotationColor,
+) -> text_editor::Style {
+    let style = text_editor::default(theme, status);
+    text_editor::Style {
+        background: Background::Color(Color::from_rgba8(255, 255, 255, 0.72)),
+        border: Border {
+            width: 2.0,
+            color: Color::from_rgb8(0, 102, 204),
+            ..style.border
+        },
+        placeholder: Color::from_rgb8(72, 72, 72),
+        value: annotation_color(color),
+        ..style
+    }
+}
+
+fn text_key_binding(
+    key: text_editor::KeyPress,
+) -> Option<text_editor::Binding<Message>> {
+    if accepts_text(&key.key, key.modifiers) {
+        Some(text_editor::Binding::Custom(Message::AcceptText))
+    } else {
+        text_editor::Binding::from_key_press(key)
+    }
+}
+
+fn accepts_text(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> bool {
+    matches!(
+        key.as_ref(),
+        keyboard::Key::Named(keyboard::key::Named::Enter)
+    ) && !modifiers.shift()
 }
 
 fn tool_button(
@@ -291,4 +461,29 @@ fn tool_button(
             button::secondary
         })
         .height(CONTROL_HEIGHT)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{accepts_text, text_size_after_scroll};
+    use iced::{keyboard, mouse};
+
+    #[test]
+    fn plain_enter_accepts_but_shift_enter_does_not() {
+        let enter = keyboard::Key::Named(keyboard::key::Named::Enter);
+
+        assert!(accepts_text(&enter, keyboard::Modifiers::empty()));
+        assert!(!accepts_text(&enter, keyboard::Modifiers::SHIFT));
+    }
+
+    #[test]
+    fn font_size_wheel_steps_and_stops_at_limits() {
+        let up = mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 };
+        let down = mouse::ScrollDelta::Pixels { x: 0.0, y: -1.0 };
+
+        assert_eq!(text_size_after_scroll(24.0, up), 32.0);
+        assert_eq!(text_size_after_scroll(24.0, down), 20.0);
+        assert_eq!(text_size_after_scroll(64.0, up), 64.0);
+        assert_eq!(text_size_after_scroll(8.0, down), 8.0);
+    }
 }

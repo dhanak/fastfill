@@ -1,13 +1,15 @@
 use super::{
-    CanvasState, PageCanvas, draw_group_member, draw_group_selection,
-    draw_marquee, draw_selection, draw_shape, page_viewport,
+    CanvasLayer, CanvasState, PageCanvas, draw_group_member,
+    draw_group_selection, draw_marquee, draw_selection, draw_shape, draw_text,
+    draw_text_selection, draw_text_underline, page_viewport,
 };
 use crate::app::Message;
 use crate::appearance::{
     PAGE_SHADOW_X, PAGE_SHADOW_Y, canvas_background, page_shadow,
 };
 use fastfill_rust::annotations::{
-    EditHit, LineEndpoint, Pointer, ResizeCorner,
+    AnnotationRef, EditHit, LineEndpoint, Pointer, ResizeCorner, TextEditHit,
+    Tool,
 };
 use fastfill_rust::geometry::Point as PagePoint;
 use fastfill_rust::interaction::TouchEvent;
@@ -149,7 +151,7 @@ impl canvas::Program<Message> for PageCanvas<'_> {
         _cursor: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
-        if self.background {
+        if matches!(self.layer, CanvasLayer::Background) {
             frame.fill_rectangle(
                 Point::ORIGIN,
                 bounds.size(),
@@ -157,69 +159,50 @@ impl canvas::Program<Message> for PageCanvas<'_> {
             );
         }
 
-        if let Some(view) = self
+        let Some(view) = self
             .navigation
             .view(self.page_size, page_viewport(bounds.size()))
-        {
-            let page = view.page_rect();
-            let size = iced::Size::new(page.width, page.height);
-            if self.background {
-                frame.fill_rectangle(
-                    Point::new(page.x + PAGE_SHADOW_X, page.y + PAGE_SHADOW_Y),
-                    size,
-                    page_shadow(),
-                );
-                frame.fill_rectangle(
-                    Point::new(page.x, page.y),
-                    size,
-                    Color::WHITE,
-                );
-                if let Some(image) = self.image {
-                    frame.draw_image(
-                        Rectangle::new(Point::new(page.x, page.y), size),
-                        &image.handle,
-                    );
-                }
-            } else {
-                let scale = page.width / self.page_size.width;
-                for (index, annotation) in
-                    self.annotations.shapes().iter().enumerate()
-                {
-                    if self.annotations.is_edited(index) {
-                        continue;
-                    }
-                    draw_shape(&mut frame, view, annotation, scale);
-                }
-                for preview in self.annotations.previews() {
-                    draw_shape(&mut frame, view, &preview, scale);
-                }
-                if self.annotations.tool().handles_annotations() {
-                    if let Some(annotation) =
-                        self.annotations.selection_annotation(scale)
+        else {
+            return vec![frame.into_geometry()];
+        };
+        let view_scale = view.page_rect().width / self.page_size.width;
+        match self.layer {
+            CanvasLayer::Annotation(annotation) => {
+                match annotation {
+                    AnnotationRef::Shape(index, annotation)
+                        if !self.annotations.is_edited(index) =>
                     {
-                        draw_selection(&mut frame, view, &annotation, scale);
-                    } else if let Some(bounds) =
-                        self.annotations.selection_bounds(scale)
+                        draw_shape(&mut frame, view, annotation, view_scale);
+                    }
+                    AnnotationRef::Text(index, annotation)
+                        if !self.annotations.is_text_edited(index) =>
                     {
-                        for annotation in
-                            self.annotations.selection_annotations(scale)
-                        {
-                            draw_group_member(
-                                &mut frame,
-                                view,
-                                &annotation,
-                                scale,
-                            );
-                        }
-                        draw_group_selection(&mut frame, view, bounds);
+                        draw_text(&mut frame, view, annotation, view_scale);
                     }
-                    if let Some(bounds) = self.annotations.selection_box() {
-                        draw_marquee(&mut frame, view, bounds);
-                    }
+                    AnnotationRef::Shape(_, _) | AnnotationRef::Text(_, _) => {}
                 }
+                return vec![frame.into_geometry()];
             }
+            CanvasLayer::Overlay => {
+                self.draw_overlay(&mut frame, view, view_scale);
+                return vec![frame.into_geometry()];
+            }
+            CanvasLayer::Background => {}
         }
-
+        let page = view.page_rect();
+        let size = iced::Size::new(page.width, page.height);
+        frame.fill_rectangle(
+            Point::new(page.x + PAGE_SHADOW_X, page.y + PAGE_SHADOW_Y),
+            size,
+            page_shadow(),
+        );
+        frame.fill_rectangle(Point::new(page.x, page.y), size, Color::WHITE);
+        if let Some(image) = self.image {
+            frame.draw_image(
+                Rectangle::new(Point::new(page.x, page.y), size),
+                &image.handle,
+            );
+        }
         vec![frame.into_geometry()]
     }
 
@@ -235,6 +218,27 @@ impl canvas::Program<Message> for PageCanvas<'_> {
             mouse::Interaction::Grabbing
         } else if !self.annotations.tool().handles_annotations() {
             mouse::Interaction::Grab
+        } else if self.annotations.tool() == Tool::Select
+            && let Some(point) = cursor.position_in(bounds)
+            && let Some(point) =
+                self.to_page(PagePoint::new(point.x, point.y), bounds)
+            && let Some(hit) = self.annotations.hit_text_interaction(
+                point,
+                Pointer::Mouse,
+                self.scale(bounds).unwrap_or(1.0),
+            )
+        {
+            match hit {
+                TextEditHit::Move => mouse::Interaction::Move,
+                TextEditHit::Rotate => mouse::Interaction::Crosshair,
+            }
+        } else if let Some(point) = cursor.position_in(bounds)
+            && let Some(point) =
+                self.to_page(PagePoint::new(point.x, point.y), bounds)
+            && self.annotations.tool() == Tool::Text
+            && self.annotations.text_hit(point).is_some()
+        {
+            mouse::Interaction::Text
         } else if let Some(point) = cursor.position_in(bounds)
             && let Some(point) =
                 self.to_page(PagePoint::new(point.x, point.y), bounds)
@@ -271,6 +275,54 @@ fn edit_cursor(hit: EditHit) -> mouse::Interaction {
 }
 
 impl PageCanvas<'_> {
+    fn draw_overlay(
+        self,
+        frame: &mut canvas::Frame,
+        view: fastfill_rust::geometry::PageView,
+        scale: f32,
+    ) {
+        for preview in self.annotations.previews() {
+            draw_shape(frame, view, &preview, scale);
+        }
+        if let Some(preview) = self.annotations.text_move_preview() {
+            draw_text(frame, view, &preview, scale);
+        }
+        if let Some(mut preview) = self.annotations.text_preview() {
+            // The editor stays horizontal even for rotated text.
+            preview.rotation = 0.0;
+            draw_text_underline(frame, view, &preview, scale);
+        }
+        self.draw_selection_overlay(frame, view, scale);
+    }
+
+    fn draw_selection_overlay(
+        self,
+        frame: &mut canvas::Frame,
+        view: fastfill_rust::geometry::PageView,
+        scale: f32,
+    ) {
+        if !self.annotations.tool().handles_annotations() {
+            return;
+        }
+        if let Some(annotation) = self.annotations.selection_annotation(scale) {
+            draw_selection(frame, view, &annotation, scale);
+        } else if let Some(bounds) = self.annotations.selection_bounds(scale) {
+            for annotation in self.annotations.selection_annotations(scale) {
+                draw_group_member(frame, view, &annotation, scale);
+            }
+            draw_group_selection(frame, view, bounds);
+        }
+        if let Some(bounds) = self.annotations.selection_box() {
+            draw_marquee(frame, view, bounds);
+        }
+        if !self.annotations.has_text_edit()
+            && let Some(annotation) =
+                self.annotations.selected_text_annotation()
+        {
+            draw_text_selection(frame, view, &annotation, scale);
+        }
+    }
+
     fn to_page(self, local: PagePoint, bounds: Rectangle) -> Option<PagePoint> {
         self.navigation
             .view(self.page_size, page_viewport(bounds.size()))

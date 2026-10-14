@@ -208,16 +208,39 @@ text. No importing, saving, camera, or annotations were included.
       modifier instead of hard-coded Ctrl.
 - [x] User checkpoint: smoke-test existing tools before phase 4 starts.
 
-### 4. Text and toolkit decision gate — not started
+### 4. Text and toolkit decision gate — in progress
 
-- Inline text, typeface/size/styles, transparent editing background, correct
-  unrotated editor sizing, stable positioning, explicit accept/cancel.
-- Formatting remains pending until accepted; Escape restores all changes.
-- Test draft lifecycle, focus transitions, measurement, and undo.
-- Prototype shared text/shape layout for screen and PDF before selecting a
-  renderer/export dependency. Flag mismatches rather than hiding them.
-- User checkpoint: rotated/bold text, multiline entry, touch and keyboard.
-- Decide whether iced remains suitable before proceeding.
+#### 4A. Plain inline text lifecycle — accepted
+
+- [x] Place a plain text draft left-aligned at a click or tap.
+- [x] Edit directly over the page with a translucent framed input.
+- [x] Accept non-empty text with Enter or a click elsewhere.
+- [x] Cancel with Escape; keep drafts out of history until accepted.
+- [x] Include accepted text in undo, redo, page replacement, and rendering.
+- [x] User checkpoint: placement, focus, acceptance, cancellation, and undo.
+
+#### 4B. Multiline editing and measured layout — accepted
+
+- [x] Add Shift+Enter line breaks and content-sized editor bounds.
+- [x] Keep the editor stable as text changes and preserve click placement.
+- [x] Reopen existing text with Text; select and move it with Select.
+- [x] Test focus transitions, measurement, hit testing, and movement.
+- [x] User checkpoint: multiline entry, reopening, movement, and layout.
+
+#### 4C. Formatting and rotation — accepted
+
+- [x] Add typeface, size, bold, italic, underline, color, and rotation.
+- [x] Keep formatting pending until accepted; Escape restores all changes.
+- [x] Size the horizontal editor from unrotated text bounds.
+- [x] Expose formatting for inactive selected text and wheel-step font size.
+- [x] Include text in shared visual layer order and layer commands.
+- [x] User checkpoint: rotated/bold text, touch, and keyboard behavior.
+
+#### 4D. Shared rendering and toolkit decision — not started
+
+- [ ] Prototype shared text/shape layout for screen and PDF before selecting a
+      renderer/export dependency. Flag mismatches rather than hiding them.
+- [ ] Decide whether iced remains suitable before proceeding.
 
 ### 5. Projects, pages, imports, and PDF — not started
 
@@ -601,6 +624,85 @@ text. No importing, saving, camera, or annotations were included.
   native and WASM compilation, and a linked Trunk WASM build.
 - User smoke-tested the existing tools and accepted the refactor before phase
   4 started.
+
+### 2026-10-14 — checkpoint 4A plain inline text
+
+- Applied the saved Phase 4 prototype without dropping its stash. Ported only
+  the plain text lifecycle into the refactored module layout; multiline text,
+  measured bounds, selection, and formatting remain later slices.
+- TDD red: the isolated text tests failed before the Text tool, pending draft,
+  acceptance, history, and deletion APIs existed.
+- Place text by click or tap, left-aligned at that page point. Edit it in a
+  focused, translucent input over the page; Enter or another page click
+  accepts it and Escape cancels it.
+- Keep empty or canceled drafts out of history. Include accepted text in undo,
+  redo, delete-all, replacement confirmation, annotation count, and rendering.
+- Keep edge placement consistent by storing the adjusted editor anchor and
+  width used by final rendering. Use high-contrast black editor text.
+- Match the editor's padding and 1.3 line-height in canvas rendering. A
+  headless renderer check requires editing and finalized glyph bounds to be
+  identical.
+- Passed 124 all-feature tests, 85 core-only tests, strict Clippy, formatting,
+  native and WASM compilation, and a linked Trunk WASM build.
+- User accepted 4A after left-aligned placement, high-contrast input, shared
+  edge clamping, and exact editor/finalized glyph positioning were verified.
+
+### 2026-10-14 — checkpoint 4B multiline and measured text
+
+- User accepted 4A. TDD red then covered multiline bounds, reopening, moving,
+  edit history, deletion safety, and zoom-independent placement.
+- Replace the single-line input with iced's multiline editor. Plain Enter
+  accepts; Shift+Enter inserts a line break. Click-away and Escape retain
+  their accepted and canceled meanings.
+- Measure the same font, shaping, size, and line height used by the canvas
+  renderer. Keep content bounds in page units, so zoom does not alter object
+  geometry. Preserve only explicit line breaks; never soft-wrap at page edges.
+- Preserve the text origin while content grows. Reopen text immediately with
+  Text, or click-release with Select; drag with Select to move it as one
+  undoable edit.
+- Draw a selection frame for accepted text, allow deletion when not editing,
+  and clip rendered glyphs at the page edge. Editing and finalized multiline
+  glyph bounds match in headless renderer checks.
+- Edge testing exposed bounds clamped to the remaining paper area. Text frames
+  now retain full measured size outside the paper, while accepted glyphs are
+  clipped to both paper and document viewport. This also prevents panned text
+  from painting over toolbars.
+- Passed 135 all-feature tests, 92 dependency-light core tests, strict Clippy,
+  formatting, native and WASM compilation, and a linked Trunk WASM build.
+- User accepted multiline entry, full-size edge frames, explicit-only line
+  breaks, reopening, movement, cancellation, clipping, and undo.
+
+### 2026-10-14 — checkpoint 4C formatting and rotation
+
+- TDD red covered pending format changes, Escape restoration, acceptance as
+  one history entry, remembered defaults, rotated hit testing, Ctrl snapping,
+  reset, and undo/redo.
+- Add generic Sans, Serif, and Monospace choices; 8–64 point sizes; bold,
+  italic, underline, and six existing colors. Measure and render with the same
+  selected font attributes.
+- Keep format changes inside the inline draft. Escape restores every committed
+  text property; Enter or click-away accepts them together. Accepted settings
+  become defaults for the next text object.
+- Rotate selected text using its own handle. Ctrl snaps to 45° increments and
+  Rotation 0° participates in history. Hit testing and selection frames follow
+  the rotated object.
+- Keep editing horizontal and size it from unrotated measured bounds. Render
+  accepted glyphs and underlines rotated and clipped to the page.
+- Fall back to bundled Fira Sans instead of crashing when a minimal Linux or
+  WASM environment lacks a requested generic or italic face. Normal desktop
+  font installations retain their native generic families.
+- Select clicks now retain an inactive text selection for move, rotation,
+  deletion, and immediate undoable formatting. Text clicks still reopen the
+  inline editor, whose formatting remains pending and cancelable.
+- Step the font size by scrolling over its selector. Keep normal canvas wheel
+  zoom elsewhere.
+- Put text and shapes in one explicit layer order. Layer buttons now work for
+  text, Select hit testing follows visible topmost order, and separate canvas
+  layers prevent iced from batching all glyphs above paths.
+- Passed 147 all-feature tests and 99 dependency-light core tests, strict
+  Clippy, formatting, native and WASM compilation, and a linked Trunk build.
+- User accepted Select-versus-Text behavior, inactive formatting, font-size
+  scrolling, mixed text/shape layers, and the remaining 4C behavior.
 
 ## References
 

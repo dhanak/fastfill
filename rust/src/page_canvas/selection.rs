@@ -1,5 +1,6 @@
 use super::render::closed_path;
 use crate::appearance::{SELECTION_HANDLE_SIZE, SELECTION_STROKE, accent};
+use fastfill_rust::annotations::TextAnnotation;
 use fastfill_rust::annotations::{AnnotationGeometry, ShapeAnnotation};
 use fastfill_rust::geometry::{PageView, Point as PagePoint, Rect as PageRect};
 use iced::widget::canvas;
@@ -34,29 +35,7 @@ pub(super) fn draw_selection(
         annotation.frame_corners(),
         annotation.rotation_handle(scale),
     ) {
-        let top = PagePoint::new(
-            corners[0].x.midpoint(corners[1].x),
-            corners[0].y.midpoint(corners[1].y),
-        );
-        let top = view.page_to_view(top);
-        let handle = view.page_to_view(handle);
-        let top = Point::new(top.x, top.y);
-        let handle = Point::new(handle.x, handle.y);
-        let stem = canvas::Path::line(top, handle);
-        frame.stroke(
-            &stem,
-            canvas::Stroke::default()
-                .with_color(blue)
-                .with_width(SELECTION_STROKE),
-        );
-        let knob = canvas::Path::circle(handle, SELECTION_HANDLE_SIZE / 2.0);
-        frame.fill(&knob, Color::WHITE);
-        frame.stroke(
-            &knob,
-            canvas::Stroke::default()
-                .with_color(blue)
-                .with_width(SELECTION_STROKE),
-        );
+        draw_rotation_handle(frame, view, corners, handle);
     }
     for center in handles {
         let half = SELECTION_HANDLE_SIZE / 2.0;
@@ -72,6 +51,59 @@ pub(super) fn draw_selection(
                 .with_width(SELECTION_STROKE),
         );
     }
+}
+
+pub(super) fn draw_text_selection(
+    frame: &mut canvas::Frame,
+    view: PageView,
+    annotation: &TextAnnotation,
+    scale: f32,
+) {
+    let corners = annotation.frame_corners();
+    let points = corners.map(|point| {
+        let point = view.page_to_view(point);
+        Point::new(point.x, point.y)
+    });
+    frame.stroke(
+        &closed_path(&points),
+        canvas::Stroke::default()
+            .with_color(accent())
+            .with_width(SELECTION_STROKE),
+    );
+    if let Some(handle) = annotation.rotation_handle(scale) {
+        draw_rotation_handle(frame, view, corners, handle);
+    }
+}
+
+fn draw_rotation_handle(
+    frame: &mut canvas::Frame,
+    view: PageView,
+    corners: [PagePoint; 4],
+    handle: PagePoint,
+) {
+    let top = PagePoint::new(
+        corners[0].x.midpoint(corners[1].x),
+        corners[0].y.midpoint(corners[1].y),
+    );
+    let top = view.page_to_view(top);
+    let handle = view.page_to_view(handle);
+    let top = Point::new(top.x, top.y);
+    let handle = Point::new(handle.x, handle.y);
+    let stem = canvas::Path::line(top, handle);
+    frame.stroke(
+        &stem,
+        canvas::Stroke::default()
+            .with_color(accent())
+            .with_width(SELECTION_STROKE),
+    );
+    let knob = canvas::Path::circle(handle, SELECTION_HANDLE_SIZE / 2.0);
+    frame.fill(&knob, Color::WHITE);
+    frame.stroke(
+        &knob,
+        canvas::Stroke::default()
+            .with_color(accent())
+            .with_width(SELECTION_STROKE),
+    );
 }
 
 pub(super) fn draw_group_member(

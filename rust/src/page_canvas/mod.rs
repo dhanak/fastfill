@@ -1,6 +1,6 @@
 use crate::appearance::PAGE_MARGIN;
 use crate::picker::ImportedImage;
-use fastfill_rust::annotations::{Annotations, DragModifiers};
+use fastfill_rust::annotations::{AnnotationRef, Annotations, DragModifiers};
 use fastfill_rust::geometry::{Navigation, Rect as PageRect, Size as PageSize};
 use fastfill_rust::interaction::TouchNavigation;
 use iced::{Point, mouse};
@@ -10,9 +10,10 @@ mod program;
 mod render;
 mod selection;
 
-use render::draw_shape;
+use render::{draw_shape, draw_text, draw_text_underline};
 use selection::{
     draw_group_member, draw_group_selection, draw_marquee, draw_selection,
+    draw_text_selection,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -24,7 +25,14 @@ pub(crate) struct PageCanvas<'a> {
     pub(crate) input_epoch: u64,
     pub(crate) input_enabled: bool,
     pub(crate) modifiers: DragModifiers,
-    pub(crate) background: bool,
+    pub(crate) layer: CanvasLayer<'a>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum CanvasLayer<'a> {
+    Background,
+    Annotation(AnnotationRef<'a>),
+    Overlay,
 }
 
 #[derive(Default)]
