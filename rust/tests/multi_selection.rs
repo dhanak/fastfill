@@ -209,7 +209,7 @@ fn selected_and_all_deletion_are_single_undoable_changes() {
     );
     assert!(annotations.delete_selected());
     assert_eq!(annotations.shapes().len(), 1);
-    assert_eq!(annotations.selected_indices(), []);
+    assert_eq!(annotations.selected_indices(), &[] as &[usize]);
     assert!(annotations.undo());
     assert_eq!(annotations.shapes().len(), 3);
     assert_eq!(annotations.selected_indices(), [0, 1]);

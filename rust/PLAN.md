@@ -208,7 +208,7 @@ text. No importing, saving, camera, or annotations were included.
       modifier instead of hard-coded Ctrl.
 - [x] User checkpoint: smoke-test existing tools before phase 4 starts.
 
-### 4. Text and toolkit decision gate — in progress
+### 4. Text and toolkit decision gate — accepted
 
 #### 4A. Plain inline text lifecycle — accepted
 
@@ -236,13 +236,16 @@ text. No importing, saving, camera, or annotations were included.
 - [x] Include text in shared visual layer order and layer commands.
 - [x] User checkpoint: rotated/bold text, touch, and keyboard behavior.
 
-#### 4D. Shared rendering and toolkit decision — not started
+#### 4D. Shared rendering and toolkit decision — accepted
 
-- [ ] Prototype shared text/shape layout for screen and PDF before selecting a
-      renderer/export dependency. Flag mismatches rather than hiding them.
-- [ ] Decide whether iced remains suitable before proceeding.
+- [x] Extract backend-neutral paths and text layout in page coordinates; make
+      the iced preview consume it without changing output.
+- [x] User checkpoint: existing annotation preview remains visually unchanged.
+- [x] Feed the same layout into a narrow PDF-output probe. Flag text or image
+      mismatches rather than hiding them.
+- [x] Decide whether iced remains suitable before proceeding.
 
-### 5. Projects, pages, imports, and PDF — not started
+### 5. Projects, pages, imports, and PDF — in progress
 
 - Incremental slices: safe `.docscan` loading; compatible atomic saving;
   multiple pages/reorder; PDF import; matching PDF export; recovery.
@@ -250,6 +253,17 @@ text. No importing, saving, camera, or annotations were included.
 - Test C#/Rust cross-reading, archive limits, hostile input, interrupted
   saves, dirty revisions, cancellation, and exported page geometry.
 - User checkpoint with copies of existing projects, never originals first.
+
+#### 5A. Safe schema-v1 project loading — accepted
+
+- [x] Mirror the C# manifest without converting or dropping edit data.
+- [x] Bound ZIP entries, manifest size, expanded size, images, pages,
+      annotations, ink points, and text length before use.
+- [x] Reject unsafe paths, duplicate entries/IDs, unknown JSON fields,
+      malformed geometry, missing assets, and image metadata mismatches.
+- [x] Load a synthetic C#-compatible archive and the available review
+      projects through the same public API.
+- [x] Keep UI opening and Rust annotation conversion for a later slice.
 
 ### 6. Correction, snapping, and camera — not started
 
@@ -703,6 +717,71 @@ text. No importing, saving, camera, or annotations were included.
   Clippy, formatting, native and WASM compilation, and a linked Trunk build.
 - User accepted Select-versus-Text behavior, inactive formatting, font-size
   scrolling, mixed text/shape layers, and the remaining 4C behavior.
+
+### 2026-10-14 — checkpoint 4D1 shared annotation layout
+
+- TDD red: backend-neutral rendering tests failed before a core rendering
+  module exposed annotation paths and text layout.
+- Generate rectangle, oval, line, arrow, mark, pen, and highlighter paths in
+  page coordinates without iced or platform dependencies. Keep color,
+  opacity, stroke width, joins, caps, fill, rotation, and layer order intact.
+- Make the iced canvas a thin adapter over that shared layout. Existing
+  clipping stays in the preview backend and all pixel-rendering regressions
+  remain green.
+- Keep text content, measured bounds, format, and rotation in shared layout.
+  Actual glyph shaping remains iced-specific; the PDF probe must expose any
+  metric mismatch or flatten the same shaped output rather than silently
+  repositioning text.
+- Add no dependency. The PDF backend decision remains deferred until 4D2.
+- Passed 150 all-feature tests and 103 dependency-light core tests, strict
+  Clippy, formatting, native and WASM compilation, and a linked Trunk build.
+- User confirmed that existing annotation rendering remains visually
+  unchanged. Start the PDF probe without reopening preview work.
+
+### 2026-10-14 — checkpoint 4D2 PDF probe and toolkit decision
+
+- TDD red: the PDF probe test failed before its feature and module existed.
+  Green: valid page geometry produces a one-page PDF and invalid dimensions
+  fail explicitly.
+- Add optional Krilla 0.8.2 with no default features. Translate the shared
+  paths, fills, strokes, joins, caps, colors, rotations, and opacity directly;
+  do not duplicate annotation geometry in the PDF adapter.
+- Reject text with `TextRequiresFlattening`. Iced/cosmic-text owns current
+  font fallback, shaping, and measured bounds; reshaping with another engine
+  could move or wrap text. Imported page images are likewise absent from this
+  vector-only probe rather than silently rendered differently.
+- Keep iced. It has passed the required desktop interactions, inline editing,
+  shared layer rendering, native CI, and WASM compilation. It need not be the
+  PDF serializer. Phase 5 should flatten the complete page with matching text
+  layout, then use the PDF library as the container.
+- Passed 153 all-feature tests, 103 dependency-light core tests, strict
+  Clippy, formatting, all-feature WASM compilation, and a linked Trunk build.
+
+### 2026-10-14 — checkpoint 5A safe project loading
+
+- User confirmed the Phase 4 host tests and application startup before this
+  slice began.
+- TDD red: the archive tests failed before the project module existed. Green:
+  six focused checks cover compatible data, hostile names, normalized-name
+  collisions, unknown fields, model limits, geometry, assets, and manifest
+  size.
+- Mirror schema version 1 as a separate lossless project model. Preserve all
+  crop, filter, annotation, style, transform, identity, and timestamp data;
+  do not prematurely force normalized C# geometry into the Rust editor model.
+- Bound entry count, compressed and expanded sizes, manifest and image bytes,
+  decoded pixels, pages, annotations, ink points, and UTF-16 text lengths.
+  Reject non-regular/unsafe entries, duplicate entries or IDs, malformed JSON,
+  invalid transforms, off-page objects, and asset metadata mismatches.
+- Load both real C# review projects through the same public API used by tests.
+  Their legacy computed JSON members and omitted default text fields remain
+  compatible.
+- Add only pure-Rust ZIP/JSON/schema dependencies. All-feature WASM compilation
+  and the linked Trunk build remain green.
+- Passed 159 all-feature tests, 109 dependency-light core tests, strict
+  Clippy, formatting, all-feature WASM compilation, and a linked Trunk build.
+- UI opening and conversion into editable Rust pages remain deliberately out
+  of this trust-boundary slice. User confirmed the host test suite remains
+  green, so 5A is accepted.
 
 ## References
 

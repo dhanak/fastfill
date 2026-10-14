@@ -1,5 +1,5 @@
 use super::{
-    CanvasLayer, CanvasState, PageCanvas, draw_group_member,
+    CanvasLayer, CanvasState, PageCanvas, draw_annotation, draw_group_member,
     draw_group_selection, draw_marquee, draw_selection, draw_shape, draw_text,
     draw_text_selection, draw_text_underline, page_viewport,
 };
@@ -169,15 +169,19 @@ impl canvas::Program<Message> for PageCanvas<'_> {
         match self.layer {
             CanvasLayer::Annotation(annotation) => {
                 match annotation {
-                    AnnotationRef::Shape(index, annotation)
+                    AnnotationRef::Shape(index, _)
                         if !self.annotations.is_edited(index) =>
                     {
-                        draw_shape(&mut frame, view, annotation, view_scale);
+                        draw_annotation(
+                            &mut frame, view, annotation, view_scale,
+                        );
                     }
-                    AnnotationRef::Text(index, annotation)
+                    AnnotationRef::Text(index, _)
                         if !self.annotations.is_text_edited(index) =>
                     {
-                        draw_text(&mut frame, view, annotation, view_scale);
+                        draw_annotation(
+                            &mut frame, view, annotation, view_scale,
+                        );
                     }
                     AnnotationRef::Shape(_, _) | AnnotationRef::Text(_, _) => {}
                 }

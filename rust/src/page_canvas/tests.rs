@@ -2,8 +2,7 @@ use super::clipping::{
     clip_polygon_to_rectangle, clip_segment, clipped_closed_polyline_runs,
     clipped_polyline_runs,
 };
-use super::render::mark_points;
-use fastfill_rust::annotations::{ShapeKind, arrowhead_points};
+use fastfill_rust::annotations::arrowhead_points;
 use fastfill_rust::geometry::Point as PagePoint;
 use iced::{Point, Rectangle};
 
@@ -79,22 +78,6 @@ fn arrowhead_dimensions_do_not_depend_on_direction_or_box_aspect() {
         let diagonal = (diagonal.x - end.x).hypot(diagonal.y - end.y);
         assert!((horizontal - diagonal).abs() < 0.001);
     }
-}
-
-#[test]
-fn mark_points_fill_their_selection_bounds() {
-    let bounds =
-        Rectangle::new(Point::new(10.0, 20.0), iced::Size::new(100.0, 80.0));
-    let check = mark_points(ShapeKind::Checkmark, bounds);
-    assert_eq!(check[0], Point::new(10.0, 56.0));
-    assert_eq!(check[1], Point::new(46.0, 100.0));
-    assert_eq!(check[2], Point::new(110.0, 20.0));
-
-    let cross = mark_points(ShapeKind::Cross, bounds);
-    assert_eq!(cross[0], Point::new(10.0, 20.0));
-    assert_eq!(cross[1], Point::new(110.0, 100.0));
-    assert_eq!(cross[2], Point::new(110.0, 20.0));
-    assert_eq!(cross[3], Point::new(10.0, 100.0));
 }
 
 #[test]

@@ -10,6 +10,13 @@ const MAX_IMAGE_DIMENSION: u32 = 50_000_000;
 pub struct ImageInfo {
     pub width: u32,
     pub height: u32,
+    pub format: ImageFormatKind,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ImageFormatKind {
+    Jpeg,
+    Png,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -84,7 +91,15 @@ pub fn validate_image(bytes: &[u8]) -> Result<ImageInfo, ImageInputError> {
         .decode()
         .map_err(|_| ImageInputError::InvalidData)?;
 
-    Ok(ImageInfo { width, height })
+    Ok(ImageInfo {
+        width,
+        height,
+        format: match format {
+            ImageFormat::Jpeg => ImageFormatKind::Jpeg,
+            ImageFormat::Png => ImageFormatKind::Png,
+            _ => unreachable!("unsupported formats were rejected"),
+        },
+    })
 }
 
 fn decode_limits() -> Limits {

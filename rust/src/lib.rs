@@ -4,3 +4,7 @@ pub mod annotations;
 pub mod geometry;
 pub mod image_input;
 pub mod interaction;
+#[cfg(feature = "pdf")]
+pub mod pdf_probe;
+pub mod project;
+pub mod rendering;

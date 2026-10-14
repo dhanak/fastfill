@@ -10,7 +10,7 @@ mod program;
 mod render;
 mod selection;
 
-use render::{draw_shape, draw_text, draw_text_underline};
+use render::{draw_annotation, draw_shape, draw_text, draw_text_underline};
 use selection::{
     draw_group_member, draw_group_selection, draw_marquee, draw_selection,
     draw_text_selection,

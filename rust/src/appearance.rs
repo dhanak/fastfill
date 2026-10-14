@@ -27,14 +27,8 @@ pub(crate) fn page_shadow() -> Color {
 }
 
 pub(crate) fn annotation_color(color: AnnotationColor) -> Color {
-    match color {
-        AnnotationColor::Black => Color::BLACK,
-        AnnotationColor::White => Color::WHITE,
-        AnnotationColor::Red => Color::from_rgb8(220, 32, 32),
-        AnnotationColor::Blue => accent(),
-        AnnotationColor::Green => Color::from_rgb8(0, 160, 72),
-        AnnotationColor::Yellow => Color::from_rgb8(245, 196, 0),
-    }
+    let [red, green, blue] = color.rgb();
+    Color::from_rgb8(red, green, blue)
 }
 
 pub(crate) fn text_font(format: TextFormat) -> Font {

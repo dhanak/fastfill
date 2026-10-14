@@ -57,7 +57,8 @@ jobs:
         run: |
           rustup toolchain install 1.99.0 --profile minimal
           rustup target add --toolchain 1.99.0 wasm32-unknown-unknown
-      - name: Check WASM GUI
+      - name: Check WASM GUI and PDF probe
         run: >-
           cargo +1.99.0 check
+          --all-features
           --target wasm32-unknown-unknown

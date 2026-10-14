@@ -11,6 +11,20 @@ pub enum AnnotationColor {
     Yellow,
 }
 
+impl AnnotationColor {
+    #[must_use]
+    pub const fn rgb(self) -> [u8; 3] {
+        match self {
+            Self::Black => [0, 0, 0],
+            Self::White => [255, 255, 255],
+            Self::Red => [220, 32, 32],
+            Self::Blue => [0, 102, 204],
+            Self::Green => [0, 160, 72],
+            Self::Yellow => [245, 196, 0],
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AnnotationStyle {
     pub color: AnnotationColor,
