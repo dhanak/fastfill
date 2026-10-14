@@ -1,7 +1,6 @@
 use super::text::measure_text;
 use super::{FastFill, ImagePicker, Message, TEXT_EDITOR_ID, page_size};
-use crate::picker::{ImportedImage, pick_image};
-use fastfill_rust::annotations::{Annotations, DragModifiers, Pointer, Tool};
+use fastfill_rust::annotations::{DragModifiers, Pointer, Tool};
 use fastfill_rust::geometry::Point as PagePoint;
 use iced::widget::text_editor;
 use iced::{Task, keyboard};
@@ -40,50 +39,45 @@ pub(super) fn shortcut_message(
 
 impl FastFill {
     pub(super) fn cancel_interaction(&mut self) {
-        self.annotations.cancel();
+        self.annotations_mut().cancel();
+        self.dragged_page = None;
         self.input_epoch = self.input_epoch.wrapping_add(1);
     }
 
-    fn pick_image(&mut self) -> Task<Message> {
-        self.image_picker = ImagePicker::Picking;
-        self.status = "Selecting an image…".into();
-        self.status_is_error = false;
-        Task::perform(pick_image(), Message::ImagePicked)
-    }
-
-    fn accept_text(&mut self) {
+    pub(super) fn accept_text(&mut self) {
         self.sync_text();
-        if self.annotations.accept_text() {
+        if self.annotations_mut().accept_text() {
             self.input_epoch = self.input_epoch.wrapping_add(1);
         }
     }
 
     fn sync_text(&mut self) {
-        let Some((_, _, format, scale)) = self.annotations.text_edit() else {
+        let Some((_, _, format, scale)) = self.annotations().text_edit() else {
             return;
         };
         let content = self.text_content.text();
         let size = measure_text(&content, format, scale);
-        self.annotations.update_text(content, size);
+        self.annotations_mut().update_text(content, size);
     }
 
     fn set_text_format(&mut self, format: super::TextFormat) {
-        if self.annotations.has_text_edit() {
-            if self.annotations.set_text_format(format) {
+        if self.annotations().has_text_edit() {
+            if self.annotations_mut().set_text_format(format) {
                 self.sync_text();
             }
         } else if let Some(annotation) =
-            self.annotations.selected_text_annotation()
+            self.annotations().selected_text_annotation()
         {
             let size = measure_text(&annotation.text, format, 1.0);
-            self.annotations.set_selected_text_format(format, size);
-        } else if self.annotations.set_text_format(format) {
+            self.annotations_mut()
+                .set_selected_text_format(format, size);
+        } else if self.annotations_mut().set_text_format(format) {
             self.sync_text();
         }
     }
 
     fn start_text_editor(&mut self) -> Task<Message> {
-        let Some((content, ..)) = self.annotations.text_edit() else {
+        let Some((content, ..)) = self.annotations().text_edit() else {
             return Task::none();
         };
         self.text_content = text_editor::Content::with_text(content);
@@ -101,8 +95,8 @@ impl FastFill {
         point: PagePoint,
         square: bool,
     ) -> Task<Message> {
-        self.annotations.finish(pointer, point, square);
-        if self.annotations.has_text_edit() {
+        self.annotations_mut().finish(pointer, point, square);
+        if self.annotations().has_text_edit() {
             self.start_text_editor()
         } else {
             Task::none()
@@ -110,26 +104,30 @@ impl FastFill {
     }
 
     fn undo(&mut self) {
-        if self.image_picker == ImagePicker::Idle && self.annotations.undo() {
+        if self.image_picker == ImagePicker::Idle
+            && self.annotations_mut().undo()
+        {
             self.input_epoch = self.input_epoch.wrapping_add(1);
         }
     }
 
     fn redo(&mut self) {
-        if self.image_picker == ImagePicker::Idle && self.annotations.redo() {
+        if self.image_picker == ImagePicker::Idle
+            && self.annotations_mut().redo()
+        {
             self.input_epoch = self.input_epoch.wrapping_add(1);
         }
     }
 
     fn reset_rotation(&mut self) {
         if self.image_picker == ImagePicker::Idle {
-            self.annotations.reset_rotation();
+            self.annotations_mut().reset_rotation();
         }
     }
 
     fn adjust_thickness(&mut self, delta: f32) {
-        if let Some(style) = self.annotations.current_style() {
-            self.annotations.set_stroke_width(
+        if let Some(style) = self.annotations().current_style() {
+            self.annotations_mut().set_stroke_width(
                 (style.stroke_width + delta).clamp(1.0, 20.0),
             );
         }
@@ -138,8 +136,8 @@ impl FastFill {
     fn ask_delete_all(&mut self) {
         self.accept_text();
         if self.image_picker == ImagePicker::Idle
-            && self.annotations.active_pointer().is_none()
-            && !self.annotations.is_empty()
+            && self.annotations().active_pointer().is_none()
+            && !self.annotations().is_empty()
         {
             self.confirm_delete_all = true;
         }
@@ -152,45 +150,18 @@ impl FastFill {
         scale: f32,
     ) {
         if self.image_picker == ImagePicker::Idle {
-            self.annotations.begin_interaction(
-                pointer,
-                point,
-                page_size(self),
-                scale,
-                self.modifiers,
-            );
-        }
-    }
-
-    fn image_picked(&mut self, result: Result<Option<ImportedImage>, String>) {
-        self.image_picker = ImagePicker::Idle;
-        match result {
-            Ok(Some(image)) => {
-                self.cancel_interaction();
-                self.status = format!(
-                    "Opened {} ({} × {} px)",
-                    image.name, image.size.width, image.size.height,
-                );
-                self.page = Some(image);
-                self.navigation.fit();
-                let tool = self.annotations.tool();
-                self.annotations = Annotations::default();
-                self.annotations.set_tool(tool);
-                self.status_is_error = false;
-            }
-            Ok(None) => {
-                self.status = "Open canceled.".into();
-                self.status_is_error = false;
-            }
-            Err(error) => {
-                self.status = error;
-                self.status_is_error = true;
-            }
+            let size = page_size(self);
+            let modifiers = self.modifiers;
+            self.annotations_mut()
+                .begin_interaction(pointer, point, size, scale, modifiers);
         }
     }
 }
 
 pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
+    if let Some(task) = super::pages::update(state, &message) {
+        return task;
+    }
     if handle_delete_confirmation(state, &message)
         || handle_navigation(state, &message)
         || handle_text_format(state, &message)
@@ -198,54 +169,37 @@ pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
         return Task::none();
     }
     match message {
-        Message::OpenImage => {
-            if state.image_picker == ImagePicker::Idle {
-                state.accept_text();
-                state.cancel_interaction();
-                if state.annotations.is_empty() {
-                    return state.pick_image();
-                }
-                state.image_picker = ImagePicker::ConfirmReplace;
-            }
-        }
-        Message::ReplacePage => {
-            if state.image_picker == ImagePicker::ConfirmReplace {
-                return state.pick_image();
-            }
-        }
-        Message::KeepPage => state.image_picker = ImagePicker::Idle,
-        Message::ImagePicked(result) => state.image_picked(result),
         Message::SetTool(tool) => {
             state.accept_text();
             state.cancel_interaction();
-            state.annotations.set_tool(tool);
+            state.annotations_mut().set_tool(tool);
         }
         Message::Undo => state.undo(),
         Message::Redo => state.redo(),
         Message::ResetRotation => state.reset_rotation(),
         Message::DeleteSelected => {
             if state.image_picker == ImagePicker::Idle {
-                state.annotations.delete_selected();
+                state.annotations_mut().delete_selected();
             }
         }
         Message::AskDeleteAll => state.ask_delete_all(),
         Message::SendToBack => {
             if state.image_picker == ImagePicker::Idle {
-                state.annotations.send_selected_to_back();
+                state.annotations_mut().send_selected_to_back();
             }
         }
         Message::BringToFront => {
             if state.image_picker == ImagePicker::Idle {
-                state.annotations.bring_selected_to_front();
+                state.annotations_mut().bring_selected_to_front();
             }
         }
         Message::SetColor(color) => {
-            state.annotations.set_color(color);
+            state.annotations_mut().set_color(color);
         }
         Message::AdjustThickness(delta) => state.adjust_thickness(delta),
         Message::ToggleFill => {
-            if let Some(filled) = state.annotations.current_fill() {
-                state.annotations.set_filled(!filled);
+            if let Some(filled) = state.annotations().current_fill() {
+                state.annotations_mut().set_filled(!filled);
             }
         }
         Message::TextAction(action) => state.edit_text(action),
@@ -254,14 +208,14 @@ pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
             return draw_pressed(state, pointer, point, scale);
         }
         Message::DrawMoved(pointer, point, square) => {
-            state.annotations.drag(pointer, point, square);
+            state.annotations_mut().drag(pointer, point, square);
         }
         Message::DrawReleased(pointer, point, square) => {
             return state.finish_interaction(pointer, point, square);
         }
         Message::ModifiersChanged(modifiers) => {
             state.modifiers = modifiers;
-            state.annotations.constrain_square(modifiers.square);
+            state.annotations_mut().constrain_square(modifiers.square);
         }
         Message::CancelInteraction => {
             state.cancel_interaction();
@@ -285,14 +239,29 @@ pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
         | Message::SetTextSize(_)
         | Message::ToggleTextBold
         | Message::ToggleTextItalic
-        | Message::ToggleTextUnderline => {}
+        | Message::ToggleTextUnderline
+        | Message::AddPage
+        | Message::AskReplacePage
+        | Message::ConfirmReplacePage
+        | Message::KeepPage
+        | Message::ImagePicked(..)
+        | Message::SelectPage(_)
+        | Message::MovePageLeft
+        | Message::MovePageRight
+        | Message::PageDragStarted(_)
+        | Message::PageDragEntered(_)
+        | Message::PageDragFinished(_)
+        | Message::PageDragCanceled
+        | Message::ScrollPages(_)
+        | Message::AskDeletePage
+        | Message::ConfirmDeletePage => {}
     }
 
     Task::none()
 }
 
 fn handle_text_format(state: &mut FastFill, message: &Message) -> bool {
-    let Some(mut format) = state.annotations.current_text_format() else {
+    let Some(mut format) = state.annotations().current_text_format() else {
         return false;
     };
     match message {
@@ -318,24 +287,18 @@ fn draw_pressed(
         return Task::none();
     }
     state.accept_text();
-    match state.annotations.tool() {
+    let size = page_size(state);
+    match state.annotations().tool() {
         Tool::Text => {
-            if !state.annotations.begin_text_edit(
-                point,
-                page_size(state),
-                scale,
-            ) {
-                state.annotations.begin_text(point, page_size(state), scale);
+            if !state.annotations_mut().begin_text_edit(point, size, scale) {
+                state.annotations_mut().begin_text(point, size, scale);
             }
             return state.start_text_editor();
         }
         Tool::Select
-            if state.annotations.begin_text_move(
-                pointer,
-                point,
-                page_size(state),
-                scale,
-            ) => {}
+            if state
+                .annotations_mut()
+                .begin_text_move(pointer, point, size, scale) => {}
         _ => state.begin_interaction(pointer, point, scale),
     }
     Task::none()
@@ -348,7 +311,7 @@ fn handle_delete_confirmation(state: &mut FastFill, message: &Message) -> bool {
     match message {
         Message::ConfirmDeleteAll => {
             state.confirm_delete_all = false;
-            state.annotations.delete_all();
+            state.annotations_mut().delete_all();
         }
         Message::KeepAll | Message::CancelInteraction => {
             state.confirm_delete_all = false;
@@ -377,7 +340,7 @@ fn handle_navigation(state: &mut FastFill, message: &Message) -> bool {
         }
         Message::Pan(delta) => {
             state.accept_text();
-            state.annotations.cancel();
+            state.annotations_mut().cancel();
             state.navigation.pan_by(*delta);
         }
         Message::ZoomAt {
@@ -386,7 +349,7 @@ fn handle_navigation(state: &mut FastFill, message: &Message) -> bool {
             viewport,
         } => {
             state.accept_text();
-            state.annotations.cancel();
+            state.annotations_mut().cancel();
             state.navigation.zoom_at(
                 *factor,
                 *anchor,
@@ -396,7 +359,7 @@ fn handle_navigation(state: &mut FastFill, message: &Message) -> bool {
         }
         Message::TouchGesture { delta, viewport } => {
             state.accept_text();
-            state.annotations.cancel();
+            state.annotations_mut().cancel();
             state.navigation.zoom_at(
                 delta.zoom_factor,
                 delta.zoom_anchor,

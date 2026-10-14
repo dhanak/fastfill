@@ -13,8 +13,8 @@ use std::io::{Read, Seek};
 use std::path::Path;
 use zip::ZipArchive;
 
-const MAXIMUM_MANIFEST_BYTES: u64 = 5 * 1024 * 1024;
-const MAXIMUM_ARCHIVE_CONTENT_BYTES: u64 = 600 * 1024 * 1024;
+pub(super) const MAXIMUM_MANIFEST_BYTES: u64 = 5 * 1024 * 1024;
+pub(super) const MAXIMUM_ARCHIVE_CONTENT_BYTES: u64 = 600 * 1024 * 1024;
 const MAXIMUM_ENTRIES: usize = 64;
 
 #[derive(Clone, Debug)]
@@ -226,7 +226,7 @@ where
     Ok(bytes)
 }
 
-fn validate_asset(
+pub(super) fn validate_asset(
     page: &super::model::ProjectPage,
     info: ImageInfo,
 ) -> Result<(), ProjectLoadError> {

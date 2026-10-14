@@ -12,7 +12,7 @@ use fastfill_rust::annotations::{
 use fastfill_rust::geometry::{Point as PagePoint, Rect as PageRect};
 use iced::widget::{
     Row, button, canvas, column, container, mouse_area, pick_list, responsive,
-    row, text, text_editor,
+    row, scrollable, text, text_editor,
 };
 use iced::{
     Background, Border, Color, Element, Fill, Padding, keyboard, mouse,
@@ -20,7 +20,7 @@ use iced::{
 
 fn heading(state: &FastFill) -> Element<'_, Message> {
     let status = if state.status.is_empty() {
-        "Open a PNG or JPEG, or draw on the blank page."
+        "Add a PNG or JPEG, or draw on the blank page."
     } else {
         &state.status
     };
@@ -41,7 +41,22 @@ fn heading(state: &FastFill) -> Element<'_, Message> {
                     text("Replace page and discard its annotations?")
                         .width(Fill),
                     button("Keep page").on_press(Message::KeepPage),
-                    button("Replace").on_press(Message::ReplacePage),
+                    button("Replace").on_press(Message::ConfirmReplacePage),
+                ]
+                .align_y(iced::Alignment::Center)
+                .spacing(8),
+            )
+            .padding(8)
+            .style(container::warning),
+        );
+    }
+    if state.confirm_delete_page {
+        heading = heading.push(
+            container(
+                row![
+                    text("Delete this page and its annotations?").width(Fill),
+                    button("Keep page").on_press(Message::KeepPage),
+                    button("Delete page").on_press(Message::ConfirmDeletePage),
                 ]
                 .align_y(iced::Alignment::Center)
                 .spacing(8),
@@ -86,7 +101,7 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
         .into()
     });
 
-    column![heading(state), body]
+    column![heading(state), row![super::rail::view(state), body]]
         .width(Fill)
         .height(Fill)
         .into()
@@ -99,30 +114,24 @@ fn control_row(state: &FastFill, viewport: PageRect) -> Element<'_, Message> {
         viewport,
     };
     toolbar_row(row![
-        button("Open image")
-            .on_press_maybe(
-                (state.image_picker == ImagePicker::Idle)
-                    .then_some(Message::OpenImage),
-            )
-            .height(CONTROL_HEIGHT),
         button("Undo")
             .on_press_maybe(
                 (state.image_picker == ImagePicker::Idle
-                    && state.annotations.can_undo())
+                    && state.annotations().can_undo())
                 .then_some(Message::Undo),
             )
             .height(CONTROL_HEIGHT),
         button("Redo")
             .on_press_maybe(
                 (state.image_picker == ImagePicker::Idle
-                    && state.annotations.can_redo())
+                    && state.annotations().can_redo())
                 .then_some(Message::Redo),
             )
             .height(CONTROL_HEIGHT),
         button("Rotation 0°")
             .on_press_maybe(
                 (state.image_picker == ImagePicker::Idle
-                    && state.annotations.can_reset_rotation())
+                    && state.annotations().can_reset_rotation())
                 .then_some(Message::ResetRotation),
             )
             .height(CONTROL_HEIGHT),
@@ -137,7 +146,7 @@ fn control_row(state: &FastFill, viewport: PageRect) -> Element<'_, Message> {
 }
 
 fn tool_row(state: &FastFill, available_width: f32) -> Element<'_, Message> {
-    let selected = state.annotations.tool();
+    let selected = state.annotations().tool();
     let mut tools = Row::new();
     for tool in Tool::ALL {
         tools = tools.push(tool_button(tool, selected));
@@ -147,9 +156,9 @@ fn tool_row(state: &FastFill, available_width: f32) -> Element<'_, Message> {
             button("Delete")
                 .on_press_maybe(
                     (state.image_picker == ImagePicker::Idle
-                        && state.annotations.has_selection()
-                        && !state.annotations.has_text_edit()
-                        && state.annotations.active_pointer().is_none())
+                        && state.annotations().has_selection()
+                        && !state.annotations().has_text_edit()
+                        && state.annotations().active_pointer().is_none())
                     .then_some(Message::DeleteSelected),
                 )
                 .height(CONTROL_HEIGHT),
@@ -158,8 +167,8 @@ fn tool_row(state: &FastFill, available_width: f32) -> Element<'_, Message> {
             button("Delete all")
                 .on_press_maybe(
                     (state.image_picker == ImagePicker::Idle
-                        && !state.annotations.is_empty()
-                        && state.annotations.active_pointer().is_none())
+                        && !state.annotations().is_empty()
+                        && state.annotations().active_pointer().is_none())
                     .then_some(Message::AskDeleteAll),
                 )
                 .height(CONTROL_HEIGHT),
@@ -168,9 +177,9 @@ fn tool_row(state: &FastFill, available_width: f32) -> Element<'_, Message> {
             button("To back")
                 .on_press_maybe(
                     (state.image_picker == ImagePicker::Idle
-                        && state.annotations.has_selection()
-                        && !state.annotations.has_text_edit()
-                        && state.annotations.active_pointer().is_none())
+                        && state.annotations().has_selection()
+                        && !state.annotations().has_text_edit()
+                        && state.annotations().active_pointer().is_none())
                     .then_some(Message::SendToBack),
                 )
                 .height(CONTROL_HEIGHT),
@@ -179,26 +188,31 @@ fn tool_row(state: &FastFill, available_width: f32) -> Element<'_, Message> {
             button("To front")
                 .on_press_maybe(
                     (state.image_picker == ImagePicker::Idle
-                        && state.annotations.has_selection()
-                        && !state.annotations.has_text_edit()
-                        && state.annotations.active_pointer().is_none())
+                        && state.annotations().has_selection()
+                        && !state.annotations().has_text_edit()
+                        && state.annotations().active_pointer().is_none())
                     .then_some(Message::BringToFront),
                 )
                 .height(CONTROL_HEIGHT),
         );
     if available_width >= 520.0 {
         tools = tools.push(
-            text(format!("{} annotations", state.annotations.len())).size(14),
+            text(format!("{} annotations", state.annotations().len())).size(14),
         );
     }
-    toolbar_row(tools).into()
+    scrollable(toolbar_row(tools))
+        .direction(scrollable::Direction::Horizontal(
+            scrollable::Scrollbar::new(),
+        ))
+        .height(TOOLBAR_ROW_HEIGHT)
+        .into()
 }
 
 fn style_row(state: &FastFill) -> Element<'_, Message> {
-    if let Some(format) = state.annotations.current_text_format() {
+    if let Some(format) = state.annotations().current_text_format() {
         return text_style_row(format);
     }
-    let Some(style) = state.annotations.current_style() else {
+    let Some(style) = state.annotations().current_style() else {
         return container(iced::widget::Space::new())
             .height(TOOLBAR_ROW_HEIGHT)
             .into();
@@ -224,15 +238,15 @@ fn style_row(state: &FastFill) -> Element<'_, Message> {
             )
             .height(CONTROL_HEIGHT),
     ];
-    if state.annotations.fill_available() {
+    if state.annotations().fill_available() {
         styles = styles.push(
-            button(if state.annotations.current_fill() == Some(true) {
+            button(if state.annotations().current_fill() == Some(true) {
                 "Fill ✓"
             } else {
                 "Fill"
             })
             .on_press(Message::ToggleFill)
-            .style(if state.annotations.current_fill() == Some(true) {
+            .style(if state.annotations().current_fill() == Some(true) {
                 button::primary
             } else {
                 button::secondary
@@ -341,13 +355,15 @@ pub(super) fn document(state: &FastFill) -> Element<'_, Message> {
     responsive(move |available| {
         let page_size = page_size(state);
         let page = PageCanvas {
-            image: state.page.as_ref(),
+            image: state.image(),
             navigation: state.navigation,
             page_size,
-            annotations: &state.annotations,
+            annotations: state.annotations(),
             input_epoch: state.input_epoch,
             input_enabled: state.image_picker == ImagePicker::Idle
-                && !state.confirm_delete_all,
+                && !state.confirm_delete_all
+                && !state.confirm_delete_page
+                && state.dragged_page.is_none(),
             modifiers: state.modifiers,
             layer: CanvasLayer::Overlay,
         };
@@ -359,7 +375,7 @@ pub(super) fn document(state: &FastFill) -> Element<'_, Message> {
         };
         let mut layers =
             iced::widget::stack![canvas(background).width(Fill).height(Fill),];
-        for annotation in state.annotations.ordered_annotations() {
+        for annotation in state.annotations().ordered_annotations() {
             let annotation = PageCanvas {
                 layer: CanvasLayer::Annotation(annotation),
                 input_enabled: false,
@@ -368,7 +384,7 @@ pub(super) fn document(state: &FastFill) -> Element<'_, Message> {
             layers = layers.push(canvas(annotation).width(Fill).height(Fill));
         }
         layers = layers.push(canvas(page).width(Fill).height(Fill));
-        if let Some((_, bounds, format, _)) = state.annotations.text_edit()
+        if let Some((_, bounds, format, _)) = state.annotations().text_edit()
             && let Some(view) =
                 state.navigation.view(page_size, page_viewport(available))
         {

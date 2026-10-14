@@ -1,4 +1,6 @@
 mod controller;
+mod pages;
+mod rail;
 mod text;
 mod view;
 
@@ -19,14 +21,15 @@ use fastfill_rust::geometry::{Rect as PageRect, Size as PageSize};
 use fastfill_rust::interaction::GestureDelta;
 use iced::keyboard;
 #[cfg(test)]
-use iced::touch;
-#[cfg(test)]
 use iced::widget::canvas;
 #[cfg(test)]
 use iced::widget::image::Handle;
 use iced::widget::text_editor;
 #[cfg(test)]
-use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
+use iced::{Color, Point, Rectangle, Renderer, Theme};
+#[cfg(test)]
+use iced::{mouse, touch};
+use pages::{PageDrag, Pages};
 #[cfg(test)]
 use view::document;
 use view::view;
@@ -36,16 +39,39 @@ const TEXT_EDITOR_ID: &str = "inline-text-editor";
 
 #[derive(Default)]
 struct FastFill {
-    page: Option<ImportedImage>,
+    pages: Pages,
     navigation: Navigation,
-    annotations: Annotations,
     modifiers: DragModifiers,
     input_epoch: u64,
     image_picker: ImagePicker,
     status: String,
     status_is_error: bool,
     confirm_delete_all: bool,
+    confirm_delete_page: bool,
+    dragged_page: Option<PageDrag>,
+    page_scroll: f32,
+    image_directory: Option<std::path::PathBuf>,
     text_content: text_editor::Content,
+}
+
+impl FastFill {
+    fn image(&self) -> Option<&ImportedImage> {
+        self.pages.current().image.as_ref()
+    }
+
+    fn annotations(&self) -> &Annotations {
+        &self.pages.current().annotations
+    }
+
+    fn annotations_mut(&mut self) -> &mut Annotations {
+        &mut self.pages.current_mut().annotations
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PickPurpose {
+    Add,
+    Replace,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -53,15 +79,26 @@ enum ImagePicker {
     #[default]
     Idle,
     ConfirmReplace,
-    Picking,
+    Picking(PickPurpose),
 }
 
 #[derive(Clone, Debug)]
 pub(crate) enum Message {
-    OpenImage,
-    ReplacePage,
+    AddPage,
+    AskReplacePage,
+    ConfirmReplacePage,
     KeepPage,
-    ImagePicked(Result<Option<ImportedImage>, String>),
+    ImagePicked(PickPurpose, Result<Option<ImportedImage>, String>),
+    SelectPage(usize),
+    MovePageLeft,
+    MovePageRight,
+    PageDragStarted(usize),
+    PageDragEntered(usize),
+    PageDragFinished(usize),
+    PageDragCanceled,
+    ScrollPages(f32),
+    AskDeletePage,
+    ConfirmDeletePage,
     SetTool(Tool),
     Undo,
     Redo,
@@ -134,7 +171,7 @@ pub(crate) fn run() -> iced::Result {
 }
 
 fn page_size(state: &FastFill) -> PageSize {
-    state.page.as_ref().map_or(DEFAULT_PAGE, |page| page.size)
+    state.image().map_or(DEFAULT_PAGE, |page| page.size)
 }
 
 #[cfg(test)]

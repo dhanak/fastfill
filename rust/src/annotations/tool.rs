@@ -104,7 +104,7 @@ impl Tool {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(super) struct ToolStyles(Vec<(Tool, AnnotationStyle)>);
 
 impl Default for ToolStyles {

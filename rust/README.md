@@ -36,7 +36,31 @@ to reach TCP port 24800. Trunk watches for changes, but browser auto-reload is
 disabled so the generated page never assumes the development machine is
 `localhost`; refresh the browser after a rebuild.
 
-Checkpoint 4C adds formatted, rotatable text to the annotation tools:
+Checkpoint 5C adds multiple image pages:
+
+- **Add image:** choose a PNG or JPEG. The first image uses the starter blank
+  page and asks before replacing its annotations. Subsequent images are
+  inserted after the active page. Limit: 20 pages. Native Add/Replace dialogs
+  remember the last successful import folder during the current run.
+- **Switch page:** click a thumbnail or choose a page number. Pending text is
+  accepted, unfinished shape edits are canceled, and the new page fits the
+  view. Each page keeps its annotations, selection, and undo/redo history.
+  The active tool and its default settings carry across pages.
+- **Reorder:** use ↑/↓ or drag any part of a thumbnail. Thumbnails rearrange
+  to preview the new order, with a blue frame and separated drop marker.
+  Release commits; dropping in empty space below the last page moves it to
+  the end. Escape, lost touch, or dropping outside the rail cancels. Scroll
+  with the mouse wheel or drag the scrollbar at the rail's right edge.
+- **Replace image:** replace the current page image. Annotated pages require
+  confirmation. Canceling the picker or choosing an invalid image preserves
+  the current page and its history.
+- **Delete page:** confirm removal of the current page and its annotations.
+  Deleting the last page leaves one blank editable page. Undo/Redo currently
+  applies to active-page annotations; page operations cannot yet be undone.
+
+Available annotation tools:
+
+The tool row scrolls horizontally in narrower windows.
 
 - **Rectangle:** drag with the left mouse button or one finger. The preview
   uses the chosen style immediately. Hold Ctrl to draw a square.
@@ -92,11 +116,9 @@ Checkpoint 4C adds formatted, rotatable text to the annotation tools:
 - Shapes stay attached to the page while zooming, panning, or resizing the
   window. Parts outside the page are clipped, while a small reachable part is
   kept on-page.
-- Opening another image asks before discarding annotations. Canceling the
-  picker or choosing an invalid image preserves the current page.
-
-Annotations and history are temporary. Mixed text/shape multi-selection,
-projects, and saving are not implemented. Minimal Linux or WASM environments
+Pages, annotations, and history are temporary. Mixed text/shape multi-selection
+and project open/save UI are not implemented. Schema-v1 archive load/save APIs
+are covered by automated compatibility tests. Minimal Linux or WASM environments
 without requested generic or italic fonts fall back to bundled Fira Sans.
 Android browser rendering is currently slow; native touchscreen performance
 still needs hardware testing.

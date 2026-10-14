@@ -1,11 +1,27 @@
 use super::geometry::{valid, valid_annotation_size};
 use super::{
-    AnnotationRef, Annotations, Draft, Layer, Pointer, ShapeAnnotation,
-    ShapeDraft, Snapshot, Tool,
+    AnnotationRef, AnnotationSettings, Annotations, Draft, Layer, Pointer,
+    ShapeAnnotation, ShapeDraft, Snapshot, Tool,
 };
 use crate::geometry::{Point, Rect, Size};
 
 impl Annotations {
+    #[must_use]
+    pub fn settings(&self) -> AnnotationSettings {
+        AnnotationSettings {
+            tool: self.tool,
+            styles: self.styles.clone(),
+            text_format: self.text_format,
+        }
+    }
+
+    pub fn apply_settings(&mut self, settings: &AnnotationSettings) {
+        self.cancel();
+        self.tool = settings.tool;
+        self.styles = settings.styles.clone();
+        self.text_format = settings.text_format;
+    }
+
     #[must_use]
     pub const fn tool(&self) -> Tool {
         self.tool

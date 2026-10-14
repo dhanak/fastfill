@@ -4,23 +4,34 @@ use fastfill_rust::image_input::ImageInfo;
 use fastfill_rust::image_input::MAX_IMAGE_BYTES;
 use fastfill_rust::image_input::{validate_image, validate_image_length};
 use iced::widget::image::Handle;
+use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ImportedImage {
     pub(crate) handle: Handle,
     pub(crate) name: String,
     pub(crate) size: PageSize,
+    pub(crate) directory: Option<PathBuf>,
 }
 
-pub(crate) async fn pick_image() -> Result<Option<ImportedImage>, String> {
-    let Some(file) = rfd::AsyncFileDialog::new()
+pub(crate) async fn pick_image(
+    directory: Option<PathBuf>,
+) -> Result<Option<ImportedImage>, String> {
+    let mut dialog = rfd::AsyncFileDialog::new()
         .set_title("Open image")
-        .add_filter("Image", &["png", "jpg", "jpeg"])
-        .pick_file()
-        .await
-    else {
+        .add_filter("Image", &["png", "jpg", "jpeg"]);
+    if let Some(directory) = directory.filter(|path| path.is_dir()) {
+        dialog = dialog.set_directory(directory);
+    }
+    let Some(file) = dialog.pick_file().await else {
         return Ok(None);
     };
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let directory = file.path().parent().map(std::path::Path::to_path_buf);
+    // Browsers do not expose the selected file's directory.
+    #[cfg(target_arch = "wasm32")]
+    let directory = None;
 
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -41,6 +52,7 @@ pub(crate) async fn pick_image() -> Result<Option<ImportedImage>, String> {
         handle: Handle::from_bytes(bytes),
         name,
         size: page_size_from_pixels(info),
+        directory,
     }))
 }
 

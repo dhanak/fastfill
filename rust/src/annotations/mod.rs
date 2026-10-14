@@ -62,3 +62,10 @@ pub struct Annotations {
     undo: Vec<Snapshot>,
     redo: Vec<Snapshot>,
 }
+
+#[derive(Clone, Debug)]
+pub struct AnnotationSettings {
+    tool: Tool,
+    styles: ToolStyles,
+    text_format: TextFormat,
+}

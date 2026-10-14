@@ -3,26 +3,31 @@ use super::*;
 #[test]
 fn undo_redo_messages_apply_only_to_committed_edits() {
     let mut state = annotated_page();
-    let rectangle = state.annotations.shapes()[0].clone();
+    let rectangle = state.annotations().shapes()[0].clone();
     let _ = update(&mut state, Message::Undo);
-    assert_eq!(state.annotations.shapes(), []);
+    assert_eq!(state.annotations().shapes(), []);
     let _ = update(&mut state, Message::Redo);
-    assert_eq!(state.annotations.shapes(), std::slice::from_ref(&rectangle),);
+    assert_eq!(
+        state.annotations().shapes(),
+        std::slice::from_ref(&rectangle),
+    );
 
-    state.annotations.begin_interaction(
+    state.annotations_mut().begin_interaction(
         Pointer::Mouse,
         PagePoint::new(30.0, 45.0),
         DEFAULT_PAGE,
         1.0,
         DragModifiers::default(),
     );
-    state
-        .annotations
-        .drag(Pointer::Mouse, PagePoint::new(40.0, 55.0), false);
-    let preview = state.annotations.preview();
+    state.annotations_mut().drag(
+        Pointer::Mouse,
+        PagePoint::new(40.0, 55.0),
+        false,
+    );
+    let preview = state.annotations().preview();
     let _ = update(&mut state, Message::Undo);
-    assert_eq!(state.annotations.preview(), preview);
-    assert_eq!(state.annotations.shapes(), [rectangle]);
+    assert_eq!(state.annotations().preview(), preview);
+    assert_eq!(state.annotations().shapes(), [rectangle]);
 }
 
 #[test]
@@ -60,12 +65,12 @@ fn plain_text_messages_accept_cancel_and_commit_on_click_away() {
     let _ =
         update(&mut state, Message::DrawPressed(Pointer::Mouse, first, 1.0));
     paste_text(&mut state, "Cancel me");
-    let first_bounds = state.annotations.text_preview().unwrap().bounds;
+    let first_bounds = state.annotations().text_preview().unwrap().bounds;
     assert_eq!(first_bounds.x, first.x);
     assert!(first_bounds.y < first.y);
     let _ = update(&mut state, Message::CancelInteraction);
-    assert_eq!(state.annotations.texts(), []);
-    assert!(!state.annotations.can_undo());
+    assert_eq!(state.annotations().texts(), []);
+    assert!(!state.annotations().can_undo());
 
     let _ =
         update(&mut state, Message::DrawPressed(Pointer::Mouse, first, 1.0));
@@ -74,13 +79,16 @@ fn plain_text_messages_accept_cancel_and_commit_on_click_away() {
         &mut state,
         Message::DrawPressed(Pointer::Mouse, second, 1.0),
     );
-    assert_eq!(state.annotations.texts()[0].text, "First");
-    assert_eq!(state.annotations.text_preview().unwrap().bounds.x, second.x,);
+    assert_eq!(state.annotations().texts()[0].text, "First");
+    assert_eq!(
+        state.annotations().text_preview().unwrap().bounds.x,
+        second.x,
+    );
 
     paste_text(&mut state, "Second");
     let _ = update(&mut state, Message::AcceptText);
-    assert_eq!(state.annotations.texts().len(), 2);
-    assert!(state.annotations.text_preview().is_none());
+    assert_eq!(state.annotations().texts().len(), 2);
+    assert!(state.annotations().text_preview().is_none());
 }
 
 #[test]
@@ -94,8 +102,8 @@ fn switching_tools_accepts_pending_text() {
     paste_text(&mut state, "Accepted");
 
     let _ = update(&mut state, Message::SetTool(Tool::Rectangle));
-    assert_eq!(state.annotations.texts()[0].text, "Accepted");
-    assert_eq!(state.annotations.tool(), Tool::Rectangle);
+    assert_eq!(state.annotations().texts()[0].text, "Accepted");
+    assert_eq!(state.annotations().tool(), Tool::Rectangle);
 }
 
 #[test]
@@ -113,14 +121,14 @@ fn multiline_text_reopens_from_text_and_selects_with_select_tool() {
         )),
     );
     paste_text(&mut state, "Second");
-    let preview = state.annotations.text_preview().unwrap();
+    let preview = state.annotations().text_preview().unwrap();
     assert_eq!(preview.text, "First\nSecond");
     assert!(preview.bounds.height > 24.0 * 1.3);
     let _ = update(&mut state, Message::AcceptText);
 
     let _ =
         update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
-    assert!(state.annotations.has_text_edit());
+    assert!(state.annotations().has_text_edit());
     let _ = update(&mut state, Message::CancelInteraction);
 
     let _ = update(&mut state, Message::SetTool(Tool::Select));
@@ -130,8 +138,8 @@ fn multiline_text_reopens_from_text_and_selects_with_select_tool() {
         &mut state,
         Message::DrawReleased(Pointer::Mouse, point, false),
     );
-    assert!(!state.annotations.has_text_edit());
-    assert!(state.annotations.selected_text_annotation().is_some());
+    assert!(!state.annotations().has_text_edit());
+    assert!(state.annotations().selected_text_annotation().is_some());
 }
 
 #[test]
@@ -143,7 +151,7 @@ fn text_format_messages_stay_pending_until_acceptance() {
         update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
     paste_text(&mut state, "Format me");
     let _ = update(&mut state, Message::AcceptText);
-    let original = state.annotations.texts()[0].clone();
+    let original = state.annotations().texts()[0].clone();
 
     let _ =
         update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
@@ -153,7 +161,7 @@ fn text_format_messages_stay_pending_until_acceptance() {
     let _ = update(&mut state, Message::ToggleTextItalic);
     let _ = update(&mut state, Message::ToggleTextUnderline);
     let _ = update(&mut state, Message::SetColor(AnnotationColor::Blue));
-    let preview = state.annotations.text_preview().unwrap();
+    let preview = state.annotations().text_preview().unwrap();
     assert_eq!(preview.format.typeface, TextTypeface::Serif);
     assert_eq!(preview.format.font_size, 40.0);
     assert!(preview.format.bold);
@@ -161,36 +169,35 @@ fn text_format_messages_stay_pending_until_acceptance() {
     assert!(preview.format.underline);
     assert_eq!(preview.format.color, AnnotationColor::Blue);
     assert!(preview.bounds.height > original.bounds.height);
-    assert_eq!(state.annotations.texts(), std::slice::from_ref(&original),);
+    assert_eq!(state.annotations().texts(), std::slice::from_ref(&original),);
 
     let _ = update(&mut state, Message::CancelInteraction);
-    assert_eq!(state.annotations.texts(), [original]);
+    assert_eq!(state.annotations().texts(), [original]);
 }
 
 #[test]
 fn accepted_text_requires_confirmation_before_page_replacement() {
     let mut state = FastFill::default();
-    state.annotations.set_tool(Tool::Text);
-    state.annotations.begin_text(
-        PagePoint::new(300.0, 400.0),
-        page_size(&state),
-        1.0,
-    );
+    state.annotations_mut().set_tool(Tool::Text);
+    let page = page_size(&state);
     state
-        .annotations
+        .annotations_mut()
+        .begin_text(PagePoint::new(300.0, 400.0), page, 1.0);
+    state
+        .annotations_mut()
         .update_text("Keep me", PageSize::new(100.0, 31.2));
-    state.annotations.accept_text();
+    state.annotations_mut().accept_text();
 
-    let _ = update(&mut state, Message::OpenImage);
+    let _ = update(&mut state, Message::AskReplacePage);
     assert_eq!(state.image_picker, ImagePicker::ConfirmReplace);
-    assert_eq!(state.annotations.texts()[0].text, "Keep me");
+    assert_eq!(state.annotations().texts()[0].text, "Keep me");
 }
 
 #[test]
 fn select_drag_is_pending_escape_reverts_and_delete_removes_selection() {
     let mut state = annotated_page();
     let _ = update(&mut state, Message::SetTool(Tool::Select));
-    let original = state.annotations.shapes()[0].clone();
+    let original = state.annotations().shapes()[0].clone();
     let start = screen_point(&state, PagePoint::new(30.0, 45.0));
     let end = Point::new(start.x + 20.0, start.y + 30.0);
     let mut canvas_state = CanvasState::default();
@@ -206,24 +213,24 @@ fn select_drag_is_pending_escape_reverts_and_delete_removes_selection() {
         &canvas::Event::Mouse(mouse::Event::CursorMoved { position: end }),
         end,
     );
-    assert!(state.annotations.preview().is_some());
-    assert_eq!(state.annotations.shapes()[0], original);
+    assert!(state.annotations().preview().is_some());
+    assert_eq!(state.annotations().shapes()[0], original);
     let _ = update(&mut state, Message::CancelInteraction);
-    assert_eq!(state.annotations.shapes()[0], original);
+    assert_eq!(state.annotations().shapes()[0], original);
     let _ = update(&mut state, Message::DeleteSelected);
-    assert_eq!(state.annotations.shapes(), []);
+    assert_eq!(state.annotations().shapes(), []);
 }
 
 #[test]
 fn rectangle_mode_can_resize_selected_object_through_its_handle() {
     let mut state = annotated_page();
-    let original = state.annotations.shapes()[0].clone();
+    let original = state.annotations().shapes()[0].clone();
     let view = state
         .navigation
         .view(DEFAULT_PAGE, page_viewport(CANVAS.size()))
         .unwrap();
     let scale = view.page_rect().width / DEFAULT_PAGE.width;
-    let controls = state.annotations.selection_bounds(scale).unwrap();
+    let controls = state.annotations().selection_bounds(scale).unwrap();
     let handle = ResizeCorner::BottomRight.position(controls);
     let start = screen_point(&state, handle);
     let end = Point::new(start.x + 20.0, start.y + 30.0);
@@ -242,8 +249,8 @@ fn rectangle_mode_can_resize_selected_object_through_its_handle() {
         )),
         end,
     );
-    assert_eq!(state.annotations.shapes().len(), 1);
-    let resized = &state.annotations.shapes()[0];
+    assert_eq!(state.annotations().shapes().len(), 1);
+    let resized = &state.annotations().shapes()[0];
     assert!(resized.bounds().width > original.bounds().width);
     assert!(resized.bounds().height > original.bounds().height);
     assert_eq!(resized.stroke_width, original.stroke_width);
@@ -253,7 +260,7 @@ fn rectangle_mode_can_resize_selected_object_through_its_handle() {
 fn lost_touch_in_select_mode_reverts_edit_without_navigating() {
     let mut state = annotated_page();
     let _ = update(&mut state, Message::SetTool(Tool::Select));
-    let original = state.annotations.shapes()[0].clone();
+    let original = state.annotations().shapes()[0].clone();
     let navigation = state.navigation;
     let start = screen_point(&state, PagePoint::new(30.0, 45.0));
     let end = Point::new(start.x + 20.0, start.y + 30.0);
@@ -275,7 +282,7 @@ fn lost_touch_in_select_mode_reverts_edit_without_navigating() {
             end,
         );
     }
-    assert!(state.annotations.preview().is_some());
+    assert!(state.annotations().preview().is_some());
     assert_eq!(state.navigation, navigation);
     canvas_event(
         &mut state,
@@ -286,36 +293,24 @@ fn lost_touch_in_select_mode_reverts_edit_without_navigating() {
         }),
         end,
     );
-    assert!(state.annotations.preview().is_none());
-    assert_eq!(state.annotations.shapes()[0], original);
+    assert!(state.annotations().preview().is_none());
+    assert_eq!(state.annotations().shapes()[0], original);
     assert_eq!(state.navigation, navigation);
 }
 
 #[test]
 fn outlines_render_above_imported_image_and_clip_at_both_dpi_scales() {
-    let mut state = FastFill {
-        page: Some(ImportedImage {
-            handle: Handle::from_rgba(
-                600,
-                600,
-                [240, 230, 210, 255].repeat(600 * 600),
-            ),
-            name: "paper.png".into(),
-            size: PageSize::new(600.0, 600.0),
-        }),
-        ..FastFill::default()
-    };
-    state.annotations.set_tool(Tool::Rectangle);
+    let mut state = rendered_page();
+    state.annotations_mut().set_tool(Tool::Rectangle);
     for (start, end) in [
         (PagePoint::new(100.0, 100.0), PagePoint::new(200.0, 200.0)),
         (PagePoint::new(20.0, 20.0), PagePoint::new(-100.0, -100.0)),
     ] {
-        state
-            .annotations
-            .begin(Pointer::Mouse, start, page_size(&state));
-        state.annotations.finish(Pointer::Mouse, end, false);
+        let page = page_size(&state);
+        state.annotations_mut().begin(Pointer::Mouse, start, page);
+        state.annotations_mut().finish(Pointer::Mouse, end, false);
     }
-    state.annotations.set_tool(Tool::Navigate);
+    state.annotations_mut().set_tool(Tool::Navigate);
     for (scale, dpi) in [(1_u32, 1.0), (2, 2.0)] {
         let pixels = render_document(&state, scale, dpi);
         let scale = usize::try_from(scale).unwrap();
@@ -341,28 +336,32 @@ fn outlines_render_above_imported_image_and_clip_at_both_dpi_scales() {
 #[test]
 fn edit_preview_replaces_the_committed_outline() {
     let mut state = rendered_page();
-    state.annotations.set_tool(Tool::Rectangle);
-    state.annotations.begin(
+    state.annotations_mut().set_tool(Tool::Rectangle);
+    let page = page_size(&state);
+    state.annotations_mut().begin(
         Pointer::Mouse,
         PagePoint::new(100.0, 100.0),
-        page_size(&state),
+        page,
     );
-    state.annotations.finish(
+    state.annotations_mut().finish(
         Pointer::Mouse,
         PagePoint::new(200.0, 200.0),
         false,
     );
-    state.annotations.set_tool(Tool::Select);
-    assert!(state.annotations.begin_interaction(
+    state.annotations_mut().set_tool(Tool::Select);
+    let page = page_size(&state);
+    assert!(state.annotations_mut().begin_interaction(
         Pointer::Mouse,
         PagePoint::new(150.0, 150.0),
-        page_size(&state),
+        page,
         0.88,
         DragModifiers::default(),
     ));
-    state
-        .annotations
-        .drag(Pointer::Mouse, PagePoint::new(350.0, 350.0), false);
+    state.annotations_mut().drag(
+        Pointer::Mouse,
+        PagePoint::new(350.0, 350.0),
+        false,
+    );
 
     let pixels = render_document(&state, 1, 1.0);
     let pixel = |x: usize, y: usize| {
@@ -376,37 +375,43 @@ fn edit_preview_replaces_the_committed_outline() {
 #[test]
 fn draft_and_edit_preview_use_the_annotation_color() {
     let mut state = rendered_page();
-    state.annotations.set_tool(Tool::Rectangle);
-    state.annotations.set_color(AnnotationColor::Red);
-    state.annotations.set_filled(true);
-    state.annotations.begin(
+    state.annotations_mut().set_tool(Tool::Rectangle);
+    state.annotations_mut().set_color(AnnotationColor::Red);
+    state.annotations_mut().set_filled(true);
+    let page = page_size(&state);
+    state.annotations_mut().begin(
         Pointer::Mouse,
         PagePoint::new(100.0, 100.0),
-        page_size(&state),
+        page,
     );
-    state
-        .annotations
-        .drag(Pointer::Mouse, PagePoint::new(200.0, 200.0), false);
-
-    let pixels = render_document(&state, 1, 1.0);
-    assert_eq!(&pixels[(168 * 600 + 168) * 4..][..4], [220, 32, 32, 255]);
-
-    state.annotations.finish(
+    state.annotations_mut().drag(
         Pointer::Mouse,
         PagePoint::new(200.0, 200.0),
         false,
     );
-    assert!(state.annotations.set_color(AnnotationColor::Green));
-    assert!(state.annotations.begin_interaction(
+
+    let pixels = render_document(&state, 1, 1.0);
+    assert_eq!(&pixels[(168 * 600 + 168) * 4..][..4], [220, 32, 32, 255]);
+
+    state.annotations_mut().finish(
+        Pointer::Mouse,
+        PagePoint::new(200.0, 200.0),
+        false,
+    );
+    assert!(state.annotations_mut().set_color(AnnotationColor::Green));
+    let page = page_size(&state);
+    assert!(state.annotations_mut().begin_interaction(
         Pointer::Mouse,
         PagePoint::new(150.0, 150.0),
-        page_size(&state),
+        page,
         0.88,
         DragModifiers::default(),
     ));
-    state
-        .annotations
-        .drag(Pointer::Mouse, PagePoint::new(250.0, 250.0), false);
+    state.annotations_mut().drag(
+        Pointer::Mouse,
+        PagePoint::new(250.0, 250.0),
+        false,
+    );
 
     let pixels = render_document(&state, 1, 1.0);
     assert_eq!(&pixels[(256 * 600 + 256) * 4..][..4], [0, 160, 72, 255]);
@@ -415,18 +420,19 @@ fn draft_and_edit_preview_use_the_annotation_color() {
 #[test]
 fn oval_renders_a_curved_unfilled_outline() {
     let mut state = rendered_page();
-    state.annotations.set_tool(Tool::Oval);
-    state.annotations.begin(
+    state.annotations_mut().set_tool(Tool::Oval);
+    let page = page_size(&state);
+    state.annotations_mut().begin(
         Pointer::Mouse,
         PagePoint::new(100.0, 100.0),
-        page_size(&state),
+        page,
     );
-    state.annotations.finish(
+    state.annotations_mut().finish(
         Pointer::Mouse,
         PagePoint::new(200.0, 200.0),
         false,
     );
-    state.annotations.set_tool(Tool::Navigate);
+    state.annotations_mut().set_tool(Tool::Navigate);
 
     let pixels = render_document(&state, 1, 1.0);
     let pixel = |x: usize, y: usize| {
@@ -441,28 +447,30 @@ fn oval_renders_a_curved_unfilled_outline() {
 #[test]
 fn line_renders_above_the_page_and_clips_at_its_edge() {
     let mut state = rendered_page();
-    state.annotations.set_tool(Tool::Line);
-    state.annotations.begin(
+    state.annotations_mut().set_tool(Tool::Line);
+    let page = page_size(&state);
+    state.annotations_mut().begin(
         Pointer::Mouse,
         PagePoint::new(100.0, 100.0),
-        page_size(&state),
+        page,
     );
-    state.annotations.finish(
+    state.annotations_mut().finish(
         Pointer::Mouse,
         PagePoint::new(500.0, 500.0),
         false,
     );
-    state.annotations.begin(
+    let page = page_size(&state);
+    state.annotations_mut().begin(
         Pointer::Mouse,
         PagePoint::new(20.0, 300.0),
-        page_size(&state),
+        page,
     );
-    state.annotations.finish(
+    state.annotations_mut().finish(
         Pointer::Mouse,
         PagePoint::new(-100.0, 300.0),
         false,
     );
-    state.annotations.set_tool(Tool::Navigate);
+    state.annotations_mut().set_tool(Tool::Navigate);
 
     let pixels = render_document(&state, 1, 1.0);
     let pixel = |x: usize, y: usize| {
@@ -476,17 +484,16 @@ fn line_renders_above_the_page_and_clips_at_its_edge() {
 #[test]
 fn arrow_renders_a_directional_head_and_clips_all_segments() {
     let mut state = rendered_page();
-    state.annotations.set_tool(Tool::Arrow);
+    state.annotations_mut().set_tool(Tool::Arrow);
     for (start, end) in [
         (PagePoint::new(100.0, 300.0), PagePoint::new(500.0, 300.0)),
         (PagePoint::new(20.0, 400.0), PagePoint::new(-100.0, 400.0)),
     ] {
-        state
-            .annotations
-            .begin(Pointer::Mouse, start, page_size(&state));
-        state.annotations.finish(Pointer::Mouse, end, false);
+        let page = page_size(&state);
+        state.annotations_mut().begin(Pointer::Mouse, start, page);
+        state.annotations_mut().finish(Pointer::Mouse, end, false);
     }
-    state.annotations.set_tool(Tool::Navigate);
+    state.annotations_mut().set_tool(Tool::Navigate);
 
     let pixels = render_document(&state, 1, 1.0);
     let dark_near = |x: usize, y: usize| {
@@ -510,13 +517,14 @@ fn marks_render_as_strokes_without_a_surrounding_box() {
         (Tool::Checkmark, PagePoint::new(300.0, 300.0)),
         (Tool::Cross, PagePoint::new(400.0, 400.0)),
     ] {
-        state.annotations.set_tool(tool);
+        state.annotations_mut().set_tool(tool);
+        let page = page_size(&state);
+        state.annotations_mut().begin(Pointer::Mouse, center, page);
         state
-            .annotations
-            .begin(Pointer::Mouse, center, page_size(&state));
-        state.annotations.finish(Pointer::Mouse, center, false);
+            .annotations_mut()
+            .finish(Pointer::Mouse, center, false);
     }
-    state.annotations.set_tool(Tool::Navigate);
+    state.annotations_mut().set_tool(Tool::Navigate);
 
     let pixels = render_document(&state, 1, 1.0);
     let pixel = |x: usize, y: usize| {
@@ -550,33 +558,35 @@ fn marks_render_as_strokes_without_a_surrounding_box() {
 #[test]
 fn colors_and_filled_shapes_render_without_filling_oval_corners() {
     let mut state = rendered_page();
-    state.annotations.set_tool(Tool::Rectangle);
-    state.annotations.set_color(AnnotationColor::Red);
-    state.annotations.set_filled(true);
-    state.annotations.begin(
+    state.annotations_mut().set_tool(Tool::Rectangle);
+    state.annotations_mut().set_color(AnnotationColor::Red);
+    state.annotations_mut().set_filled(true);
+    let page = page_size(&state);
+    state.annotations_mut().begin(
         Pointer::Mouse,
         PagePoint::new(100.0, 100.0),
-        page_size(&state),
+        page,
     );
-    state.annotations.finish(
+    state.annotations_mut().finish(
         Pointer::Mouse,
         PagePoint::new(200.0, 200.0),
         false,
     );
-    state.annotations.set_tool(Tool::Oval);
-    state.annotations.set_color(AnnotationColor::Green);
-    state.annotations.set_filled(true);
-    state.annotations.begin(
+    state.annotations_mut().set_tool(Tool::Oval);
+    state.annotations_mut().set_color(AnnotationColor::Green);
+    state.annotations_mut().set_filled(true);
+    let page = page_size(&state);
+    state.annotations_mut().begin(
         Pointer::Mouse,
         PagePoint::new(300.0, 100.0),
-        page_size(&state),
+        page,
     );
-    state.annotations.finish(
+    state.annotations_mut().finish(
         Pointer::Mouse,
         PagePoint::new(500.0, 200.0),
         false,
     );
-    state.annotations.set_tool(Tool::Navigate);
+    state.annotations_mut().set_tool(Tool::Navigate);
 
     let pixels = render_document(&state, 1, 1.0);
     let pixel = |x: usize, y: usize| {
@@ -603,35 +613,39 @@ fn colors_and_filled_shapes_render_without_filling_oval_corners() {
 #[test]
 fn pen_fill_and_translucent_highlighter_render_over_the_page() {
     let mut state = rendered_page();
-    state.annotations.set_tool(Tool::Pen);
-    state.annotations.set_color(AnnotationColor::Blue);
-    state.annotations.set_filled(true);
-    state.annotations.begin(
+    state.annotations_mut().set_tool(Tool::Pen);
+    state.annotations_mut().set_color(AnnotationColor::Blue);
+    state.annotations_mut().set_filled(true);
+    let page = page_size(&state);
+    state.annotations_mut().begin(
         Pointer::Mouse,
         PagePoint::new(100.0, 100.0),
-        page_size(&state),
+        page,
     );
-    state
-        .annotations
-        .drag(Pointer::Mouse, PagePoint::new(200.0, 100.0), false);
-    state.annotations.finish(
+    state.annotations_mut().drag(
+        Pointer::Mouse,
+        PagePoint::new(200.0, 100.0),
+        false,
+    );
+    state.annotations_mut().finish(
         Pointer::Mouse,
         PagePoint::new(150.0, 200.0),
         false,
     );
 
-    state.annotations.set_tool(Tool::Highlighter);
-    state.annotations.begin(
+    state.annotations_mut().set_tool(Tool::Highlighter);
+    let page = page_size(&state);
+    state.annotations_mut().begin(
         Pointer::Mouse,
         PagePoint::new(300.0, 100.0),
-        page_size(&state),
+        page,
     );
-    state.annotations.finish(
+    state.annotations_mut().finish(
         Pointer::Mouse,
         PagePoint::new(500.0, 100.0),
         false,
     );
-    state.annotations.set_tool(Tool::Navigate);
+    state.annotations_mut().set_tool(Tool::Navigate);
 
     let pixels = render_document(&state, 1, 1.0);
     let pixel = |x: usize, y: usize| {
@@ -654,32 +668,36 @@ fn pen_fill_and_translucent_highlighter_render_over_the_page() {
 #[test]
 fn rotated_rectangle_renders_around_its_frame_center() {
     let mut state = rendered_page();
-    state.annotations.set_tool(Tool::Rectangle);
-    state.annotations.begin(
+    state.annotations_mut().set_tool(Tool::Rectangle);
+    let page = page_size(&state);
+    state.annotations_mut().begin(
         Pointer::Mouse,
         PagePoint::new(100.0, 100.0),
-        page_size(&state),
+        page,
     );
-    state.annotations.finish(
+    state.annotations_mut().finish(
         Pointer::Mouse,
         PagePoint::new(300.0, 200.0),
         false,
     );
-    state.annotations.set_tool(Tool::Select);
-    let handle = state.annotations.shapes()[0].rotation_handle(1.0).unwrap();
-    state.annotations.begin_interaction(
+    state.annotations_mut().set_tool(Tool::Select);
+    let handle = state.annotations().shapes()[0]
+        .rotation_handle(1.0)
+        .unwrap();
+    let page = page_size(&state);
+    state.annotations_mut().begin_interaction(
         Pointer::Mouse,
         handle,
-        page_size(&state),
+        page,
         1.0,
         DragModifiers::default(),
     );
-    state.annotations.finish(
+    state.annotations_mut().finish(
         Pointer::Mouse,
         PagePoint::new(282.0, 150.0),
         false,
     );
-    state.annotations.set_tool(Tool::Navigate);
+    state.annotations_mut().set_tool(Tool::Navigate);
 
     let pixels = render_document(&state, 1, 1.0);
     let pixel = |x: usize, y: usize| {
@@ -701,21 +719,22 @@ fn rotated_rectangle_renders_around_its_frame_center() {
 #[test]
 fn group_membership_changes_are_visually_distinct() {
     let mut state = rendered_page();
-    state.annotations.set_tool(Tool::Rectangle);
-    assert!(state.annotations.set_color(AnnotationColor::White));
+    state.annotations_mut().set_tool(Tool::Rectangle);
+    assert!(state.annotations_mut().set_color(AnnotationColor::White));
     for x in [100.0, 400.0, 250.0] {
-        assert!(state.annotations.begin(
+        let page = page_size(&state);
+        assert!(state.annotations_mut().begin(
             Pointer::Mouse,
             PagePoint::new(x, 100.0),
-            page_size(&state),
+            page,
         ));
-        assert!(state.annotations.finish(
+        assert!(state.annotations_mut().finish(
             Pointer::Mouse,
             PagePoint::new(x + 50.0, 150.0),
             false,
         ));
     }
-    state.annotations.set_tool(Tool::Select);
+    state.annotations_mut().set_tool(Tool::Select);
     let ctrl = DragModifiers {
         square: true,
         ..DragModifiers::default()
@@ -725,25 +744,27 @@ fn group_membership_changes_are_visually_distinct() {
         PagePoint::new(125.0, 125.0),
         PagePoint::new(425.0, 125.0),
     ] {
-        assert!(state.annotations.begin_interaction(
+        let page = page_size(&state);
+        assert!(state.annotations_mut().begin_interaction(
             Pointer::Mouse,
             point,
-            page_size(&state),
+            page,
             1.0,
             ctrl,
         ));
     }
-    assert_eq!(state.annotations.selected_indices(), [0, 1]);
+    assert_eq!(state.annotations().selected_indices(), [0, 1]);
     let without_middle = render_document(&state, 1, 1.0);
 
-    assert!(state.annotations.begin_interaction(
+    let page = page_size(&state);
+    assert!(state.annotations_mut().begin_interaction(
         Pointer::Mouse,
         PagePoint::new(275.0, 125.0),
-        page_size(&state),
+        page,
         1.0,
         ctrl,
     ));
-    assert_eq!(state.annotations.selected_indices(), [0, 1, 2]);
+    assert_eq!(state.annotations().selected_indices(), [0, 1, 2]);
     let with_middle = render_document(&state, 1, 1.0);
 
     assert!(
@@ -755,14 +776,14 @@ fn group_membership_changes_are_visually_distinct() {
 #[test]
 fn accepted_text_renders_over_the_page() {
     let mut state = rendered_page();
-    state.annotations.set_tool(Tool::Text);
+    state.annotations_mut().set_tool(Tool::Text);
     let _ = update(
         &mut state,
         Message::DrawPressed(Pointer::Mouse, PagePoint::new(300.0, 300.0), 1.0),
     );
     paste_text(&mut state, "FastFill");
     let _ = update(&mut state, Message::AcceptText);
-    state.annotations.set_tool(Tool::Navigate);
+    state.annotations_mut().set_tool(Tool::Navigate);
 
     let pixels = render_document(&state, 1, 1.0);
     let dark = (280..=320)
@@ -773,14 +794,14 @@ fn accepted_text_renders_over_the_page() {
 #[test]
 fn text_and_shapes_follow_shared_layer_order() {
     let mut state = rendered_page();
-    state.annotations.set_tool(Tool::Text);
+    state.annotations_mut().set_tool(Tool::Text);
     let point = PagePoint::new(250.0, 250.0);
     let _ =
         update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
     paste_text(&mut state, "Layer");
     let _ = update(&mut state, Message::AcceptText);
-    let text = state.annotations.texts()[0].clone();
-    state.annotations.set_tool(Tool::Navigate);
+    let text = state.annotations().texts()[0].clone();
+    state.annotations_mut().set_tool(Tool::Navigate);
 
     let text_only = render_document(&state, 1, 1.0);
     let pixels = text_only.as_chunks::<4>().0;
@@ -790,39 +811,37 @@ fn text_and_shapes_follow_shared_layer_order() {
         .collect();
     assert!(!glyphs.is_empty(), "test text must produce dark pixels");
 
-    state.annotations.set_tool(Tool::Rectangle);
-    assert!(state.annotations.set_color(AnnotationColor::Yellow));
-    assert!(state.annotations.set_filled(true));
+    state.annotations_mut().set_tool(Tool::Rectangle);
+    assert!(state.annotations_mut().set_color(AnnotationColor::Yellow));
+    assert!(state.annotations_mut().set_filled(true));
     let margin = 10.0;
     let start = PagePoint::new(text.bounds.x - margin, text.bounds.y - margin);
     let end = PagePoint::new(
         text.bounds.x + text.bounds.width + margin,
         text.bounds.y + text.bounds.height + margin,
     );
-    assert!(
-        state
-            .annotations
-            .begin(Pointer::Mouse, start, page_size(&state))
-    );
-    assert!(state.annotations.finish(Pointer::Mouse, end, false));
-    state.annotations.set_tool(Tool::Navigate);
+    let page = page_size(&state);
+    assert!(state.annotations_mut().begin(Pointer::Mouse, start, page));
+    assert!(state.annotations_mut().finish(Pointer::Mouse, end, false));
+    state.annotations_mut().set_tool(Tool::Navigate);
     let covered = render_document(&state, 1, 1.0);
     assert_eq!(dark_pixels_at(&covered, &glyphs), 0);
 
-    state.annotations.set_tool(Tool::Text);
-    assert!(state.annotations.begin_text_edit(
+    state.annotations_mut().set_tool(Tool::Text);
+    let page = page_size(&state);
+    assert!(state.annotations_mut().begin_text_edit(
         text.bounds.center(),
-        page_size(&state),
+        page,
         1.0,
     ));
-    assert!(state.annotations.accept_text());
-    state.annotations.set_tool(Tool::Select);
-    assert!(state.annotations.bring_selected_to_front());
-    state.annotations.set_tool(Tool::Navigate);
+    assert!(state.annotations_mut().accept_text());
+    state.annotations_mut().set_tool(Tool::Select);
+    assert!(state.annotations_mut().bring_selected_to_front());
+    state.annotations_mut().set_tool(Tool::Navigate);
     let raised = render_document(&state, 1, 1.0);
     assert!(dark_pixels_at(&raised, &glyphs) > glyphs.len() / 2);
 
-    assert!(state.annotations.send_selected_to_back());
+    assert!(state.annotations_mut().send_selected_to_back());
     let lowered = render_document(&state, 1, 1.0);
     assert_eq!(dark_pixels_at(&lowered, &glyphs), 0);
 }
@@ -830,7 +849,7 @@ fn text_and_shapes_follow_shared_layer_order() {
 #[test]
 fn formatted_text_color_and_rotation_reach_canvas_rendering() {
     let mut state = rendered_page();
-    state.annotations.set_tool(Tool::Text);
+    state.annotations_mut().set_tool(Tool::Text);
     let point = PagePoint::new(250.0, 250.0);
     let _ =
         update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
@@ -842,19 +861,20 @@ fn formatted_text_color_and_rotation_reach_canvas_rendering() {
     let _ = update(&mut state, Message::SetColor(AnnotationColor::Blue));
     let _ = update(&mut state, Message::AcceptText);
 
-    state.annotations.set_tool(Tool::Select);
-    let text = state.annotations.texts()[0].clone();
+    state.annotations_mut().set_tool(Tool::Select);
+    let text = state.annotations().texts()[0].clone();
     let handle = text.rotation_handle(1.0).unwrap();
     let center = text.bounds.center();
-    assert!(state.annotations.begin_text_move(
+    let page = page_size(&state);
+    assert!(state.annotations_mut().begin_text_move(
         Pointer::Mouse,
         handle,
-        page_size(&state),
+        page,
         1.0,
     ));
     let end = PagePoint::new(center.x + 100.0, center.y);
-    assert!(state.annotations.finish(Pointer::Mouse, end, false));
-    state.annotations.set_tool(Tool::Navigate);
+    assert!(state.annotations_mut().finish(Pointer::Mouse, end, false));
+    state.annotations_mut().set_tool(Tool::Navigate);
 
     let pixels = render_document(&state, 1, 1.0);
     let mut bounds: Option<(usize, usize, usize, usize)> = None;
@@ -881,7 +901,7 @@ fn formatted_text_color_and_rotation_reach_canvas_rendering() {
 fn inline_editor_and_accepted_text_share_glyph_bounds() {
     for content in ["hello", "First\nSecond"] {
         let mut state = rendered_page();
-        state.annotations.set_tool(Tool::Text);
+        state.annotations_mut().set_tool(Tool::Text);
         let view = state
             .navigation
             .view(page_size(&state), page_viewport(CANVAS.size()))
@@ -905,7 +925,7 @@ fn inline_editor_and_accepted_text_share_glyph_bounds() {
     }
 }
 
-fn paste_text(state: &mut FastFill, text: &str) {
+pub(super) fn paste_text(state: &mut FastFill, text: &str) {
     let action = text_editor::Action::Edit(text_editor::Edit::Paste(
         std::sync::Arc::new(text.to_owned()),
     ));
@@ -974,21 +994,31 @@ fn pixel_indices_for_page_rect(
 }
 
 fn rendered_page() -> FastFill {
-    FastFill {
-        page: Some(ImportedImage {
-            handle: Handle::from_rgba(
-                600,
-                600,
-                [240, 230, 210, 255].repeat(600 * 600),
-            ),
-            name: "paper.png".into(),
-            size: PageSize::new(600.0, 600.0),
-        }),
-        ..FastFill::default()
-    }
+    let mut state = FastFill::default();
+    state.pages.current_mut().image = Some(ImportedImage {
+        handle: Handle::from_rgba(
+            600,
+            600,
+            [240, 230, 210, 255].repeat(600 * 600),
+        ),
+        name: "paper.png".into(),
+        size: PageSize::new(600.0, 600.0),
+        directory: None,
+    });
+    state
 }
 
 fn render_document(state: &FastFill, scale: u32, dpi: f32) -> Vec<u8> {
+    render_element(document(state), iced::Size::new(600, 600), scale, dpi)
+}
+
+#[allow(clippy::cast_precision_loss)]
+fn render_element(
+    mut element: iced::Element<'_, Message>,
+    size: iced::Size<u32>,
+    scale: u32,
+    dpi: f32,
+) -> Vec<u8> {
     use iced::advanced::Renderer as _;
     use iced::advanced::renderer::{Headless, Style};
     use iced::advanced::{Layout, layout, widget};
@@ -1000,14 +1030,14 @@ fn render_document(state: &FastFill, scale: u32, dpi: f32) -> Vec<u8> {
             Some("tiny-skia"),
         ))
         .expect("software renderer needs no display or GPU");
-    let mut element = document(state);
     let mut tree = widget::Tree::new(element.as_widget());
-    let size = iced::Size::new(600.0, 600.0);
-    renderer.reset(Rectangle::new(Point::ORIGIN, size));
+    // These test viewports are small enough to fit exactly in f32.
+    let logical = iced::Size::new(size.width as f32, size.height as f32);
+    renderer.reset(Rectangle::new(Point::ORIGIN, logical));
     let node = element.as_widget_mut().layout(
         &mut tree,
         &renderer,
-        &layout::Limits::new(size, size),
+        &layout::Limits::new(logical, logical),
     );
     element.as_widget().draw(
         &tree,
@@ -1016,58 +1046,93 @@ fn render_document(state: &FastFill, scale: u32, dpi: f32) -> Vec<u8> {
         &Style::default(),
         Layout::new(&node),
         mouse::Cursor::Unavailable,
-        &Rectangle::new(Point::ORIGIN, size),
+        &Rectangle::new(Point::ORIGIN, logical),
     );
     renderer.screenshot(
-        iced::Size::new(600 * scale, 600 * scale),
+        iced::Size::new(size.width * scale, size.height * scale),
         dpi,
         Color::WHITE,
     )
 }
 
-fn annotated_page() -> FastFill {
+#[test]
+fn main_window_keeps_the_page_rail_separate_from_the_canvas() {
+    let state = rendered_page();
+    let size = iced::Size::new(1_200, 800);
+    let pixels = render_element(view(&state), size, 1, 1.0);
+    let pixel = |x: usize, y: usize| {
+        let offset = (y * 1_200 + x) * 4;
+        &pixels[offset..offset + 4]
+    };
+    assert_eq!(pixel(180, 780), [67, 72, 78, 255]);
+    assert_eq!(pixel(680, 500), [240, 230, 210, 255]);
+    assert_ne!(pixel(80, 500), [67, 72, 78, 255]);
+
+    if let Some(path) = std::env::var_os("FASTFILL_UI_SNAPSHOT") {
+        image::save_buffer(
+            path,
+            &pixels,
+            size.width,
+            size.height,
+            image::ColorType::Rgba8,
+        )
+        .expect("UI snapshot");
+    }
+}
+
+pub(super) fn annotated_page() -> FastFill {
     let mut state = FastFill::default();
-    state.annotations.set_tool(Tool::Rectangle);
-    state.annotations.begin(
+    state.annotations_mut().set_tool(Tool::Rectangle);
+    state.annotations_mut().begin(
         Pointer::Mouse,
         PagePoint::new(10.0, 20.0),
         DEFAULT_PAGE,
     );
-    state
-        .annotations
-        .finish(Pointer::Mouse, PagePoint::new(50.0, 70.0), false);
+    state.annotations_mut().finish(
+        Pointer::Mouse,
+        PagePoint::new(50.0, 70.0),
+        false,
+    );
     state
 }
 
 #[test]
 fn canceling_page_replacement_keeps_annotations() {
     let mut state = annotated_page();
-    let _ = update(&mut state, Message::OpenImage);
+    let _ = update(&mut state, Message::AskReplacePage);
     assert_eq!(state.image_picker, ImagePicker::ConfirmReplace);
 
     let _ = update(&mut state, Message::KeepPage);
     assert_eq!(state.image_picker, ImagePicker::Idle);
-    assert_eq!(state.annotations.shapes().len(), 1);
+    assert_eq!(state.annotations().shapes().len(), 1);
     let _ = update(&mut state, Message::Undo);
-    assert_eq!(state.annotations.shapes(), []);
+    assert_eq!(state.annotations().shapes(), []);
 }
 
 #[test]
 fn canceled_or_failed_picker_keeps_annotations() {
     let mut state = annotated_page();
-    let _ = update(&mut state, Message::OpenImage);
-    let _ = update(&mut state, Message::ReplacePage);
-    assert_eq!(state.image_picker, ImagePicker::Picking);
-    let _ = update(&mut state, Message::ImagePicked(Ok(None)));
-    assert_eq!(state.image_picker, ImagePicker::Idle);
-    assert_eq!(state.annotations.shapes().len(), 1);
-
+    let _ = update(&mut state, Message::AskReplacePage);
+    let _ = update(&mut state, Message::ConfirmReplacePage);
+    assert_eq!(
+        state.image_picker,
+        ImagePicker::Picking(PickPurpose::Replace)
+    );
     let _ = update(
         &mut state,
-        Message::ImagePicked(Err("Corrupt image".into())),
+        Message::ImagePicked(PickPurpose::Replace, Ok(None)),
+    );
+    assert_eq!(state.image_picker, ImagePicker::Idle);
+    assert_eq!(state.annotations().shapes().len(), 1);
+
+    let _ = update(&mut state, Message::AskReplacePage);
+    let _ = update(&mut state, Message::ConfirmReplacePage);
+    let _ = update(
+        &mut state,
+        Message::ImagePicked(PickPurpose::Replace, Err("Corrupt image".into())),
     );
     assert!(state.status_is_error);
-    assert_eq!(state.annotations.shapes().len(), 1);
+    assert_eq!(state.annotations().shapes().len(), 1);
 }
 
 #[test]
@@ -1077,16 +1142,20 @@ fn successful_import_resets_annotations_and_retains_tool() {
         handle: Handle::from_rgba(1, 1, vec![255; 4]),
         name: "replacement.png".into(),
         size: PageSize::new(1.0, 1.0),
+        directory: None,
     };
-    let _ = update(&mut state, Message::OpenImage);
-    let _ = update(&mut state, Message::ReplacePage);
-    let _ = update(&mut state, Message::ImagePicked(Ok(Some(image))));
+    let _ = update(&mut state, Message::AskReplacePage);
+    let _ = update(&mut state, Message::ConfirmReplacePage);
+    let _ = update(
+        &mut state,
+        Message::ImagePicked(PickPurpose::Replace, Ok(Some(image))),
+    );
 
-    assert_eq!(state.annotations.shapes(), []);
-    assert_eq!(state.annotations.tool(), Tool::Rectangle);
-    assert!(!state.annotations.can_undo());
-    assert!(!state.annotations.can_redo());
-    assert_eq!(state.page.unwrap().name, "replacement.png");
+    assert_eq!(state.annotations().shapes(), []);
+    assert_eq!(state.annotations().tool(), Tool::Rectangle);
+    assert!(!state.annotations().can_undo());
+    assert!(!state.annotations().can_redo());
+    assert_eq!(state.image().unwrap().name, "replacement.png");
 }
 
 #[test]
@@ -1094,19 +1163,19 @@ fn delete_all_requires_confirmation_and_remains_undoable() {
     let mut state = annotated_page();
     let _ = update(&mut state, Message::AskDeleteAll);
     assert!(state.confirm_delete_all);
-    assert_eq!(state.annotations.shapes().len(), 1);
+    assert_eq!(state.annotations().shapes().len(), 1);
 
     let _ = update(&mut state, Message::Undo);
-    assert_eq!(state.annotations.shapes().len(), 1);
+    assert_eq!(state.annotations().shapes().len(), 1);
     let _ = update(&mut state, Message::KeepAll);
     assert!(!state.confirm_delete_all);
 
     let _ = update(&mut state, Message::AskDeleteAll);
     let _ = update(&mut state, Message::ConfirmDeleteAll);
     assert!(!state.confirm_delete_all);
-    assert_eq!(state.annotations.shapes(), []);
+    assert_eq!(state.annotations().shapes(), []);
     let _ = update(&mut state, Message::Undo);
-    assert_eq!(state.annotations.shapes().len(), 1);
+    assert_eq!(state.annotations().shapes().len(), 1);
 }
 
 #[test]
@@ -1116,7 +1185,7 @@ fn escape_closes_delete_all_confirmation_without_deleting() {
     let _ = update(&mut state, Message::CancelInteraction);
 
     assert!(!state.confirm_delete_all);
-    assert_eq!(state.annotations.shapes().len(), 1);
+    assert_eq!(state.annotations().shapes().len(), 1);
 }
 
 #[test]
@@ -1135,14 +1204,14 @@ fn cancel_and_navigation_changes_never_commit_a_draft() {
         },
     ] {
         let mut state = annotated_page();
-        state.annotations.begin(
+        state.annotations_mut().begin(
             Pointer::Mouse,
             PagePoint::new(100.0, 100.0),
             DEFAULT_PAGE,
         );
         let _ = update(&mut state, message);
-        assert!(state.annotations.active_pointer().is_none());
-        assert_eq!(state.annotations.shapes().len(), 1);
+        assert!(state.annotations().active_pointer().is_none());
+        assert_eq!(state.annotations().shapes().len(), 1);
     }
 }
 
@@ -1165,10 +1234,10 @@ fn canvas_event(
     position: Point,
 ) -> Option<Message> {
     let page = PageCanvas {
-        image: state.page.as_ref(),
+        image: state.image(),
         navigation: state.navigation,
         page_size: page_size(state),
-        annotations: &state.annotations,
+        annotations: state.annotations(),
         input_epoch: state.input_epoch,
         input_enabled: state.image_picker == ImagePicker::Idle
             && !state.confirm_delete_all,
@@ -1216,7 +1285,7 @@ fn mouse_drawing_uses_canvas_offset_and_ctrl_without_panning() {
             ..DragModifiers::default()
         }),
     );
-    let preview = state.annotations.preview().unwrap().bounds();
+    let preview = state.annotations().preview().unwrap().bounds();
     assert!((preview.width - preview.height).abs() < 0.001);
     canvas_event(
         &mut state,
@@ -1227,7 +1296,7 @@ fn mouse_drawing_uses_canvas_offset_and_ctrl_without_panning() {
         end,
     );
     assert_eq!(state.navigation, navigation);
-    let rectangle = state.annotations.shapes()[0].bounds();
+    let rectangle = state.annotations().shapes()[0].bounds();
     assert!((rectangle.x - 100.0).abs() < 0.001);
     assert!((rectangle.y - 200.0).abs() < 0.001);
     assert!((rectangle.width - 120.0).abs() < 0.001);
@@ -1260,7 +1329,7 @@ fn right_drag_pans_in_rectangle_mode_without_creating_an_object() {
     let after = screen_point(&state, PagePoint::new(0.0, 0.0));
     assert!((after.x - before.x - 20.0).abs() < 0.001);
     assert!((after.y - before.y - 30.0).abs() < 0.001);
-    assert_eq!(state.annotations.shapes(), []);
+    assert_eq!(state.annotations().shapes(), []);
 }
 
 #[test]
@@ -1293,7 +1362,7 @@ fn wheel_zooms_around_pointer_in_all_tools() {
         let after = screen_point(&state, anchor);
         assert!((after.x - before.x).abs() < 0.001);
         assert!((after.y - before.y).abs() < 0.001);
-        assert_eq!(state.annotations.shapes(), []);
+        assert_eq!(state.annotations().shapes(), []);
     }
 }
 
@@ -1319,7 +1388,7 @@ fn wheel_does_not_interrupt_active_mouse_or_touch_gestures() {
             };
             canvas_event(&mut state, &mut canvas_state, &press, start);
             let navigation = state.navigation;
-            let preview = state.annotations.preview();
+            let preview = state.annotations().preview();
             let message = canvas_event(
                 &mut state,
                 &mut canvas_state,
@@ -1330,7 +1399,7 @@ fn wheel_does_not_interrupt_active_mouse_or_touch_gestures() {
             );
             assert!(message.is_none());
             assert_eq!(state.navigation, navigation);
-            assert_eq!(state.annotations.preview(), preview);
+            assert_eq!(state.annotations().preview(), preview);
         }
     }
 }
@@ -1356,8 +1425,8 @@ fn mouse_release_outside_canvas_keeps_partial_page_geometry() {
         )),
         end,
     );
-    assert!(state.annotations.shapes()[0].bounds().x < 0.0);
-    assert!(state.annotations.active_pointer().is_none());
+    assert!(state.annotations().shapes()[0].bounds().x < 0.0);
+    assert!(state.annotations().active_pointer().is_none());
 }
 
 #[test]
@@ -1401,8 +1470,11 @@ fn drawing_touch_ignores_second_finger_and_lost_touch_cancels() {
         );
     }
     assert_eq!(state.navigation, navigation);
-    assert_eq!(state.annotations.active_pointer(), Some(Pointer::Touch(1)));
-    assert_eq!(state.annotations.shapes(), []);
+    assert_eq!(
+        state.annotations().active_pointer(),
+        Some(Pointer::Touch(1))
+    );
+    assert_eq!(state.annotations().shapes(), []);
     canvas_event(
         &mut state,
         &mut canvas_state,
@@ -1412,8 +1484,8 @@ fn drawing_touch_ignores_second_finger_and_lost_touch_cancels() {
         }),
         end,
     );
-    assert!(state.annotations.active_pointer().is_none());
-    assert_eq!(state.annotations.shapes(), []);
+    assert!(state.annotations().active_pointer().is_none());
+    assert_eq!(state.annotations().shapes(), []);
 
     for event in [
         touch::Event::FingerPressed {
@@ -1432,6 +1504,6 @@ fn drawing_touch_ignores_second_finger_and_lost_touch_cancels() {
             end,
         );
     }
-    assert_eq!(state.annotations.shapes().len(), 1);
+    assert_eq!(state.annotations().shapes().len(), 1);
     assert_eq!(state.navigation, navigation);
 }

@@ -1,8 +1,17 @@
+#[cfg(not(target_arch = "wasm32"))]
+use fastfill_rust::project::save_archive_file;
 use fastfill_rust::project::{
     ProjectAnnotation, ProjectLoadError, load_archive, load_archive_file,
+    save_archive,
 };
 use serde_json::{Value, json};
+#[cfg(not(target_arch = "wasm32"))]
+use std::fs;
 use std::io::{Cursor, Write};
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::{SystemTime, UNIX_EPOCH};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
@@ -151,7 +160,7 @@ fn rejects_manifest_before_allocating_beyond_its_limit() {
 }
 
 #[test]
-fn loads_external_csharp_fixture_when_requested() {
+fn round_trips_external_csharp_fixture_when_requested() {
     let Some(path) = std::env::var_os("FASTFILL_DOCSCAN_FIXTURE") else {
         return;
     };
@@ -159,6 +168,75 @@ fn loads_external_csharp_fixture_when_requested() {
     let loaded = load_archive_file(path).expect("external C# project");
 
     assert_ne!(loaded.project.pages.len(), 0);
+    let output = save_archive(&loaded, Cursor::new(Vec::new()))
+        .expect("saved external project")
+        .into_inner();
+    let reloaded =
+        load_archive(Cursor::new(output)).expect("reloaded external project");
+    assert_eq!(reloaded.project, loaded.project);
+    assert_eq!(reloaded.assets.len(), loaded.assets.len());
+}
+
+#[test]
+fn saves_a_lossless_archive_that_the_loader_accepts() {
+    let source = archive_with_manifest(
+        &valid_manifest(),
+        &[("assets/page.png", PNG_1X1)],
+    );
+    let loaded = load_archive(Cursor::new(source)).expect("source project");
+
+    let output = save_archive(&loaded, Cursor::new(Vec::new()))
+        .expect("saved project")
+        .into_inner();
+    let reloaded =
+        load_archive(Cursor::new(output)).expect("saved project reloads");
+
+    assert_eq!(reloaded.project, loaded.project);
+    assert_eq!(
+        reloaded.asset("page.png").expect("saved asset").bytes,
+        PNG_1X1
+    );
+}
+
+#[test]
+fn refuses_to_save_when_a_referenced_asset_is_missing() {
+    let source = archive_with_manifest(
+        &valid_manifest(),
+        &[("assets/page.png", PNG_1X1)],
+    );
+    let mut loaded = load_archive(Cursor::new(source)).expect("source project");
+    loaded.assets.clear();
+
+    let error = save_archive(&loaded, Cursor::new(Vec::new()))
+        .expect_err("missing asset must fail");
+
+    assert!(error.to_string().contains("Page asset is missing"));
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn atomic_save_replaces_valid_files_and_preserves_old_files_on_error() {
+    let directory = temporary_test_directory();
+    let path = directory.join("project.docscan");
+    fs::write(&path, b"old project").unwrap();
+    let source = archive_with_manifest(
+        &valid_manifest(),
+        &[("assets/page.png", PNG_1X1)],
+    );
+    let mut loaded = load_archive(Cursor::new(source)).expect("source project");
+
+    loaded.project.pages[0].source_pixel_width = 2;
+    save_archive_file(&loaded, &path).expect_err("invalid save must fail");
+    assert_eq!(fs::read(&path).unwrap(), b"old project");
+    assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+
+    loaded.project.pages[0].source_pixel_width = 1;
+    save_archive_file(&loaded, &path).expect("atomic save");
+    let reloaded = load_archive_file(&path).expect("committed project");
+    assert_eq!(reloaded.project, loaded.project);
+    assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+
+    fs::remove_dir_all(directory).unwrap();
 }
 
 fn assert_invalid(bytes: Vec<u8>, expected: &str) {
@@ -283,4 +361,18 @@ fn valid_manifest() -> Value {
             ]
         }]
     })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn temporary_test_directory() -> PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "fastfill-project-save-{}-{unique}",
+        std::process::id()
+    ));
+    fs::create_dir(&path).unwrap();
+    path
 }

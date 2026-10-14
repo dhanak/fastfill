@@ -265,6 +265,35 @@ text. No importing, saving, camera, or annotations were included.
       projects through the same public API.
 - [x] Keep UI opening and Rust annotation conversion for a later slice.
 
+#### 5B. Compatible atomic project saving — accepted
+
+- [x] Serialize schema-v1 manifests and referenced page assets without
+      dropping edit data.
+- [x] Validate generated archives before replacing an existing project.
+- [x] Commit native files atomically in the destination directory on Windows,
+      Linux, and macOS; preserve the old file on every pre-commit failure.
+- [x] Keep the shared archive writer buildable for WebAssembly.
+- [x] Round-trip synthetic and real C# projects through load-save-load tests.
+
+#### 5C. Multiple image pages and reordering — accepted
+
+- [x] Own image, annotations, selection, and annotation undo/redo per page.
+- [x] Add images after the active page, with a 20-page limit and safe picker
+      cancellation/error handling.
+- [x] Switch pages from a thumbnail rail or native page selector; accept
+      pending text, cancel unfinished shape edits, and fit the selected page.
+- [x] Keep tool and default style settings across page switches.
+- [x] Reorder with buttons or whole-thumbnail mouse/touch dragging; preview
+      the order, accept end-of-list drops, and keep scrolling separate.
+- [x] Confirm page deletion and annotated image replacement; keep a blank
+      editable page after deleting the last page.
+- [x] Pass native/core tests, strict lint, and WebAssembly checks.
+- [x] User checkpoint: imports, independent history, switches, reorder,
+      replacement/deletion, page limit, and touch where available.
+
+The next slice connects project open/save UI and editable archive conversion,
+including dirty revisions. PDF import/export and recovery follow that slice.
+
 ### 6. Correction, snapping, and camera — not started
 
 - Port image correction and form snapping, retaining calibrated fixtures.
@@ -279,6 +308,22 @@ text. No importing, saving, camera, or annotations were included.
 
 - Polish the UI for regular use: cohesive visual styling, tool icons, touch
   layout, and confirmations that overlay the canvas without resizing it.
+- Redesign the page rail with animated reorder feedback:
+  - Draw a semi-transparent thumbnail above the UI, keeping the original grab
+    offset so it follows the mouse/touch pointer even outside the rail.
+  - Remove the dragged page from the displayed sequence; show a larger gap at
+    its prospective insertion point. Animate neighboring pages as it moves.
+  - On Escape or release outside the rail, animate the thumbnail back to its
+    original place and close the gap. On a valid drop, animate it into the
+    new position. Commit page order only on a valid drop; settling is visual.
+  - Remove the temporary "Drag page to reorder" captions during the redesign.
+  - Reuse iced opacity, overlays, and redraw scheduling with a small eased
+    transition (initially 150–200 ms). Request frames only while animating.
+    Keep a reduced-motion/instant-settle path and test interrupted animations,
+    pointer offsets, scrolling, cancellation, and final ordering.
+  - Feasible, moderate scope: estimate a few hundred production lines plus
+    tests, localized to rail layout, drag state, and the floating overlay.
+    No animation dependency or document-model rewrite should be needed.
 - Separate prototype artifacts from existing C# release names/assets.
 - Portable Windows build, documented Linux dependencies/package, icons,
   diagnostics, file opening, help, and user documentation.
@@ -782,6 +827,81 @@ text. No importing, saving, camera, or annotations were included.
 - UI opening and conversion into editable Rust pages remain deliberately out
   of this trust-boundary slice. User confirmed the host test suite remains
   green, so 5A is accepted.
+
+### 2026-10-14 — checkpoint 5B atomic project saving
+
+- TDD red: archive tests failed before save APIs existed. Green: schema-v1
+  data and assets survive load-save-load, missing assets fail before output,
+  invalid saves preserve the old file, and successful saves leave no
+  temporary entries behind.
+- Validate the model, encoded images, dimensions, formats, manifest size, and
+  expanded size before writing. Reopen and compare the temporary archive
+  before committing it.
+- Use `atomicwrites` only on native targets. It writes beside the destination,
+  syncs data, uses durable Unix rename, and uses `MoveFileExW` with replace and
+  write-through flags on Windows. Keep the shared ZIP writer dependency-free
+  from native filesystem APIs so WebAssembly still builds.
+- Write one entry per referenced asset, even if multiple pages share it. This
+  avoids ambiguous duplicate ZIP names while remaining compatible with the C#
+  loader.
+- Round-trip both available C# review projects without changing their project
+  model or page assets.
+- Passed 162 all-feature tests, 112 dependency-light core tests, strict
+  Clippy, formatting, all-feature WebAssembly compilation, and a linked Trunk
+  build locally. Native Windows and macOS replacement still rely on CI.
+- User confirmed the host test suite passes; 5B is accepted.
+
+### 2026-10-14 — checkpoint 5C multiple image pages
+
+- TDD red: controller tests failed before multi-page state and messages
+  existed. Green: independent annotations/history, switches, tool defaults,
+  page limits, picker cancellation, stale replies, reorder, and confirmed
+  deletion retain the expected page data.
+- Move page ownership and page-specific controller actions into `app/pages`.
+  Copy only tool settings between pages; keep each page's annotation history
+  in place. Store no duplicated active-page annotation state.
+- Add a fixed-width rail with image thumbnails, annotation counts, native
+  page selector, import/replace/delete controls, and reorder buttons. A
+  dedicated drag grip owns mouse/touch reorder; touch elsewhere scrolls.
+- Preview reorder until release. Use the final release position, reject a
+  drop outside the rail, ignore other pointers, and cancel on Escape or lost
+  touch. Automated input tests cover these paths without a display.
+- Keep annotation Undo/Redo per page. Page operations currently require
+  explicit confirmation where destructive and are not part of undo. Project
+  open/save UI, archive-to-editor conversion, and dirty revisions follow in
+  the next slice.
+- Add a software-rendered full-window layout check for rail/canvas separation
+  and keep all existing rendering tests green. Let the tool row scroll
+  horizontally when the narrower editor cannot fit every control.
+- Passed 173 all-feature tests, 112 core tests, strict Clippy, formatting,
+  all-feature WebAssembly compilation, and a linked Trunk build locally.
+- Await manual checks: add several images, annotate each, switch and undo
+  independently, reorder with buttons/grips, cancel a reorder, cancel and
+  confirm replacement/deletion, and check the 20-page limit. Native touch
+  remains a hardware checkpoint when a suitable device is available.
+
+### 2026-10-14 — checkpoint 5C manual-test follow-up
+
+- Reuse the last successful import directory for native Add/Replace dialogs
+  during the current run. Fall back to the normal dialog location if that
+  directory no longer exists; browsers cannot expose the selected folder.
+- Allow drag from the whole thumbnail. Reflow thumbnails into their preview
+  positions, highlight the moved card, and separate the drop marker from
+  the card. Accept empty space below the final page as an end-of-list drop.
+- Provide a separate right-edge scrollbar for mouse/touch list scrolling.
+  Mouse wheel scrolling also works while reordering a long list.
+- The previous Add path retained an annotated starter blank as another page.
+  Make the first-image workflow explicit instead: ask before replacing an
+  annotated starter, and retain its annotations/history if confirmation or
+  image selection is canceled. Add on image pages still inserts a new page.
+- TDD red: folder-memory and reorder-preview APIs were absent. Green: new
+  tests cover whole-thumbnail mouse/touch drags, end-of-list release through
+  actual input events, preview/cancel geometry, folder memory, and confirmed
+  starter replacement. All 178 all-feature tests, strict Clippy, formatting,
+  WebAssembly compilation, and the linked Trunk build pass locally.
+- User confirmed the behavior; 5C is accepted. Record the requested animated
+  floating-thumbnail/gap reorder under Phase 7. Keep the current labels until
+  that rail redesign; no further UI implementation in this checkpoint.
 
 ## References
 
