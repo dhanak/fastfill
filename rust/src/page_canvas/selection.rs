@@ -1,4 +1,4 @@
-use super::closed_path;
+use super::render::closed_path;
 use crate::appearance::{SELECTION_HANDLE_SIZE, SELECTION_STROKE, accent};
 use fastfill_rust::annotations::{AnnotationGeometry, ShapeAnnotation};
 use fastfill_rust::geometry::{PageView, Point as PagePoint, Rect as PageRect};

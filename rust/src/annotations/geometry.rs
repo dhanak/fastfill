@@ -1,5 +1,103 @@
-use super::{AnnotationGeometry, LineKind, Pointer, ShapeAnnotation};
+use super::{
+    AnnotationGeometry, LineKind, Pointer, RESIZE_CORNERS,
+    ROTATION_HANDLE_OFFSET, ShapeAnnotation,
+};
 use crate::geometry::{Point, Rect, Size};
+
+impl ShapeAnnotation {
+    #[must_use]
+    pub fn bounds(&self) -> Rect {
+        match &self.geometry {
+            AnnotationGeometry::Bounded { bounds, .. } => *bounds,
+            AnnotationGeometry::Linear { kind, start, end } => {
+                linear_bounds(*kind, *start, *end, self.stroke_width)
+            }
+            AnnotationGeometry::Ink { points, .. } => {
+                ink_bounds(points, self.stroke_width)
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn supports_rotation(&self) -> bool {
+        !matches!(self.geometry, AnnotationGeometry::Linear { .. })
+    }
+
+    #[must_use]
+    pub fn frame_corners(&self) -> Option<[Point; 4]> {
+        self.supports_rotation().then(|| {
+            let bounds = self.bounds();
+            RESIZE_CORNERS
+                .map(|corner| self.rotated_point(corner.position(bounds)))
+        })
+    }
+
+    #[must_use]
+    pub fn rotation_handle(&self, scale: f32) -> Option<Point> {
+        if !self.supports_rotation() || !valid_scale(scale) {
+            return None;
+        }
+        let bounds = self.bounds();
+        let center = bounds.center();
+        Some(self.rotated_point(Point::new(
+            center.x,
+            bounds.y - ROTATION_HANDLE_OFFSET / scale,
+        )))
+    }
+
+    #[must_use]
+    pub fn rotated_point(&self, point: Point) -> Point {
+        rotate_point(point, self.bounds().center(), self.rotation)
+    }
+
+    pub(super) fn unrotated_point(&self, point: Point) -> Point {
+        rotate_point(point, self.bounds().center(), -self.rotation)
+    }
+
+    pub(super) fn visible_bounds(&self) -> Rect {
+        self.frame_corners()
+            .map_or_else(|| self.bounds(), |corners| point_bounds(&corners))
+    }
+
+    pub(super) fn translated(&self, dx: f32, dy: f32) -> Self {
+        let geometry = match &self.geometry {
+            AnnotationGeometry::Bounded { kind, bounds } => {
+                AnnotationGeometry::Bounded {
+                    kind: *kind,
+                    bounds: Rect::new(
+                        bounds.x + dx,
+                        bounds.y + dy,
+                        bounds.width,
+                        bounds.height,
+                    ),
+                }
+            }
+            AnnotationGeometry::Linear { kind, start, end } => {
+                AnnotationGeometry::Linear {
+                    kind: *kind,
+                    start: Point::new(start.x + dx, start.y + dy),
+                    end: Point::new(end.x + dx, end.y + dy),
+                }
+            }
+            AnnotationGeometry::Ink { kind, points } => {
+                AnnotationGeometry::Ink {
+                    kind: *kind,
+                    points: points
+                        .iter()
+                        .map(|point| Point::new(point.x + dx, point.y + dy))
+                        .collect(),
+                }
+            }
+        };
+        Self {
+            geometry,
+            stroke_width: self.stroke_width,
+            color: self.color,
+            filled: self.filled,
+            rotation: self.rotation,
+        }
+    }
+}
 
 pub(super) fn valid(point: Point) -> bool {
     point.x.is_finite() && point.y.is_finite()

@@ -11,6 +11,30 @@ fn rectangle_tool() -> Annotations {
 }
 
 #[test]
+fn tool_catalog_has_one_entry_for_every_tool() {
+    assert_eq!(
+        Tool::ALL,
+        [
+            Tool::Navigate,
+            Tool::Select,
+            Tool::Rectangle,
+            Tool::Oval,
+            Tool::Line,
+            Tool::Arrow,
+            Tool::Checkmark,
+            Tool::Cross,
+            Tool::Pen,
+            Tool::Highlighter,
+        ],
+    );
+    assert!(Tool::ALL.into_iter().all(|tool| !tool.label().is_empty()));
+    assert!(!Tool::Navigate.handles_annotations());
+    assert!(Tool::Select.handles_annotations());
+    assert!(!Tool::Select.creates_annotations());
+    assert!(Tool::Rectangle.creates_annotations());
+}
+
+#[test]
 fn bounded_shape_tools_commit_their_shape_kind() {
     for (tool, kind) in [
         (Tool::Rectangle, ShapeKind::Rectangle),

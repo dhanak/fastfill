@@ -1,4 +1,11 @@
-use super::*;
+use super::clipping::{
+    clip_polygon_to_rectangle, clip_segment, clipped_closed_polyline_runs,
+    clipped_polyline_runs,
+};
+use super::render::mark_points;
+use fastfill_rust::annotations::{ShapeKind, arrowhead_points};
+use fastfill_rust::geometry::Point as PagePoint;
+use iced::{Point, Rectangle};
 
 #[test]
 fn segment_clipping_handles_crossing_inside_and_outside_lines() {

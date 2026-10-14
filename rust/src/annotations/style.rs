@@ -1,6 +1,31 @@
 use super::{
-    AnnotationColor, AnnotationStyle, Annotations, ShapeAnnotation, Tool,
+    AnnotationColor, AnnotationGeometry, AnnotationStyle, Annotations, InkKind,
+    ShapeAnnotation, ShapeKind, Tool,
 };
+
+impl ShapeAnnotation {
+    #[must_use]
+    pub const fn style(&self) -> AnnotationStyle {
+        AnnotationStyle {
+            color: self.color,
+            stroke_width: self.stroke_width,
+            filled: self.filled,
+        }
+    }
+
+    pub(super) fn supports_fill(&self) -> bool {
+        matches!(
+            self.geometry,
+            AnnotationGeometry::Bounded {
+                kind: ShapeKind::Rectangle | ShapeKind::Oval,
+                ..
+            } | AnnotationGeometry::Ink {
+                kind: InkKind::Pen,
+                ..
+            }
+        )
+    }
+}
 
 impl Annotations {
     #[must_use]

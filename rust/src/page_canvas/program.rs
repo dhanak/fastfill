@@ -7,7 +7,7 @@ use crate::appearance::{
     PAGE_SHADOW_X, PAGE_SHADOW_Y, canvas_background, page_shadow,
 };
 use fastfill_rust::annotations::{
-    EditHit, LineEndpoint, Pointer, ResizeCorner, Tool,
+    EditHit, LineEndpoint, Pointer, ResizeCorner,
 };
 use fastfill_rust::geometry::Point as PagePoint;
 use fastfill_rust::interaction::TouchEvent;
@@ -70,7 +70,7 @@ impl canvas::Program<Message> for PageCanvas<'_> {
         if let canvas::Event::Touch(event) = event {
             return self.touch_input(state, *event, bounds);
         }
-        if self.annotations.tool() != Tool::Navigate
+        if self.annotations.tool().handles_annotations()
             && state.dragging.is_none()
             && let Some(message) = self.annotation_mouse_input(
                 event,
@@ -89,7 +89,7 @@ impl canvas::Program<Message> for PageCanvas<'_> {
                     button,
                     mouse::Button::Left | mouse::Button::Right
                 ) && (*button == mouse::Button::Right
-                    || self.annotations.tool() == Tool::Navigate)
+                    || !self.annotations.tool().handles_annotations())
                     && position.is_some()
                     && !state.touch.is_active()
                     && self.annotations.active_pointer().is_none() =>
@@ -193,7 +193,7 @@ impl canvas::Program<Message> for PageCanvas<'_> {
                 for preview in self.annotations.previews() {
                     draw_shape(&mut frame, view, &preview, scale);
                 }
-                if self.annotations.tool() != Tool::Navigate {
+                if self.annotations.tool().handles_annotations() {
                     if let Some(annotation) =
                         self.annotations.selection_annotation(scale)
                     {
@@ -233,7 +233,7 @@ impl canvas::Program<Message> for PageCanvas<'_> {
             mouse::Interaction::None
         } else if state.dragging.is_some() || state.touch.is_active() {
             mouse::Interaction::Grabbing
-        } else if self.annotations.tool() == Tool::Navigate {
+        } else if !self.annotations.tool().handles_annotations() {
             mouse::Interaction::Grab
         } else if let Some(point) = cursor.position_in(bounds)
             && let Some(point) =
@@ -246,17 +246,7 @@ impl canvas::Program<Message> for PageCanvas<'_> {
             )
         {
             edit_cursor(hit)
-        } else if matches!(
-            self.annotations.tool(),
-            Tool::Rectangle
-                | Tool::Oval
-                | Tool::Line
-                | Tool::Arrow
-                | Tool::Checkmark
-                | Tool::Cross
-                | Tool::Pen
-                | Tool::Highlighter
-        ) {
+        } else if self.annotations.tool().creates_annotations() {
             mouse::Interaction::Crosshair
         } else {
             mouse::Interaction::None
@@ -344,7 +334,7 @@ impl PageCanvas<'_> {
         bounds: Rectangle,
     ) -> Option<canvas::Action<Message>> {
         let event = map_touch_event(event, bounds)?;
-        if self.annotations.tool() != Tool::Navigate {
+        if self.annotations.tool().handles_annotations() {
             if state.dragging.is_some() {
                 return Some(canvas::Action::capture());
             }

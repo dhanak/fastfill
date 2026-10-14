@@ -27,18 +27,18 @@ fn undo_redo_messages_apply_only_to_committed_edits() {
 
 #[test]
 fn keyboard_shortcuts_map_to_history_and_edit_commands() {
-    let ctrl = keyboard::Modifiers::CTRL;
-    let ctrl_shift = ctrl | keyboard::Modifiers::SHIFT;
+    let command = keyboard::Modifiers::COMMAND;
+    let command_shift = command | keyboard::Modifiers::SHIFT;
     assert!(matches!(
-        shortcut_message(keyboard::Key::Character("z".into()), ctrl),
+        shortcut_message(keyboard::Key::Character("z".into()), command),
         Some(Message::Undo),
     ));
     assert!(matches!(
-        shortcut_message(keyboard::Key::Character("Z".into()), ctrl_shift,),
+        shortcut_message(keyboard::Key::Character("Z".into()), command_shift,),
         Some(Message::Redo),
     ));
     assert!(matches!(
-        shortcut_message(keyboard::Key::Character("y".into()), ctrl),
+        shortcut_message(keyboard::Key::Character("y".into()), command),
         Some(Message::Redo),
     ));
     assert!(

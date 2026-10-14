@@ -193,6 +193,21 @@ text. No importing, saving, camera, or annotations were included.
 - [x] Preserve selection and layer order through undo/redo.
 - [x] User checkpoint: mixed-object selection, layers, and bulk operations.
 
+#### 3L. Architecture review before text — accepted
+
+- [x] Audit recent commits for unavoidable cross-layer work versus accidental
+      file coupling.
+- [x] Separate annotation model, tool catalog, editor operations, and styles.
+- [x] Separate application state, update/controller logic, and iced views.
+- [x] Separate canvas input, annotation rendering, clipping, and selection UI.
+- [x] Drive toolbar order, labels, cursor mode, and style defaults from one
+      authoritative tool catalog.
+- [x] Keep the platform-independent annotation editor free of iced/native
+      dependencies.
+- [x] Fix the macOS shortcut regression test to use iced's platform command
+      modifier instead of hard-coded Ctrl.
+- [x] User checkpoint: smoke-test existing tools before phase 4 starts.
+
 ### 4. Text and toolkit decision gate — not started
 
 - Inline text, typeface/size/styles, transparent editing background, correct
@@ -562,6 +577,30 @@ text. No importing, saving, camera, or annotations were included.
   group boundary remains unchanged.
 - Passed 113 all-feature tests, 79 core-only tests, strict Clippy, formatting,
   native and WASM compilation, and a linked Trunk WASM build.
+
+### 2026-10-14 — architecture review before checkpoint 4
+
+- Audited the phase 3 commit spread. Model, editor, renderer, UI, and tests are
+  legitimate layers of a vertical tool feature; forcing them together would
+  couple the reusable core to iced. The avoidable coupling was inside large
+  module roots and duplicated tool lists.
+- Turned `annotations`, `app`, and `page_canvas` into directory modules. Their
+  roots now expose state and wiring while focused children own model types,
+  tool metadata, controller logic, views, rendering, clipping, input, and
+  selection visuals.
+- Added one `Tool::ALL` catalog for toolbar order and per-tool defaults. Tool
+  capabilities now drive canvas input and cursors, so another drawing tool no
+  longer requires duplicate exhaustive lists in GUI code.
+- Kept geometry and editor state independent of iced and native APIs. Avoided
+  a trait-per-tool design: current geometry families already provide the
+  useful extension seam without speculative abstractions.
+- The macOS CI failure was a platform-specific test bug. The application uses
+  iced's command modifier correctly; its test now uses `Modifiers::COMMAND`
+  instead of assuming Ctrl on every operating system.
+- Passed 114 all-feature tests, 80 core-only tests, strict Clippy, formatting,
+  native and WASM compilation, and a linked Trunk WASM build.
+- User smoke-tested the existing tools and accepted the refactor before phase
+  4 started.
 
 ## References
 
