@@ -7,7 +7,7 @@ use fastfill_rust::project::{
 };
 use iced::widget::image::Handle;
 use std::collections::BTreeMap;
-use std::io::Cursor;
+use std::io::{Cursor, Read, Seek};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -20,7 +20,7 @@ pub(crate) struct OpenedProject {
 }
 
 #[derive(Debug)]
-pub(super) struct SaveSnapshot {
+pub(crate) struct SaveSnapshot {
     pub(super) project: Project,
     pub(super) images: Vec<Option<Handle>>,
 }
@@ -88,6 +88,29 @@ pub(super) async fn open_project(
     let Some(file) = dialog.pick_file().await else {
         return Ok(None);
     };
+    #[cfg(not(target_arch = "wasm32"))]
+    let opened = decode_project(
+        std::fs::File::open(file.path())
+            .map_err(|error| format!("Could not read project: {error}"))?,
+        Some(file.path().to_path_buf()),
+        file.file_name(),
+    )?;
+    #[cfg(target_arch = "wasm32")]
+    let opened = {
+        // Check browser file size before its read allocates the whole ZIP.
+        if file.inner().size() > 610.0 * 1024.0 * 1024.0 {
+            return Err("Project file exceeds the browser size limit.".into());
+        }
+        decode_project(Cursor::new(file.read().await), None, file.file_name())?
+    };
+    Ok(Some(Arc::new(opened)))
+}
+
+pub(super) fn decode_project(
+    reader: impl Read + Seek,
+    path: Option<PathBuf>,
+    name: String,
+) -> Result<OpenedProject, String> {
     let mut pixels = BTreeMap::new();
     let mut on_image = |name: &str, image: image::DynamicImage| {
         let image = image.into_rgba8();
@@ -96,36 +119,13 @@ pub(super) async fn open_project(
             Handle::from_rgba(image.width(), image.height(), image.into_raw()),
         );
     };
-    #[cfg(not(target_arch = "wasm32"))]
-    let (loaded, path) = (
-        load_archive_with_images(
-            std::fs::File::open(file.path())
-                .map_err(|error| format!("Could not read project: {error}"))?,
-            &mut on_image,
-        )
-        .map_err(|error| error.to_string())?,
-        Some(file.path().to_path_buf()),
-    );
-    #[cfg(target_arch = "wasm32")]
-    let (loaded, path) = {
-        // Check browser file size before its read allocates the whole ZIP.
-        if file.inner().size() > 610.0 * 1024.0 * 1024.0 {
-            return Err("Project file exceeds the browser size limit.".into());
-        }
-        (
-            load_archive_with_images(
-                Cursor::new(file.read().await),
-                &mut on_image,
-            )
-            .map_err(|error| error.to_string())?,
-            None,
-        )
-    };
-    let mut opened = prepare_opened(loaded, path, file.file_name())?;
+    let loaded = load_archive_with_images(reader, &mut on_image)
+        .map_err(|error| error.to_string())?;
+    let mut opened = prepare_opened(loaded, path, name)?;
     for image in &mut opened.images {
         image.display = pixels.get(&image.name).cloned();
     }
-    Ok(Some(Arc::new(opened)))
+    Ok(opened)
 }
 
 pub(super) fn encode_snapshot(
@@ -193,51 +193,51 @@ fn encode_png(image: &image::DynamicImage) -> Result<Vec<u8>, String> {
     Ok(bytes.into_inner())
 }
 
+// Keep one async interface: native saving awaits the file dialog.
+#[cfg_attr(target_arch = "wasm32", allow(clippy::unused_async))]
 pub(super) async fn save_project(
     snapshot: SaveSnapshot,
     path: Option<PathBuf>,
     directory: Option<PathBuf>,
     name: String,
 ) -> Result<Option<SaveReceipt>, String> {
-    // Native Save writes the existing path; Save as always uses the dialog.
-    #[cfg(not(target_arch = "wasm32"))]
-    if let Some(path) = path {
-        let archive = encode_snapshot(snapshot)?;
-        fastfill_rust::project::save_archive_file(&archive, &path)
-            .map_err(|error| error.to_string())?;
-        return Ok(Some(receipt(path)));
-    }
-    #[cfg(target_arch = "wasm32")]
-    let _ = path;
-    let mut dialog = rfd::AsyncFileDialog::new()
-        .set_title("Save project")
-        .set_file_name(&name)
-        .add_filter("FastFill project", &["docscan"]);
-    if let Some(directory) = directory.filter(|p| p.is_dir()) {
-        dialog = dialog.set_directory(directory);
-    }
-    let Some(file) = dialog.save_file().await else {
-        return Ok(None);
-    };
-    let archive = encode_snapshot(snapshot)?;
+    // Native Save writes the existing path; Save as uses the native dialog.
     #[cfg(not(target_arch = "wasm32"))]
     {
+        if let Some(path) = path {
+            let archive = encode_snapshot(snapshot)?;
+            fastfill_rust::project::save_archive_file(&archive, &path)
+                .map_err(|error| error.to_string())?;
+            return Ok(Some(receipt(path)));
+        }
+        let mut dialog = rfd::AsyncFileDialog::new()
+            .set_title("Save project")
+            .set_file_name(&name)
+            .add_filter("FastFill project", &["docscan"]);
+        if let Some(directory) = directory.filter(|p| p.is_dir()) {
+            dialog = dialog.set_directory(directory);
+        }
+        let Some(file) = dialog.save_file().await else {
+            return Ok(None);
+        };
+        let archive = encode_snapshot(snapshot)?;
         fastfill_rust::project::save_archive_file(&archive, file.path())
             .map_err(|error| error.to_string())?;
         Ok(Some(receipt(file.path().to_path_buf())))
     }
     #[cfg(target_arch = "wasm32")]
     {
+        let _ = (path, directory);
+        let archive = encode_snapshot(snapshot)?;
         let mut zip = Cursor::new(Vec::new());
         fastfill_rust::project::save_archive(&archive, &mut zip)
             .map_err(|error| error.to_string())?;
-        file.write(&zip.into_inner())
-            .await
-            .map_err(|error| format!("Could not download project: {error}"))?;
-        Ok(Some(SaveReceipt {
-            path: None,
-            name: file.file_name(),
-        }))
+        crate::browser_download::download(
+            &name,
+            &zip.into_inner(),
+            "application/zip",
+        )?;
+        Ok(Some(SaveReceipt { path: None, name }))
     }
 }
 

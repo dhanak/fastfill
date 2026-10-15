@@ -1,10 +1,14 @@
 mod controller;
+mod export;
+mod export_io;
 mod pages;
 mod pdf;
 mod project;
 mod project_io;
 mod project_view;
 mod rail;
+#[cfg(not(target_arch = "wasm32"))]
+mod recovery;
 mod text;
 mod view;
 
@@ -57,7 +61,10 @@ struct FastFill {
     dragged_page: Option<PageDrag>,
     page_scroll: f32,
     image_directory: Option<std::path::PathBuf>,
+    export_directory: Option<std::path::PathBuf>,
     text_content: text_editor::Content,
+    #[cfg(not(target_arch = "wasm32"))]
+    recovery: recovery::Recovery,
 }
 
 impl FastFill {
@@ -90,10 +97,22 @@ enum ImagePicker {
 
 #[derive(Clone, Debug)]
 pub(crate) enum Message {
+    #[cfg(not(target_arch = "wasm32"))]
+    Recovery(recovery::Event),
+    #[cfg(not(target_arch = "wasm32"))]
+    RestoreRecovery,
+    #[cfg(not(target_arch = "wasm32"))]
+    DiscardRecovery,
+    #[cfg(not(target_arch = "wasm32"))]
+    DeferRecovery,
     NewProject,
     OpenProject,
     SaveProject,
     SaveProjectAs,
+    ExportPdf,
+    CancelPdfExport,
+    PdfExportProgress(u64, usize, usize),
+    PdfExported(u64, Result<Option<export_io::ExportReceipt>, String>),
     DiscardProject,
     SaveBeforeLeave,
     KeepProject,
@@ -164,7 +183,7 @@ pub(crate) enum Message {
 }
 
 pub(crate) fn run() -> iced::Result {
-    iced::application(FastFill::default, update, view)
+    iced::application(boot, update, view)
         .title(|state: &FastFill| {
             format!(
                 "FastFill — {}{}",
@@ -206,6 +225,18 @@ pub(crate) fn run() -> iced::Result {
             })
         })
         .run()
+}
+
+fn boot() -> (FastFill, iced::Task<Message>) {
+    let state = FastFill::default();
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut state = state;
+        state.project.operation = project::Operation::Recovering;
+        (state, recovery::start())
+    }
+    #[cfg(target_arch = "wasm32")]
+    (state, iced::Task::none())
 }
 
 fn page_size(state: &FastFill) -> PageSize {

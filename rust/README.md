@@ -13,6 +13,13 @@ mise exec -- cargo test --all-features
 mise exec -- cargo check --target wasm32-unknown-unknown
 ```
 
+The small browser download adapter also has a dependency-free check
+(Node.js 18+; run in CI):
+
+```sh
+node web/download.test.mjs
+```
+
 The WASM command needs its standard library once per toolchain:
 
 ```sh
@@ -48,6 +55,16 @@ to reach TCP port 24800. Trunk watches for changes, but browser auto-reload is
 disabled so the generated page never assumes the development machine is
 `localhost`; refresh the browser after a rebuild.
 
+For browser performance checks, also optimize FastFill itself, not only its
+dependencies. This takes longer to build:
+
+```sh
+mise exec -- trunk serve --release --address 0.0.0.0 --port 24800 \
+  --no-autoreload true
+```
+
+The browser remains a touch-test harness; responsiveness still needs tuning.
+
 Checkpoint 5C adds multiple image pages:
 
 - **Add image:** choose a PNG or JPEG. The first image uses the starter blank
@@ -75,10 +92,11 @@ Checkpoint 5D2 connects project files:
 - **New / Open:** start a blank project or choose a `.docscan`. Unsaved
   changes prompt Save, Discard, or Cancel. Failed/canceled opens keep the
   current pages and history; successful opens start fresh annotation history.
-- **Save / Save as:** the first save chooses a destination; later Save writes
-  that file atomically. Save as chooses another destination. Use `.docscan`
-  filenames. Original PNG/JPEG bytes remain intact; blank pages save as white
-  PNGs. Save accepts pending text and cancels unfinished shape drags.
+- **Save / Save as:** on desktop, first save chooses a destination; later Save
+  writes that file atomically. Native Save as chooses another destination.
+  The button is hidden in WASM, where Save always downloads a copy. Use
+  `.docscan` filenames. Original PNG/JPEG bytes remain intact; blank pages save
+  as white PNGs. Save accepts pending text and cancels unfinished shape drags.
 - **Dirty marker:** `*` beside the filename means unsaved content. Page
   imports, replacement, deletion, reorder, and annotation changes count.
   Selection, navigation, and tool defaults do not. Undo back to the saved
@@ -87,7 +105,8 @@ Checkpoint 5D2 connects project files:
   Save failures/cancellation never continue New, Open, or Close. Escape
   cancels the confirmation; changing focus does not discard it.
 - **Shortcuts:** Ctrl+N New, Ctrl+O Open, Ctrl+S Save, Ctrl+Shift+S Save as.
-  Use Command instead of Ctrl on macOS.
+  Use Command instead of Ctrl on macOS. In WASM, Ctrl+Shift+S remains an alias
+  for Save/download.
 
 Checkpoint 5E adds **Import PDF** in the page rail:
 
@@ -118,7 +137,71 @@ transparency, and PDF form appearances. Renderer-reported content failures
 reject the import; not every unsupported PDF construct produces a warning.
 Use trusted PDFs: input/output limits do not sandbox internal decompression,
 memory use, or CPU time. Password-protected PDFs have no password prompt.
-PDF export and recovery remain separate upcoming checkpoints.
+
+Checkpoint 5F adds **Export PDF** in the top row:
+
+- Export every page in rail order, including the current inline text edit.
+  Selection frames, handles, unfinished drawings, and zoom/pan are excluded.
+- Pages use the editor's drawing and text engine, flattened at 300 DPI with
+  lossless compression and white paper. Text formatting, rotation, layers,
+  transparency, and page-edge clipping are retained. PDF text is **not
+  searchable or editable**; keep the `.docscan` for later changes.
+- PDF page sizes follow the project's 612-point-wide coordinate convention,
+  preserving aspect ratio. This does not retain an imported PDF's original
+  physical paper size. Use your PDF viewer's fit-to-paper option when printing.
+- Native export runs in a worker with page progress and a cancel button.
+  Cancel is checked between pages and before file replacement, not within a
+  page render/compression. Wait for acknowledgment; a completed file commit
+  cannot be undone by a late cancellation. The native save dialog itself must
+  be dismissed normally.
+- Native destinations must end in `.pdf`. An existing file is replaced only
+  after all pages render and temporary-file bytes pass read-back verification.
+  Errors or cancellation before commit leave the old file intact. Export
+  remembers its own last successful folder during the run.
+  Write errors name the chosen destination, not the internal temporary file.
+- Export never saves the editable project, clears its unsaved marker, changes
+  its `.docscan` filename, or resets page selection/history/navigation.
+- Limits: 20 pages, 50 megapixels/page, 200 megapixels/document at 300 DPI,
+  and 100 MiB PDF output. Browser export requests a download directly, without
+  FastFill's extra "click to download" dialog, with the same event-thread
+  blocking limitation as import. The browser may ask where to save or block a
+  download according to its settings. A request is not proof of a disk write.
+
+Checkpoint 5G adds **automatic recovery on native desktop**:
+
+- Changed, unsaved projects get a separate atomic `.docscan` snapshot about
+  every 10 seconds while no modal file operation is active. Snapshot encoding
+  and disk work run in a background worker. Unfinished drawings and open text
+  edits postpone snapshots; they are never accepted automatically. Recent
+  work since the last completed
+  snapshot can still be lost. Keep saving projects explicitly.
+- After an abnormal exit, startup offers **Restore**, **Discard**, or
+  **Not now**. Restore opens an unsaved copy named `Recovered project.docscan`,
+  without the original project's path. Save chooses a destination. Not now
+  keeps recovery for a later launch; Discard deletes that offered snapshot.
+  Multiple abandoned snapshots are offered newest first; after restoring one,
+  the others remain available on a later launch.
+- Successful Save, project replacement, and normal close remove the current
+  session's obsolete recovery. Canceled/failed file dialogs keep it. Recovery
+  never overwrites the explicit project file or clears its unsaved marker.
+  File locks isolate running instances and pending recovery choices.
+- Locations: `%LOCALAPPDATA%/FastFill/Recovery` on Windows;
+  `$XDG_STATE_HOME/fastfill/recovery` on Linux, falling back to
+  `$HOME/.local/state/fastfill/recovery`; and
+  `$HOME/Library/Application Support/FastFill/Recovery` on macOS.
+  Set `FASTFILL_RECOVERY_DIR` to an absolute directory to isolate testing.
+  These files contain unencrypted document images and annotations. Newly
+  created Unix recovery directories are private to the user. Existing
+  directory permissions remain unchanged. C# workspaces are untouched.
+- Failures show a persistent recovery warning without blocking editing or
+  explicit saves. Failed snapshots keep the preceding valid recovery and
+  retry on the next tick. A startup/worker failure disables recovery for that
+  run. Cleanup failure before normal close keeps the window open with a
+  warning. Invalid recovery archives stay intact unless explicitly discarded.
+- Browser recovery is not implemented in this checkpoint. Local browser
+  storage is feasible; an IndexedDB follow-up would suit binary project/image
+  data without synchronous `localStorage` writes. Browser Save still requests
+  a project download; do not rely on closing/reloading the tab to save work.
 
 Project dialogs remember their last successful folder during the run. File
 operations block editing until finished. Page geometry, fonts, and strokes use
@@ -131,8 +214,10 @@ decoding the new PNG again. Saving fully validates source images once; native
 temporary-file read-back verifies exact bytes and ZIP CRC before atomic commit.
 No archive thumbnail/schema change is required for these optimizations.
 
-In browsers, Open uploads a file and Save/Save as downloads a `.docscan`; no
-original path can be reused. Download completion means the browser accepted
+In browsers, Open uploads a file and Save downloads a `.docscan`; no
+original path can be reused. Save requests the download immediately,
+using the project filename; the browser handles destination/renaming. There
+is no extra application download dialog. Completion means FastFill submitted
 the download request, not verified disk persistence. Closing/reloading the
 browser tab is not guarded; save first. Large archive/image processing can
 still pause the browser. These are harness limits, not native behavior.
@@ -212,7 +297,7 @@ The tool row scrolls horizontally in narrower windows.
   window. Parts outside the page are clipped, while a small reachable part is
   kept on-page.
 
-Save projects explicitly; automatic recovery is not implemented yet.
+Save projects explicitly; native recovery is a safety net, not a saved file.
 Schema-v1 archive load/save
 APIs are covered by automated compatibility tests. Minimal Linux or WASM
 environments without requested generic or italic fonts fall back to bundled

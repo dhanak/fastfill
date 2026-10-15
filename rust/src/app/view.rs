@@ -37,15 +37,31 @@ fn heading(state: &FastFill) -> Element<'_, Message> {
     if let Some(confirmation) = super::project_view::confirmation(state) {
         heading = heading.push(confirmation);
     }
-    if let super::project::Operation::ImportingPdf { progress, .. } =
-        state.project.operation
-    {
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(banner) = super::recovery::banner(state) {
+        heading = heading.push(banner);
+    }
+    let pdf_progress = match &state.project.operation {
+        super::project::Operation::ImportingPdf { progress, .. } => Some((
+            *progress,
+            "Cancel PDF import",
+            Some(Message::CancelPdfImport),
+        )),
+        super::project::Operation::ExportingPdf {
+            progress, cancel, ..
+        } => Some((
+            *progress,
+            "Cancel PDF export",
+            (!cancel.load(std::sync::atomic::Ordering::Relaxed))
+                .then_some(Message::CancelPdfExport),
+        )),
+        _ => None,
+    };
+    if let Some((progress, label, message)) = pdf_progress {
         heading = heading.push(
             row![
                 progress_bar(0.0..=1.0, progress).girth(8).length(Fill),
-                button("Cancel PDF import")
-                    .on_press(Message::CancelPdfImport)
-                    .height(CONTROL_HEIGHT),
+                button(label).on_press_maybe(message).height(CONTROL_HEIGHT),
             ]
             .spacing(12)
             .align_y(iced::Alignment::Center),
@@ -421,8 +437,12 @@ pub(super) fn document(state: &FastFill) -> Element<'_, Message> {
             input_enabled: false,
             ..page
         };
-        let mut layers =
-            iced::widget::stack![canvas(background).width(Fill).height(Fill),];
+        // iced leaves a stack's first child unlayered. An empty base makes
+        // even the page background respect the canvas viewport's clip.
+        let mut layers = iced::widget::stack![
+            iced::widget::Space::new().width(Fill).height(Fill),
+            canvas(background).width(Fill).height(Fill),
+        ];
         for annotation in state.annotations().ordered_annotations() {
             let annotation = PageCanvas {
                 layer: CanvasLayer::Annotation(annotation),

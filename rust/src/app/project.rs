@@ -21,9 +21,18 @@ pub(super) enum LeaveAction {
 pub(super) enum Operation {
     #[default]
     Idle,
+    #[cfg(not(target_arch = "wasm32"))]
+    Recovering,
+    #[cfg(not(target_arch = "wasm32"))]
+    ClosingRecovery,
     Confirm(LeaveAction),
     Opening(u64),
     ImportingPdf {
+        id: u64,
+        cancel: Arc<std::sync::atomic::AtomicBool>,
+        progress: f32,
+    },
+    ExportingPdf {
         id: u64,
         cancel: Arc<std::sync::atomic::AtomicBool>,
         progress: f32,
@@ -166,7 +175,12 @@ impl FastFill {
                     move |result| Message::ProjectOpened(id, result),
                 )
             }
-            LeaveAction::Close(id) => iced::window::close(id),
+            LeaveAction::Close(id) => {
+                #[cfg(not(target_arch = "wasm32"))]
+                return super::recovery::close(self, id);
+                #[cfg(target_arch = "wasm32")]
+                iced::window::close(id)
+            }
         }
     }
 
@@ -313,6 +327,29 @@ impl FastFill {
             }
         }
         Task::none()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn restore_project(
+        &mut self,
+        opened: &OpenedProject,
+    ) -> Result<(), String> {
+        let pages = Pages::from_opened(opened)?;
+        let mut header = opened.project.clone();
+        header.pages.clear();
+        self.project.header = header;
+        self.project.path = None;
+        self.project.name.clone_from(&opened.name);
+        self.project.saved = None;
+        self.project.operation = Operation::Idle;
+        self.pages = pages;
+        self.navigation.fit();
+        self.page_scroll = 0.0;
+        self.cancel_interaction();
+        self.status =
+            "Recovered unsaved work. Save to keep a project copy.".into();
+        self.status_is_error = false;
+        Ok(())
     }
 }
 

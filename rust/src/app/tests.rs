@@ -1269,6 +1269,77 @@ fn main_window_keeps_the_page_rail_separate_from_the_canvas() {
     }
 }
 
+#[test]
+fn zoomed_panned_page_cannot_paint_over_toolbars_or_the_rail() {
+    let mut state = rendered_page();
+    let viewport = PageRect::new(0.0, 0.0, 1_036.0, 568.0);
+    state.navigation.zoom_at(
+        4.0,
+        viewport.center(),
+        page_size(&state),
+        viewport,
+    );
+    state.navigation.pan_by(PagePoint::new(-300.0, -500.0));
+    for (scale, dpi) in [(1, 1.0), (2, 2.0)] {
+        let pixels = render_element(
+            view(&state),
+            iced::Size::new(1_200, 800),
+            scale,
+            dpi,
+        );
+        let pixels = pixels.as_chunks::<4>().0;
+        let width = 1_200 * usize::try_from(scale).unwrap();
+        let scale = usize::try_from(scale).unwrap();
+        let page_color = [240, 230, 210, 255];
+        assert!(
+            pixels[..200 * scale * width]
+                .iter()
+                .all(|pixel| *pixel != page_color),
+            "page image must not cover the toolbar at {dpi} DPI scale"
+        );
+        for y in 400 * scale..780 * scale {
+            for x in 160 * scale..164 * scale {
+                assert_ne!(
+                    pixels[y * width + x],
+                    page_color,
+                    "page image must not cover the rail border"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn scrolled_thumbnails_cannot_paint_over_page_controls() {
+    // Keep concurrent font initialization out of the pixel comparison.
+    let _ = crate::appearance::text_font(TextFormat::default());
+    let mut state = rendered_page();
+    let image = state.image().unwrap().clone();
+    assert!(state.pages.import_images(&vec![image; 6]));
+    for (scale, dpi) in [(1, 1.0), (2, 2.0)] {
+        state.page_scroll = 0.0;
+        let before = render_element(
+            super::rail::view(&state),
+            iced::Size::new(164, 600),
+            scale,
+            dpi,
+        );
+        state.page_scroll = 80.0;
+        let after = render_element(
+            super::rail::view(&state),
+            iced::Size::new(164, 600),
+            scale,
+            dpi,
+        );
+        let scale = usize::try_from(scale).unwrap();
+        let control_bytes = 164 * 260 * scale * scale * 4;
+        assert!(
+            before[..control_bytes] == after[..control_bytes],
+            "scrolling must not change the page controls at {dpi} DPI scale"
+        );
+    }
+}
+
 pub(super) fn annotated_page() -> FastFill {
     let mut state = FastFill::default();
     state.annotations_mut().set_tool(Tool::Rectangle);

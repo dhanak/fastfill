@@ -37,9 +37,21 @@ pub enum AnnotationRef<'a> {
     Text(usize, &'a TextAnnotation),
 }
 
-pub(crate) enum OwnedAnnotation {
+#[derive(Clone, Debug)]
+pub enum OwnedAnnotation {
     Shape(ShapeAnnotation),
     Text(TextAnnotation),
+}
+
+impl OwnedAnnotation {
+    /// Borrow content for rendering; the index is a placeholder, always zero.
+    #[must_use]
+    pub const fn as_ref(&self) -> AnnotationRef<'_> {
+        match self {
+            Self::Shape(shape) => AnnotationRef::Shape(0, shape),
+            Self::Text(text) => AnnotationRef::Text(0, text),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

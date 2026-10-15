@@ -68,7 +68,14 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
                 ),
             ]
             .spacing(4),
-            canvas(Rail { app: state }).width(Fill).height(Fill),
+            // Give the canvas an explicit layer/clip, like the document.
+            iced::widget::stack![
+                iced::widget::Space::new().width(Fill).height(Fill),
+                canvas(Rail { app: state }).width(Fill).height(Fill),
+            ]
+            .width(Fill)
+            .height(Fill)
+            .clip(true),
         ]
         .spacing(6),
     )

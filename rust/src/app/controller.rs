@@ -162,6 +162,20 @@ impl FastFill {
 }
 
 pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(task) = super::recovery::update(state, &message) {
+        return task;
+    }
+    let task = update_editor(state, message);
+    #[cfg(not(target_arch = "wasm32"))]
+    super::recovery::synchronize(state);
+    task
+}
+
+fn update_editor(state: &mut FastFill, message: Message) -> Task<Message> {
+    if let Some(task) = super::export::update(state, &message) {
+        return task;
+    }
     if let Some(task) = super::pdf::update(state, &message) {
         return task;
     }

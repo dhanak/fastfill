@@ -246,7 +246,7 @@ text. No importing, saving, camera, or annotations were included.
       mismatches rather than hiding them.
 - [x] Decide whether iced remains suitable before proceeding.
 
-### 5. Projects, pages, imports, and PDF — in progress
+### 5. Projects, pages, imports, and PDF — accepted
 
 - Incremental slices: safe `.docscan` loading; compatible atomic saving;
   multiple pages/reorder; PDF import; matching PDF export; recovery.
@@ -349,7 +349,50 @@ introduce v2 only when a concrete requirement justifies it.
 
 Performance/progress, mixed text/shape selection, and bulk font controls are
 also accepted. See the follow-up logs below. Matching PDF export is next;
-keep recovery separate and stop after committing this checkpoint.
+keep recovery separate.
+
+#### 5F. Matching PDF export — accepted
+
+- [x] Flatten committed pages at 300 DPI using the editor's renderer,
+      preserving order, images, formatted text, layers, alpha, and clipping.
+- [x] Exclude selection handles, drafts, navigation, and other UI overlays.
+- [x] Export all pages through a PDF save dialog, with native worker progress
+      and cancellation; replace native destinations atomically.
+- [x] Accept pending text without marking the project saved or changing its
+      `.docscan` path, page selection, history, or navigation.
+- [x] Bound page dimensions and total raster work before allocating pixels.
+- [x] Test PDF round trips, rendering fidelity, cancellation, failures, and
+      native/core/WASM builds. Document flattened/non-searchable output.
+- [x] User checkpoint: export, view/print, page order, appearance, overwrite,
+      cancel, dirty state, and browser download where available.
+
+Stop at the export checkpoint. Recovery remains a separate slice.
+
+#### 5G. Automatic recovery — accepted
+
+- [x] Test native, atomic recovery storage and concurrent-instance isolation.
+- [x] Snapshot committed dirty work every 10 seconds in a background worker.
+      Skip pending text/drawing edits; never accept them automatically.
+- [x] Offer startup Restore/Discard/Not now; restore into an unsaved copy,
+      never the original project's path. Keep snapshots until saved or
+      discarded.
+- [x] Serialize writes and cleanup so late completion cannot resurrect old
+      recovery after Save, New, Open, or normal exit.
+- [x] Document per-user paths, failure reporting, and browser limitations.
+- [x] Run automated checks; stop for native crash/relaunch manual testing.
+- [x] User checkpoint: crash recovery, deferred restore, Save/Discard cleanup,
+      and concurrent instances. All requested checks passed.
+
+Native locations: `%LOCALAPPDATA%/FastFill/Recovery` on Windows,
+`$XDG_STATE_HOME/fastfill/recovery` (fallback
+`$HOME/.local/state/fastfill/recovery`) on Linux, and
+`$HOME/Library/Application Support/FastFill/Recovery` on macOS.
+`FASTFILL_RECOVERY_DIR` overrides the directory for isolated testing.
+Browser recovery is deferred; browser Save still downloads a project.
+User suggested browser-local recovery: record IndexedDB as a follow-up for
+binary project/image data, rather than synchronous, string-only localStorage.
+Handle quota/eviction, private browsing, and multiple live tabs explicitly.
+See [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API).
 
 ### 6. Correction, snapping, and camera — not started
 
@@ -365,6 +408,8 @@ keep recovery separate and stop after committing this checkpoint.
 
 - Polish the UI for regular use: cohesive visual styling, tool icons, touch
   layout, and confirmations that overlay the canvas without resizing it.
+- Profile the browser harness if full-release builds remain sluggish;
+  dependency-only optimization leaves FastFill's own debug code unoptimized.
 - Redesign the page rail with animated reorder feedback:
   - Draw a semi-transparent thumbnail above the UI, keeping the original grab
     offset so it follows the mouse/touch pointer even outside the rail.
@@ -1199,6 +1244,175 @@ Manual checkpoint — accepted:
 
 Stop after the requested commit. Resume with matching PDF export next, then
 recovery as a separate checkpoint; neither is implemented in this slice.
+
+### 2026-10-15 — checkpoint 5F matching PDF export
+
+- Scope: export only, leaving the C# app and recovery unchanged.
+- Add tests for page order/dimensions, whole-document preflight, page-boundary
+  cancellation, and exclusion of selection/draft overlays before wiring UI.
+- Reuse iced's headless software renderer and the existing annotation drawing
+  functions. Keep one explicit renderer layer per annotation to retain
+  text/path order. A regression test caught that separate geometries alone
+  still batch text above paths; mirror the UI stack's layer boundaries.
+  Snapshot committed objects without copying selection or undo history.
+- Flatten at 300 DPI in page-point coordinates; embed raw RGBA losslessly with
+  the existing Krilla dependency. Enable its raster-images feature for GUI
+  builds only; the standalone vector PDF probe stays dependency-light.
+- Add an Export PDF save dialog, per-page native worker progress, cancellation,
+  panic/error reporting, and stale-result guards. Keep edits blocked until the
+  export worker acknowledges cancellation, since an atomic commit is final.
+- Write native output to a same-directory temporary file, verify exact bytes,
+  check cancellation, then replace atomically. Refuse non-PDF destinations.
+- Preserve project path/name, saved identity, page selection, navigation, and
+  annotation history. Accept pending text before the snapshot; cancel drafts.
+  Remember the last successful export directory independently of project I/O.
+- Bound output to 20 pages, 50 MP/page, 200 MP total, and 100 MiB PDF bytes.
+- Add render/round-trip checks covering formatted Unicode text, rotation,
+  translucent shapes/highlighting, clipping, real canvas parity, blank paper,
+  and imported backgrounds. Add controller and atomic-write regressions.
+- Document raster/non-searchable output, page-point printing dimensions, and
+  the existing browser event-thread/download acknowledgment limitations.
+
+Automated validation: all green. All-feature suite: 249 tests; core-only:
+130 tests. Formatting, strict all-target/all-feature Clippy, native test
+compilation, WebAssembly compilation, and diff whitespace checks pass.
+The PDF-only feature build also passes its three vector-probe tests without
+the GUI or raster-image feature.
+Builds use `/tmp/fastfill-rust-codex-target`, never the host target directory.
+
+Manual checkpoint 5F — passed by user; see follow-up below:
+
+1. Open a copy of a multi-page project, reorder pages, and export. Check count,
+   order, backgrounds, and annotation placement in a PDF viewer.
+2. Include B/I/U, multiple fonts, Unicode, rotated text, overlapping text/shapes,
+   highlighter, and objects crossing the page edge. Check appearance/clipping.
+   Try print preview with fit-to-paper; output uses project point dimensions.
+3. Export while zoomed/panned and with an object selected. Output must contain
+   the full page, without selection handles, toolbars, or unfinished drawings.
+4. Export directly from an active text editor. Pending text must be included;
+   the editable project must still need saving. Clean projects stay clean.
+   Project filename, selected page, selection/history, and navigation remain.
+5. Cancel the save dialog. On a larger export, use Cancel PDF export and wait
+   for acknowledgment. Existing destination/project data must remain intact
+   unless the file had already committed before cancellation.
+6. Overwrite a disposable PDF successfully; try an invalid/non-PDF destination
+   and check the visible error. Repeat export to check remembered folder.
+7. Optional browser harness: download/open the PDF. Large work still blocks
+   browser progress/cancel handling; native export is the primary checkpoint.
+
+### 2026-10-15 — 5F acceptance and browser follow-up
+
+- User confirms PDF export works, including native error handling and browser
+  project import/PDF export. Mark the export checkpoint accepted. Recovery
+  remains separate; address these focused follow-ups before advancing.
+- Replace intimidating atomic-write paths in export errors with the chosen
+  destination and a useful reason. Keep write/read-back verification context.
+- Reproduce page-image bleed over the toolbar with a rendering regression at
+  100%/200% DPI. iced clips later stack children but not its first child; use
+  an empty base so every page layer, including its background, is clipped.
+  Apply the same fix to the scrolling thumbnail canvas; a separate failing
+  regression reproduced thumbnails covering the rail's page controls.
+- Replace browser save/download modals with one small Blob/download adapter
+  shared by PDF export and project saving. Keep native dialogs unchanged.
+  Remove the temporary link and revoke its URL after download startup; report
+  synchronous browser errors without claiming verified disk persistence.
+- Add standalone Node assertions for PDF/project filenames, MIME types, byte
+  subarrays, immediate clicks, delayed URL cleanup, and DOM failure cleanup.
+  Run this check in CI without adding a JS framework or package dependencies.
+- Keep overall WASM responsiveness as a known harness limitation. Document a
+  fully optimized application build for comparison before deeper profiling.
+
+Automated follow-up validation: 253 all-feature Rust tests and the standalone
+browser adapter check pass. Native/WASM strict Clippy, formatting, and diff
+whitespace checks pass. Trunk builds the complete WASM bundle; its generated
+JS imports the copied download module correctly. Container build/distribution
+outputs stay under `/tmp`, outside the host target and dist directories.
+
+Focused manual recheck — passed by user:
+
+1. Zoom/pan a large image page under the toolbar and toward the rail. Nothing
+   should cover controls or their backgrounds, including in the browser.
+2. Try an unwritable PDF destination. Error should show the chosen filename
+   and a useful reason, with no `.atomicwrite` or random temporary filenames.
+3. Browser Save/Save as and Export PDF should start normal browser downloads
+   without FastFill's extra modal. Open the resulting `.docscan` and PDF.
+
+### 2026-10-15 — 5F follow-ups accepted
+
+- User confirms all requested native/browser checks passed. Close checkpoint
+  5F, including the export error, clipping, and direct-download follow-ups.
+- Hide Save as in WASM only: it is equivalent to Save's download-copy flow.
+  Keep native Save as and the existing Ctrl+Shift+S shortcut unchanged; the
+  shortcut remains a Save/download alias in the browser.
+- Add a platform-aware project-controls check and update the prototype guide.
+- Validation: 254 all-feature tests, formatting, and strict native/WASM
+  Clippy pass.
+
+Next separate checkpoint: 5G recovery. Do not start it in this change.
+
+### 2026-10-15 — checkpoint 5G native automatic recovery
+
+- Add a single native worker for periodic snapshots, loading recovery, and
+  ordered cleanup. Reuse the project's bounded archive loader, decoded image
+  cache, original encoded assets, and atomic verified writer. No dependency
+  or C# application changes.
+- Snapshot changed, committed dirty content about every 10 seconds; skip
+  pending draws/text and modal file operations. Do not change explicit-save
+  identity, history, navigation, or the current editor. Recovery is a safety
+  net, not an explicit save; a crash may lose work after the last snapshot.
+- Use UUID session names and OS file locks in a private per-user directory.
+  Ignore live sessions and foreign links/names. Offer abandoned snapshots
+  newest first with Restore, Discard, and Not now. Keep corrupt files until
+  explicit discard. Restore an unsaved copy without the original file path;
+  keep its snapshot until explicit Save/Discard or a newer atomic snapshot.
+- Queue cleanup behind in-flight writes on Save, New, successful Open, and
+  normal close. Canceled/failed dialogs retain current work and recovery.
+  Wait for cleanup acknowledgment before closing. Ignore late restore results
+  once closing, and keep the window open if cleanup fails.
+- Show persistent, actionable recovery warnings. Retry snapshot/cleanup I/O
+  failures on later ticks without a retry loop; worker/startup failure leaves
+  ordinary editing and explicit saving available.
+- Per user request, paths use FastFill/fastfill, never a -rust suffix. Keep
+  the C# workspaces subdirectory and explicit project files untouched.
+- Record browser-local recovery as a possible IndexedDB follow-up. Do not
+  add it to this native checkpoint; account for quotas, eviction, private
+  browsing, and concurrent tabs before promising browser recovery.
+- Automated checks: 271 all-feature Rust tests (17 new recovery checks),
+  130 core-only tests, native/WASM strict Clippy, formatting, browser download
+  adapter assertions, whitespace checks, and a complete Trunk bundle build.
+  Container outputs remain under /tmp; host target/dist stay untouched.
+
+Manual checkpoint 5G — passed by user:
+
+1. Add at least two pages, shapes, and accepted text; reorder pages. Wait
+   about 15 seconds, then kill the FastFill process with the system task
+   manager (not the window close button). Relaunch: choose Not now, close,
+   relaunch again, then Restore. Check page order, images, text, formatting,
+   and layers. Restored work must be unsaved, without an original save path.
+2. Save the recovered work to a new .docscan. Close and relaunch: no recovery
+   prompt for that session. Existing explicitly saved projects must not
+   change unless you deliberately save over them.
+3. Make another accepted change; wait for a snapshot. Cancel an attempted
+   Save as, then force-kill/relaunch: recovery must still exist. Restore,
+   make another change, wait, then close normally and choose Discard. The
+   next launch must not offer that session. Also check New + Discard.
+4. Run two instances. Create unsaved work in each and wait for snapshots.
+   Launching another instance must not offer either live project's recovery.
+   Kill only one original instance; a new launch should offer only its
+   abandoned work. The still-running instance must remain unaffected.
+5. Optional error check: set FASTFILL_RECOVERY_DIR to an existing regular
+   file, not a directory. Startup should show a visible recovery warning;
+   annotation editing and explicit Save must still work. Unset afterward.
+
+User confirms all requested checks passed. Close checkpoint 5G and Phase 5;
+browser recovery remains a documented follow-up. Phase 6 is not started.
+
+### 2026-10-15 — Phase 5 accepted
+
+- Record user acceptance of all 5G manual checks and close the final planned
+  Phase 5 checkpoint. Keep browser recovery as a documented follow-up.
+- Leave the implementation and staged changes unchanged. Wait for an
+  explicit request before committing or starting Phase 6.
 
 ## References
 

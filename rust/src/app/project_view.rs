@@ -30,8 +30,12 @@ pub(super) fn controls(state: &FastFill) -> Element<'_, Message> {
         control("New", Message::NewProject),
         control("Open", Message::OpenProject),
         control("Save", Message::SaveProject),
-        control("Save as", Message::SaveProjectAs),
     ]
+    .extend(
+        cfg!(not(target_arch = "wasm32"))
+            .then(|| control("Save as", Message::SaveProjectAs).into()),
+    )
+    .push(control("Export PDF", Message::ExportPdf))
     .spacing(8)
     .align_y(iced::Alignment::Center)
     .into()
@@ -67,4 +71,18 @@ pub(super) fn confirmation(state: &FastFill) -> Option<Element<'_, Message>> {
         .style(container::warning)
         .into(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn project_controls_match_the_platform_save_workflow() {
+        let state = FastFill::default();
+        let header = controls(&state);
+        // Title, New, Open, Save, Export PDF; native adds Save as.
+        let expected = 5 + usize::from(cfg!(not(target_arch = "wasm32")));
+        assert_eq!(header.as_widget().children().len(), expected);
+    }
 }
