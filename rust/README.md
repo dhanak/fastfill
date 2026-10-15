@@ -9,7 +9,7 @@ Install the pinned toolchain and run all local checks:
 mise install
 mise exec -- cargo fmt --check
 mise exec -- cargo clippy --all-targets --all-features -- -D warnings
-mise exec -- cargo test --all-features
+mise exec -- cargo test --all-features --all-targets
 mise exec -- cargo check --target wasm32-unknown-unknown
 ```
 
@@ -64,6 +64,86 @@ mise exec -- trunk serve --release --address 0.0.0.0 --port 24800 \
 ```
 
 The browser remains a touch-test harness; responsiveness still needs tuning.
+
+Checkpoint 6A starts the correction pipeline with **an offline preview
+command**, not page-edit controls yet. From `rust/`, create
+`../artifacts/previews/` if needed, or choose another existing output folder:
+
+```sh
+mise exec -- cargo run --no-default-features --example correct_page -- \
+  ../tests/samples/sample-form.png ../artifacts/previews/corrected-form.png \
+  examples/correction.json
+```
+
+The supplied settings crop 4% from each edge, then rotate 90° clockwise.
+Open the resulting PNG in an image viewer. Change `rotationQuarterTurns`
+to 0 to inspect the unrotated crop, or omit the JSON argument entirely for
+an exact full-frame copy of the decoded 8-bit RGBA pixels. Preview PNGs use
+8-bit channels; original encoding and metadata are not reproduced. Output
+files are created atomically and never overwritten, so choose a new filename
+for each run. Original images and projects are untouched.
+
+JSON uses the existing normalized `crop` coordinates (0–1), ordered
+`topLeft`, `topRight`, `bottomRight`, `bottomLeft`, and clockwise
+`rotationQuarterTurns` (negative counts work too). Arbitrary convex crops use
+a four-corner projective transform with alpha-aware bilinear interpolation;
+they are not four independent corner adjustments. Nonfinite, crossed,
+out-of-image, or numerically unusable crops are rejected. Both input and
+output are limited to 50 MP; encoded inputs to 100 MiB and JSON to 16 KiB.
+Full-frame correction retains every RGBA pixel and the original dimensions,
+unlike the old C# processor's one-pixel reduction. The preview command is
+native-only; the correction library also builds for WASM. Use `--release`
+before `--no-default-features` for performance measurements.
+
+Checkpoint 6B adds **filters to the same offline preview command**. For
+example, use `examples/filter.json` instead of the crop/rotation preset.
+It applies Enhanced color with contrast +10 and no geometry changes.
+The JSON `filter` object uses the existing project schema:
+
+| `mode` | Filter |
+| --- | --- |
+| 0 | Original |
+| 1 | Enhanced color: gray-world balance and local Lab contrast |
+| 2 | Grayscale (BT.601) |
+| 3 | Adaptive B&W for ink on unevenly lit paper |
+
+`contrast` ranges from -100 to +100, default 0. It uses linear gain about
+128. The top-level `brightness` setting has the same range/default and adds
+up to 255 channel levels. Use `examples/brightness.json` for brightness +15,
+or combine both adjustments:
+
+```json
+{"brightness": 15, "filter": {"mode": 1, "contrast": 10}}
+```
+
+Both adjustments run **after** the selected filter, in one lookup:
+`(channel - 128) * (1 + contrast / 100) + 128 + 255 * brightness / 100`.
+Round and clamp to 0–255 only once, after both adjustments. With brightness
+0, negative contrast softens B&W into gray; contrast -100 produces mid-gray.
+Brightness can also soften pure B&W, so leave it at 0 for strictly black and
+white output. Geometry runs before filtering, so cropped backgrounds do not
+affect color balance. Filters preserve alpha and leave fully transparent
+pixels unchanged. Source images and projects stay intact. Brightness is an
+offline-preview setting for now; project persistence belongs to 6C, without
+changing schema-v1 archives in this checkpoint.
+
+Enhanced color retains the old gray-world + Lab CLAHE approach (8x8 tiles,
+clip limit 2). Empty/flat tiles use identity mappings to avoid blowing tiny
+or uniform images to white; edge tiles use actual image pixels. B&W retains
+the 31-pixel Gaussian neighborhood (sigma 5, offset 12), but intentionally
+omits blanket median denoising to preserve single-pixel rules, dotted fields,
+and fine print. Camera noise can therefore remain, and thresholding can lose
+very faint writing; use grayscale/enhanced when needed. The portable
+float/byte implementation is not promised to match native OpenCV pixelwise.
+See the [CLAHE reference] and [adaptive threshold reference].
+
+[CLAHE reference]:
+  https://docs.opencv.org/4.x/d5/daf/tutorial_py_histogram_equalization.html
+[adaptive threshold reference]:
+  https://docs.opencv.org/4.x/d7/d4d/tutorial_py_thresholding.html
+
+Page-edit controls, corrected-project editing, auto-detection, and camera
+capture remain separate Phase 6 checkpoints. The main editor is unchanged.
 
 Checkpoint 5C adds multiple image pages:
 

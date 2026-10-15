@@ -129,6 +129,29 @@ impl CropQuad {
             self.bottom_left,
         ]
     }
+
+    pub(crate) fn is_valid(self) -> bool {
+        let points = self.points();
+        if points.iter().any(|point| {
+            !point.x.is_finite()
+                || !point.y.is_finite()
+                || !(0.0..=1.0).contains(&point.x)
+                || !(0.0..=1.0).contains(&point.y)
+        }) {
+            return false;
+        }
+        let signs: [f64; 4] = std::array::from_fn(|index| {
+            let a = points[index];
+            let b = points[(index + 1) % 4];
+            let c = points[(index + 2) % 4];
+            (f64::from(b.x) - f64::from(a.x))
+                * (f64::from(c.y) - f64::from(b.y))
+                - (f64::from(b.y) - f64::from(a.y))
+                    * (f64::from(c.x) - f64::from(b.x))
+        });
+        signs.iter().all(|value| *value > 0.0)
+            || signs.iter().all(|value| *value < 0.0)
+    }
 }
 
 #[derive(

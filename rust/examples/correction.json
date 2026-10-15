@@ -1,0 +1,9 @@
+{
+  "crop": {
+    "topLeft": { "x": 0.04, "y": 0.04 },
+    "topRight": { "x": 0.96, "y": 0.04 },
+    "bottomRight": { "x": 0.96, "y": 0.96 },
+    "bottomLeft": { "x": 0.04, "y": 0.96 }
+  },
+  "rotationQuarterTurns": 1
+}

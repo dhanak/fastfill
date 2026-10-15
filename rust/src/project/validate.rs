@@ -74,26 +74,7 @@ pub(super) fn validate_page(
 }
 
 fn validate_crop(page: &ProjectPage) -> Result<(), ProjectLoadError> {
-    let points = page.crop.points();
-    if points.iter().any(|point| {
-        !finite_point(*point)
-            || !(0.0..=1.0).contains(&point.x)
-            || !(0.0..=1.0).contains(&point.y)
-    }) {
-        return invalid(
-            "Crop corners must be finite, inside the page, and convex.",
-        );
-    }
-    let mut signs = [0.0; 4];
-    for index in 0..4 {
-        let a = points[index];
-        let b = points[(index + 1) % 4];
-        let c = points[(index + 2) % 4];
-        signs[index] = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
-    }
-    if !(signs.iter().all(|value| *value > 0.0)
-        || signs.iter().all(|value| *value < 0.0))
-    {
+    if !page.crop.is_valid() {
         return invalid(
             "Crop corners must be finite, inside the page, and convex.",
         );

@@ -6,11 +6,13 @@ on:
       - ".github/workflows/rust.yml"
       - "rust/**"
       - "docs/samples/fastfill-camera-sample-form.pdf"
+      - "tests/samples/sample-form.png"
   pull_request:
     paths:
       - ".github/workflows/rust.yml"
       - "rust/**"
       - "docs/samples/fastfill-camera-sample-form.pdf"
+      - "tests/samples/sample-form.png"
   workflow_dispatch:
 
 permissions:
@@ -41,7 +43,7 @@ jobs:
       - name: Test platform-independent logic
         run: cargo +1.99.0 test --no-default-features
       - name: Test application state and GUI input
-        run: cargo +1.99.0 test --all-features
+        run: cargo +1.99.0 test --all-features --all-targets
       - name: Lint
         if: matrix.os == 'ubuntu-latest'
         run: >-

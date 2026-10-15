@@ -394,7 +394,7 @@ binary project/image data, rather than synchronous, string-only localStorage.
 Handle quota/eviction, private browsing, and multiple live tabs explicitly.
 See [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API).
 
-### 6. Correction, snapping, and camera — not started
+### 6. Correction, snapping, and camera — in progress
 
 - Port image correction and form snapping, retaining calibrated fixtures.
 - Port document detection and temporal capture gating with all 224 frames.
@@ -403,6 +403,61 @@ See [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API).
   use different adapters; avoid unconditional native-only dependencies.
 - User checkpoints: lab parity first, then laptop camera, then SP6 cameras,
   permissions, orientation, countdown, cancellation, and suspend/resume.
+
+#### 6A. Correction geometry and offline preview — accepted
+
+- [x] Test perspective correction and quarter-turn rotation independently of
+      the GUI. Reuse the current crop schema and image dependency.
+- [x] Validate source/crop/output limits before allocating output pixels;
+      reject crossed, nonfinite, or numerically unusable quadrangles.
+- [x] Preserve full-frame dimensions and pixels exactly. Treat normalized
+      corners as pixel centers; include both endpoints in output dimensions.
+- [x] Add a small native PNG preview command using optional JSON correction
+      settings. Bound reads and refuse existing output files.
+- [x] Test synthetic geometry, real sample forms, alpha interpolation, and
+      command parsing. Keep native/core/WASM builds green.
+- [x] User checkpoint: inspect generated crops/rotation. Main application
+      behavior and corrected-project editing remain unchanged in this slice.
+
+#### 6B. Portable image filters — accepted
+
+- [x] Test grayscale, contrast, enhanced color, and adaptive B&W first.
+- [x] Reuse schema-v1 filter settings and validate contrast before allocation.
+      Apply filters after perspective correction/rotation, without modifying
+      source pixels, dimensions, alpha, or explicit project files.
+- [x] Retain gray-world balance, Lab CLAHE (8x8 tiles, clip 2), and Gaussian
+      B&W calibration (31-pixel window, sigma 5, offset 12). Avoid blanket
+      median blur that erases fine rules/dots; test that intentional change.
+- [x] Reuse installed image primitives where semantics match. Add no native
+      OpenCV dependency; keep core/native/WASM checks green.
+- [x] Extend the existing preview command and document numeric filter modes.
+- [x] User checkpoint: accept generated form/camera filter comparisons.
+- [x] Add brightness -100..100, default 0, after the selected color mode.
+      Combine with contrast in one clamped lookup; test limits, ordering,
+      alpha/source preservation, JSON defaults, and invalid-input safety.
+- [x] User checkpoint: accept the added brightness comparisons.
+      Continue separately with page editing and corrected-project I/O in 6C.
+
+Follow-up slices, each with its own checkpoint:
+
+- **6C — Page editor:** original-image corner adjustment, full frame,
+  rotation, live filtered preview, Accept/Cancel, and corrected-project I/O.
+  Persist brightness in schema-v2 projects while retaining schema-v1 loading.
+  Specify annotation behavior and keep displaced objects accessible, with a
+  warning when moved. Apply changes transactionally; keep originals intact.
+- **6D — Form snapping:** port line/box detection against existing form
+  fixtures, then connect global smart-snap placement and Ctrl corner snapping.
+- **6E — Document detection:** port still-image framing against calibrated
+  fixtures before using any live camera. Do not recalibrate by convenience.
+- **6F — Temporal framing:** replay all 224 laptop-camera frames, with stable
+  overlay/countdown/capture decisions and recorded-sequence regressions.
+- **6G — Native capture:** evaluate camera backends, then add device switch,
+  live overlay, manual/automatic capture, permissions, and lifecycle handling.
+  Test laptop first, SP6 next; defer unsupported browser camera behavior.
+
+The old C# full-frame processor loses one pixel in each dimension. Preserve
+the Rust viewer's exact full-frame dimensions instead; document this intended
+difference rather than porting the off-by-one into the new pipeline.
 
 ### 7. Packaging and replacement decision — not started
 
@@ -1413,6 +1468,134 @@ browser recovery remains a documented follow-up. Phase 6 is not started.
   Phase 5 checkpoint. Keep browser recovery as a documented follow-up.
 - Leave the implementation and staged changes unchanged. Wait for an
   explicit request before committing or starting Phase 6.
+
+### 2026-10-15 — Phase 5 commit and checkpoint 6A
+
+- At user request, commit accepted Phase 5 work as unsigned 0d9f1c0. Do not
+  push. Keep subsequent Phase 6 changes separate and uncommitted.
+- Split Phase 6 into correction geometry, filters, transactional page editing,
+  form snapping, still detection, temporal framing, and native capture. Stop
+  at each checkpoint; do not combine camera work with this foundation.
+- TDD red: ten new correction tests fail at the unimplemented geometry API.
+  Green: add bounded four-corner projective correction and quarter turns,
+  using the existing image dependency for exact rotations. No new dependency.
+- Keep the pipeline independent of iced, filesystem, and project mutation.
+  Share finite/in-bounds/convex crop validation with the archive model, using
+  f64 cross-products. Reject unusable projections and oversized output before
+  allocating a destination. Accept the existing reversed-winding contract.
+- Include endpoint pixel centers in dimensions. Full-frame identity keeps
+  exact dimensions and bytes; arbitrary crops use inverse bilinear sampling.
+  Accumulate premultiplied colors to avoid transparent-edge halos without a
+  large float-image copy. Borrow full-frame input while rotating to avoid
+  an unnecessary full-size clone.
+- Add the native correct_page preview example and a small JSON preset. Bound
+  PNG/JPEG reads to 100 MiB and settings to 16 KiB; write PNG atomically with
+  no overwrite. Test empty/missing/extra arguments and destination safety.
+- Add 14 core correction checks and three preview checks. Cover exact crops,
+  skewed/perspective corners, nonfinite/concave/crossed input, output budgets,
+  negative/large rotation counts, alpha, single-pixel axes, JSON, and the real
+  sample form. Make native CI test all targets so examples run too, and
+  trigger checks when the sample PNG changes.
+- Validation: 288 all-feature/all-target tests and 147 core/example tests
+  pass; strict native/WASM all-target Clippy, formatting, and diff whitespace
+  checks pass. Trunk builds the complete browser bundle. Existing GUI behavior
+  and C# sources remain unchanged.
+- Generate and inspect full-form, cropped/rotated-form, and recorded laptop
+  camera previews under artifacts/previews/correction-6a.k02IEf/. The camera
+  example uses manually specified corners on folded-paper-0059.jpg, not an
+  automatic detection result. Detector/224-frame replay work is deferred.
+
+Manual checkpoint 6A — visual previews accepted by user:
+
+1. Inspect the generated full-form and cropped/rotated-form PNGs. Printed
+   text and lines should remain legible, with no missing final row/column.
+   The preset removes outer margins, then rotates 90 degrees clockwise.
+2. Optionally rerun from rust/ with fresh output filenames:
+   `mise exec -- cargo run --no-default-features --example correct_page --`
+   followed by input PNG/JPEG, output PNG, and examples/correction.json.
+   Omit JSON for identity; change its rotationQuarterTurns to 0 for crop only.
+   Rerunning with an existing output must refuse without changing that file.
+3. Inspect camera-manual-crop.png for the perspective/rotation smoke check.
+   This is a manually framed, folded laptop-camera sample, not an SP6 image
+   or an auto-framing test; four corners cannot flatten a physical fold.
+
+User accepts both generated form and camera previews. Command safety remains
+covered by automated tests. Proceed to the separate 6B filter checkpoint.
+
+### 2026-10-15 — 6A accepted; checkpoint 6B filters
+
+- Record user acceptance of the corrected form and manually framed camera
+  previews. Keep the main editor and C# application unchanged in 6B.
+- TDD red: ten filter tests fail at the unimplemented filter dispatcher;
+  contrast-bound validation already passes. Green: add schema-compatible
+  filters after perspective correction and rotation, with no new dependency.
+- Match BT.601 grayscale and the legacy linear contrast curve about 128.
+  Validate contrast -100..100 before allocating output; apply contrast last.
+  Preserve source pixels, output dimensions, alpha, and hidden RGB at alpha 0.
+- Keep gray-world balance plus 8x8 Lab CLAHE with clip limit 2. Use an sRGB
+  lookup and in-place Lab bytes instead of a large floating-point image.
+  Ignore transparent pixels in statistics; keep flat/empty tiles unchanged
+  and blend neighboring tile lookup tables. Test reference Lab colors,
+  contrast gain, boundary seams, cast removal, and colored marks.
+- Reuse image's optimized byte Gaussian blur with the legacy 31-pixel
+  neighborhood, sigma 5, and threshold offset 12. Treat transparent neighbors
+  as white paper. Intentionally omit median blur: synthetic rules, dots, and
+  faint strokes must survive; the real form retains over 95% of dark ink.
+  Camera noise and very faint ink remain visual calibration concerns.
+- Extend the preview JSON with the existing numeric filter schema and add
+  examples/filter.json. Test settings-to-PNG, invalid contrast, empty args,
+  source/output safety, pipeline ordering, and tiny images. Print CLI errors
+  using their human-readable message.
+- Validation: 303 all-feature/all-target tests and 162 core/example tests
+  pass; strict native/WASM all-target Clippy, formatting, and whitespace
+  checks pass. Trunk builds the browser bundle. Keep container builds under
+  /tmp, away from host targets.
+- Generate full-size original, grayscale, enhanced (+10 contrast), B&W,
+  and original +35 contrast for both the form and the manually cropped
+  laptop-camera frame. Comparisons live under
+  artifacts/previews/filters-6b.V3q7ss/index.html. Click images for full size.
+  Camera corners are manual; no detection/224-frame replay is claimed here.
+
+Manual checkpoint 6B — original filters accepted 2026-10-15:
+
+1. Open the comparison HTML or the individual PNGs. Check the printed form's
+   small text, dotted fields, fine rules, checkboxes, and tinted headers.
+2. Compare the camera's color cast and handwriting across modes. Enhanced
+   color can amplify compression/noise; B&W can lose very faint writing.
+   Grayscale/original remain available when thresholding is unsuitable.
+3. Optional: run correct_page with examples/filter.json and a fresh output
+   filename. Edit mode 0/1/2/3 or contrast -100..100; bad settings must fail
+   without creating output or changing an existing file.
+
+User accepted the shown filters, including the laptop-camera comparison.
+Keep these samples; no replacement color document is needed. Brightness is
+an additional checkpoint before 6C; do not start page editing or commit yet.
+
+### 2026-10-15 — 6B brightness correction
+
+- TDD red: the preview-settings test rejects the unknown brightness field.
+  Green: add brightness -100..100, default 0, to PageCorrection. Keep the
+  schema-v1 filter DTO unchanged; defer brightness persistence to schema-v2
+  page editing in 6C, with schema-v1 loading retained.
+- Apply additive brightness after the color mode, combined with contrast in
+  the existing byte lookup. Clamp/round once to avoid losing recoverable
+  tones between adjustments. No new dependency or second image pass.
+- Add five tests for JSON defaults/round trips, RGB offsets/limits, combined
+  contrast clipping, every mode, alpha/hidden RGB, source preservation, and
+  invalid settings at both correction entry points. Extend the CLI test to
+  verify brightness output and reject bad settings without creating output.
+- Document the formula and add examples/brightness.json. Extend the existing
+  comparison HTML with the same manually cropped laptop-camera image at
+  brightness -15, 0, +15, and brightness +10 with contrast +25. Inspect the
+  generated PNGs; retain the original samples and accepted filter outputs.
+- Validation: 308 all-feature/all-target tests and 167 core/example tests
+  pass. Strict native/WASM all-target Clippy, formatting, whitespace checks,
+  and the full Trunk browser build pass. All build output remains under /tmp.
+
+Manual checkpoint — brightness accepted 2026-10-15. User inspected the
+brightness comparisons and approved completion of 6B. Commit the pending
+6A/6B work, then start 6C separately. The main editor and C# app remain
+unchanged in this commit.
 
 ## References
 
