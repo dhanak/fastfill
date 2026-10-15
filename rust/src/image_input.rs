@@ -64,6 +64,32 @@ pub fn validate_image_length(length: usize) -> Result<(), ImageInputError> {
 ///
 /// Returns an error for empty, oversized, unsupported, or corrupt images.
 pub fn validate_image(bytes: &[u8]) -> Result<ImageInfo, ImageInputError> {
+    decode_image(bytes).map(|(info, _)| info)
+}
+
+/// Validate an image and retain its pixels for display without decoding twice.
+///
+/// # Errors
+/// Rejects the same invalid inputs and allocation limits as `validate_image`.
+pub fn decode_image(
+    bytes: &[u8],
+) -> Result<(ImageInfo, image::DynamicImage), ImageInputError> {
+    let info = inspect_image(bytes)?;
+    let format = match info.format {
+        ImageFormatKind::Jpeg => ImageFormat::Jpeg,
+        ImageFormatKind::Png => ImageFormat::Png,
+    };
+    let mut reader = ImageReader::with_format(Cursor::new(bytes), format);
+    reader.limits(decode_limits());
+    let pixels = reader.decode().map_err(|_| ImageInputError::InvalidData)?;
+    Ok((info, pixels))
+}
+
+/// Inspect bounded dimensions/format without claiming the pixels are valid.
+///
+/// # Errors
+/// Rejects invalid headers, unsupported formats, and excessive sizes.
+pub fn inspect_image(bytes: &[u8]) -> Result<ImageInfo, ImageInputError> {
     validate_image_length(bytes.len())?;
 
     let guessed = ImageReader::new(Cursor::new(bytes))
@@ -83,13 +109,6 @@ pub fn validate_image(bytes: &[u8]) -> Result<ImageInfo, ImageInputError> {
     if u64::from(width) * u64::from(height) > MAX_IMAGE_PIXELS {
         return Err(ImageInputError::TooManyPixels);
     }
-
-    let mut decode_reader =
-        ImageReader::with_format(Cursor::new(bytes), format);
-    decode_reader.limits(decode_limits());
-    decode_reader
-        .decode()
-        .map_err(|_| ImageInputError::InvalidData)?;
 
     Ok(ImageInfo {
         width,

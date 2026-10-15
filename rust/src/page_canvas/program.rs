@@ -1,7 +1,8 @@
 use super::{
     CanvasLayer, CanvasState, PageCanvas, draw_annotation, draw_group_member,
     draw_group_selection, draw_marquee, draw_selection, draw_shape, draw_text,
-    draw_text_selection, draw_text_underline, page_viewport,
+    draw_text_group_member, draw_text_selection, draw_text_underline,
+    page_viewport,
 };
 use crate::app::Message;
 use crate::appearance::{
@@ -204,7 +205,7 @@ impl canvas::Program<Message> for PageCanvas<'_> {
         if let Some(image) = self.image {
             frame.draw_image(
                 Rectangle::new(Point::new(page.x, page.y), size),
-                &image.handle,
+                image.display_handle(),
             );
         }
         vec![frame.into_geometry()]
@@ -288,7 +289,7 @@ impl PageCanvas<'_> {
         for preview in self.annotations.previews() {
             draw_shape(frame, view, &preview, scale);
         }
-        if let Some(preview) = self.annotations.text_move_preview() {
+        for preview in self.annotations.text_move_previews() {
             draw_text(frame, view, &preview, scale);
         }
         if let Some(mut preview) = self.annotations.text_preview() {
@@ -310,9 +311,16 @@ impl PageCanvas<'_> {
         }
         if let Some(annotation) = self.annotations.selection_annotation(scale) {
             draw_selection(frame, view, &annotation, scale);
-        } else if let Some(bounds) = self.annotations.selection_bounds(scale) {
+        } else if self.annotations.selected_count() > 1
+            && let Some(bounds) = self.annotations.selection_bounds(scale)
+        {
             for annotation in self.annotations.selection_annotations(scale) {
                 draw_group_member(frame, view, &annotation, scale);
+            }
+            if self.annotations.selected_count() > 1 {
+                for text in self.annotations.selection_texts() {
+                    draw_text_group_member(frame, view, &text);
+                }
             }
             draw_group_selection(frame, view, bounds);
         }

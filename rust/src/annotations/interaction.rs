@@ -5,7 +5,7 @@ use super::geometry::{
 };
 use super::{
     AnnotationGeometry, AnnotationStyle, CreationKind, EditHit, InkKind,
-    LineEndpoint, Pointer, ShapeAnnotation,
+    LineEndpoint, Pointer, ShapeAnnotation, TextAnnotation,
 };
 use crate::geometry::{Point, Rect, Size};
 use uuid::Uuid;
@@ -39,6 +39,7 @@ pub(super) struct EditDraft {
 pub(super) struct GroupMoveDraft {
     pub(super) pointer: Pointer,
     pub(super) originals: Vec<(usize, ShapeAnnotation)>,
+    pub(super) original_texts: Vec<(usize, TextAnnotation)>,
     pub(super) start: Point,
     pub(super) end: Point,
     pub(super) page: Size,
@@ -46,16 +47,35 @@ pub(super) struct GroupMoveDraft {
 
 impl GroupMoveDraft {
     pub(super) fn annotations(&self) -> Vec<(usize, ShapeAnnotation)> {
-        let (left_limit, right_limit, top_limit, bottom_limit) =
-            self.originals.iter().fold(
+        let (dx, dy) = self.delta();
+        self.originals
+            .iter()
+            .map(|(index, annotation)| (*index, annotation.translated(dx, dy)))
+            .collect()
+    }
+
+    pub(super) fn texts(&self) -> Vec<(usize, TextAnnotation)> {
+        let (dx, dy) = self.delta();
+        self.original_texts
+            .iter()
+            .map(|(index, annotation)| (*index, annotation.translated(dx, dy)))
+            .collect()
+    }
+
+    fn delta(&self) -> (f32, f32) {
+        let (left_limit, right_limit, top_limit, bottom_limit) = self
+            .originals
+            .iter()
+            .map(|(_, a)| a.visible_bounds())
+            .chain(self.original_texts.iter().map(|(_, a)| a.visible_bounds()))
+            .fold(
                 (
                     f32::NEG_INFINITY,
                     f32::INFINITY,
                     f32::NEG_INFINITY,
                     f32::INFINITY,
                 ),
-                |(left, right, top, bottom), (_, annotation)| {
-                    let bounds = annotation.visible_bounds();
+                |(left, right, top, bottom), bounds| {
                     let visible_x =
                         1.0_f32.min(bounds.width).min(self.page.width);
                     let visible_y =
@@ -70,10 +90,7 @@ impl GroupMoveDraft {
             );
         let dx = (self.end.x - self.start.x).clamp(left_limit, right_limit);
         let dy = (self.end.y - self.start.y).clamp(top_limit, bottom_limit);
-        self.originals
-            .iter()
-            .map(|(index, annotation)| (*index, annotation.translated(dx, dy)))
-            .collect()
+        (dx, dy)
     }
 }
 

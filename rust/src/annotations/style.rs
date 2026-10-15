@@ -34,6 +34,12 @@ impl Annotations {
             let annotation = self.shapes.get(index)?;
             return Some(annotation.style());
         }
+        if self.tool == Tool::Select && self.selected_count() > 1 {
+            return self.selected_texts.last().map(|index| AnnotationStyle {
+                color: self.texts[*index].format.color,
+                ..AnnotationStyle::default()
+            });
+        }
         self.styles.get(self.tool)
     }
 
@@ -71,7 +77,12 @@ impl Annotations {
         let targets = self.style_target_indices();
         let object_changed = targets
             .iter()
-            .any(|index| self.shapes[*index].color != color);
+            .any(|index| self.shapes[*index].color != color)
+            || self.tool == Tool::Select
+                && self
+                    .selected_texts
+                    .iter()
+                    .any(|index| self.texts[*index].format.color != color);
         let default_changed = self
             .styles
             .get(self.tool)
@@ -83,6 +94,11 @@ impl Annotations {
             self.record_change();
             for index in targets {
                 self.shapes[index].color = color;
+            }
+            if self.tool == Tool::Select {
+                for index in &self.selected_texts {
+                    self.texts[*index].format.color = color;
+                }
             }
         }
         if let Some(style) = self.styles.get_mut(self.tool) {

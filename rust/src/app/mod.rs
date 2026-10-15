@@ -1,5 +1,6 @@
 mod controller;
 mod pages;
+mod pdf;
 mod project;
 mod project_io;
 mod project_view;
@@ -107,6 +108,11 @@ pub(crate) enum Message {
     ConfirmReplacePage,
     KeepPage,
     ImagePicked(PickPurpose, Result<Option<ImportedImage>, String>),
+    ImportPdf,
+    CancelPdfImport,
+    PdfProgress(u64, usize, usize),
+    PdfStage(u64, usize, usize, fastfill_rust::pdf_import::PdfStage),
+    PdfImported(u64, Result<Option<std::sync::Arc<pdf::PdfBatch>>, String>),
     SelectPage(usize),
     MovePageLeft,
     MovePageRight,

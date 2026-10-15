@@ -75,6 +75,25 @@ pub(super) fn draw_text_selection(
     }
 }
 
+pub(super) fn draw_text_group_member(
+    frame: &mut canvas::Frame,
+    view: PageView,
+    annotation: &TextAnnotation,
+) {
+    let points = annotation.frame_corners().map(|point| {
+        let point = view.page_to_view(point);
+        Point::new(point.x, point.y)
+    });
+    let mut color = accent();
+    color.a = 0.5;
+    frame.stroke(
+        &closed_path(&points),
+        canvas::Stroke::default()
+            .with_color(color)
+            .with_width(SELECTION_STROKE),
+    );
+}
+
 fn draw_rotation_handle(
     frame: &mut canvas::Frame,
     view: PageView,

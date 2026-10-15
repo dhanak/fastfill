@@ -23,6 +23,11 @@ pub(super) enum Operation {
     Idle,
     Confirm(LeaveAction),
     Opening(u64),
+    ImportingPdf {
+        id: u64,
+        cancel: Arc<std::sync::atomic::AtomicBool>,
+        progress: f32,
+    },
     Saving {
         id: u64,
         identity: Vec<(Uuid, u64)>,
@@ -89,7 +94,7 @@ impl ProjectSession {
         )
     }
 
-    fn request_id(&mut self) -> u64 {
+    pub(super) fn request_id(&mut self) -> u64 {
         self.next_request += 1;
         self.next_request
     }

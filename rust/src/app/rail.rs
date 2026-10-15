@@ -48,6 +48,11 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
             .align_y(iced::Alignment::Center)
             .spacing(4),
             control("Add image", Message::AddPage, state.pages.can_add()),
+            control(
+                "Import PDF",
+                Message::ImportPdf,
+                state.pages.pdf_capacity() > 0,
+            ),
             control("Replace image", Message::AskReplacePage, true),
             control("Delete page", Message::AskDeletePage, true),
             row![
@@ -321,7 +326,7 @@ impl canvas::Program<Message> for Rail<'_> {
                         Point::new((width - size.width) / 2.0, y + 10.0),
                         size,
                     ),
-                    &image.handle,
+                    image.display_handle(),
                 );
             } else {
                 frame.fill_rectangle(

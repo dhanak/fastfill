@@ -5,10 +5,12 @@ on:
     paths:
       - ".github/workflows/rust.yml"
       - "rust/**"
+      - "docs/samples/fastfill-camera-sample-form.pdf"
   pull_request:
     paths:
       - ".github/workflows/rust.yml"
       - "rust/**"
+      - "docs/samples/fastfill-camera-sample-form.pdf"
   workflow_dispatch:
 
 permissions:
@@ -57,7 +59,7 @@ jobs:
         run: |
           rustup toolchain install 1.99.0 --profile minimal
           rustup target add --toolchain 1.99.0 wasm32-unknown-unknown
-      - name: Check WASM GUI and PDF probe
+      - name: Check WASM GUI, PDF import, and PDF probe
         run: >-
           cargo +1.99.0 check
           --all-features

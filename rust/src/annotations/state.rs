@@ -181,7 +181,7 @@ impl Annotations {
         {
             return false;
         }
-        self.selected_text = None;
+        self.selected_texts.clear();
         self.draft = Some(Draft::Create(ShapeDraft {
             id: uuid::Uuid::new_v4(),
             pointer,
@@ -245,7 +245,7 @@ impl Annotations {
                 self.shapes.push(annotation);
                 self.layers.push(Layer::Shape(self.shapes.len() - 1));
                 self.selected = vec![self.shapes.len() - 1];
-                self.selected_text = None;
+                self.selected_texts.clear();
             }
             Draft::Edit(draft) => {
                 let annotation = draft.annotation();
@@ -259,6 +259,7 @@ impl Annotations {
             }
             Draft::GroupMove(draft) => {
                 let moved = draft.annotations();
+                let texts = draft.texts();
                 if moved.iter().any(|(_, annotation)| {
                     !valid_finished_annotation(annotation)
                 }) {
@@ -266,10 +267,15 @@ impl Annotations {
                 }
                 if moved.iter().any(|(index, annotation)| {
                     self.shapes[*index] != *annotation
+                }) || texts.iter().any(|(index, annotation)| {
+                    self.texts[*index] != *annotation
                 }) {
                     self.record_change();
                     for (index, annotation) in moved {
                         self.shapes[index] = annotation;
+                    }
+                    for (index, annotation) in texts {
+                        self.texts[index] = annotation;
                     }
                 }
             }
@@ -277,6 +283,15 @@ impl Annotations {
                 let bounds = draft.bounds();
                 self.selected = self
                     .shapes
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, annotation)| {
+                        intersects(bounds, annotation.visible_bounds())
+                            .then_some(index)
+                    })
+                    .collect();
+                self.selected_texts = self
+                    .texts
                     .iter()
                     .enumerate()
                     .filter_map(|(index, annotation)| {
@@ -302,7 +317,7 @@ impl Annotations {
             texts: self.texts.clone(),
             layers: self.layers.clone(),
             selected: self.selected.clone(),
-            selected_text: self.selected_text,
+            selected_texts: self.selected_texts.clone(),
         }
     }
 
@@ -312,7 +327,7 @@ impl Annotations {
         self.texts = snapshot.texts;
         self.layers = snapshot.layers;
         self.selected = snapshot.selected;
-        self.selected_text = snapshot.selected_text;
+        self.selected_texts = snapshot.selected_texts;
     }
 
     pub(super) fn record_change(&mut self) {

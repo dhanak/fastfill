@@ -44,8 +44,8 @@ impl Annotations {
 
     #[must_use]
     pub fn selected_index(&self) -> Option<usize> {
-        match self.selected.as_slice() {
-            [index] => Some(*index),
+        match (self.selected.as_slice(), self.selected_texts.as_slice()) {
+            ([index], []) => Some(*index),
             _ => None,
         }
     }
@@ -56,8 +56,18 @@ impl Annotations {
     }
 
     #[must_use]
+    pub fn selected_text_indices(&self) -> &[usize] {
+        &self.selected_texts
+    }
+
+    #[must_use]
+    pub fn selected_count(&self) -> usize {
+        self.selected.len() + self.selected_texts.len()
+    }
+
+    #[must_use]
     pub fn has_selection(&self) -> bool {
-        !self.selected.is_empty() || self.selected_text.is_some()
+        self.selected_count() != 0
     }
 
     #[must_use]
@@ -70,9 +80,9 @@ impl Annotations {
                     annotation.supports_rotation()
                         && annotation.rotation.abs() > f32::EPSILON
                 })
-            }) || self.selected_text.is_some_and(|index| {
+            }) || self.selected_texts.iter().any(|index| {
                 self.texts
-                    .get(index)
+                    .get(*index)
                     .is_some_and(|text| text.rotation.abs() > f32::EPSILON)
             }))
     }
@@ -87,8 +97,8 @@ impl Annotations {
                 self.shapes[*index].rotation = 0.0;
             }
         }
-        if let Some(index) = self.selected_text {
-            self.texts[index].rotation = 0.0;
+        for index in &self.selected_texts {
+            self.texts[*index].rotation = 0.0;
         }
         true
     }
@@ -133,6 +143,11 @@ impl Annotations {
         self.selection_annotations(scale)
             .into_iter()
             .map(|annotation| annotation.visible_bounds())
+            .chain(
+                self.selection_texts()
+                    .iter()
+                    .map(super::TextAnnotation::visible_bounds),
+            )
             .reduce(union_bounds)
     }
 
@@ -276,7 +291,7 @@ impl Annotations {
         }
 
         if let (Some(index), Some(hit)) = (self.selected_index(), hit) {
-            self.selected_text = None;
+            self.selected_texts.clear();
             self.start_edit(pointer, index, point, page, modifiers, hit);
             return true;
         }
@@ -306,16 +321,19 @@ impl Annotations {
             return true;
         }
 
-        let picked = match self.hit_layer(point, pointer, scale) {
-            Some(Layer::Shape(index)) => Some(index),
-            Some(Layer::Text(_)) | None => None,
-        };
+        if self.hit_selected_text(point, pointer, scale)
+            == Some(super::TextEditHit::Rotate)
+        {
+            return self.begin_text_move(pointer, point, page, scale);
+        }
+        let picked = self.hit_layer(point, pointer, scale);
         if picked.is_none()
             && let (Some(index), Some(EditHit::Move)) =
                 (self.selected_index(), hit)
         {
             if modifiers.square {
                 self.selected.clear();
+                self.selected_texts.clear();
             } else {
                 self.start_edit(
                     pointer,
@@ -329,33 +347,48 @@ impl Annotations {
             return true;
         }
         if modifiers.square
-            && let Some(index) = picked
+            && let Some(layer) = picked
         {
-            self.selected_text = None;
-            match self.selected.binary_search(&index) {
+            let (indices, index) = match layer {
+                Layer::Shape(index) => (&mut self.selected, index),
+                Layer::Text(index) => (&mut self.selected_texts, index),
+            };
+            match indices.binary_search(&index) {
                 Ok(position) => {
-                    self.selected.remove(position);
+                    indices.remove(position);
                 }
-                Err(position) => self.selected.insert(position, index),
+                Err(position) => indices.insert(position, index),
             }
             return true;
         }
-        let group_hit = self.selected.len() > 1
+        let group_hit = self.selected_count() > 1
             && picked.map_or_else(
                 || {
                     self.selected.iter().any(|index| {
                         contains(self.shapes[*index].visible_bounds(), point)
+                    }) || self.selected_texts.iter().any(|index| {
+                        let text = &self.texts[*index];
+                        contains(text.bounds, text.unrotated_point(point))
                     })
                 },
-                |index| self.selected.binary_search(&index).is_ok(),
+                |layer| match layer {
+                    Layer::Shape(index) => {
+                        self.selected.binary_search(&index).is_ok()
+                    }
+                    Layer::Text(index) => {
+                        self.selected_texts.binary_search(&index).is_ok()
+                    }
+                },
             );
         if group_hit {
-            self.selected_text = None;
             self.start_group_move(pointer, point, page);
             return true;
         }
-        if let Some(index) = picked {
-            self.selected_text = None;
+        if let Some(Layer::Text(_)) = picked {
+            return self.begin_text_move(pointer, point, page, scale);
+        }
+        if let Some(Layer::Shape(index)) = picked {
+            self.selected_texts.clear();
             self.selected = vec![index];
             let hit = self
                 .hit_selected(point, pointer, scale, modifiers)
@@ -364,7 +397,7 @@ impl Annotations {
             return true;
         }
         self.selected.clear();
-        self.selected_text = None;
+        self.selected_texts.clear();
         self.draft = Some(Draft::Selection(SelectionDraft {
             start: point,
             end: point,
@@ -382,6 +415,11 @@ impl Annotations {
         self.draft = Some(Draft::GroupMove(GroupMoveDraft {
             pointer,
             originals,
+            original_texts: self
+                .selected_texts
+                .iter()
+                .map(|index| (*index, self.texts[*index].clone()))
+                .collect(),
             start: point,
             end: point,
             page,
@@ -413,7 +451,7 @@ impl Annotations {
         if self.draft.is_some()
             || self.text_draft.is_some()
             || self.text_move.is_some()
-            || (self.selected.is_empty() && self.selected_text.is_none())
+            || !self.has_selection()
         {
             return false;
         }
@@ -423,10 +461,11 @@ impl Annotations {
             self.shapes.remove(*index);
         }
         self.selected.clear();
-        if let Some(index) = self.selected_text.take() {
+        for index in self.selected_texts.clone().into_iter().rev() {
             self.remove_text_layer(index);
             self.texts.remove(index);
         }
+        self.selected_texts.clear();
         true
     }
 
@@ -440,7 +479,7 @@ impl Annotations {
         self.texts.clear();
         self.layers.clear();
         self.selected.clear();
-        self.selected_text = None;
+        self.selected_texts.clear();
         true
     }
 
@@ -456,7 +495,7 @@ impl Annotations {
         if self.draft.is_some()
             || self.text_draft.is_some()
             || self.text_move.is_some()
-            || (self.selected.is_empty() && self.selected_text.is_none())
+            || !self.has_selection()
         {
             return false;
         }
@@ -464,7 +503,9 @@ impl Annotations {
             super::Layer::Shape(index) => {
                 self.selected.binary_search(index).is_ok()
             }
-            super::Layer::Text(index) => self.selected_text == Some(*index),
+            super::Layer::Text(index) => {
+                self.selected_texts.binary_search(index).is_ok()
+            }
         };
         let selected: Vec<_> =
             self.layers.iter().copied().filter(is_selected).collect();

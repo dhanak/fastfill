@@ -1,10 +1,9 @@
 //! File dialogs and archive work run outside the application update loop.
 
 use crate::picker::ImportedImage;
-#[cfg(target_arch = "wasm32")]
-use fastfill_rust::project::load_archive;
 use fastfill_rust::project::{
     LoadedAsset, LoadedProject, Project, decode_editor_page,
+    load_archive_with_images,
 };
 use iced::widget::image::Handle;
 use std::collections::BTreeMap;
@@ -89,10 +88,22 @@ pub(super) async fn open_project(
     let Some(file) = dialog.pick_file().await else {
         return Ok(None);
     };
+    let mut pixels = BTreeMap::new();
+    let mut on_image = |name: &str, image: image::DynamicImage| {
+        let image = image.into_rgba8();
+        pixels.insert(
+            name.to_owned(),
+            Handle::from_rgba(image.width(), image.height(), image.into_raw()),
+        );
+    };
     #[cfg(not(target_arch = "wasm32"))]
     let (loaded, path) = (
-        fastfill_rust::project::load_archive_file(file.path())
-            .map_err(|error| error.to_string())?,
+        load_archive_with_images(
+            std::fs::File::open(file.path())
+                .map_err(|error| format!("Could not read project: {error}"))?,
+            &mut on_image,
+        )
+        .map_err(|error| error.to_string())?,
         Some(file.path().to_path_buf()),
     );
     #[cfg(target_arch = "wasm32")]
@@ -102,13 +113,19 @@ pub(super) async fn open_project(
             return Err("Project file exceeds the browser size limit.".into());
         }
         (
-            load_archive(Cursor::new(file.read().await))
-                .map_err(|error| error.to_string())?,
+            load_archive_with_images(
+                Cursor::new(file.read().await),
+                &mut on_image,
+            )
+            .map_err(|error| error.to_string())?,
             None,
         )
     };
-    prepare_opened(loaded, path, file.file_name())
-        .map(|opened| Some(Arc::new(opened)))
+    let mut opened = prepare_opened(loaded, path, file.file_name())?;
+    for image in &mut opened.images {
+        image.display = pixels.get(&image.name).cloned();
+    }
+    Ok(Some(Arc::new(opened)))
 }
 
 pub(super) fn encode_snapshot(
@@ -157,7 +174,8 @@ pub(super) fn encode_snapshot(
                 ))?
             }
         };
-        let info = fastfill_rust::image_input::validate_image(&bytes)
+        // The archive writer performs full validation before any file commit.
+        let info = fastfill_rust::image_input::inspect_image(&bytes)
             .map_err(|error| error.to_string())?;
         assets.insert(page.source_asset.clone(), LoadedAsset { bytes, info });
     }

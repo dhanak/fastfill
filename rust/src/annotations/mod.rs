@@ -49,7 +49,7 @@ struct Snapshot {
     texts: Vec<TextAnnotation>,
     layers: Vec<Layer>,
     selected: Vec<usize>,
-    selected_text: Option<usize>,
+    selected_texts: Vec<usize>,
 }
 
 #[derive(Debug, Default)]
@@ -66,7 +66,7 @@ pub struct Annotations {
     text_draft: Option<TextDraft>,
     text_move: Option<TextMoveDraft>,
     selected: Vec<usize>,
-    selected_text: Option<usize>,
+    selected_texts: Vec<usize>,
     undo: Vec<Snapshot>,
     redo: Vec<Snapshot>,
 }

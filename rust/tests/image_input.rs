@@ -1,5 +1,6 @@
 use fastfill_rust::image_input::{
-    ImageInputError, MAX_IMAGE_BYTES, validate_image, validate_image_length,
+    ImageInputError, MAX_IMAGE_BYTES, decode_image, validate_image,
+    validate_image_length,
 };
 
 const PNG_1X1: &[u8] = &[
@@ -15,6 +16,10 @@ fn accepts_a_complete_png_and_reports_dimensions() {
 
     assert_eq!(image.width, 1);
     assert_eq!(image.height, 1);
+    let (info, pixels) = decode_image(PNG_1X1).unwrap();
+    assert_eq!(info, image);
+    assert_eq!(pixels.width(), 1);
+    assert_eq!(pixels.height(), 1);
 }
 
 #[test]

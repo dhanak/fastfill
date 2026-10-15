@@ -1,5 +1,3 @@
-#[cfg(not(target_arch = "wasm32"))]
-use super::archive::load_archive;
 use super::archive::{
     LoadedProject, MAXIMUM_ARCHIVE_CONTENT_BYTES, MAXIMUM_MANIFEST_BYTES,
     ProjectLoadError, validate_asset,
@@ -9,6 +7,8 @@ use crate::image_input::{validate_image, validate_image_length};
 use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::Read;
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::SeekFrom;
 use std::io::{Seek, Write};
@@ -113,8 +113,7 @@ pub fn save_archive_file(
                 let _ = save_archive(loaded, &mut *file)?;
                 file.flush()?;
                 file.seek(SeekFrom::Start(0))?;
-                let reloaded = load_archive(&mut *file)?;
-                verify_read_back(loaded, &reloaded)
+                verify_read_back(loaded, &mut *file)
             },
             options,
         )
@@ -194,27 +193,49 @@ where
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn verify_read_back(
+fn verify_read_back<R: Read + Seek>(
     expected: &LoadedProject,
-    actual: &LoadedProject,
+    reader: R,
 ) -> Result<(), ProjectSaveError> {
-    if actual.project != expected.project {
+    let mut archive = zip::ZipArchive::new(reader).map_err(zip_error)?;
+    let names = expected
+        .project
+        .pages
+        .iter()
+        .map(|page| page.source_asset.as_str())
+        .collect::<BTreeSet<_>>();
+    if archive.len() != names.len() + 1 {
         return Err(invalid("Saved project failed read-back validation."));
     }
-    for page in &expected.project.pages {
-        let expected_bytes = &expected
-            .assets
-            .get(&page.source_asset)
-            .expect("referenced assets were validated")
-            .bytes;
-        let actual_bytes = &actual
-            .assets
-            .get(&page.source_asset)
-            .ok_or_else(|| invalid("Saved project lost a page asset."))?
-            .bytes;
-        if actual_bytes != expected_bytes {
-            return Err(invalid("Saved project changed a page asset."));
-        }
+    let manifest = serde_json::to_vec_pretty(&expected.project)
+        .map_err(|error| invalid(error.to_string()))?;
+    verify_entry(&mut archive, "project.json", &manifest)?;
+    // Input pixels were fully validated before writing. Byte equality plus
+    // ZIP CRC verifies them without a second image decode.
+    for name in names {
+        verify_entry(
+            &mut archive,
+            &format!("assets/{name}"),
+            &expected.assets[name].bytes,
+        )?;
+    }
+    Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn verify_entry<R: Read + Seek>(
+    archive: &mut zip::ZipArchive<R>,
+    name: &str,
+    expected: &[u8],
+) -> Result<(), ProjectSaveError> {
+    let mut actual = Vec::new();
+    archive
+        .by_name(name)
+        .map_err(zip_error)?
+        .take(expected.len() as u64 + 1)
+        .read_to_end(&mut actual)?;
+    if actual != expected {
+        return Err(invalid("Saved project failed read-back validation."));
     }
     Ok(())
 }
@@ -228,4 +249,44 @@ fn zip_error(error: zip::result::ZipError) -> ProjectSaveError {
 
 fn invalid(message: impl Into<String>) -> ProjectSaveError {
     ProjectSaveError::Invalid(message.into())
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn readback_rejects_changed_short_long_missing_and_corrupt_entries() {
+        for bytes in [
+            b"expected".as_slice(),
+            b"changed",
+            b"short",
+            b"expected plus extra",
+        ] {
+            let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+            write_entry(&mut writer, "asset", bytes, CompressionMethod::Stored)
+                .unwrap();
+            let original = writer.finish().unwrap().into_inner();
+            let mut archive =
+                zip::ZipArchive::new(Cursor::new(&original)).unwrap();
+            assert_eq!(
+                verify_entry(&mut archive, "asset", b"expected").is_ok(),
+                bytes == b"expected"
+            );
+            assert!(
+                verify_entry(&mut archive, "missing", b"expected").is_err()
+            );
+            let mut damaged = original;
+            // Flip content without updating the ZIP CRC.
+            let offset = damaged
+                .windows(bytes.len())
+                .position(|window| window == bytes)
+                .unwrap();
+            damaged[offset] ^= 1;
+            let mut archive =
+                zip::ZipArchive::new(Cursor::new(damaged)).unwrap();
+            assert!(verify_entry(&mut archive, "asset", bytes).is_err());
+        }
+    }
 }

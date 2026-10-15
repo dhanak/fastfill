@@ -2,7 +2,7 @@
 use fastfill_rust::project::save_archive_file;
 use fastfill_rust::project::{
     ProjectAnnotation, ProjectLoadError, load_archive, load_archive_file,
-    save_archive,
+    load_archive_with_images, save_archive,
 };
 use serde_json::{Value, json};
 #[cfg(not(target_arch = "wasm32"))]
@@ -21,6 +21,25 @@ const PNG_1X1: &[u8] = &[
     120, 218, 99, 100, 248, 15, 0, 1, 5, 1, 1, 39, 24, 227, 102, 0, 0, 0, 0,
     73, 69, 78, 68, 174, 66, 96, 130,
 ];
+
+#[test]
+fn staged_display_reuses_the_validated_pixels_and_preserves_source_bytes() {
+    let mut manifest = valid_manifest();
+    let mut shared = manifest["pages"][0].clone();
+    shared["id"] = json!("39cf856d-dc68-48bf-b98a-f4999aa7796b");
+    shared["annotations"] = json!([]);
+    manifest["pages"].as_array_mut().unwrap().push(shared);
+    let bytes =
+        archive_with_manifest(&manifest, &[("assets/page.png", PNG_1X1)]);
+    let mut decoded = Vec::new();
+    let loaded =
+        load_archive_with_images(Cursor::new(bytes), |name, pixels| {
+            decoded.push((name.to_owned(), pixels.width(), pixels.height()));
+        })
+        .unwrap();
+    assert_eq!(decoded, [("page.png".into(), 1, 1)]);
+    assert_eq!(loaded.assets["page.png"].bytes, PNG_1X1);
+}
 
 #[test]
 fn loads_csharp_schema_without_discarding_edit_data() {

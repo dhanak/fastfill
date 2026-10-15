@@ -3,7 +3,7 @@ use super::validate::{
     MAXIMUM_IMAGE_BYTES, validate_asset_name, validate_project,
 };
 use crate::image_input::{
-    ImageFormatKind, ImageInfo, validate_image, validate_image_length,
+    ImageFormatKind, ImageInfo, decode_image, validate_image_length,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
@@ -90,6 +90,22 @@ pub fn load_archive<R>(reader: R) -> Result<LoadedProject, ProjectLoadError>
 where
     R: Read + Seek,
 {
+    load_archive_with_images(reader, |_, _| {})
+}
+
+/// Load and validate an archive, passing decoded pixels to a staging callback.
+/// The callback runs once per referenced asset; keep its results private until
+/// the whole load succeeds. This avoids decoding again on the UI thread.
+///
+/// # Errors
+/// Returns the same validation and I/O errors as `load_archive`.
+pub fn load_archive_with_images<R>(
+    reader: R,
+    mut on_image: impl FnMut(&str, image::DynamicImage),
+) -> Result<LoadedProject, ProjectLoadError>
+where
+    R: Read + Seek,
+{
     let mut archive = ZipArchive::new(reader).map_err(|error| {
         invalid(format!("Project archive is invalid: {error}"))
     })?;
@@ -127,10 +143,11 @@ where
         validate_image_length(bytes.len()).map_err(|error| {
             invalid(format!("Page asset is invalid: {error}"))
         })?;
-        let info = validate_image(&bytes).map_err(|error| {
+        let (info, pixels) = decode_image(&bytes).map_err(|error| {
             invalid(format!("Page asset is invalid: {error}"))
         })?;
         validate_asset(page, info)?;
+        on_image(&page.source_asset, pixels);
         assets.insert(page.source_asset.clone(), LoadedAsset { bytes, info });
     }
 

@@ -79,22 +79,6 @@ impl FastFill {
         self.annotations_mut().update_text(content, size);
     }
 
-    fn set_text_format(&mut self, format: super::TextFormat) {
-        if self.annotations().has_text_edit() {
-            if self.annotations_mut().set_text_format(format) {
-                self.sync_text();
-            }
-        } else if let Some(annotation) =
-            self.annotations().selected_text_annotation()
-        {
-            let size = measure_text(&annotation.text, format, 1.0);
-            self.annotations_mut()
-                .set_selected_text_format(format, size);
-        } else if self.annotations_mut().set_text_format(format) {
-            self.sync_text();
-        }
-    }
-
     fn start_text_editor(&mut self) -> Task<Message> {
         let Some((content, ..)) = self.annotations().text_edit() else {
             return Task::none();
@@ -178,6 +162,9 @@ impl FastFill {
 }
 
 pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
+    if let Some(task) = super::pdf::update(state, &message) {
+        return task;
+    }
     if let Some(task) = super::project::update(state, &message) {
         return task;
     }
@@ -258,20 +245,52 @@ pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
 }
 
 fn handle_text_format(state: &mut FastFill, message: &Message) -> bool {
-    let Some(mut format) = state.annotations().current_text_format() else {
+    let Some(current) = state.annotations().current_text_format() else {
         return false;
     };
+    // A mixed group's shared color belongs to both text and shapes.
+    if matches!(message, Message::SetColor(_))
+        && state.annotations().tool() == Tool::Select
+        && state.annotations().selected_count() > 1
+    {
+        return false;
+    }
+    let Some(format) = changed_text_format(message, current, current) else {
+        return false;
+    };
+    if state.annotations().has_text_edit()
+        || state.annotations().selected_text_indices().is_empty()
+    {
+        if state.annotations_mut().set_text_format(format) {
+            state.sync_text();
+        }
+    } else {
+        state
+            .annotations_mut()
+            .update_selected_text_formats(|text| {
+                let format = changed_text_format(message, text.format, current)
+                    .expect("validated format command");
+                (format, measure_text(&text.text, format, 1.0))
+            });
+    }
+    true
+}
+
+fn changed_text_format(
+    message: &Message,
+    mut format: super::TextFormat,
+    selected: super::TextFormat,
+) -> Option<super::TextFormat> {
     match message {
         Message::SetColor(color) => format.color = *color,
         Message::SetTextTypeface(typeface) => format.typeface = *typeface,
         Message::SetTextSize(font_size) => format.font_size = *font_size,
-        Message::ToggleTextBold => format.bold = !format.bold,
-        Message::ToggleTextItalic => format.italic = !format.italic,
-        Message::ToggleTextUnderline => format.underline = !format.underline,
-        _ => return false,
+        Message::ToggleTextBold => format.bold = !selected.bold,
+        Message::ToggleTextItalic => format.italic = !selected.italic,
+        Message::ToggleTextUnderline => format.underline = !selected.underline,
+        _ => return None,
     }
-    state.set_text_format(format);
-    true
+    Some(format)
 }
 
 fn draw_pressed(
@@ -292,10 +311,6 @@ fn draw_pressed(
             }
             return state.start_text_editor();
         }
-        Tool::Select
-            if state
-                .annotations_mut()
-                .begin_text_move(pointer, point, size, scale) => {}
         _ => state.begin_interaction(pointer, point, scale),
     }
     Task::none()

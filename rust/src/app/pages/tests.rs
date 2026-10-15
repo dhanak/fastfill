@@ -149,6 +149,7 @@ fn successful_import_remembers_the_folder_and_cancel_keeps_it() {
 fn test_image(name: &str) -> ImportedImage {
     ImportedImage {
         handle: Handle::from_rgba(1, 1, vec![255; 4]),
+        display: None,
         name: format!("{name}.png"),
         size: PageSize::new(600.0, 600.0),
         info: fastfill_rust::image_input::ImageInfo {

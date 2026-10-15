@@ -73,7 +73,7 @@ pub struct TextAnnotation {
 }
 
 impl TextAnnotation {
-    fn translated(&self, dx: f32, dy: f32) -> Self {
+    pub(super) fn translated(&self, dx: f32, dy: f32) -> Self {
         let mut annotation = self.clone();
         annotation.bounds.x += dx;
         annotation.bounds.y += dy;
@@ -113,7 +113,7 @@ impl TextAnnotation {
         rotate_point(point, self.bounds.center(), -self.rotation)
     }
 
-    fn visible_bounds(&self) -> Rect {
+    pub(super) fn visible_bounds(&self) -> Rect {
         point_bounds(&self.frame_corners())
     }
 }
@@ -192,6 +192,40 @@ impl Annotations {
     }
 
     #[must_use]
+    pub fn text_move_previews(&self) -> Vec<TextAnnotation> {
+        match &self.draft {
+            Some(super::Draft::GroupMove(draft)) => {
+                draft.texts().into_iter().map(|(_, text)| text).collect()
+            }
+            _ => self.text_move_preview().into_iter().collect(),
+        }
+    }
+
+    #[must_use]
+    pub fn selection_texts(&self) -> Vec<TextAnnotation> {
+        let previews = self.text_move_previews();
+        self.selected_texts
+            .iter()
+            .filter_map(|index| {
+                self.texts.get(*index).map(|text| {
+                    previews
+                        .iter()
+                        .find(|preview| preview.id == text.id)
+                        .unwrap_or(text)
+                        .clone()
+                })
+            })
+            .collect()
+    }
+
+    pub(super) fn selected_text_index(&self) -> Option<usize> {
+        match (self.selected.as_slice(), self.selected_texts.as_slice()) {
+            ([], [index]) => Some(*index),
+            _ => None,
+        }
+    }
+
+    #[must_use]
     pub fn text_edit(&self) -> Option<(&str, Rect, TextFormat, f32)> {
         self.text_draft.as_ref().map(|draft| {
             (
@@ -233,7 +267,7 @@ impl Annotations {
         if let Some(draft) = &self.text_move {
             return Some(draft.annotation());
         }
-        self.selected_text
+        self.selected_text_index()
             .and_then(|index| self.texts.get(index))
             .cloned()
     }
@@ -280,9 +314,22 @@ impl Annotations {
             .as_ref()
             .map(|draft| draft.annotation.format)
             .or_else(|| {
-                self.selected_text
-                    .and_then(|index| self.texts.get(index))
-                    .map(|annotation| annotation.format)
+                let index = self.selected_texts.first()?;
+                let mut format = self.texts.get(*index)?.format;
+                // A toggle is active only when every selected text has it.
+                format.bold = self
+                    .selected_texts
+                    .iter()
+                    .all(|index| self.texts[*index].format.bold);
+                format.italic = self
+                    .selected_texts
+                    .iter()
+                    .all(|index| self.texts[*index].format.italic);
+                format.underline = self
+                    .selected_texts
+                    .iter()
+                    .all(|index| self.texts[*index].format.underline);
+                Some(format)
             })
             .or_else(|| (self.tool == Tool::Text).then_some(self.text_format))
     }
@@ -310,29 +357,50 @@ impl Annotations {
         format: TextFormat,
         size: Size,
     ) -> bool {
-        if self.text_draft.is_some()
+        if self.selected_text_index().is_none() {
+            return false;
+        }
+        self.update_selected_text_formats(|_| (format, size))
+    }
+
+    /// Apply measured text formats atomically, preserving every shape and
+    /// unrelated text property. Invalid results or active drags change nothing.
+    /// All selected texts form one undo step, not one step per object.
+    pub fn update_selected_text_formats(
+        &mut self,
+        mut update: impl FnMut(&TextAnnotation) -> (TextFormat, Size),
+    ) -> bool {
+        if self.draft.is_some()
+            || self.text_draft.is_some()
             || self.text_move.is_some()
-            || !valid_text_format(format)
-            || !valid_text_size(size)
+            || self.selected_texts.is_empty()
         {
             return false;
         }
-        let Some(index) = self.selected_text else {
-            return false;
-        };
-        let annotation = &self.texts[index];
-        if annotation.format == format
-            && (annotation.bounds.width - size.width).abs() <= f32::EPSILON
-            && (annotation.bounds.height - size.height).abs() <= f32::EPSILON
+        let mut updates = Vec::with_capacity(self.selected_texts.len());
+        for index in &self.selected_texts {
+            let original = &self.texts[*index];
+            let (format, size) = update(original);
+            if !valid_text_format(format) || !valid_text_size(size) {
+                return false;
+            }
+            let mut annotation = original.clone();
+            annotation.format = format;
+            annotation.bounds.width = size.width;
+            annotation.bounds.height = size.height;
+            updates.push((*index, annotation));
+        }
+        if updates
+            .iter()
+            .all(|(index, text)| *text == self.texts[*index])
         {
             return false;
         }
         self.record_change();
-        let annotation = &mut self.texts[index];
-        annotation.format = format;
-        annotation.bounds.width = size.width;
-        annotation.bounds.height = size.height;
-        self.text_format = format;
+        for (index, annotation) in updates {
+            self.text_format = annotation.format;
+            self.texts[index] = annotation;
+        }
         true
     }
 
@@ -346,6 +414,8 @@ impl Annotations {
                 .text_move
                 .as_ref()
                 .is_some_and(|draft| draft.index == index)
+            || matches!(&self.draft, Some(super::Draft::GroupMove(draft))
+                if draft.original_texts.iter().any(|(i, _)| *i == index))
     }
 
     pub fn begin_text(&mut self, point: Point, page: Size, scale: f32) -> bool {
@@ -353,7 +423,7 @@ impl Annotations {
             return false;
         }
         self.selected.clear();
-        self.selected_text = None;
+        self.selected_texts.clear();
         self.text_draft = Some(TextDraft {
             annotation: TextAnnotation {
                 id: uuid::Uuid::new_v4(),
@@ -405,7 +475,7 @@ impl Annotations {
             return false;
         };
         self.selected.clear();
-        self.selected_text = Some(index);
+        self.selected_texts = vec![index];
         self.text_move = Some(TextMoveDraft {
             pointer,
             index,
@@ -445,7 +515,7 @@ impl Annotations {
                 self.record_change();
                 self.remove_text_layer(index);
                 self.texts.remove(index);
-                self.selected_text = None;
+                self.selected_texts.clear();
             }
             return true;
         }
@@ -454,14 +524,14 @@ impl Annotations {
             Some(index) if self.texts[index] != draft.annotation => {
                 self.record_change();
                 self.texts[index] = draft.annotation;
-                self.selected_text = Some(index);
+                self.selected_texts = vec![index];
             }
-            Some(index) => self.selected_text = Some(index),
+            Some(index) => self.selected_texts = vec![index],
             None => {
                 self.record_change();
                 self.texts.push(draft.annotation);
                 self.layers.push(super::Layer::Text(self.texts.len() - 1));
-                self.selected_text = Some(self.texts.len() - 1);
+                self.selected_texts = vec![self.texts.len() - 1];
             }
         }
         self.text_format = format;
@@ -530,7 +600,7 @@ impl Annotations {
             return false;
         };
         self.selected.clear();
-        self.selected_text = Some(index);
+        self.selected_texts = vec![index];
         self.text_draft = Some(TextDraft {
             annotation,
             index: Some(index),
@@ -545,7 +615,7 @@ impl Annotations {
         pointer: Pointer,
         scale: f32,
     ) -> Option<(usize, TextEditHit)> {
-        if let Some(index) = self.selected_text
+        if let Some(index) = self.selected_text_index()
             && self.hit_selected_text(point, pointer, scale)
                 == Some(TextEditHit::Rotate)
         {

@@ -7,7 +7,7 @@ mod validate;
 
 pub use archive::{
     LoadedAsset, LoadedProject, ProjectLoadError, load_archive,
-    load_archive_file,
+    load_archive_file, load_archive_with_images,
 };
 pub use editor::{
     ProjectEditError, decode_editor_page, editor_page_size, encode_editor_page,

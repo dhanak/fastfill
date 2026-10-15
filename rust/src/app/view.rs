@@ -11,8 +11,8 @@ use fastfill_rust::annotations::{
 };
 use fastfill_rust::geometry::{Point as PagePoint, Rect as PageRect};
 use iced::widget::{
-    Row, button, canvas, column, container, mouse_area, pick_list, responsive,
-    row, scrollable, text, text_editor,
+    Row, button, canvas, column, container, mouse_area, pick_list,
+    progress_bar, responsive, row, scrollable, text, text_editor,
 };
 use iced::{
     Background, Border, Color, Element, Fill, Padding, keyboard, mouse,
@@ -20,7 +20,7 @@ use iced::{
 
 fn heading(state: &FastFill) -> Element<'_, Message> {
     let status = if state.status.is_empty() {
-        "Add a PNG or JPEG, or draw on the blank page."
+        "Add an image, import a PDF, or draw on the blank page."
     } else {
         &state.status
     };
@@ -36,6 +36,20 @@ fn heading(state: &FastFill) -> Element<'_, Message> {
         column![super::project_view::controls(state), status_line].spacing(4);
     if let Some(confirmation) = super::project_view::confirmation(state) {
         heading = heading.push(confirmation);
+    }
+    if let super::project::Operation::ImportingPdf { progress, .. } =
+        state.project.operation
+    {
+        heading = heading.push(
+            row![
+                progress_bar(0.0..=1.0, progress).girth(8).length(Fill),
+                button("Cancel PDF import")
+                    .on_press(Message::CancelPdfImport)
+                    .height(CONTROL_HEIGHT),
+            ]
+            .spacing(12)
+            .align_y(iced::Alignment::Center),
+        );
     }
     if state.image_picker == ImagePicker::ConfirmReplace {
         heading = heading.push(
@@ -212,35 +226,51 @@ fn tool_row(state: &FastFill, available_width: f32) -> Element<'_, Message> {
 }
 
 fn style_row(state: &FastFill) -> Element<'_, Message> {
-    if let Some(format) = state.annotations().current_text_format() {
-        return text_style_row(format);
-    }
-    let Some(style) = state.annotations().current_style() else {
+    let format = state.annotations().current_text_format();
+    let style = state.annotations().current_style();
+    let Some(color) = format
+        .map(|format| format.color)
+        .or_else(|| style.map(|style| style.color))
+    else {
         return container(iced::widget::Space::new())
             .height(TOOLBAR_ROW_HEIGHT)
             .into();
     };
-    let mut styles = row![
-        color_button("Black", AnnotationColor::Black, style.color),
-        color_button("White", AnnotationColor::White, style.color),
-        color_button("Red", AnnotationColor::Red, style.color),
-        color_button("Blue", AnnotationColor::Blue, style.color),
-        color_button("Green", AnnotationColor::Green, style.color),
-        color_button("Yellow", AnnotationColor::Yellow, style.color),
-        button("−")
-            .on_press_maybe(
-                (style.stroke_width > 1.0)
-                    .then_some(Message::AdjustThickness(-1.0)),
+    let mut styles = format
+        .map_or_else(Row::new, |format| text_style_controls(state, format));
+    for (label, value) in [
+        ("Black", AnnotationColor::Black),
+        ("White", AnnotationColor::White),
+        ("Red", AnnotationColor::Red),
+        ("Blue", AnnotationColor::Blue),
+        ("Green", AnnotationColor::Green),
+        ("Yellow", AnnotationColor::Yellow),
+    ] {
+        styles = styles.push(color_button(label, value, color));
+    }
+    if let Some(style) = style
+        && (state.annotations().tool() != Tool::Select
+            || !state.annotations().selected_indices().is_empty())
+    {
+        styles = styles
+            .push(
+                button("−")
+                    .on_press_maybe(
+                        (style.stroke_width > 1.0)
+                            .then_some(Message::AdjustThickness(-1.0)),
+                    )
+                    .height(CONTROL_HEIGHT),
             )
-            .height(CONTROL_HEIGHT),
-        text(format!("{:.0} pt", style.stroke_width)).size(14),
-        button("+")
-            .on_press_maybe(
-                (style.stroke_width < 20.0)
-                    .then_some(Message::AdjustThickness(1.0)),
-            )
-            .height(CONTROL_HEIGHT),
-    ];
+            .push(text(format!("{:.0} pt", style.stroke_width)).size(14))
+            .push(
+                button("+")
+                    .on_press_maybe(
+                        (style.stroke_width < 20.0)
+                            .then_some(Message::AdjustThickness(1.0)),
+                    )
+                    .height(CONTROL_HEIGHT),
+            );
+    }
     if state.annotations().fill_available() {
         styles = styles.push(
             button(if state.annotations().current_fill() == Some(true) {
@@ -257,13 +287,32 @@ fn style_row(state: &FastFill) -> Element<'_, Message> {
             .height(CONTROL_HEIGHT),
         );
     }
-    toolbar_row(styles).into()
+    scrollable(toolbar_row(styles))
+        .direction(scrollable::Direction::Horizontal(
+            scrollable::Scrollbar::new(),
+        ))
+        .height(TOOLBAR_ROW_HEIGHT)
+        .into()
 }
 
 const TEXT_SIZES: [f32; 10] =
     [8.0, 10.0, 12.0, 16.0, 20.0, 24.0, 32.0, 40.0, 48.0, 64.0];
 
-fn text_style_row(format: TextFormat) -> Element<'static, Message> {
+fn text_style_controls(
+    state: &FastFill,
+    format: TextFormat,
+) -> Row<'static, Message> {
+    let selected = state.annotations().selected_text_indices();
+    let common_typeface = selected.iter().all(|index| {
+        state.annotations().texts()[*index].format.typeface == format.typeface
+    });
+    let common_size = selected.iter().all(|index| {
+        (state.annotations().texts()[*index].format.font_size
+            - format.font_size)
+            .abs()
+            < f32::EPSILON
+    });
+    let editing = state.annotations().has_text_edit();
     let toggle = |label, enabled, message| {
         button(label)
             .on_press(message)
@@ -274,20 +323,22 @@ fn text_style_row(format: TextFormat) -> Element<'static, Message> {
             })
             .height(CONTROL_HEIGHT)
     };
-    let styles = row![
+    row![
         pick_list(
             TextTypeface::ALL,
-            Some(format.typeface),
+            (editing || common_typeface).then_some(format.typeface),
             Message::SetTextTypeface,
         )
-        .width(130),
+        .width(130)
+        .placeholder("Mixed fonts"),
         mouse_area(
             pick_list(
                 TEXT_SIZES,
-                Some(format.font_size),
+                (editing || common_size).then_some(format.font_size),
                 Message::SetTextSize,
             )
-            .width(75),
+            .width(75)
+            .placeholder("Mixed"),
         )
         .on_scroll(move |delta| {
             Message::SetTextSize(text_size_after_scroll(
@@ -298,14 +349,7 @@ fn text_style_row(format: TextFormat) -> Element<'static, Message> {
         toggle("B", format.bold, Message::ToggleTextBold),
         toggle("I", format.italic, Message::ToggleTextItalic),
         toggle("U", format.underline, Message::ToggleTextUnderline),
-        color_button("Black", AnnotationColor::Black, format.color),
-        color_button("White", AnnotationColor::White, format.color),
-        color_button("Red", AnnotationColor::Red, format.color),
-        color_button("Blue", AnnotationColor::Blue, format.color),
-        color_button("Green", AnnotationColor::Green, format.color),
-        color_button("Yellow", AnnotationColor::Yellow, format.color),
-    ];
-    toolbar_row(styles).into()
+    ]
 }
 
 fn text_size_after_scroll(current: f32, delta: mouse::ScrollDelta) -> f32 {

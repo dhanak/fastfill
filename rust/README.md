@@ -25,6 +25,18 @@ Run the current native prototype:
 mise exec -- cargo run
 ```
 
+Debug builds optimize dependencies (including image/PDF codecs), while keeping
+FastFill code unoptimized for quick edits and debugging. The first build after
+this setting changes is slower; subsequent application edits reuse that work.
+Use `mise exec -- cargo run --release` to assess release performance.
+
+Measure archive loading/saving with a trusted project:
+
+```sh
+mise exec -- cargo run --no-default-features \
+  --example project_timing -- form.docscan
+```
+
 Serve the same prototype to another device on the LAN:
 
 ```sh
@@ -77,10 +89,47 @@ Checkpoint 5D2 connects project files:
 - **Shortcuts:** Ctrl+N New, Ctrl+O Open, Ctrl+S Save, Ctrl+Shift+S Save as.
   Use Command instead of Ctrl on macOS.
 
+Checkpoint 5E adds **Import PDF** in the page rail:
+
+- Import all pages after the active page, in their original order. An empty
+  starter page is replaced; an annotated starter stays. Existing annotations
+  and history are preserved. The result becomes an unsaved project change.
+- Pages become 300-DPI PNG backgrounds with white paper, respecting PDF crop
+  boxes and page rotation. Printed text, PDF annotations, and form fields are
+  flattened, not editable PDF objects. Add FastFill annotations normally, then
+  save/reopen as `.docscan`. The original PDF is not retained or modified.
+- Imports are all-or-nothing. Invalid/unsupported pages, limits, errors, or
+  cancellation leave existing pages intact. Limits: 100 MiB input, 20 project
+  pages, 50 megapixels/page, 200 megapixels/batch, and 600 MiB encoded output.
+- Native rendering runs on a worker thread with parsing, interpreting,
+  rendering, and compression stages plus a progress bar. The bar counts work
+  stages, not elapsed time. Cancel stops at stage boundaries and discards the
+  entire pending batch; it cannot interrupt a stage already running.
+  Late results are ignored.
+- Image/PDF pickers share their last successful native folder during the run.
+  Browser PDF uploads work, but rasterization blocks the browser event thread;
+  progress/cancellation cannot respond while rendering. Test large PDFs in the
+  native app instead.
+
+The portable PDF backend is [Hayro](https://github.com/LaurenzV/hayro), with
+embedded substitute fonts and CMaps, no external renderer installation. It is
+experimental: check imported pages visually, particularly complex fonts,
+transparency, and PDF form appearances. Renderer-reported content failures
+reject the import; not every unsupported PDF construct produces a warning.
+Use trusted PDFs: input/output limits do not sandbox internal decompression,
+memory use, or CPU time. Password-protected PDFs have no password prompt.
+PDF export and recovery remain separate upcoming checkpoints.
+
 Project dialogs remember their last successful folder during the run. File
 operations block editing until finished. Page geometry, fonts, and strokes use
 point units; 1:1 still matches the imported image's original pixels. Saving
 does not resize or recompress imported images.
+
+Opening reuses fully validated image pixels for display, keeping the original
+encoded bytes for saving. PDF import likewise retains its raster rather than
+decoding the new PNG again. Saving fully validates source images once; native
+temporary-file read-back verifies exact bytes and ZIP CRC before atomic commit.
+No archive thumbnail/schema change is required for these optimizations.
 
 In browsers, Open uploads a file and Save/Save as downloads a `.docscan`; no
 original path can be reused. Download completion means the browser accepted
@@ -129,12 +178,18 @@ The tool row scrolls horizontally in narrower windows.
   Each tool remembers its own settings; Select changes the chosen object
   with undo.
 - **Select:** click or touch a shape, line, ink path, or text, then drag to
-  move it. Drag empty page space to select every intersecting shape. Ctrl-click
-  toggles individual shapes. Drag any selected shape to move the whole shape
-  selection. Faint member frames identify each shape inside the strong group
-  boundary. A single shape retains resize, endpoint, and rotation controls.
-- **Bulk styles:** color and thickness apply to every selected object. Fill
-  applies only to compatible rectangles, ovals, and pen paths.
+  move it. Drag empty page space to select intersecting shapes and text.
+  Ctrl-click toggles individual members. Drag any selected member to move the
+  whole selection. Faint member frames identify membership inside the strong
+  group boundary. A single object retains its applicable editing controls.
+- **Bulk styles:** color applies to every selected object. Thickness applies
+  to shapes/ink; fill applies only to rectangles, ovals, and pen paths.
+  Selections containing text also show font, size, and B/I/U controls; these
+  change only selected text, preserving its other attributes and measuring
+  each box separately. Each action is one undo step. Mixed fonts/sizes show
+  "Mixed"; B/I/U enable all unless every selected text already has that
+  attribute, in which case they disable all. Shape thickness/fill remain
+  available beside text controls; scroll the options row in narrow windows.
 - **Layers:** To back and To front move selected text or shapes behind or
   ahead of unselected objects while preserving relative order.
 - **Rotate:** drag the round handle above selected text, rectangle, oval, mark,
@@ -156,9 +211,11 @@ The tool row scrolls horizontally in narrower windows.
 - Shapes stay attached to the page while zooming, panning, or resizing the
   window. Parts outside the page are clipped, while a small reachable part is
   kept on-page.
-Pages, annotations, and history are temporary. Mixed text/shape multi-selection
-and project open/save UI are not implemented. Schema-v1 archive load/save APIs
-are covered by automated compatibility tests. Minimal Linux or WASM environments
-without requested generic or italic fonts fall back to bundled Fira Sans.
+
+Save projects explicitly; automatic recovery is not implemented yet.
+Schema-v1 archive load/save
+APIs are covered by automated compatibility tests. Minimal Linux or WASM
+environments without requested generic or italic fonts fall back to bundled
+Fira Sans.
 Android browser rendering is currently slow; native touchscreen performance
 still needs hardware testing.

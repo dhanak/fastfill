@@ -147,14 +147,43 @@ impl Pages {
         self.items.len() < MAXIMUM_PAGES
     }
 
+    fn empty_starter(&self) -> bool {
+        self.items.len() == 1
+            && self.current().image.is_none()
+            && self.current().annotations.is_empty()
+    }
+
+    pub(super) fn pdf_capacity(&self) -> usize {
+        MAXIMUM_PAGES - self.len() + usize::from(self.empty_starter())
+    }
+
+    pub(super) fn import_images(&mut self, images: &[ImportedImage]) -> bool {
+        if images.is_empty() || images.len() > self.pdf_capacity() {
+            return false;
+        }
+        let settings = self.current().annotations.settings();
+        let pages = images.iter().cloned().map(|image| {
+            let mut page = EditorPage::from_image(image);
+            page.annotations.apply_settings(&settings);
+            page
+        });
+        // Stage before changing the document; preserve every existing page.
+        let pages = pages.collect::<Vec<_>>();
+        if self.empty_starter() {
+            self.items = pages;
+            self.active = 0;
+        } else {
+            self.active += 1;
+            self.items.splice(self.active..self.active, pages);
+        }
+        true
+    }
+
     pub(super) fn add_image(&mut self, image: ImportedImage) -> bool {
         if !self.can_add() {
             return false;
         }
-        if self.items.len() == 1
-            && self.current().image.is_none()
-            && self.current().annotations.is_empty()
-        {
+        if self.empty_starter() {
             self.replace_image(image);
             return true;
         }

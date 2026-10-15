@@ -1,6 +1,154 @@
 use super::*;
 
 #[test]
+fn group_font_changes_preserve_other_properties_and_shape_controls() {
+    let mut state = annotated_page();
+    let _ = update(&mut state, Message::SetTool(Tool::Text));
+    let _ = update(
+        &mut state,
+        Message::DrawPressed(Pointer::Mouse, PagePoint::new(100.0, 200.0), 1.0),
+    );
+    paste_text(&mut state, "First");
+    let _ = update(&mut state, Message::ToggleTextItalic);
+    let _ = update(&mut state, Message::SetColor(AnnotationColor::Red));
+    let _ = update(&mut state, Message::AcceptText);
+    let _ = update(
+        &mut state,
+        Message::DrawPressed(Pointer::Mouse, PagePoint::new(300.0, 400.0), 1.0),
+    );
+    paste_text(&mut state, "A much longer second text");
+    let _ = update(&mut state, Message::ToggleTextItalic);
+    let _ = update(&mut state, Message::SetTextTypeface(TextTypeface::Serif));
+    let _ = update(&mut state, Message::SetTextSize(32.0));
+    let _ = update(&mut state, Message::SetColor(AnnotationColor::Blue));
+    let _ = update(&mut state, Message::AcceptText);
+    let _ = update(&mut state, Message::SetTool(Tool::Select));
+    let _ = update(
+        &mut state,
+        Message::DrawPressed(Pointer::Mouse, PagePoint::new(1.0, 1.0), 1.0),
+    );
+    let _ = update(
+        &mut state,
+        Message::DrawReleased(
+            Pointer::Mouse,
+            PagePoint::new(600.0, 600.0),
+            false,
+        ),
+    );
+    assert_eq!(state.annotations().selected_count(), 3);
+    let before = state.annotations().texts().to_vec();
+    let shapes = state.annotations().shapes().to_vec();
+    assert!(state.annotations().current_text_format().is_some());
+    let _ = update(&mut state, Message::ToggleTextBold);
+    for (text, original) in state.annotations().texts().iter().zip(&before) {
+        assert!(text.format.bold);
+        assert_eq!(text.format.typeface, original.format.typeface);
+        assert_eq!(text.format.font_size, original.format.font_size);
+        assert_eq!(text.format.italic, original.format.italic);
+        assert_eq!(text.format.color, original.format.color);
+        assert_eq!(text.id, original.id);
+        let size = super::text::measure_text(&text.text, text.format, 1.0);
+        assert_eq!(
+            (text.bounds.width, text.bounds.height),
+            (size.width, size.height)
+        );
+    }
+    assert_eq!(state.annotations().shapes(), shapes);
+    let _ = update(&mut state, Message::Undo);
+    assert_eq!(state.annotations().texts(), before);
+    let _ = update(&mut state, Message::Redo);
+    let _ = update(&mut state, Message::ToggleTextItalic);
+    assert!(
+        state
+            .annotations()
+            .texts()
+            .iter()
+            .all(|text| text.format.italic)
+    );
+    let _ = update(&mut state, Message::ToggleTextItalic);
+    assert!(
+        state
+            .annotations()
+            .texts()
+            .iter()
+            .all(|text| !text.format.italic)
+    );
+    let _ = update(&mut state, Message::ToggleTextUnderline);
+    let _ = update(&mut state, Message::SetTextSize(40.0));
+    let _ = update(
+        &mut state,
+        Message::SetTextTypeface(TextTypeface::Monospace),
+    );
+    assert!(state.annotations().texts().iter().all(
+        |text| text.format.underline
+            && text.format.typeface == TextTypeface::Monospace
+            && (text.format.font_size - 40.0).abs() < 0.01
+    ));
+    let _ = update(&mut state, Message::SetColor(AnnotationColor::Green));
+    assert!(
+        state
+            .annotations()
+            .texts()
+            .iter()
+            .all(|text| text.format.color == AnnotationColor::Green)
+    );
+    assert_eq!(
+        state.annotations().shapes()[0].color,
+        AnnotationColor::Green
+    );
+    let _ = update(&mut state, Message::AdjustThickness(1.0));
+    assert!(
+        state.annotations().shapes()[0].stroke_width > shapes[0].stroke_width
+    );
+}
+
+#[test]
+fn select_ctrl_click_and_marquee_keep_text_in_mixed_groups() {
+    let mut state = annotated_page();
+    let _ = update(&mut state, Message::SetTool(Tool::Text));
+    let point = PagePoint::new(300.0, 300.0);
+    let _ =
+        update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
+    paste_text(&mut state, "Group member");
+    let _ = update(&mut state, Message::AcceptText);
+    let _ = update(&mut state, Message::SetTool(Tool::Select));
+    state.modifiers.square = true;
+    let _ = update(
+        &mut state,
+        Message::DrawPressed(Pointer::Mouse, PagePoint::new(30.0, 45.0), 1.0),
+    );
+    assert_eq!(state.annotations().selected_count(), 2);
+    assert!(state.annotations().active_pointer().is_none());
+    state.modifiers.square = false;
+    let _ =
+        update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
+    let _ = update(
+        &mut state,
+        Message::DrawReleased(
+            Pointer::Mouse,
+            PagePoint::new(320.0, 330.0),
+            false,
+        ),
+    );
+    assert_eq!(state.annotations().selected_count(), 2);
+    assert_eq!(state.annotations().texts()[0].bounds.x, 320.0);
+    let _ = update(&mut state, Message::Undo);
+    let _ = update(
+        &mut state,
+        Message::DrawPressed(Pointer::Mouse, PagePoint::new(5.0, 5.0), 1.0),
+    );
+    let _ = update(
+        &mut state,
+        Message::DrawReleased(
+            Pointer::Mouse,
+            PagePoint::new(600.0, 600.0),
+            false,
+        ),
+    );
+    assert_eq!(state.annotations().selected_count(), 2);
+}
+
+#[test]
 fn undo_redo_messages_apply_only_to_committed_edits() {
     let mut state = annotated_page();
     let rectangle = state.annotations().shapes()[0].clone();
@@ -1037,6 +1185,7 @@ fn rendered_page() -> FastFill {
             [240, 230, 210, 255].repeat(600 * 600),
         ),
         name: "paper.png".into(),
+        display: None,
         size: PageSize::new(600.0, 600.0),
         info: fastfill_rust::image_input::ImageInfo {
             width: 600,
@@ -1180,6 +1329,7 @@ fn successful_import_resets_annotations_and_retains_tool() {
     let mut state = annotated_page();
     let image = ImportedImage {
         handle: Handle::from_rgba(1, 1, vec![255; 4]),
+        display: None,
         name: "replacement.png".into(),
         size: PageSize::new(1.0, 1.0),
         info: fastfill_rust::image_input::ImageInfo {

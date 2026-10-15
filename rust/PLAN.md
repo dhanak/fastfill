@@ -292,8 +292,8 @@ text. No importing, saving, camera, or annotations were included.
 - [x] User checkpoint: imports, independent history, switches, reorder,
       replacement/deletion, page limit, and touch where available.
 
-The next slice connects project open/save UI and editable archive conversion,
-including dirty revisions. PDF import/export and recovery follow that slice.
+Project open/save UI and editable conversion are accepted. Continue with PDF
+import, matching PDF export, then recovery as separate checkpoints.
 
 #### 5D1. Editable schema bridge and save-state identity — accepted
 
@@ -333,6 +333,23 @@ introduce v2 only when a concrete requirement justifies it.
 - [x] User checkpoint: native dialogs, dirty guard choices, reopen fidelity,
       image 1:1, and browser upload/download where available. See checklist
       below.
+
+#### 5E. Transactional multi-page PDF import — accepted
+
+- [x] Evaluate a portable renderer against synthetic and real form PDFs.
+- [x] Rasterize at 300 DPI with white backgrounds and crop/rotation support.
+- [x] Bound input bytes, page count, output dimensions, and batch size.
+- [x] Add Import PDF after the active page; replace only an empty starter.
+- [x] Stage the whole batch before changing pages, selection, or history.
+- [x] Show native progress, cancel between pages, and ignore late results.
+- [x] Preserve annotations on existing pages and dirty the imported document.
+- [x] Verify save/reopen, native/WASM builds, errors, limits, and cancellation.
+- [x] User checkpoint: PDF appearance, insertion, limits, cancel, save/reopen.
+      Stop before PDF export or recovery.
+
+Performance/progress, mixed text/shape selection, and bulk font controls are
+also accepted. See the follow-up logs below. Matching PDF export is next;
+keep recovery separate and stop after committing this checkpoint.
 
 ### 6. Correction, snapping, and camera — not started
 
@@ -1034,13 +1051,160 @@ Manual checkpoint — accepted (use copies for legacy files):
    and ordinary mouse editing. Browser upload/download is optional; save before
    closing/reloading its tab. Native touch remains a hardware checkpoint.
 
-Stop here at the user's request. Resume with PDF import next, then matching
-PDF export and recovery. No next-slice implementation in this checkpoint.
+User requested a stop at 5D2. Resumed below after the green CI report.
+
+### 2026-10-15 — checkpoint 5E multi-page PDF import
+
+- User reported green GitHub CI/CD for the accepted 5D2 commit. Continue with
+  PDF import only; matching PDF export and recovery remain separate slices.
+- TDD red: core import APIs and controller workflow did not exist. Core tests
+  cover sizing, page order, white backgrounds, printed standard-font text,
+  crop/rotation/UserUnit, invalid input, count/pixel budgets, cancellation,
+  renderer warnings, and the tracked printable sample form.
+- Select Hayro 0.8 with embedded substitute fonts/CMaps and CPU rendering.
+  It builds without a separate PDFium/native renderer installation. Keep the
+  GUI-independent adapter behind `pdf-import`, enabled by the GUI feature;
+  core-only tests need not compile the renderer. Existing `pdf` export probe
+  remains separate and unchanged.
+- Import every PDF page at 300 DPI as a white-backed PNG. Stage all images
+  before inserting after the active page; replace only an empty starter.
+  Retain annotated starter pages, other page IDs, selection, and history.
+  Printed PDF content/forms become image backgrounds, not editable objects.
+- Check input length before parsing, all page dimensions before rendering,
+  and encoded output size before installation. Limits: 100 MiB input,
+  20 project pages, 50 MP/page, 200 MP/batch, 600 MiB encoded batch output.
+  Fail the complete batch on reported content warnings or native renderer
+  panic. These limits are not an internal memory/CPU/decompression sandbox;
+  use trusted PDFs and visually verify complex content.
+- Native import owns one worker thread. Page progress/cancellation use the
+  existing project-operation guard and request IDs. Cancel discards the batch
+  and releases the UI; an in-flight page can finish but its late result is
+  ignored. Cannot interrupt a single page or parsing. Reuse image folder memory.
+- Keep the browser upload path buildable, but explicitly document synchronous
+  browser rasterization and unavailable progress/cancel during that work.
+  A browser worker runtime is outside this small native-first checkpoint.
+- Controller checks cover all-or-nothing insertion, an annotated starter,
+  modal/edit guards, stale replies, modifier release, and pending text/drafts.
+  A real sample PDF raster passes through annotation, ZIP save, reload, and
+  editable page reconstruction with stable IDs and exact raster dimensions.
+- Remove stale prototype README claims that project open/save is absent and
+  all content is temporary. Document PDF behavior and current limitations.
+- Passed 224 all-feature tests, 123 core-only tests, strict Clippy, formatting,
+  all-feature WebAssembly compilation, and a linked Trunk build locally.
+  New Windows/macOS runtime checks still rely on CI and manual testing.
+
+Manual checkpoint — accepted, with performance/selection follow-up below:
+
+1. Import `docs/samples/fastfill-camera-sample-form.pdf` into a new project.
+   Check printed text, lines, checkboxes, white paper, Fit, and pixel-based 1:1.
+2. Import a multi-page PDF, ideally including landscape/rotated/cropped pages.
+   Check order, orientation, aspect ratio, and successful folder memory.
+3. Annotate an existing page, then import another PDF. Check insertion after
+   that page, retained annotations/history, and an unsaved `*`. An annotated
+   starter blank must remain rather than being silently replaced.
+4. Annotate imported pages, reorder, save as `.docscan`, New, and reopen.
+   Check all page images, annotations, IDs/order behavior, and clean state.
+5. Cancel the picker or an in-progress multi-page import. Try a damaged PDF
+   and a PDF exceeding remaining page capacity. Check that no partial pages
+   appear and existing content remains usable. Password PDFs have no prompt.
+6. Confirm progress and Cancel remain responsive in the native app. Browser
+   upload is optional; large imports can freeze the harness while rendering.
+
+Stop for this checkpoint; do not start PDF export or recovery yet.
+
+### 2026-10-15 — 5E performance and mixed-selection follow-up
+
+- User confirmed functional import checks. Reported slow import/open/save,
+  page images appearing after annotations, minimal progress, and missing text
+  from marquee/Ctrl-click groups. Do not advance to export yet.
+- Found the supplied sample at `artifacts/reviews/docscans/sample-page.docscan`
+  rather than `artifacts/previews/`. Its 1.3 MiB archive holds 18.8 MP of image
+  data, about 75 MB as RGBA. Unoptimized local timings: validated open 0.91 s,
+  validated ZIP write 0.81 s, and full read-back decode 0.81 s, excluding UI
+  decoding. Add a small rerunnable `project_timing` example.
+- Reuse pixels from bounded archive validation when staging GUI pages. Keep
+  original PNG/JPEG handles for saving; use decoded RGBA handles for the page
+  and rail. Share a display handle across repeated asset references. Install
+  only after the entire project succeeds; no UI-thread image decode gap.
+- Retain rendered PDF pixels for display and encode PNG with the existing
+  image codec's fast default. This trades some compression for speed, not
+  image quality. Keep 300 DPI and all input/output limits unchanged.
+- Optimize dependencies in debug/test builds while leaving FastFill's code
+  debuggable. Accept the one-time dependency rebuild; subsequent app edits
+  reuse it. Keep agent build output under `/tmp`.
+- Remove a redundant full decode in GUI save snapshot preparation. The archive
+  writer still fully validates every source image before writing. Native
+  read-back checks exact manifest/asset bytes, entry count, and ZIP CRC without
+  decoding the already-validated, byte-identical image again. Keep atomic commit
+  and failed-save preservation. Test changed/short/long/missing/corrupt entries.
+- Add parsing/interpreting/rasterizing/compression stages and a work-stage
+  progress bar, including single-page imports. Cancellation checks stage
+  boundaries; the bar is not a time estimate. Browser rendering still blocks.
+- Extend selection/history to several text objects plus shapes. Marquee and
+  Ctrl-click include text; group movement uses a common reachability-limited
+  delta, preview, cancel, and one-step undo. Apply shared color, compatible
+  stroke/fill, deletion, layer order, and rotation reset to selected members.
+  Show faint text-member frames; retain single-object edit/rotation controls.
+- Do not add archive thumbnails or a new schema yet. Profile the corrected
+  pipeline first; previews could be a later optimization for very large files.
+- The same local sample now opens/validates in 82 ms and writes/validates in
+  66 ms. Actual native atomic save including byte/CRC read-back takes 67 ms.
+  These are container measurements, not native GUI/SP6 latency promises.
+- Passed 234 all-feature tests, 129 core-only tests, strict Clippy, formatting,
+  and all-feature WASM compilation. Native UI responsiveness and mixed-selection
+  feedback still need the checks below.
+
+Follow-up manual checkpoint — accepted, with font-control follow-up below:
+
+1. Reimport the same PDF and check stage messages/bar and native cancellation.
+2. Reopen `sample-page.docscan`; check that images and annotations appear
+   together, then compare open/save responsiveness with the prior build.
+3. Use marquee and Ctrl-click to select text plus shapes, or multiple text
+   boxes. Check faint member frames, movement, cancel, color, layer changes,
+   delete, and undo/redo. Single-text editing/rotation must still work.
+
+### 2026-10-15 — mixed-selection font controls
+
+- User confirmed near-instant load/save, visible progress, text marquee and
+  Ctrl-click selection, and shared color changes. Accept those follow-up checks.
+  Font, size, and B/I/U controls still disappeared for multi-selection.
+- Show text controls whenever selected text exists, including mixed groups.
+  Retain shape thickness/fill and shared colors; scroll the options row
+  horizontally rather than clipping controls in narrower windows.
+- Display mixed typefaces/sizes with a placeholder. Mark B/I/U active only
+  when all selected text shares the attribute; click to enable all otherwise,
+  or disable all when already active.
+- Apply only the requested attribute to each selected text, retaining its
+  other formatting, content, ID, anchor, and rotation. Measure each updated
+  text separately. Stage/validate every result before one undoable commit;
+  preserve shapes and block formatting during active drags or text drafts.
+- Preserve pending inline edit formatting and Escape behavior. Shared color
+  still reaches both shapes and text; font attributes apply only to text.
+- TDD red: bulk API was missing. New core/controller checks cover mixed
+  formatting, independent box measurement, field preservation, invalid batch
+  rollback, active drags, shared color, shape thickness, and undo/redo.
+- Passed 236 all-feature tests, 130 core-only tests, strict Clippy, formatting,
+  and all-feature WASM compilation locally. User confirmed the focused UI
+  checks below; mark 5E and its follow-ups complete.
+
+Manual checkpoint — accepted:
+
+1. Select text plus shapes, or multiple texts with different fonts/sizes.
+   Check that font controls show alongside compatible shape options, with
+   "Mixed" placeholders where applicable.
+2. Change font/size/B/I/U. Check only text changes, no unwanted attribute
+   copying, boxes update correctly, and one Undo restores the whole action.
+3. Check shared color and shape thickness/fill, font-size wheel adjustment,
+   and ordinary inline editing/Enter/Escape. Do not start PDF export yet.
+
+Stop after the requested commit. Resume with matching PDF export next, then
+recovery as a separate checkpoint; neither is implemented in this slice.
 
 ## References
 
 - [iced 0.14 documentation](https://docs.rs/iced/0.14.0/iced/)
 - [iced 0.14 features and
   MSRV](https://github.com/iced-rs/iced/blob/0.14.0/Cargo.toml)
+- [Hayro PDF renderer](https://github.com/LaurenzV/hayro)
 - Existing behavior: [user guide](../docs/USER_GUIDE.md).
 - Existing checks and fixtures: `../src/FastFill.Checks/`, `../tests/`.

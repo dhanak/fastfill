@@ -238,6 +238,7 @@ fn three_pages() -> FastFill {
                 PickPurpose::Add,
                 Ok(Some(ImportedImage {
                     handle: Handle::from_rgba(1, 1, vec![255; 4]),
+                    display: None,
                     name: format!("{index}.png"),
                     size: PageSize::new(1.0, 1.0),
                     info: fastfill_rust::image_input::ImageInfo {

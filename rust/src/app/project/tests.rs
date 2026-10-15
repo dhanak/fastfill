@@ -3,6 +3,7 @@ use crate::app::controller::update;
 use crate::app::tests::{annotated_page, paste_text};
 use crate::app::{PagePoint, Pointer, Tool, page_size};
 use fastfill_rust::project::load_archive;
+use iced::widget::image::Handle;
 use std::io::Cursor;
 
 #[test]
@@ -32,6 +33,18 @@ fn dirty_state_ignores_defaults_selection_and_canceled_drafts() {
         false,
     );
     assert!(state.project.is_dirty(&state.pages));
+}
+
+#[test]
+fn display_pixels_do_not_replace_the_original_encoded_save_data() {
+    let image = test_image("source", 60, 90);
+    assert!(matches!(image.handle, Handle::Bytes(_, _)));
+    assert!(matches!(image.display_handle(), Handle::Rgba { .. }));
+    let mut state = FastFill::default();
+    let expected = image.handle.clone();
+    assert!(state.pages.add_image(image));
+    let snapshot = state.project_snapshot().unwrap();
+    assert_eq!(snapshot.images[0], Some(expected));
 }
 
 #[test]
