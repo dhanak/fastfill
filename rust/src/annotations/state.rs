@@ -310,9 +310,10 @@ impl Annotations {
         self.text_move = None;
     }
 
-    fn snapshot(&self) -> Snapshot {
+    pub(super) fn snapshot(&self) -> Snapshot {
         Snapshot {
             revision: self.revision,
+            page_context: self.page_context,
             shapes: self.shapes.clone(),
             texts: self.texts.clone(),
             layers: self.layers.clone(),
@@ -321,8 +322,9 @@ impl Annotations {
         }
     }
 
-    fn restore(&mut self, snapshot: Snapshot) {
+    pub(super) fn restore(&mut self, snapshot: Snapshot) {
         self.revision = snapshot.revision;
+        self.page_context = snapshot.page_context;
         self.shapes = snapshot.shapes;
         self.texts = snapshot.texts;
         self.layers = snapshot.layers;

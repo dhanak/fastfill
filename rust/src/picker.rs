@@ -11,6 +11,7 @@ pub(crate) struct ImportedImage {
     // Display decoded pixels, but keep the original encoded handle for saves.
     pub(crate) display: Option<Handle>,
     pub(crate) name: String,
+    // Display pixel dimensions; info retains the original source dimensions.
     pub(crate) size: PageSize,
     pub(crate) info: ImageInfo,
     pub(crate) directory: Option<PathBuf>,
@@ -82,13 +83,14 @@ impl ImportedImage {
             handle: Handle::from_bytes(bytes),
             display: None,
             name,
-            size: page_size_from_pixels(info),
+            size: page_size_from_pixels(info.width, info.height),
             info,
             directory,
         }
     }
 
     pub(crate) fn set_pixels(&mut self, pixels: image::RgbaImage) {
+        self.size = page_size_from_pixels(pixels.width(), pixels.height());
         self.display = Some(Handle::from_rgba(
             pixels.width(),
             pixels.height(),
@@ -102,7 +104,7 @@ impl ImportedImage {
 }
 
 #[allow(clippy::cast_precision_loss)]
-fn page_size_from_pixels(info: ImageInfo) -> PageSize {
+fn page_size_from_pixels(width: u32, height: u32) -> PageSize {
     // iced uses f32 coordinates; integer precision above 16 MP is immaterial.
-    PageSize::new(info.width as f32, info.height as f32)
+    PageSize::new(width as f32, height as f32)
 }

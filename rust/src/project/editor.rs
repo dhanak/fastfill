@@ -2,15 +2,13 @@
 
 use super::editor_transform as coordinates;
 use super::validate::validate_page;
-use super::{
-    CropQuad, PageFilterSettings, ProjectAnnotation, ProjectPage,
-    ProjectShapeKind,
-};
+use super::{ProjectAnnotation, ProjectPage, ProjectShapeKind};
 use crate::annotations::{
     AnnotationColor, AnnotationGeometry, AnnotationRef, Annotations, InkKind,
     LineKind, OwnedAnnotation, ShapeAnnotation, ShapeKind, TextAnnotation,
     TextFormat, TextTypeface,
 };
+use crate::correction::{PageCorrection, corrected_dimensions};
 use crate::geometry::{Point, Rect, Size};
 use std::collections::HashMap;
 use std::fmt;
@@ -26,28 +24,33 @@ impl fmt::Display for ProjectEditError {
 
 impl std::error::Error for ProjectEditError {}
 
-/// C# preview/export uses a 612-point page width, not source image pixels.
+/// Preview/export uses a 612-point page width and corrected image aspect.
 ///
 /// # Errors
 /// Returns an error for invalid page metadata.
 pub fn editor_page_size(page: &ProjectPage) -> Result<Size, ProjectEditError> {
     validate_page(page).map_err(|error| ProjectEditError(error.to_string()))?;
+    // validate_page already rejects nonpositive source dimensions.
+    #[allow(clippy::cast_sign_loss)]
+    let (width, height) = (
+        page.source_pixel_width as u32,
+        page.source_pixel_height as u32,
+    );
+    let (width, height) =
+        corrected_dimensions(width, height, PageCorrection::from(page))
+            .map_err(|error| ProjectEditError(error.to_string()))?;
     #[allow(clippy::cast_precision_loss)]
-    Ok(Size::new(
-        612.0,
-        612.0 * page.source_pixel_height as f32
-            / page.source_pixel_width as f32,
-    ))
+    Ok(Size::new(612.0, 612.0 * height as f32 / width as f32))
 }
 
 /// Load committed annotations in layer order, with no selection or history.
 ///
 /// # Errors
-/// Rejects corrections and annotation layouts not yet supported by the editor.
+/// Rejects invalid corrections and unsupported annotation layouts.
 pub fn decode_editor_page(
     page: &ProjectPage,
 ) -> Result<Annotations, ProjectEditError> {
-    let size = editable_size(page)?;
+    let size = editor_page_size(page)?;
     let annotations = page
         .annotations
         .iter()
@@ -66,7 +69,23 @@ pub fn encode_editor_page(
     original: &ProjectPage,
     editor: &Annotations,
 ) -> Result<ProjectPage, ProjectEditError> {
-    let size = editable_size(original)?;
+    encode_corrected_editor_page(
+        original,
+        editor,
+        PageCorrection::from(original),
+    )
+}
+
+/// Save a new page correction without distorting annotation point geometry.
+///
+/// # Errors
+/// Rejects invalid corrections, pending edits, and unsupported source layouts.
+pub fn encode_corrected_editor_page(
+    original: &ProjectPage,
+    editor: &Annotations,
+    correction: PageCorrection,
+) -> Result<ProjectPage, ProjectEditError> {
+    let old_size = editor_page_size(original)?;
     if editor.active_pointer().is_some() || editor.has_text_edit() {
         return Err(error("Accept or cancel pending edits before saving."));
     }
@@ -77,11 +96,19 @@ pub fn encode_editor_page(
         .map(|annotation| {
             Ok((
                 annotation.common().0,
-                (annotation, decode_annotation(annotation, size)?),
+                (annotation, decode_annotation(annotation, old_size)?),
             ))
         })
         .collect::<Result<HashMap<_, _>, ProjectEditError>>()?;
     let mut page = original.clone();
+    page.crop = correction.crop;
+    page.rotation_quarter_turns = correction.rotation_quarter_turns;
+    page.filter = correction.filter;
+    page.brightness = correction.brightness;
+    // Old normalized bounds/transforms belong to the old aspect. Re-encode
+    // against the new aspect, but retain source-only annotation properties.
+    page.annotations.clear();
+    let size = editor_page_size(&page)?;
     page.annotations = editor
         .ordered_annotations()
         .map(|annotation| {
@@ -101,7 +128,7 @@ pub fn encode_editor_page(
                     ) => text == old,
                     _ => false,
                 };
-                if unchanged {
+                if unchanged && size == old_size {
                     return (*source).clone();
                 }
             }
@@ -112,20 +139,6 @@ pub fn encode_editor_page(
     validate_page(&page)
         .map_err(|error| ProjectEditError(error.to_string()))?;
     Ok(page)
-}
-
-fn editable_size(page: &ProjectPage) -> Result<Size, ProjectEditError> {
-    let size = editor_page_size(page)?;
-    if page.crop != CropQuad::default() {
-        return Err(error("Page crop is not yet supported by the editor."));
-    }
-    if page.rotation_quarter_turns != 0 {
-        return Err(error("Page rotation is not yet supported by the editor."));
-    }
-    if page.filter != PageFilterSettings::default() {
-        return Err(error("Page filters are not yet supported by the editor."));
-    }
-    Ok(size)
 }
 
 fn decode_annotation(

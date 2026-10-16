@@ -9,7 +9,10 @@ use fastfill_rust::project::{
     editor_page_size,
 };
 use iced::Task;
+use std::collections::BTreeMap;
 use uuid::Uuid;
+
+mod correction;
 
 pub(super) const MAXIMUM_PAGES: usize = 20;
 
@@ -28,6 +31,7 @@ pub(super) struct EditorPage {
     pub(super) annotations: Annotations,
     pub(super) metadata: ProjectPage,
     pub(super) size: Size,
+    versions: BTreeMap<u64, correction::PageVersion>,
 }
 
 impl Default for EditorPage {
@@ -37,6 +41,7 @@ impl Default for EditorPage {
             annotations: Annotations::default(),
             metadata: page_metadata(794, 1_123, "png"),
             size: super::DEFAULT_PAGE,
+            versions: BTreeMap::new(),
         }
     }
 }
@@ -55,6 +60,7 @@ impl EditorPage {
             annotations: Annotations::default(),
             metadata,
             size,
+            versions: BTreeMap::new(),
         }
     }
 }
@@ -70,6 +76,7 @@ fn page_metadata(width: u32, height: u32, extension: &str) -> ProjectPage {
         crop: CropQuad::default(),
         rotation_quarter_turns: 0,
         filter: PageFilterSettings::default(),
+        brightness: 0,
         annotations: Vec::new(),
     }
 }
@@ -116,6 +123,7 @@ impl Pages {
                     size: editor_page_size(metadata)
                         .map_err(|error| error.to_string())?,
                     metadata: metadata.clone(),
+                    versions: BTreeMap::new(),
                 })
             })
             .collect::<Result<Vec<_>, String>>()?;

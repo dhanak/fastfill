@@ -168,33 +168,34 @@ fn editing_a_loaded_object_preserves_identity_and_supports_undo() {
 }
 
 #[test]
-fn unsupported_page_corrections_and_distortion_fail_explicitly() {
+fn corrected_pages_use_output_geometry_and_keep_annotation_metadata() {
     let mut source = blank_page();
-    source.crop.top_left.x = 0.1;
-    assert!(
-        decode_editor_page(&source)
-            .unwrap_err()
-            .to_string()
-            .contains("crop")
-    );
-    source.crop = CropQuad::default();
+    source.crop.top_right.x = 0.5;
+    source.crop.bottom_right.x = 0.5;
     source.rotation_quarter_turns = 1;
-    assert!(
-        decode_editor_page(&source)
-            .unwrap_err()
-            .to_string()
-            .contains("rotation")
-    );
-    source.rotation_quarter_turns = 0;
     source.filter.contrast = 10;
-    assert!(
-        decode_editor_page(&source)
-            .unwrap_err()
-            .to_string()
-            .contains("filter")
-    );
+    let size = editor_page_size(&source).unwrap();
+    assert_eq!(size, Size::new(612.0, 612.0 * 301.0 / 900.0));
+    let mut editor = Annotations::default();
+    editor.set_tool(Tool::Rectangle);
+    editor.begin(MOUSE, Point::new(100.0, 60.0), size);
+    editor.finish(MOUSE, Point::new(200.0, 100.0), false);
+    let page = encode_editor_page(&source, &editor).unwrap();
+    assert_eq!(page.crop, source.crop);
+    assert_eq!(page.rotation_quarter_turns, 1);
+    assert_eq!(page.filter, source.filter);
+    let decoded = decode_editor_page(&page).unwrap();
+    assert_eq!(encode_editor_page(&page, &decoded).unwrap(), page);
+    let bounds = decoded.shapes()[0].bounds();
+    assert!((bounds.x - 100.0).abs() < 0.001);
+    assert!((bounds.y - 60.0).abs() < 0.001);
+    assert!((bounds.width - 100.0).abs() < 0.001);
+    assert!((bounds.height - 40.0).abs() < 0.001);
+}
 
-    source.filter = PageFilterSettings::default();
+#[test]
+fn unsupported_annotation_distortion_still_fails_explicitly() {
+    let mut source = blank_page();
     source.annotations.push(ProjectAnnotation::Shape {
         id: Uuid::from_u128(2),
         shape: ProjectShapeKind::Rectangle,
@@ -364,8 +365,15 @@ fn point_conversion_rejects_finite_schema_geometry_that_overflows() {
 }
 
 #[test]
-fn newly_rotated_shapes_and_ink_keep_their_physical_frame_corners() {
-    let source = blank_page();
+fn newly_rotated_shapes_and_ink_keep_frames_on_a_corrected_page() {
+    let mut source = blank_page();
+    source.crop = CropQuad {
+        top_left: NormalizedPoint { x: 0.1, y: 0.1 },
+        top_right: NormalizedPoint { x: 0.9, y: 0.1 },
+        bottom_right: NormalizedPoint { x: 0.9, y: 0.9 },
+        bottom_left: NormalizedPoint { x: 0.1, y: 0.9 },
+    };
+    source.rotation_quarter_turns = 1;
     let page = editor_page_size(&source).unwrap();
     for tool in [
         Tool::Rectangle,
@@ -419,6 +427,7 @@ fn blank_page() -> ProjectPage {
         crop: CropQuad::default(),
         rotation_quarter_turns: 0,
         filter: PageFilterSettings::default(),
+        brightness: 0,
         annotations: Vec::new(),
     }
 }

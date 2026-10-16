@@ -54,6 +54,11 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
                 state.pages.pdf_capacity() > 0,
             ),
             control("Replace image", Message::AskReplacePage, true),
+            control(
+                "Edit page",
+                Message::PageEdit(super::page_edit::Event::Begin),
+                state.image().is_some()
+            ),
             control("Delete page", Message::AskDeletePage, true),
             row![
                 control(

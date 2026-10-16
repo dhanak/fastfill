@@ -348,7 +348,12 @@ fn unsupported_page_load_fails_before_replacing_any_page() {
     let snapshot = state.project_snapshot().unwrap();
     let mut archive =
         super::super::project_io::encode_snapshot(snapshot).unwrap();
-    archive.project.pages[0].filter.contrast = 10;
+    let fastfill_rust::project::ProjectAnnotation::Shape { transform, .. } =
+        &mut archive.project.pages[0].annotations[0]
+    else {
+        panic!("fixture must contain a rectangle")
+    };
+    transform.m21 = 0.2;
     assert!(
         super::super::project_io::prepare_opened(
             archive,

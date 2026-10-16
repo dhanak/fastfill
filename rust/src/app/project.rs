@@ -121,6 +121,9 @@ impl FastFill {
                     .map_err(|error| error.to_string())
             })
             .collect::<Result<Vec<_>, String>>()?;
+        if project.pages.iter().any(|page| page.brightness != 0) {
+            project.schema_version = project.schema_version.max(2);
+        }
         Ok(SaveSnapshot {
             project,
             images: self

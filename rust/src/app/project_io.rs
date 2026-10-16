@@ -1,6 +1,7 @@
 //! File dialogs and archive work run outside the application update loop.
 
 use crate::picker::ImportedImage;
+use fastfill_rust::correction::{PageCorrection, correct_image};
 use fastfill_rust::project::{
     LoadedAsset, LoadedProject, Project, decode_editor_page,
     load_archive_with_images,
@@ -10,6 +11,9 @@ use std::collections::BTreeMap;
 use std::io::{Cursor, Read, Seek};
 use std::path::PathBuf;
 use std::sync::Arc;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug)]
 pub(crate) struct OpenedProject {
@@ -122,8 +126,44 @@ pub(super) fn decode_project(
     let loaded = load_archive_with_images(reader, &mut on_image)
         .map_err(|error| error.to_string())?;
     let mut opened = prepare_opened(loaded, path, name)?;
-    for image in &mut opened.images {
-        image.display = pixels.get(&image.name).cloned();
+    // One source decode per asset, but a separate corrected display per page.
+    // Stage everything privately; an error must not install a partial project.
+    for (index, (page, image)) in opened
+        .project
+        .pages
+        .iter()
+        .zip(&mut opened.images)
+        .enumerate()
+    {
+        let source = pixels
+            .get(&page.source_asset)
+            .ok_or("Page image pixels are missing.")?;
+        image.display = Some(source.clone());
+        let correction = PageCorrection::from(page);
+        if correction != PageCorrection::default() {
+            let Handle::Rgba {
+                width,
+                height,
+                pixels,
+                ..
+            } = source
+            else {
+                return Err(
+                    "Source pixels must be decoded before editing.".into()
+                );
+            };
+            let source = image::RgbaImage::from_raw(
+                *width,
+                *height,
+                pixels.as_ref().to_vec(),
+            )
+            .ok_or("Source pixels are invalid.")?;
+            let corrected =
+                correct_image(&source, correction).map_err(|error| {
+                    format!("Page {} correction failed: {error}", index + 1)
+                })?;
+            image.set_pixels(corrected);
+        }
     }
     Ok(opened)
 }

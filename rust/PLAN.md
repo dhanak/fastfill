@@ -455,6 +455,41 @@ Follow-up slices, each with its own checkpoint:
   live overlay, manual/automatic capture, permissions, and lifecycle handling.
   Test laptop first, SP6 next; defer unsupported browser camera behavior.
 
+##### 6C1. Corrected-project compatibility — accepted
+
+- [x] Test loading/editing crop, rotation, and filter metadata against the
+      corrected image geometry, without moving annotations during loading.
+- [x] Add schema-v2 brightness persistence; continue loading schema-v1 and
+      preserve v1 output unless a new feature requires v2.
+- [x] Stage corrected display pixels outside UI updates, retain original
+      encoded assets for Save/recovery, and reuse decoded input pixels.
+- [x] Test shared assets with different corrections, round trips, failures,
+      display/PDF geometry, and source preservation.
+- [x] User checkpoint: open corrected fixtures, edit annotations, Save as,
+      reopen, and export. No interactive page-correction controls yet.
+
+##### 6C2. Interactive page editor — accepted
+
+- [x] Original-image mouse/touch corner dragging, full frame, quarter-turn
+      rotation, color mode, brightness, and contrast with corrected preview.
+- [x] Transactional Accept/Cancel and stale-preview protection; explicitly
+      test cancellation and undo. Pending edits do not change page identity.
+- [x] Include accepted corrections in dirty tracking, undo/redo, Save, PDF,
+      and recovery snapshots. Retain original encoded source assets.
+- [x] Follow image-space annotation centers, not fixed page-point positions.
+      Apply independent X/Y local magnification as clarified by the user.
+      Preserve stroke width and object rotation; do not warp/skew objects.
+      Text follows vertical font scaling with natural glyph proportions.
+      Reject unsupported resulting font sizes rather than silently clamp.
+- [x] After mapping, keep partly visible objects in place. Translate only
+      wholly displaced objects back into reach and warn on acceptance.
+- [x] Coalesce preview work to one worker plus the latest settings. Reject
+      stale completions; Accept requires the current settings' preview.
+- [x] User confirms page editing, image-space annotation anchors, undo/redo,
+      export, and displaced-annotation warnings. Physical touch untested.
+- [x] User accepts compact scaled-font labels and near-instant debug
+      corrections on 2026-10-16. Proceed separately to form snapping in 6D.
+
 The old C# full-frame processor loses one pixel in each dimension. Preserve
 the Rust viewer's exact full-frame dimensions instead; document this intended
 difference rather than porting the off-by-one into the new pipeline.
@@ -463,8 +498,12 @@ difference rather than porting the off-by-one into the new pipeline.
 
 - Polish the UI for regular use: cohesive visual styling, tool icons, touch
   layout, and confirmations that overlay the canvas without resizing it.
+- Replace the font-size dropdown with a touch-friendly numeric spinner:
+  1 pt increments instead of the current 4 pt choices. Show and preserve any
+  valid imported size, including the fixtures' 22 pt. Retain size validation,
+  wheel adjustment, and pending-text Accept/Escape semantics.
 - Profile the browser harness if full-release builds remain sluggish;
-  dependency-only optimization leaves FastFill's own debug code unoptimized.
+  debug builds now lightly optimize FastFill as well as its dependencies.
 - Redesign the page rail with animated reorder feedback:
   - Draw a semi-transparent thumbnail above the UI, keeping the original grab
     offset so it follows the mouse/touch pointer even outside the rail.
@@ -1596,6 +1635,163 @@ Manual checkpoint — brightness accepted 2026-10-15. User inspected the
 brightness comparisons and approved completion of 6B. Commit the pending
 6A/6B work, then start 6C separately. The main editor and C# app remain
 unchanged in this commit.
+
+### 2026-10-15 — 6B committed; checkpoint 6C1 compatibility
+
+- Mark 6B accepted and create unsigned commit f88ae26 for the pending 6A/6B
+  work. Do not push. Keep subsequent 6C changes uncommitted for review.
+- Split 6C into corrected-project I/O and interactive page editing, each
+  with its own checkpoint. Keep correction controls out of 6C1.
+- TDD red: v2 archives reject the brightness field; staged cropped/rotated
+  images still have source dimensions (9x7 instead of 7x5). Green: accept
+  schema-v1/v2 and stage each page's corrections from its original pixels.
+- Base annotation coordinates on a 612-point width and corrected output
+  aspect. Remove blanket rejection of crop/rotation/filter metadata; retain
+  explicit rejection of unsupported affine/font/soft-wrap layouts. Test
+  rotated shape/ink frame corners on a corrected page.
+- Persist brightness as a page-level v2 field. Omit zero for v1 compatibility;
+  missing schemaVersion remains legacy v1. Upgrade snapshots only when
+  nonzero brightness needs v2, and never implicitly downgrade loaded v2.
+- Validate correction/output limits before decoding assets. Decode each
+  source asset once and stage corrected displays before installing any page.
+  Share source handles, not corrected results, across differently edited
+  pages. Use corrected display dimensions for the rail, 1:1, and PDF aspect;
+  keep source info/encoded bytes intact for saves and recovery.
+- Test all color modes, shared assets with different corrections, unchanged
+  source bytes, annotation editing and reload, v1/v2 round trips, schema
+  failures, preflight output limits, and actual corrected PDF pixels/aspect.
+- Validate the existing Scan 2026-09-15 11-19.docscan through the GUI's
+  open/save pipeline. Generate three-page v1/v2 fixtures under
+  artifacts/previews/correction-6c1.sXnKAa/ and validate both through the same
+  pipeline. The v2 camera page adds brightness +15; both retain source assets.
+- Validation: 316 all-feature/all-target tests and 170 core/example tests
+  pass. Native/WASM strict all-target Clippy, formatting, whitespace, and the
+  full Trunk build pass. Keep all compilation output under /tmp.
+
+Manual checkpoint 6C1 — accepted 2026-10-15:
+
+1. Open correction-v1.docscan and correction-v2.docscan from the generated
+   fixture directory. Inspect original form, cropped/rotated grayscale
+   form, and enhanced camera page. V2's camera page should be brighter.
+2. Check Fit, 1:1, wheel zoom, page thumbnails, and annotation selection.
+   Move/resize a rectangle and edit a text label; undo/redo those changes.
+3. Save as to a new filename, reopen, and verify corrections/annotations
+   persist without repeated cropping, rotation, or brightness changes.
+4. Export PDF; verify page orientation, backgrounds, annotation placement,
+   and page order match the canvas. Optionally open the existing 11-19 scan.
+
+User confirmed all checks. Record the font-size control mismatch: the
+fixtures use 22 pt, but the dropdown offers sizes in 4 pt increments. Defer
+replacement with a 1 pt spinner to Phase 7 UI polish, as requested.
+
+Next: 6C2 adds correction controls, transactional previews, accessibility of
+displaced objects, and correction-aware dirty/history/recovery behavior.
+The C# application remains unchanged. No new commit requested.
+
+### 2026-10-15 — 6C2 interactive page editor
+
+- Add Edit page to the rail for image pages. Keep correction input, view,
+  preview work, and per-page version handling in focused modules rather than
+  expanding the main controller. Add no dependencies; leave C# untouched.
+- Show the original image with a translucent quadrangle and mouse/touch
+  corner handles, alongside a corrected image preview. Add Full frame,
+  quarter-turn rotation, all four color modes, and brightness/contrast
+  sliders with 1-step buttons. Reject crossed or invalid corners.
+- Keep draft settings and pixels outside committed page state. Accept only
+  a completed preview matching the draft; Cancel/Escape change no page data.
+  Window resize/focus loss preserve the draft, aborting handle gestures.
+  Block other document commands and require Accept/Cancel before closing.
+- Run native preview work off the UI thread, retaining decoded originals
+  between changes. Permit one running job plus the latest queued settings;
+  reject stale settings/session completions. Browser work remains on its
+  UI thread, matching the current PDF-import harness limitation.
+- Clarification: image-space anchors, not fixed page-point positions, govern
+  annotation placement after correction. Map centers through the original
+  image, and scale width/height independently. Keep strokes and annotation
+  rotation fixed; do not apply perspective skew or warp to annotations.
+  Text follows vertical magnification with natural glyph proportions.
+  Reject unsupported resulting font sizes (6–144 pt); never drop objects.
+- TDD red: composing perspective derivatives accumulates annotation size
+  drift on crop/reset. Green: compare local magnification in fixed source
+  axes, making forward/reverse scale ratios cancel at the image anchor.
+  Filter-only changes preserve geometry exactly without float rebuilding.
+- After image-space mapping, translate only wholly off-page annotations
+  enough to remain reachable. Warn explicitly when this extra move occurs.
+  Partly visible items need no additional translation or clipping constraint.
+- Stage/validate all mapped annotations and metadata before committing.
+  Couple page-version keys to existing annotation snapshots, making each
+  accepted correction one undo step with exact pixels/geometry restoration.
+  Support interleaved annotation/page edits; release unused image versions
+  when a new edit discards redo. Retain original encoded image bytes.
+- Test preview coalescing, stale/error results, canceled/reopened sessions,
+  invalid crops, no-op acceptance, modal guards, dirty state, original bytes,
+  Save/reload, recovery, reachability warnings, and exact undo/redo. Cover
+  independent geometry scales, natural text scaling, pending/stale staged
+  changes, perspective round trips, rotation, and unclamped image anchors.
+- Exercise mouse/touch handle ownership, release positions, and lost-touch
+  rollback with synthetic events. Render the real sample form offscreen;
+  assert overlay/header visibility. Use the bundled font and a redraw event
+  in the headless helper, avoiding unavailable container fonts and
+  uninitialized button status. Inspect page-editor-readable.png under
+  artifacts/previews/page-editor-6c2.d8M45H/.
+- Validation: 343 all-feature/all-target tests and 180 core/example tests
+  pass. Strict native/WASM all-target Clippy, formatting, whitespace checks,
+  and full Trunk build pass. All compilation output stays under /tmp.
+
+Manual checkpoint 6C2 — functional checks accepted 2026-10-15:
+
+1. Run the native app and Add image, or open a corrected project copy. Choose
+   Edit page in the rail. Confirm original corner handles and corrected
+   preview are separate and legible; try touch if a device is available.
+2. Drag all four corners. Try an invalid/crossed crop, then restore a valid
+   crop or Full frame. Check both rotation buttons, every color mode, and
+   brightness/contrast. Rapid slider changes must settle at the last value.
+3. Cancel or press Escape: page, annotations, dirty state, and history stay
+   unchanged. Resize/switch focus while editing: keep pending settings.
+4. With existing rectangles, lines, ink, and text, accept a crop/rotation.
+   Centers follow image locations, shape axes scale independently, strokes
+   and object angles stay fixed, and text keeps natural glyph proportions.
+   No annotation warping is expected. The draft preview omits annotations.
+5. Crop enough to displace an annotation completely. Confirm a visible
+   warning and a reachable object. Partly visible objects need no extra move.
+   Undo/redo must restore the image, settings, and annotations together.
+6. Interleave page corrections with annotation edits and check undo/redo.
+   Save as, reopen, and export PDF; confirm geometry/settings persist and
+   corrections are not applied twice. Check recovery if practical.
+
+Pause for user acceptance before 6D form snapping. No commit requested.
+
+### 2026-10-15 — 6C2 font-label and preview-performance follow-up
+
+- User confirms page editing, image-space annotation anchoring, quick
+  undo/redo, PDF export, and displaced-object warnings. Record two issues:
+  scaled font-size digits overflow the dropdown, and each live correction
+  takes several seconds with high CPU use. Physical touch remains untested.
+- TDD red: the compact font-size display type is absent. Green: round labels
+  to at most one decimal place, but retain the original floating-point value.
+  Do not round document geometry repeatedly during crop/reset. Keep the
+  1 pt font spinner deferred to Phase 7, as previously agreed.
+- Native debug builds optimized only dependencies; FastFill's perspective
+  and filter loops remained unoptimized. Enable level-1 optimization for
+  application code while retaining debug symbols/assertions and level-2
+  dependency optimization. This also applies to the browser harness.
+- Measure the existing CLI on the 1241x1754 sample form, including decode
+  and PNG output. Crop/rotate drops from 1.62 s to 0.68 s elapsed (1.57 to
+  0.53 s user CPU); enhanced color from 2.38 s to 1.31 s (2.35 to 0.99 s
+  user CPU). Outputs before/after have identical SHA-256 hashes. These are
+  container measurements, not a guarantee for host or Surface hardware.
+- Keep full-resolution previews and the existing single-worker/coalescing
+  behavior. Try the compiler setting before adding thumbnail correction,
+  caching layers, or a second asynchronous full-resolution Accept pipeline.
+  Comparisons are under artifacts/previews/correction-performance.0aM0As/.
+- Validation: 344 all-feature/all-target tests and 180 core/example tests
+  pass. Strict native/WASM all-target Clippy, formatting, whitespace checks,
+  and full Trunk build pass. Compilation remains isolated under /tmp.
+
+Follow-up checkpoint — accepted 2026-10-16: user confirms all checks passed,
+near-instant page editing, and compact one-decimal font labels. Mark 6C
+complete and commit its pending work unsigned, as requested. Keep subsequent
+6D form-snapping changes separate and stop at its next manual checkpoint.
 
 ## References
 

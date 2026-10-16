@@ -32,10 +32,11 @@ Run the current native prototype:
 mise exec -- cargo run
 ```
 
-Debug builds optimize dependencies (including image/PDF codecs), while keeping
-FastFill code unoptimized for quick edits and debugging. The first build after
-this setting changes is slower; subsequent application edits reuse that work.
-Use `mise exec -- cargo run --release` to assess release performance.
+Debug builds lightly optimize FastFill's own pixel-processing loops (level 1)
+and optimize dependencies, including image/PDF codecs, at level 2. Debug
+symbols and assertions remain enabled. The first build after this setting
+changes is slower; subsequent edits reuse that work. Use
+`mise exec -- cargo run --release` to assess release performance.
 
 Measure archive loading/saving with a trusted project:
 
@@ -55,8 +56,8 @@ to reach TCP port 24800. Trunk watches for changes, but browser auto-reload is
 disabled so the generated page never assumes the development machine is
 `localhost`; refresh the browser after a rebuild.
 
-For browser performance checks, also optimize FastFill itself, not only its
-dependencies. This takes longer to build:
+For browser performance checks, use full release optimization rather than
+the lighter debug settings. This takes longer to build:
 
 ```sh
 mise exec -- trunk serve --release --address 0.0.0.0 --port 24800 \
@@ -66,7 +67,7 @@ mise exec -- trunk serve --release --address 0.0.0.0 --port 24800 \
 The browser remains a touch-test harness; responsiveness still needs tuning.
 
 Checkpoint 6A starts the correction pipeline with **an offline preview
-command**, not page-edit controls yet. From `rust/`, create
+command** (interactive controls are described below). From `rust/`, create
 `../artifacts/previews/` if needed, or choose another existing output folder:
 
 ```sh
@@ -123,9 +124,8 @@ Round and clamp to 0–255 only once, after both adjustments. With brightness
 Brightness can also soften pure B&W, so leave it at 0 for strictly black and
 white output. Geometry runs before filtering, so cropped backgrounds do not
 affect color balance. Filters preserve alpha and leave fully transparent
-pixels unchanged. Source images and projects stay intact. Brightness is an
-offline-preview setting for now; project persistence belongs to 6C, without
-changing schema-v1 archives in this checkpoint.
+pixels unchanged. Source images and projects stay intact. Schema-v2 projects
+also persist brightness; the page editor exposes these corrections.
 
 Enhanced color retains the old gray-world + Lab CLAHE approach (8x8 tiles,
 clip limit 2). Empty/flat tiles use identity mappings to avoid blowing tiny
@@ -142,8 +142,47 @@ See the [CLAHE reference] and [adaptive threshold reference].
 [adaptive threshold reference]:
   https://docs.opencv.org/4.x/d7/d4d/tutorial_py_thresholding.html
 
-Page-edit controls, corrected-project editing, auto-detection, and camera
-capture remain separate Phase 6 checkpoints. The main editor is unchanged.
+Checkpoint 6C1 enables **editing corrected projects**. Open `.docscan` pages
+with crop, quarter-turn rotation, any color mode, contrast, and brightness.
+The canvas, thumbnails, pixel-based 1:1 zoom, and PDF export use the corrected
+image aspect. Annotations already refer to that corrected page; loading does
+not crop or rotate them again. Save/recovery retain original encoded image
+bytes and correction settings, so reopening never applies corrections twice.
+
+Schema-v1 still loads and remains the output format when possible. Nonzero
+brightness upgrades output to schema-v2, stored as page-level `brightness`
+(-100..100). Zero is omitted; an existing v2 project stays v2. The old C# app
+need not read v2. Invalid corrections or unsupported annotation layouts fail
+the entire load without replacing the current project. Test with copies.
+
+Checkpoint 6C2 adds **Edit page** to the page rail for image pages:
+
+- Drag the four handles on the original image with mouse or touch. The
+  corrected preview updates separately; invalid/crossed crops are rejected.
+- **Full frame** restores the entire source image without resetting filters
+  or rotation. Rotate left/right changes the corrected image by 90°.
+- Choose Original, Enhanced, Grayscale, or B&W. Adjust brightness/contrast
+  with sliders or the one-step −/+ buttons. Originals stay untouched.
+- **Accept** applies a completed preview matching the current settings.
+  **Cancel** or Escape discards the pending page edits. Resizing the window
+  or switching focus keeps the draft; document commands stay blocked.
+- Annotation centers follow their original image locations. Shapes scale
+  width/height independently using local image magnification; stroke width
+  and object rotation stay fixed. No annotation perspective warp or skew.
+  Text scales by vertical magnification with natural glyph proportions,
+  not horizontal stretching. Changes exceeding 6–144 pt text are rejected.
+  Font-size labels round to at most one decimal place; underlying scaled
+  sizes retain their precision for rendering, editing, and saving.
+- Partly visible annotations need no extra move. Wholly displaced items move
+  just back within reach, with a warning. Undo restores their old positions.
+  The live preview shows the corrected image only; annotations update on
+  acceptance. Accepted corrections and relocations form one undo/redo step
+  and participate in Save, PDF export, dirty tracking, and native recovery.
+
+Native previews run one background job plus the latest queued settings;
+stale results cannot replace a newer preview. The browser harness still runs
+correction work on its UI thread. Automatic framing, edge snapping, and
+camera capture remain later checkpoints.
 
 Checkpoint 5C adds multiple image pages:
 
@@ -302,14 +341,14 @@ the download request, not verified disk persistence. Closing/reloading the
 browser tab is not guarded; save first. Large archive/image processing can
 still pause the browser. These are harness limits, not native behavior.
 
-Editable conversion currently accepts full-frame, unfiltered, unrotated pages,
-rigid annotation rotation/translation, and the three mapped font families.
-It rejects crop/filter corrections, affine scaling/shear, other fonts, and
-legacy soft-wrap settings instead of silently altering them. The archive API
-still preserves complete schema-v1 data; these are temporary editor limits,
-not a permanent v1 compatibility policy. Generic font rendering is not promised
-to be pixel-identical to C#. Schema-v2 output is allowed when needed; this
-checkpoint retains v1 output. Test existing projects with copies, not originals.
+Editable conversion accepts corrected pages, rigid annotation
+rotation/translation, and the three mapped font families. It still rejects
+affine scaling/shear, other fonts, and legacy soft-wrap settings instead of
+silently altering them. The archive API preserves complete schema-v1/v2
+data; these are temporary editor limits, not a permanent compatibility
+policy. Generic font rendering and inclusive crop dimensions are not promised
+to match the old C# renderer pixelwise. Test projects with copies, not
+originals.
 
 Available annotation tools:
 

@@ -34,6 +34,9 @@ fn heading(state: &FastFill) -> Element<'_, Message> {
     };
     let mut heading =
         column![super::project_view::controls(state), status_line].spacing(4);
+    if let Some(warning) = super::page_edit::warning(state) {
+        heading = heading.push(warning);
+    }
     if let Some(confirmation) = super::project_view::confirmation(state) {
         heading = heading.push(confirmation);
     }
@@ -117,6 +120,9 @@ fn heading(state: &FastFill) -> Element<'_, Message> {
 }
 
 pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
+    if state.page_editor.is_open() {
+        return super::page_edit::view(state);
+    }
     let body = responsive(move |available| {
         let canvas_size = iced::Size::new(
             available.width,
@@ -314,6 +320,16 @@ fn style_row(state: &FastFill) -> Element<'_, Message> {
 const TEXT_SIZES: [f32; 10] =
     [8.0, 10.0, 12.0, 16.0, 20.0, 24.0, 32.0, 40.0, 48.0, 64.0];
 
+#[derive(Clone, Copy, PartialEq)]
+struct FontSize(f32);
+
+impl std::fmt::Display for FontSize {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Round only the label; preserve exact scaled/imported geometry.
+        write!(formatter, "{}", (self.0 * 10.0).round() / 10.0)
+    }
+}
+
 fn text_style_controls(
     state: &FastFill,
     format: TextFormat,
@@ -349,9 +365,9 @@ fn text_style_controls(
         .placeholder("Mixed fonts"),
         mouse_area(
             pick_list(
-                TEXT_SIZES,
-                (editing || common_size).then_some(format.font_size),
-                Message::SetTextSize,
+                TEXT_SIZES.map(FontSize),
+                (editing || common_size).then_some(FontSize(format.font_size)),
+                |size| Message::SetTextSize(size.0),
             )
             .width(75)
             .placeholder("Mixed"),
@@ -549,7 +565,7 @@ fn tool_button(
 
 #[cfg(test)]
 mod tests {
-    use super::{accepts_text, text_size_after_scroll};
+    use super::{FontSize, accepts_text, text_size_after_scroll};
     use iced::{keyboard, mouse};
 
     #[test]
@@ -569,5 +585,20 @@ mod tests {
         assert_eq!(text_size_after_scroll(24.0, down), 20.0);
         assert_eq!(text_size_after_scroll(64.0, up), 64.0);
         assert_eq!(text_size_after_scroll(8.0, down), 8.0);
+    }
+
+    #[test]
+    fn scaled_font_sizes_have_compact_labels_without_rounding_the_value() {
+        for (value, label) in [
+            (24.0, "24"),
+            (22.000_002, "22"),
+            (14.666_667, "14.7"),
+            (143.999_98, "144"),
+            (6.000_001, "6"),
+        ] {
+            let size = FontSize(value);
+            assert_eq!(size.to_string(), label);
+            assert_eq!(size.0.to_bits(), value.to_bits());
+        }
     }
 }

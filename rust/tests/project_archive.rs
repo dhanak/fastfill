@@ -82,6 +82,68 @@ fn loads_csharp_schema_without_discarding_edit_data() {
 }
 
 #[test]
+fn schema_v2_round_trips_brightness_without_changing_v1_output() {
+    let mut legacy = valid_manifest();
+    legacy.as_object_mut().unwrap().remove("schemaVersion");
+    let v1 = load_archive(Cursor::new(archive_with_manifest(
+        &legacy,
+        &[("assets/page.png", PNG_1X1)],
+    )))
+    .unwrap();
+    assert_eq!(v1.project.schema_version, 1);
+    let manifest = serde_json::to_value(&v1.project).unwrap();
+    assert!(manifest["pages"][0].get("brightness").is_none());
+    for brightness in [-100, -20, 0, 20, 100] {
+        let mut manifest = valid_manifest();
+        manifest["schemaVersion"] = json!(2);
+        manifest["pages"][0]["brightness"] = json!(brightness);
+        let loaded = load_archive(Cursor::new(archive_with_manifest(
+            &manifest,
+            &[("assets/page.png", PNG_1X1)],
+        )))
+        .unwrap();
+        let output = save_archive(&loaded, Cursor::new(Vec::new()))
+            .unwrap()
+            .into_inner();
+        let saved = load_archive(Cursor::new(output)).unwrap();
+        assert_eq!(saved.project, loaded.project);
+        assert_eq!(saved.assets["page.png"].bytes, PNG_1X1);
+    }
+}
+
+#[test]
+fn schemas_and_brightness_are_validated_before_decoding_assets() {
+    for (version, brightness, message) in [
+        (0, 0, "schema is unsupported"),
+        (3, 0, "newer FastFill"),
+        (1, 10, "Brightness requires schema-v2"),
+        (2, -101, "between -100 and 100"),
+        (2, 101, "between -100 and 100"),
+    ] {
+        let mut manifest = valid_manifest();
+        manifest["schemaVersion"] = json!(version);
+        manifest["pages"][0]["brightness"] = json!(brightness);
+        // Missing assets prove metadata validation happens first.
+        assert_invalid(archive_with_manifest(&manifest, &[]), message);
+    }
+    let mut oversized = valid_manifest();
+    let page = &mut oversized["pages"][0];
+    page["sourcePixelWidth"] = json!(50_000_000);
+    page["sourcePixelHeight"] = json!(1);
+    let point = |x, y| json!({"x": x, "y": y});
+    page["crop"] = json!({
+        "topLeft": point(0.0, 0.0),
+        "topRight": point(1.0, 0.2),
+        "bottomRight": point(0.9, 1.0),
+        "bottomLeft": point(0.1, 0.8),
+    });
+    assert_invalid(
+        archive_with_manifest(&oversized, &[]),
+        "Corrected image exceeds",
+    );
+}
+
+#[test]
 fn rejects_unsafe_duplicate_and_unknown_archive_data() {
     let unsafe_archive = archive_with_manifest(
         &valid_manifest(),

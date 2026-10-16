@@ -42,12 +42,30 @@ impl Projection {
     }
 
     fn map(&self, u: f64, v: f64) -> (f64, f64) {
+        let (x, y) = self.map_unclamped(u, v);
+        (x.clamp(0.0, 1.0), y.clamp(0.0, 1.0))
+    }
+
+    pub(super) fn map_unclamped(&self, u: f64, v: f64) -> (f64, f64) {
         let denominator =
             self.denominator[0] * u + self.denominator[1] * v + 1.0;
-        let apply = |row: [f64; 3]| {
-            ((row[0] * u + row[1] * v + row[2]) / denominator).clamp(0.0, 1.0)
-        };
+        let apply =
+            |row: [f64; 3]| (row[0] * u + row[1] * v + row[2]) / denominator;
         (apply(self.x), apply(self.y))
+    }
+
+    pub(super) fn inverse(&self, x: f64, y: f64) -> (f64, f64) {
+        let xx = self.x[0] - x * self.denominator[0];
+        let xy = self.x[1] - x * self.denominator[1];
+        let x_rhs = x - self.x[2];
+        let yx = self.y[0] - y * self.denominator[0];
+        let yy = self.y[1] - y * self.denominator[1];
+        let y_rhs = y - self.y[2];
+        let determinant = xx * yy - xy * yx;
+        (
+            (x_rhs * yy - xy * y_rhs) / determinant,
+            (xx * y_rhs - x_rhs * yx) / determinant,
+        )
     }
 
     pub(super) fn warp(

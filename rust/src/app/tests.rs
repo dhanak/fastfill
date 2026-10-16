@@ -1202,7 +1202,7 @@ fn render_document(state: &FastFill, scale: u32, dpi: f32) -> Vec<u8> {
 }
 
 #[allow(clippy::cast_precision_loss)]
-fn render_element(
+pub(super) fn render_element(
     mut element: iced::Element<'_, Message>,
     size: iced::Size<u32>,
     scale: u32,
@@ -1214,7 +1214,8 @@ fn render_element(
 
     let mut renderer =
         iced::futures::executor::block_on(<Renderer as Headless>::new(
-            iced::Font::DEFAULT,
+            // Headless containers need the bundled font, not system fonts.
+            iced::Font::with_name("Fira Sans"),
             iced::Pixels(16.0),
             Some("tiny-skia"),
         ))
@@ -1227,6 +1228,19 @@ fn render_element(
         &mut tree,
         &renderer,
         &layout::Limits::new(logical, logical),
+    );
+    // Iced initializes button status on RedrawRequested, before drawing.
+    element.as_widget_mut().update(
+        &mut tree,
+        &iced::Event::Window(iced::window::Event::RedrawRequested(
+            iced::time::Instant::now(),
+        )),
+        Layout::new(&node),
+        mouse::Cursor::Unavailable,
+        &renderer,
+        &mut iced::advanced::clipboard::Null,
+        &mut iced::advanced::Shell::new(&mut Vec::new()),
+        &Rectangle::new(Point::ORIGIN, logical),
     );
     element.as_widget().draw(
         &tree,

@@ -10,7 +10,8 @@ pub use archive::{
     load_archive_file, load_archive_with_images,
 };
 pub use editor::{
-    ProjectEditError, decode_editor_page, editor_page_size, encode_editor_page,
+    ProjectEditError, decode_editor_page, editor_page_size,
+    encode_corrected_editor_page, encode_editor_page,
 };
 pub use model::{
     AffineTransform, CropQuad, NormalizedPoint, NormalizedRect, PageFilterMode,

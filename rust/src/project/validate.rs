@@ -3,6 +3,7 @@ use super::model::{
     AffineTransform, NormalizedPoint, NormalizedRect, Project,
     ProjectAnnotation, ProjectPage, ProjectShapeKind,
 };
+use crate::correction::{PageCorrection, corrected_dimensions};
 use std::collections::HashSet;
 
 pub(super) const MAXIMUM_IMAGE_BYTES: u64 = 100 * 1024 * 1024;
@@ -15,8 +16,8 @@ const MAXIMUM_TEXT_LENGTH: usize = 10_000;
 pub(super) fn validate_project(
     project: &Project,
 ) -> Result<(), ProjectLoadError> {
-    if project.schema_version != 1 {
-        return invalid(if project.schema_version > 1 {
+    if !(1..=2).contains(&project.schema_version) {
+        return invalid(if project.schema_version > 2 {
             "Project needs a newer FastFill version."
         } else {
             "Project schema is unsupported."
@@ -33,6 +34,9 @@ pub(super) fn validate_project(
     for page in &project.pages {
         if !page_ids.insert(page.id) {
             return invalid("Page IDs must be unique.");
+        }
+        if project.schema_version == 1 && page.brightness != 0 {
+            return invalid("Brightness requires schema-v2 or newer.");
         }
         validate_page(page)?;
     }
@@ -55,9 +59,13 @@ pub(super) fn validate_page(
     if !(0..=3).contains(&page.rotation_quarter_turns) {
         return invalid("Page rotation is invalid.");
     }
-    if !(-100..=100).contains(&page.filter.contrast) {
-        return invalid("Page filter is invalid.");
-    }
+    // Validate the output as well as the source before decoding image data.
+    corrected_dimensions(
+        u32::try_from(page.source_pixel_width).expect("positive dimension"),
+        u32::try_from(page.source_pixel_height).expect("positive dimension"),
+        PageCorrection::from(page),
+    )
+    .map_err(|error| ProjectLoadError::Invalid(error.to_string()))?;
     if page.annotations.len() > MAXIMUM_ANNOTATIONS_PER_PAGE {
         return invalid("Page annotations are too numerous.");
     }

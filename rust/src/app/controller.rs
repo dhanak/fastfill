@@ -107,18 +107,29 @@ impl FastFill {
     }
 
     fn undo(&mut self) {
-        if self.image_picker == ImagePicker::Idle
-            && self.annotations_mut().undo()
-        {
-            self.input_epoch = self.input_epoch.wrapping_add(1);
-        }
+        self.change_history(false);
     }
 
     fn redo(&mut self) {
-        if self.image_picker == ImagePicker::Idle
-            && self.annotations_mut().redo()
-        {
-            self.input_epoch = self.input_epoch.wrapping_add(1);
+        self.change_history(true);
+    }
+
+    fn change_history(&mut self, redo: bool) {
+        if self.image_picker == ImagePicker::Idle {
+            let old_size = self.pages.current().size;
+            match self.pages.current_mut().history(redo) {
+                Ok(true) => {
+                    self.input_epoch = self.input_epoch.wrapping_add(1);
+                    if self.pages.current().size != old_size {
+                        self.navigation.fit();
+                    }
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    self.status = error;
+                    self.status_is_error = true;
+                }
+            }
         }
     }
 
@@ -167,12 +178,16 @@ pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
         return task;
     }
     let task = update_editor(state, message);
+    state.pages.current_mut().prune_versions();
     #[cfg(not(target_arch = "wasm32"))]
     super::recovery::synchronize(state);
     task
 }
 
 fn update_editor(state: &mut FastFill, message: Message) -> Task<Message> {
+    if let Some(task) = super::page_edit::update(state, &message) {
+        return task;
+    }
     if let Some(task) = super::export::update(state, &message) {
         return task;
     }
@@ -240,7 +255,7 @@ fn update_editor(state: &mut FastFill, message: Message) -> Task<Message> {
             state.modifiers = modifiers;
             state.annotations_mut().constrain_square(modifiers.square);
         }
-        Message::CancelInteraction => {
+        Message::CancelInteraction | Message::ViewportResized => {
             state.cancel_interaction();
             if state.image_picker == ImagePicker::ConfirmReplace {
                 state.image_picker = ImagePicker::Idle;

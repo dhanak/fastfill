@@ -51,7 +51,11 @@ wasm-bindgen = { version = "0.2.129", optional = true }
 [lints.rust]
 unsafe_code = "deny"
 
-# Keep application code debuggable, but run image/PDF codecs at useful speed.
+# Keep debug symbols/assertions; optimize our per-pixel correction loops too.
+[profile.dev]
+opt-level = 1
+
+# Image/PDF codecs benefit from stronger optimization without slower app edits.
 [profile.dev.package."*"]
 opt-level = 2
 

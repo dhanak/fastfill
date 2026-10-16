@@ -1,6 +1,7 @@
 mod controller;
 mod export;
 mod export_io;
+mod page_edit;
 mod pages;
 mod pdf;
 mod project;
@@ -63,6 +64,7 @@ struct FastFill {
     image_directory: Option<std::path::PathBuf>,
     export_directory: Option<std::path::PathBuf>,
     text_content: text_editor::Content,
+    page_editor: page_edit::PageEditor,
     #[cfg(not(target_arch = "wasm32"))]
     recovery: recovery::Recovery,
 }
@@ -97,6 +99,8 @@ enum ImagePicker {
 
 #[derive(Clone, Debug)]
 pub(crate) enum Message {
+    PageEdit(page_edit::Event),
+    ViewportResized,
     #[cfg(not(target_arch = "wasm32"))]
     Recovery(recovery::Event),
     #[cfg(not(target_arch = "wasm32"))]
@@ -219,7 +223,7 @@ pub(crate) fn run() -> iced::Result {
                     ..
                 }) => shortcut_message(key, modifiers),
                 iced::Event::Window(iced::window::Event::Resized(_)) => {
-                    Some(Message::CancelInteraction)
+                    Some(Message::ViewportResized)
                 }
                 _ => None,
             })

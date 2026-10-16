@@ -87,6 +87,7 @@ fn checkpoint(state: &mut FastFill) {
     if state.recovery.sender.is_none()
         || state.recovery.writing
         || !state.project.is_idle()
+        || state.page_editor.is_open()
         || !state.project.is_dirty(&state.pages)
         || state.pages.iter().any(|page| {
             page.annotations.active_pointer().is_some()

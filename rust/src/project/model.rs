@@ -340,6 +340,8 @@ pub struct ProjectPage {
     pub rotation_quarter_turns: i32,
     #[serde(default)]
     pub filter: PageFilterSettings,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub brightness: i32,
     #[serde(default)]
     pub annotations: Vec<ProjectAnnotation>,
 }
@@ -347,7 +349,7 @@ pub struct ProjectPage {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Project {
-    #[serde(default = "current_schema_version")]
+    #[serde(default = "legacy_schema_version")]
     pub schema_version: i32,
     pub id: Uuid,
     #[serde(default = "default_title")]
@@ -389,8 +391,15 @@ fn point_bounds(points: &[NormalizedPoint]) -> NormalizedRect {
     }
 }
 
-const fn current_schema_version() -> i32 {
+// Missing version always means legacy v1, not the newest supported schema.
+const fn legacy_schema_version() -> i32 {
     1
+}
+
+// Serde's skip predicate receives a reference, even for scalar fields.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn is_zero(value: &i32) -> bool {
+    *value == 0
 }
 
 const fn default_color_argb() -> u32 {

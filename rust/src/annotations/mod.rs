@@ -1,6 +1,7 @@
 mod geometry;
 mod interaction;
 mod model;
+mod page;
 mod selection;
 mod state;
 mod style;
@@ -16,6 +17,7 @@ pub use model::{
     EditHit, InkKind, LineEndpoint, LineKind, Pointer, RESIZE_CORNERS,
     ROTATION_HANDLE_OFFSET, ResizeCorner, ShapeAnnotation, ShapeKind,
 };
+pub use page::PageChange;
 use text::TextDraft;
 use text::TextMoveDraft;
 pub use text::{
@@ -57,6 +59,7 @@ impl OwnedAnnotation {
 #[derive(Clone, Debug)]
 struct Snapshot {
     revision: u64,
+    page_context: u64,
     shapes: Vec<ShapeAnnotation>,
     texts: Vec<TextAnnotation>,
     layers: Vec<Layer>,
@@ -68,6 +71,7 @@ struct Snapshot {
 pub struct Annotations {
     revision: u64,
     next_revision: u64,
+    page_context: u64,
     tool: Tool,
     styles: ToolStyles,
     shapes: Vec<ShapeAnnotation>,

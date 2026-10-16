@@ -2,9 +2,12 @@
 
 mod filters;
 mod perspective;
+mod placement;
+
+pub use placement::PageMapping;
 
 use crate::image_input::MAX_IMAGE_PIXELS;
-use crate::project::{CropQuad, PageFilterSettings};
+use crate::project::{CropQuad, PageFilterSettings, ProjectPage};
 use image::RgbaImage;
 use perspective::Projection;
 use serde::{Deserialize, Serialize};
@@ -18,8 +21,19 @@ pub struct PageCorrection {
     pub rotation_quarter_turns: i32,
     pub filter: PageFilterSettings,
     /// Additive RGB adjustment, -100..=100; zero leaves brightness unchanged.
-    /// Separate from the legacy filter DTO until schema-v2 page editing.
+    /// Schema-v2 persists this separately from the legacy filter DTO.
     pub brightness: i32,
+}
+
+impl From<&ProjectPage> for PageCorrection {
+    fn from(page: &ProjectPage) -> Self {
+        Self {
+            crop: page.crop,
+            rotation_quarter_turns: page.rotation_quarter_turns,
+            filter: page.filter,
+            brightness: page.brightness,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
