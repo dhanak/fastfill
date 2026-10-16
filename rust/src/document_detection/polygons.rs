@@ -1,4 +1,4 @@
-//! Connected-outline hulls and closed Douglas–Peucker simplification.
+//! Connected contours/hulls and closed Douglas–Peucker simplification.
 
 use image::GrayImage;
 
@@ -124,6 +124,63 @@ fn approximate(hull: &[Point], epsilon: f64) -> Vec<Point> {
         .collect()
 }
 
+fn contour(
+    mask: &GrayImage,
+    start: [i64; 2],
+    inverted: bool,
+    maximum: usize,
+) -> Vec<Point> {
+    // Moore-neighbor tracing preserves concavities that a component hull loses.
+    let directions = [
+        [-1, 0],
+        [-1, -1],
+        [0, -1],
+        [1, -1],
+        [1, 0],
+        [1, 1],
+        [0, 1],
+        [-1, 1],
+    ];
+    let mut current = start;
+    let mut back = [start[0] - 1, start[1]];
+    let mut first = None;
+    let mut outline = Vec::new();
+    for _ in 0..maximum {
+        let direction = directions
+            .iter()
+            .position(|d| [current[0] + d[0], current[1] + d[1]] == back)
+            .expect("neighbor");
+        let next = (0..8).find_map(|offset| {
+            let i = (direction + offset) % 8;
+            let p =
+                [current[0] + directions[i][0], current[1] + directions[i][1]];
+            let (Ok(x), Ok(y)) = (u32::try_from(p[0]), u32::try_from(p[1]))
+            else {
+                return None;
+            };
+            (x < mask.width()
+                && y < mask.height()
+                && (mask[(x, y)][0] != 0) != inverted)
+                .then_some((p, i))
+        });
+        let Some((next, direction)) = next else {
+            break;
+        };
+        if current == start && first == Some(next) {
+            return outline;
+        }
+        first.get_or_insert(next);
+        #[allow(clippy::cast_precision_loss)]
+        outline.push(current.map(|v| v as f64));
+        let previous = directions[(direction + 7) % 8];
+        back = [current[0] + previous[0], current[1] + previous[1]];
+        current = next;
+    }
+    // At most eight directed visits per component pixel. Never approximate
+    // an incomplete traversal if the safety bound is hit.
+    Vec::new()
+}
+
 pub(super) fn candidates(
     mask: &GrayImage,
     include_holes: bool,
@@ -181,23 +238,60 @@ pub(super) fn candidates(
             if hull.len() < 4 || area(&hull) < (width * height) as f64 * 0.05 {
                 continue;
             }
-            let perimeter = hull
-                .iter()
-                .enumerate()
-                .map(|(i, a)| {
-                    let b = hull[(i + 1) % hull.len()];
-                    (a[0] - b[0]).hypot(a[1] - b[1])
-                })
-                .sum::<f64>();
-            for factor in [0.01, 0.015, 0.02, 0.03, 0.04] {
-                if let Ok(polygon) = <[Point; 4]>::try_from(approximate(
-                    &hull,
-                    perimeter * factor,
-                )) {
-                    output.push(ordered(polygon));
+            let start = [
+                i64::try_from(index % width).unwrap(),
+                i64::try_from(index / width).unwrap(),
+            ];
+            let contour = contour(mask, start, inverted, queue.len() * 8 + 1);
+            for outline in [&contour, &hull] {
+                if outline.len() < 4 {
+                    continue;
+                }
+                let perimeter = outline
+                    .iter()
+                    .enumerate()
+                    .map(|(i, a)| {
+                        let b = outline[(i + 1) % outline.len()];
+                        (a[0] - b[0]).hypot(a[1] - b[1])
+                    })
+                    .sum::<f64>();
+                for factor in [0.01, 0.015, 0.02, 0.03, 0.04] {
+                    if let Ok(polygon) = <[Point; 4]>::try_from(approximate(
+                        outline,
+                        perimeter * factor,
+                    )) {
+                        output.push(ordered(polygon));
+                    }
                 }
             }
         }
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::Luma;
+
+    #[test]
+    fn contour_keeps_concavities_and_bounds_degenerate_walks() {
+        let mask = GrayImage::from_fn(100, 80, |x, y| {
+            Luma([u8::from(
+                (10..80).contains(&x)
+                    && (10..60).contains(&y)
+                    && !((40..50).contains(&x) && y < 25),
+            )])
+        });
+        let mut points = contour(&mask, [10, 10], false, 28_001);
+        assert!(points.len() > 200);
+        let original_area = area(&points);
+        let convex_area = area(&hull(&mut points));
+        assert!(convex_area > original_area + 100.0);
+        let single = GrayImage::from_pixel(1, 1, Luma([1]));
+        assert_eq!(contour(&single, [0, 0], false, 9), [] as [Point; 0]);
+        let line = GrayImage::from_pixel(1, 20, Luma([1]));
+        assert!(contour(&line, [0, 0], false, 161).len() < 80);
+        assert_eq!(contour(&mask, [10, 10], false, 2), [] as [Point; 0]);
+    }
 }

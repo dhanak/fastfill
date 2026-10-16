@@ -1,8 +1,11 @@
-//! Bounded still-image framing. No GUI state, camera, or temporal decisions.
+//! Portable still-image/temporal framing, without camera or GUI state.
 
 mod lines;
 mod pixels;
 mod polygons;
+mod temporal;
+
+pub use temporal::{AutoCaptureGate, CaptureState, DetectionStabilizer};
 
 use crate::image_input::{ImageInputError, MAX_IMAGE_PIXELS};
 use crate::project::{CropQuad, NormalizedPoint};
@@ -34,6 +37,19 @@ pub struct DocumentDetection {
 pub fn detect_document(
     source: &RgbaImage,
 ) -> Result<DocumentDetection, ImageInputError> {
+    detect_document_with_hint(source, None)
+}
+
+/// Rank nearby outlines using the previous stable frame, not its confidence.
+/// Invalid hints are ignored; they cannot invent a quad or pass acceptance.
+///
+/// # Errors
+/// Rejects the same invalid source dimensions as `detect_document`.
+pub fn detect_document_with_hint(
+    source: &RgbaImage,
+    hint: Option<CropQuad>,
+) -> Result<DocumentDetection, ImageInputError> {
+    let hint = hint.filter(|quad| quad.is_valid());
     let (width, height) = analysis_size(source.width(), source.height())?;
     let mut result = DocumentDetection {
         corners: None,
@@ -74,14 +90,12 @@ pub fn detect_document(
             distance = pixels::edge_distances(&closed);
         }
     }
+    let mut best_rank = 0.0;
     for polygon in outlines {
         let Some((confidence, ratio)) = score(polygon, &paper, &lab, &distance)
         else {
             continue;
         };
-        if confidence <= result.confidence {
-            continue;
-        }
         let points = ordered(polygon).map(|[x, y]| {
             #[allow(clippy::cast_possible_truncation)]
             NormalizedPoint {
@@ -98,12 +112,31 @@ pub fn detect_document(
         if !quad.is_valid() {
             continue;
         }
+        // Retain the C# 0.12 hint radius/bonus. Acceptance uses the original
+        // score, so a hint cannot promote a rejected outline to a detection.
+        let bonus = hint.map_or(0.0, |hint| {
+            0.12 * (1.0 - f64::from(quad_distance(quad, hint)) / 0.12).max(0.0)
+        });
+        let rank = confidence + bonus;
+        if rank <= best_rank {
+            continue;
+        }
+        best_rank = rank;
         result.confidence = confidence.clamp(0.0, 1.0);
         result.area_ratio = ratio;
         result.corners = (confidence >= ACCEPTANCE).then_some(quad);
         result.candidate_corners = (confidence < ACCEPTANCE).then_some(quad);
     }
     Ok(result)
+}
+
+fn quad_distance(first: CropQuad, second: CropQuad) -> f32 {
+    first
+        .points()
+        .into_iter()
+        .zip(second.points())
+        .map(|(a, b)| (a.x - b.x).hypot(a.y - b.y))
+        .fold(0.0, f32::max)
 }
 
 fn analysis_size(

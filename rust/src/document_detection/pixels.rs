@@ -200,9 +200,12 @@ pub(super) fn canny(image: &GrayImage, low: i32, high: i32) -> GrayImage {
                 2 => (i - width - 1, i + width + 1),
                 _ => (i - width + 1, i + width - 1),
             };
+            // Axis-aligned maxima allow an equal second neighbor; OpenCV's
+            // diagonal maxima must exceed both neighbors.
             if magnitude[i] > low
                 && magnitude[i] > magnitude[a]
                 && magnitude[i] >= magnitude[b]
+                && (directions[i] < 2 || magnitude[i] > magnitude[b])
             {
                 flags[i] = 1;
                 if magnitude[i] > high {

@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FastFill · Recorded framing</title>
+<style>
+  :root { color-scheme: dark; font: 16px system-ui, sans-serif; }
+  body { margin: 0 auto; padding: 16px; max-width: 1280px; }
+  h1 { font-size: 1.4rem; }
+  p { color: #c6c8d0; line-height: 1.5; }
+  button, input, select { font: inherit; min-height: 44px; }
+  button { cursor: pointer; padding: 8px 16px; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  #seek { flex: 1; min-width: 200px; }
+  label { display: inline-flex; align-items: center; gap: 6px; }
+  label input { width: 20px; }
+  #scene { position: relative; width: 100%; margin-top: 16px; }
+  #frame { display: block; width: 100%; }
+  #overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+  polygon { stroke-width: 3; vector-effect: non-scaling-stroke; }
+  #rawQuad { fill: none; stroke: #ffac32; stroke-dasharray: 8 5; }
+  #stableQuad { fill: #28dc7d22; stroke: #28dc7d; }
+  #hintQuad { fill: none; stroke: #6fcaff; stroke-dasharray: 2 5; }
+  .status { display: flex; align-items: center; gap: 16px; margin: 12px 0; }
+  #countdown { width: 64px; height: 64px; flex-shrink: 0; }
+  #ring { stroke-dasharray: 100; transform: rotate(-90deg);
+    transform-origin: 32px 32px; }
+  pre { overflow: auto; font-size: .85rem; }
+  .amber { color: #ffac32; } .green { color: #28dc7d; }
+  .blue { color: #6fcaff; }
+</style>
+<h1>FastFill · Recorded framing</h1>
+<p>Offline laptop-camera replay. Playback speed does not affect detection or
+  countdown timing. No camera is opened and no image is captured or edited.</p>
+<div class="controls">
+  <button id="play" type="button">Play</button>
+  <button id="previous" type="button" aria-label="Previous frame">←</button>
+  <button id="next" type="button" aria-label="Next frame">→</button>
+  <input id="seek" type="range" min="0" value="0" aria-label="Frame">
+  <output id="position" for="seek"></output>
+  <button id="capture" type="button">Jump to capture</button>
+</div>
+<div class="controls">
+  <label class="amber"><input id="raw" type="checkbox" checked>Raw</label>
+  <label class="green"><input id="stable" type="checkbox" checked>Stable</label>
+  <label class="blue"><input id="hint" type="checkbox">Previous hint</label>
+  <label>Playback speed
+    <select id="speed" aria-label="Playback speed">
+      <option value="0.25">¼×</option>
+      <option value="0.5">½×</option>
+      <option value="1" selected>1×</option>
+    </select>
+  </label>
+</div>
+<div class="status" aria-live="polite">
+  <svg id="countdown" viewBox="0 0 64 64" aria-label="Countdown progress">
+    <circle cx="32" cy="32" r="27" fill="none" stroke="#42444e"
+      stroke-width="5"/>
+    <circle id="ring" cx="32" cy="32" r="27" fill="none" stroke="#28dc7d"
+      stroke-width="5" pathLength="100"/>
+    <text id="percent" x="32" y="37" text-anchor="middle" fill="white"
+      font-size="14"></text>
+  </svg>
+  <div><strong id="state"></strong><br><span id="details"></span></div>
+</div>
+<div id="scene">
+  <img id="frame" alt="Recorded source frame">
+  <svg id="overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none"
+    aria-hidden="true">
+    <polygon id="hintQuad"/><polygon id="rawQuad"/>
+    <polygon id="stableQuad"/>
+  </svg>
+</div>
+<details><summary>Detection and capture metadata</summary><pre id="json"></pre>
+</details>
+<script type="application/json" id="data">__REPLAY_JSON__</script>
+<script>
+  "use strict";
+  const report = JSON.parse(document.getElementById("data").textContent);
+  const $ = id => document.getElementById(id);
+  const frames = report.frames;
+  const capture = frames.findIndex(f => f.state === "ready");
+  let index = 0, timer = null, revision = 0;
+  $("seek").max = frames.length - 1;
+  $("capture").disabled = capture < 0;
+  if (capture < 0) $("capture").textContent = "No capture decision";
+  function polygon(id, quad, visible) {
+    const node = $(id);
+    node.style.display = quad && visible ? "" : "none";
+    if (!quad) return;
+    node.setAttribute("points", [quad.topLeft, quad.topRight,
+      quad.bottomRight, quad.bottomLeft]
+      .map(p => `${p.x * 1000},${p.y * 1000}`).join(" "));
+  }
+  function draw() {
+    const f = frames[index];
+    const requested = ++revision;
+    const image = new Image();
+    image.onload = () => {
+      // Never put a newer outline over an older, still-loading image.
+      if (requested !== revision) return;
+      $("frame").src = image.src;
+      paint(f);
+    };
+    image.onerror = () => {
+      if (requested !== revision) return;
+      pause();
+      $("state").textContent = `Could not load ${f.file}`;
+    };
+    image.src = f.file;
+    $("position").textContent = `${index + 1} / ${frames.length}`;
+    $("seek").value = index;
+  }
+  function paint(f) {
+    polygon("rawQuad", f.raw.corners || f.raw.candidateCorners,
+      $("raw").checked);
+    polygon("stableQuad", f.stable.corners, $("stable").checked);
+    polygon("hintQuad", f.hint, $("hint").checked);
+    $("ring").setAttribute("stroke-dashoffset", 100 - f.progress * 100);
+    $("percent").textContent = `${Math.round(f.progress * 100)}%`;
+    $("state").textContent = {
+      noDocument: "No stable, sharp document",
+      holdSteady: "Hold steady — countdown",
+      ready: "Capture decision — first ready frame",
+      captured: "Captured — waiting for reset"
+    }[f.state];
+    $("details").textContent = `${f.label} · ${f.timestampMs} ms · ` +
+      `raw ${f.raw.confidence.toFixed(3)} · ` +
+      `stable ${f.stable.confidence.toFixed(3)} · ` +
+      `sharpness ${f.stable.sharpness.toFixed(1)}`;
+    $("json").textContent = JSON.stringify(f, null, 2);
+  }
+  function pause() {
+    clearTimeout(timer);
+    timer = null;
+    $("play").textContent = "Play";
+  }
+  function select(value) {
+    pause();
+    index = Math.max(0, Math.min(frames.length - 1, Number(value)));
+    draw();
+  }
+  function tick() {
+    if (index >= frames.length - 1) { pause(); return; }
+    index++;
+    draw();
+    timer = setTimeout(tick, report.intervalMs / Number($("speed").value));
+  }
+  $("play").onclick = () => {
+    if (timer !== null) { pause(); return; }
+    if (index === frames.length - 1) { index = 0; draw(); }
+    $("play").textContent = "Pause";
+    timer = setTimeout(tick, report.intervalMs / Number($("speed").value));
+  };
+  $("previous").onclick = () => select(index - 1);
+  $("next").onclick = () => select(index + 1);
+  $("capture").onclick = () => select(capture);
+  $("seek").oninput = event => select(event.target.value);
+  for (const id of ["raw", "stable", "hint"]) $(id).onchange = draw;
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) pause();
+  });
+  draw();
+</script>
+</html>

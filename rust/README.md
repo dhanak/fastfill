@@ -274,9 +274,10 @@ edge, geometry, boundary, and continuing-side calibrations. Hough sampling
 uses a fixed seed; no native OpenCV library is required. See the
 [upstream Hough reference].
 Portable resampling, contours, and numeric details can still differ. The
-current port uses connected-component hulls and enclosed edge regions;
-original concave contours remain a parity follow-up. Three low-contrast
-booklet photos remain rejected; do not lower the threshold to accept them.
+current port uses connected contours, hulls, and enclosed edge regions.
+Diagonal edge suppression follows the [native strict-maximum rule].
+Low-contrast booklet photos remain rejected; do not lower the threshold to
+accept them.
 The gallery's minor framing errors and background-related misses are
 accepted limitations. No live camera/temporal wiring is present yet.
 Background edges can also outrank the correct outline: a speaker or cable
@@ -285,6 +286,8 @@ Check every suggestion and adjust corners manually; Ctrl snapping can help.
 
 [upstream Hough reference]:
   https://github.com/opencv/opencv/blob/4.x/modules/imgproc/src/hough.cpp
+[native strict-maximum rule]:
+  https://github.com/opencv/opencv/blob/4.11.0/modules/imgproc/src/canny.cpp#L585
 
 Checkpoint 6E2 adds **Auto frame** beside **Full frame** in **Edit page**:
 
@@ -307,6 +310,45 @@ Checkpoint 6E2 adds **Auto frame** beside **Full frame** in **Edit page**:
 - Nothing is committed until Accept. It waits for the current completed
   preview. Accepted crop/corrections and image-anchored annotations remain
   one Undo/Redo step and survive Save, reopening, recovery, and PDF export.
+
+Checkpoint 6F1 adds **offline temporal replay**, not a live camera screen:
+
+```sh
+mise exec -- cargo run --no-default-features --example frame_replay -- \
+  ../artifacts/reviews/cam/frames ../artifacts/previews/my-frame-replay
+```
+
+Choose a new output folder whose parent exists. Up to 300 regular PNG/JPEG
+files are replayed in filename order, using virtual 33 ms steps (an optional
+third argument changes the interval to 25–5000 ms). Use zero-padded names.
+The command streams source images, preserves their encoded bytes, refuses
+existing destinations, and leaves any partial diagnostics recoverable on
+error. Resolution changes reset tracking. Open the generated `index.html`
+directly; no server, camera permission, or network connection is needed.
+
+Play/pause, scrub, step frames, toggle raw/stable/prior-hint outlines, inspect
+metadata, and jump to the first capture decision if one exists. The circular
+countdown and decisions use recorded timestamps, independent of analysis or
+playback speed. `replay.json` retains all results for programmatic inspection.
+Tracking uses the C# four-frame/two-vote consensus and a **one-second**
+countdown, shortened following handheld-use feedback. Confidence, area,
+sharpness, and movement limits stay unchanged.
+Live adapters must reset both tracker and gate on pause, camera/orientation
+changes, and input failures; they must not reuse stale camera results.
+
+The enabled full 224-frame regression retains the original C# geometry and
+quality gates, with the user-requested shorter wait. The three original
+unhinted smoke checks remain separate and unchanged. Run the sequence check:
+
+```sh
+mise exec -- cargo test --no-default-features --test document_detection \
+  recorded_laptop_sequence -- --nocapture
+```
+
+Viewfinder screenshots are diagnostic-only: app toolbars/status bars are not
+part of live camera frames. Keep genuine camera images as the acceptance
+fixtures. Offline replay and repeated-still demos do not validate physical
+camera access, permissions, orientation, or capture latency.
 
 Checkpoint 5C adds multiple image pages:
 

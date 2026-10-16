@@ -590,6 +590,40 @@ difference rather than porting the off-by-one into the new pipeline.
       background-edge limitation after a small scoring experiment regresses
       an existing fixture. Stop before temporal/countdown work in 6F.
 
+##### 6F1. Temporal core and replay diagnostics — accepted
+
+- [x] Port four-frame/two-vote consensus, 0.08 agreement, coordinate medians,
+      0.35 smoothing, and calibrated previous-frame ranking hints. Keep hint
+      bonuses separate from confidence and do not alter unhinted detection.
+- [x] Port the countdown with a one-second handheld wait, 0.04 drift limit,
+      confidence 0.72, area 0.1, and laptop-frame sharpness 25. Emit one Ready
+      decision per capture cycle; reset on loss, blur, or explicit restart.
+- [x] Cover invalid values, rejected candidates, jitter, changing majorities,
+      cumulative drift, clock rollback, reset, and current-frame sharpness.
+- [x] Replay all 224 committed laptop-camera frames in virtual 33 ms steps.
+      Retain strict geometry/quality gates. Track the initially exposed
+      detector-parity failure and its resolution separately in 6F2.
+- [x] Add bounded offline replay diagnostics with raw/stable overlays,
+      playback/scrubbing, countdown progress, and the capture event. Preserve
+      source images and reject existing destinations; no live camera yet.
+- [x] User accepts the restored detector and one-second replay on 2026-10-16.
+      Stop before native capture in 6G; offline replay does not validate
+      physical camera adapters.
+
+##### 6F2. Full-recording detector parity — accepted
+
+- [x] Restore connected contour candidates and strict diagonal edge maxima.
+      User clarifies viewfinder screenshots contain app chrome absent from
+      actual camera pixels; do not treat that status-bar crop as a blocking
+      regression. Keep genuine camera fixtures and generic clutter checks.
+- [x] Pass the enabled full-recording test: 224 frames, raw
+      correct >= 160, stable correct >= 180, wrong = 0 for both, and a
+      correctly framed capture. Keep 0.1 normalized corner tolerance, image
+      quality/geometry calibration, and three unhinted smoke checks. Only
+      countdown duration changes from two seconds to one, as requested.
+- [x] User accepts the complete replay checkpoint on 2026-10-16. Close 6F,
+      commit the work unsigned, and stop for today. Leave 6G unstarted.
+
 ### 7. Packaging and replacement decision — not started
 
 - Polish the UI for regular use: cohesive visual styling, tool icons, touch
@@ -2442,6 +2476,128 @@ Leave changes uncommitted and stop before recorded temporal replay in 6F.
 - Validation after restoring the detector: all eight still-image framing
   regressions pass with their original tolerances. Formatting and whitespace
   checks pass. Retained changes for this investigation are documentation only.
+
+### 2026-10-16 — accepted work committed; 6F1 temporal/replay checkpoint
+
+- Commit accepted 6D3–6E2 work unsigned as `7c3177d`, without pushing.
+  The owner's signing rebase changes it to `54bed57` with an identical tree.
+  Keep the C# app unchanged. No commit is requested for the new 6F work.
+- TDD: first observe missing temporal APIs. Port bounded four-result history,
+  two-vote clusters, current-cluster tie preference, coordinate medians,
+  0.08 agreement, and 0.35 smoothing. Retain current-frame sharpness rather
+  than smooth away blur. Validate finite metrics and convex median results.
+- Add optional previous-frame ranking hints using the original 0.12 radius
+  and bonus. Invalid hints are ignored. Keep confidence separate from rank:
+  hints cannot invent corners or turn rejected candidates into detections.
+  The unhinted page editor and detector calibration stay unchanged.
+- Port the current C# two-second countdown, confidence >= 0.72, area >= 0.1,
+  sharpness >= 25, and cumulative drift <= 0.04 from the countdown anchor.
+  Use monotonic Duration timestamps, handle clock rollback, expose progress,
+  and emit Ready once until loss/blur or an explicit reset rearms the gate.
+  Test jitter, majority changes, smoothing, invalid/rejected input, blur,
+  loss, resets, repeated timestamps, rollback, and capture rearming.
+- Add `frame_replay INPUT_DIR NEW_OUTPUT_DIR [INTERVAL_MS=33]`, bounded to
+  300 sorted regular JPEG/PNG frames and existing 100 MiB/50 MP image limits.
+  Stream one source at a time, copy original bytes, and emit JSON plus a
+  server-free HTML viewer with playback, scrubbing, optional outlines,
+  countdown, capture jump, and per-frame metadata. Reset for size changes.
+  Refuse existing outputs and escape embedded JSON against HTML injection.
+- Extend the recorded regression to all 224 trusted committed laptop frames
+  with virtual 33 ms timestamps. Retain all C# gates: raw correct >= 160,
+  stable correct >= 180, wrong = 0, and at least one correctly framed Ready.
+  Preserve the separate three-frame unhinted smoke test and its tolerance.
+- The new full gate fails: raw 143 correct/34 wrong/47 missing; stable
+  151 correct/33 wrong/40 missing; no capture, peak progress about 0.957.
+  Keep this test enabled and visibly red. Do not skip it, lower thresholds,
+  loosen tolerances, or claim 6F complete merely to keep CI green.
+- Investigate the earlier deferred contour gap and an OpenCV diagonal NMS
+  tie mismatch. The combined experiment reaches raw 181 correct/0 wrong
+  and stable 190 correct/0 wrong, but still never captures and regresses the
+  accepted card screenshot: its status bar becomes the proposed bottom.
+  Remove both detector experiments; retain no pixel/candidate changes.
+  This is broader detector-parity work, not a safe calibration-only tweak.
+  Compare the [upstream diagonal NMS rule][canny-nms-reference] when resuming.
+- Split 6F at this checkpoint: portable temporal logic and diagnostics are
+  ready to inspect; full-recording parity remains explicitly pending in
+  6F2. Do not start camera adapters in 6G or mark the full milestone complete.
+- Validation: native all-feature/all-target and core/example checks pass
+  when explicitly excluding the new known-red full-recording gate with
+  `-- --skip recorded_laptop_sequence --quiet`; it is not ignored in source
+  or disabled in CI. Strict native/WASM Clippy, formatting, whitespace,
+  and the final browser build pass. The eight temporal unit checks and
+  four replay-command checks pass. Rebuild/replay the actual corpus after
+  removing experiments; verify the four-frame hold demo reaches Ready.
+  All compilation/browser output stays under /tmp, not host target/dist.
+
+Initial manual checkpoint 6F1 — superseded by the one-second replay below:
+
+1. Open `artifacts/previews/temporal-6f.eCb9ro/replay/index.html`. Play,
+   scrub, step, and toggle raw/stable/prior-hint outlines. The actual laptop
+   sequence is a diagnostic failure: it does not reach a capture decision.
+2. Open `artifacts/previews/temporal-6f.eCb9ro/hold-demo/index.html`.
+   This deliberately repeats one real frame four times at 1000 ms intervals;
+   it is not footage or a detector-success claim. Check 0%, 50%, and 100%
+   progress, Jump to capture, and playback-speed-independent decisions.
+3. Inspect raw/stable differences and metadata. Browser interaction needs
+   host validation; no browser executable is installed in this container.
+   The viewer's controls, stale-image guard, and progress logic were checked
+   using V8 with DOM/image stubs, not a real browser or touchscreen.
+
+[canny-nms-reference]:
+  https://github.com/opencv/opencv/blob/4.11.0/modules/imgproc/src/canny.cpp#L585
+
+### 2026-10-16 — 6F follow-up: one-second wait and real camera fixtures
+
+- User reports the framing is usable through much of the recording, but
+  two seconds is impractical for handheld steadiness. Shorten only the wait
+  to one second; keep confidence, area, sharpness, voting, smoothing, motion
+  limits, and corner tolerances unchanged.
+- User clarifies that the card/status-bar image is a screenshot of a
+  viewfinder, not raw camera pixels. Retain it as diagnostic-only rather
+  than require the detector to ignore artificial app chrome. Restore the
+  connected-contour candidates and strict diagonal Canny maxima. Genuine
+  camera fixtures and the synthetic background-extension check still gate
+  changes. The separate 11-19 background-ranking limit remains documented.
+- TDD: update timing checks first and observe three failures against the
+  two-second gate. Verify no capture at 999 ms, capture at 1000 ms, 50%
+  progress at 500 ms, cumulative drift/blur resets, clock rollback, and one
+  event per cycle. Update the replay's timing metadata and event checks.
+- The container interruption stops the corpus run and clears /tmp build
+  output. Preserve the partial report as `interrupted-replay`, rebuild in
+  the isolated target, and rerun all core/example tests and the full replay.
+  Do not alter host target/dist, C# source, or CI. Keep changes uncommitted.
+- Full-recording acceptance now passes: raw 181 correct / 0 wrong / 43
+  missing; stable 190 correct / 0 wrong / 34 missing. The first correctly
+  framed capture decision occurs at frame 83 (2706 ms), after 1023 ms of
+  steady input at the recording's 33 ms interval. Missing early/blurred
+  frames remain missing; do not claim detection on every frame.
+- Validation: all 259 core/example tests pass, including the full enabled
+  224-frame gate without skips. Strict native and WASM core Clippy,
+  formatting, and whitespace checks pass after the rebuild. Before the
+  interruption, unchanged source also passed native all-feature checks
+  (with the duplicate corpus run excluded), strict native/WASM all-feature
+  Clippy, and a Trunk browser build. Physical camera access is still untested.
+- Regenerate the complete offline replay and verify its JSON matches the
+  embedded report, all 224 image files exist, and countdown/capture metadata
+  matches the regression. Retain the small 500 ms repeated-still demo.
+
+Manual checkpoint 6F — accepted 2026-10-16:
+
+1. Open `artifacts/previews/temporal-6f-1s.N3mPss/index.html`, then the
+   updated 224-frame replay. Play, scrub, toggle raw/stable/prior-hint
+   outlines, and use Jump to capture. Verify the green outline follows the
+   paper at frame 83 rather than a fold or background edge.
+2. Inspect countdown progress immediately before that capture. Its one-second
+   wait uses virtual recording timestamps, not playback/analysis speed.
+   The separate repeated-still demo shows consensus, 0%, 50%, and 100% at
+   500 ms frame intervals; it is not footage or camera-adapter validation.
+3. The earlier two-second report remains available for comparison, clearly
+   marked historical. Keep screenshot/status-bar effects diagnostic-only.
+   Offline replay acceptance does not validate native camera adapters.
+
+User accepts the replay checkpoint and requests a commit and stop for today.
+Mark 6F1/6F2 complete, create an unsigned commit, and do not push. Leave
+native capture in 6G unstarted until the user requests continuation.
 
 ## References
 

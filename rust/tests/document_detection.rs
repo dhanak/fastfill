@@ -1,4 +1,7 @@
-use fastfill_rust::document_detection::detect_document;
+use fastfill_rust::document_detection::{
+    AutoCaptureGate, CaptureState, DetectionStabilizer, detect_document,
+    detect_document_with_hint,
+};
 use fastfill_rust::project::{CropQuad, NormalizedPoint};
 use image::{Rgba, RgbaImage};
 
@@ -145,6 +148,32 @@ fn subthreshold_candidate_is_not_silently_an_accepted_document() {
     let json = serde_json::to_value(&result).unwrap();
     assert!(json["corners"].is_null());
     assert!(json["candidateCorners"].is_object());
+    let hinted =
+        detect_document_with_hint(&source, result.candidate_corners).unwrap();
+    assert!(hinted.corners.is_none());
+    assert_eq!(hinted.confidence, result.confidence);
+}
+
+#[test]
+fn hints_are_advisory_and_invalid_or_distant_hints_are_ignored() {
+    let source = document(
+        640,
+        480,
+        [(90.0, 60.0), (560.0, 80.0), (530.0, 430.0), (70.0, 400.0)],
+    );
+    let baseline = detect_document(&source).unwrap();
+    let mut invalid = CropQuad::default();
+    invalid.top_left.x = f32::NAN;
+    for hint in [
+        None,
+        Some(invalid),
+        Some(CropQuad::default()),
+        baseline.corners,
+    ] {
+        let actual = detect_document_with_hint(&source, hint).unwrap();
+        assert_eq!(actual.corners, baseline.corners);
+        assert_eq!(actual.confidence, baseline.confidence);
+    }
 }
 
 fn stroke(image: &mut RgbaImage, a: (f64, f64), b: (f64, f64), width: f64) {
@@ -226,23 +255,17 @@ fn saturated_document_uses_color_boundary_not_only_white_paper_mask() {
     assert!(distance(detection.corners.unwrap(), white) < 0.02);
 }
 
-#[test]
-fn recorded_laptop_frames_find_the_outer_sheet_not_the_fold() {
-    // Read trusted committed fixtures in place, without a TAR dependency or
-    // filesystem extraction. Full 224-frame temporal replay belongs to 6F.
+fn recorded_frames() -> impl Iterator<Item = (&'static str, &'static [u8])> {
+    // Only the trusted committed TAR, not a general-purpose archive reader.
     let archive = include_bytes!("../../tests/samples/folded-paper-frames.tar");
-    let expected = CropQuad {
-        top_left: NormalizedPoint { x: 0.28, y: 0.09 },
-        top_right: NormalizedPoint { x: 0.86, y: 0.15 },
-        bottom_right: NormalizedPoint { x: 0.86, y: 0.89 },
-        bottom_left: NormalizedPoint { x: 0.26, y: 0.89 },
-    };
     let mut offset = 0;
-    let mut checked = 0;
-    while offset + 512 <= archive.len() {
+    std::iter::from_fn(move || {
+        if offset + 512 > archive.len() {
+            return None;
+        }
         let header = &archive[offset..offset + 512];
         if header.iter().all(|byte| *byte == 0) {
-            break;
+            return None;
         }
         let name = std::str::from_utf8(&header[..100])
             .unwrap()
@@ -255,23 +278,91 @@ fn recorded_laptop_frames_find_the_outer_sheet_not_the_fold() {
         )
         .unwrap();
         offset += 512;
-        if ["0059.jpg", "0112.jpg", "0168.jpg"]
+        let bytes = &archive[offset..offset + size];
+        offset += size.div_ceil(512) * 512;
+        Some((name, bytes))
+    })
+    .filter(|(name, _)| {
+        std::path::Path::new(name)
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("jpg"))
+    })
+}
+
+fn recorded_corners() -> CropQuad {
+    CropQuad {
+        top_left: NormalizedPoint { x: 0.28, y: 0.09 },
+        top_right: NormalizedPoint { x: 0.86, y: 0.15 },
+        bottom_right: NormalizedPoint { x: 0.86, y: 0.89 },
+        bottom_left: NormalizedPoint { x: 0.26, y: 0.89 },
+    }
+}
+
+#[test]
+fn recorded_laptop_frames_find_the_outer_sheet_not_the_fold() {
+    let mut checked = 0;
+    for (name, bytes) in recorded_frames().filter(|(name, _)| {
+        ["0059.jpg", "0112.jpg", "0168.jpg"]
             .iter()
             .any(|suffix| name.ends_with(suffix))
-        {
-            let (_, image) = fastfill_rust::image_input::decode_image(
-                &archive[offset..offset + size],
-            )
-            .unwrap();
-            let detection = detect_document(&image.into_rgba8()).unwrap();
-            assert!(detection.corners.is_some(), "{name}: {detection:?}");
-            assert!(
-                distance(detection.corners.unwrap(), expected) < 0.1,
-                "{name}: {detection:?}"
-            );
-            checked += 1;
-        }
-        offset += size.div_ceil(512) * 512;
+    }) {
+        let (_, image) =
+            fastfill_rust::image_input::decode_image(bytes).unwrap();
+        let single = detect_document(&image.into_rgba8()).unwrap();
+        assert!(single.corners.is_some(), "{name}: {single:?}");
+        assert!(
+            distance(single.corners.unwrap(), recorded_corners()) < 0.1,
+            "{name}: {single:?}"
+        );
+        checked += 1;
     }
     assert_eq!(checked, 3);
+}
+
+#[test]
+fn recorded_laptop_sequence_finds_the_outer_sheet_and_reaches_capture() {
+    // Keep the C# geometry/quality gates intact across the complete recording.
+    // The countdown alone uses the user's one-second handheld calibration.
+    let expected = recorded_corners();
+    let mut checked = 0;
+    let mut tracker = DetectionStabilizer::default();
+    let mut gate = AutoCaptureGate::default();
+    let mut raw_counts = [0; 2];
+    let mut stable_counts = [0; 2];
+    let mut capture_frame = None;
+    for (name, bytes) in recorded_frames() {
+        let (_, image) =
+            fastfill_rust::image_input::decode_image(bytes).unwrap();
+        let raw =
+            detect_document_with_hint(&image.into_rgba8(), tracker.hint())
+                .unwrap();
+        let stable = tracker.update(&raw);
+        for (detection, counts) in
+            [(&raw, &mut raw_counts), (&stable, &mut stable_counts)]
+        {
+            if let Some(corners) = detection.corners {
+                let correct = distance(corners, expected) < 0.1;
+                counts[usize::from(!correct)] += 1;
+                if !correct {
+                    eprintln!("{name}: {detection:?}");
+                }
+            }
+        }
+        let timestamp = std::time::Duration::from_millis(checked * 33);
+        if gate.evaluate(&stable, timestamp) == CaptureState::Ready {
+            assert!(distance(stable.corners.unwrap(), expected) < 0.1);
+            capture_frame.get_or_insert(checked + 1);
+        }
+        checked += 1;
+    }
+    eprintln!(
+        "Frames {checked}, raw {raw_counts:?}, stable \
+        {stable_counts:?}, capture {capture_frame:?}"
+    );
+    assert_eq!(checked, 224);
+    assert!(raw_counts[0] >= 160);
+    assert_eq!(raw_counts[1], 0);
+    assert!(stable_counts[0] >= 180);
+    assert_eq!(stable_counts[1], 0);
+    assert!(capture_frame.is_some());
 }
