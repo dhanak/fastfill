@@ -122,6 +122,7 @@ fn filled_pen_path_can_be_selected_from_its_interior() {
         1.0,
         DragModifiers::default(),
     ));
+    assert!(annotations.finish(TOUCH, Point::new(150.0, 140.0), false));
     assert_eq!(annotations.selected_index(), Some(0));
 }
 

@@ -1,4 +1,5 @@
 use super::geometry::{valid, valid_annotation_size};
+use super::marquee::{hits_frame, hits_shape};
 use super::{
     AnnotationRef, AnnotationSettings, Annotations, Draft, Layer,
     OwnedAnnotation, Pointer, ShapeAnnotation, ShapeDraft, Snapshot, Tool,
@@ -192,7 +193,40 @@ impl Annotations {
             page,
             style: self.styles.get(self.tool).unwrap_or_default(),
             points: vec![point],
+            mark_snap: None,
         }));
+        true
+    }
+
+    /// Freeze a new mark's click target; dragging past the threshold is manual.
+    pub fn set_mark_snap(
+        &mut self,
+        pointer: Pointer,
+        bounds: Rect,
+        threshold: f32,
+    ) -> bool {
+        if !valid(Point::new(bounds.x, bounds.y))
+            || !valid(Point::new(
+                bounds.x + bounds.width,
+                bounds.y + bounds.height,
+            ))
+            || bounds.width < 1.0
+            || (bounds.width - bounds.height).abs() > f32::EPSILON
+            || !threshold.is_finite()
+            || threshold <= 0.0
+        {
+            return false;
+        }
+        let Some(Draft::Create(draft)) = &mut self.draft else {
+            return false;
+        };
+        if draft.pointer != pointer
+            || !matches!(draft.kind,
+                super::CreationKind::Bounded(kind) if kind.is_mark())
+        {
+            return false;
+        }
+        draft.mark_snap = Some((bounds, threshold));
         true
     }
 
@@ -280,14 +314,16 @@ impl Annotations {
                 }
             }
             Draft::Selection(draft) => {
-                let bounds = draft.bounds();
+                let Some(bounds) = draft.bounds() else {
+                    self.apply_selection_click(draft.picked, draft.toggle);
+                    return true;
+                };
                 self.selected = self
                     .shapes
                     .iter()
                     .enumerate()
                     .filter_map(|(index, annotation)| {
-                        intersects(bounds, annotation.visible_bounds())
-                            .then_some(index)
+                        hits_shape(bounds, annotation).then_some(index)
                     })
                     .collect();
                 self.selected_texts = self
@@ -295,7 +331,7 @@ impl Annotations {
                     .iter()
                     .enumerate()
                     .filter_map(|(index, annotation)| {
-                        intersects(bounds, annotation.visible_bounds())
+                        hits_frame(bounds, &annotation.frame_corners())
                             .then_some(index)
                     })
                     .collect();
@@ -371,11 +407,4 @@ fn valid_finished_annotation(annotation: &ShapeAnnotation) -> bool {
         && valid_annotation_size(annotation)
         && bounds.x + bounds.width > 0.0
         && bounds.y + bounds.height > 0.0
-}
-
-fn intersects(first: Rect, second: Rect) -> bool {
-    first.x <= second.x + second.width
-        && first.x + first.width >= second.x
-        && first.y <= second.y + second.height
-        && first.y + first.height >= second.y
 }

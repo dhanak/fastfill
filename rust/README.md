@@ -181,8 +181,62 @@ Checkpoint 6C2 adds **Edit page** to the page rail for image pages:
 
 Native previews run one background job plus the latest queued settings;
 stale results cannot replace a newer preview. The browser harness still runs
-correction work on its UI thread. Automatic framing, edge snapping, and
-camera capture remain later checkpoints.
+correction work on its UI thread. Automatic framing, Ctrl-assisted crop
+corner snapping, and camera capture remain later checkpoints.
+
+Checkpoint 6D2 adds **Smart snap** placement:
+
+- The button appears with **Text**, **Check**, and **Cross**, including while
+  an object remains selected. It starts off at launch and remembers its state
+  across tools, pages, and projects during that run. It is not a document
+  setting and does not affect dirty tracking or undo history.
+- Enable it and wait for **Ready**. Analysis uses the corrected page image,
+  independent of zoom. Native analysis runs in one background worker;
+  switching pages queues only the latest request. Live page results are
+  cached, and corrections invalidate the affected result automatically.
+- Click or tap near a checkbox to center a check/cross in an inset square
+  inside it. Dragging instead keeps manual sizing. Color and thickness stay
+  as selected; existing-object moves and resizes do not snap again.
+- Click near a solid, dashed, or dotted rule to start text at its left end,
+  immediately above it. The text's bottom stays anchored while typing or
+  changing font size. Table cells use their own left border where detected.
+  Text retains its natural width and explicit newlines; no field auto-wrap.
+  Clicking elsewhere on a filled rule reopens text already anchored to that
+  field, with the caret at the end, instead of creating a duplicate. Direct
+  clicks on text still place the caret near the clicked glyph. Editing existing
+  text keeps its position rather than snapping it again.
+- **Off**, **No image**, **Analyzing…**, or **Unavailable** means ordinary
+  placement. Completed analysis never moves annotations already placed or
+  an editor already opened. Toggle off/on to retry a failed analysis.
+  Snap placement creates the usual single undo step and saves/exports like
+  any other annotation. The browser harness still analyzes on its UI thread
+  and may pause briefly when enabling snap or visiting an uncached page.
+
+Checkpoint 6D1 also provides **portable form-feature diagnostics**. From
+`rust/`, choose an existing output folder and an unused filename:
+
+```sh
+mise exec -- cargo run --no-default-features --example form_probe -- \
+  ../tests/samples/sample-form.png ../artifacts/previews/form-candidates.png
+```
+
+Open the resulting PNG: blue outlines mark checkboxes; orange lines mark
+solid/dashed/dotted rules. JSON on stdout lists normalized candidates and
+analysis dimensions; redirect it to a file if desired. Repeat with
+`../tests/samples/datum-form.png` for the Dátum label and short dotted fields.
+Input/output files are never overwritten. Analysis retains the 1600-pixel
+edge and short-axis distance calibration; GUI zoom is not an input.
+
+This is not OCR: table borders are valid rule candidates too. Vertical
+dividers connecting two horizontal rules add individual cell candidates;
+the nearest-line query prefers the cell under the click over the full row
+at the same distance. Full row rules remain available, including merged
+rows without dividers. A text stem touching just one rule does not split it.
+The portable box check uses straight edge bands and rectangular interiors,
+avoiding rounded letter counters without OpenCV. Strongly rotated or
+perspective-distorted boxes are outside this slice; analyze corrected,
+upright pages. Scaling uses the installed image resampler, not OpenCV's exact
+pixels. Ctrl-assisted crop corners follow separately in 6D3.
 
 Checkpoint 5C adds multiple image pages:
 
@@ -342,13 +396,21 @@ browser tab is not guarded; save first. Large archive/image processing can
 still pause the browser. These are harness limits, not native behavior.
 
 Editable conversion accepts corrected pages, rigid annotation
-rotation/translation, and the three mapped font families. It still rejects
-affine scaling/shear, other fonts, and legacy soft-wrap settings instead of
-silently altering them. The archive API preserves complete schema-v1/v2
-data; these are temporary editor limits, not a permanent compatibility
-policy. Generic font rendering and inclusive crop dimensions are not promised
-to match the old C# renderer pixelwise. Test projects with copies, not
-originals.
+rotation/translation, and three font categories. C#'s Segoe UI, Arial, and
+Calibri map to Sans; Times New Roman maps to Serif, and Consolas to Monospace.
+An imported family name survives ordinary edits until its category changes.
+It still rejects affine scaling/shear and unmapped fonts instead of silently
+altering them. These are temporary limits, not a permanent compatibility
+policy.
+
+Legacy text loads even when its old `maximumWidth` fitting hint is not 1
+or is missing (the C# default was 0.4). That value does not prove the text
+actually wrapped. Import retains content, explicit newlines, bounds, and
+transforms; unchanged annotations keep their legacy metadata when saved.
+Rust text does not automatically wrap words: genuinely wrapped legacy text
+may flow differently until given explicit newlines. Editing it uses Rust's
+normal natural-size text layout. Generic font rendering and inclusive crop
+dimensions are not promised to match C# pixelwise. Test projects with copies.
 
 Available annotation tools:
 
@@ -371,7 +433,8 @@ The tool row scrolls horizontally in narrower windows.
   page. The editor grows with its content and uses only explicit line breaks;
   it does not wrap at the paper edge. Shift+Enter inserts a line break; Enter
   or clicking elsewhere accepts non-empty text. Escape cancels pending
-  changes. Click accepted text with Text to reopen it. Select clicks select
+  changes. Click accepted text with Text to reopen it with the caret nearest
+  the clicked glyph (including rotated text). Select clicks select
   text without opening the editor; drag to move it or use its rotation handle.
   Choose Sans, Serif, or Monospace; size; bold; italic; underline; and color.
   Editor changes remain pending until acceptance; changes to inactive selected
@@ -381,11 +444,34 @@ The tool row scrolls horizontally in narrower windows.
   stroke widths from 1–20 points. Rectangle, Oval, and Pen offer Fill.
   Each tool remembers its own settings; Select changes the chosen object
   with undo.
-- **Select:** click or touch a shape, line, ink path, or text, then drag to
-  move it. Drag empty page space to select intersecting shapes and text.
-  Ctrl-click toggles individual members. Drag any selected member to move the
-  whole selection. Faint member frames identify membership inside the strong
-  group boundary. A single object retains its applicable editing controls.
+- **Select:** click/tap an unselected object to select it on release. Drag
+  from an unselected object or empty page space to start a marquee instead
+  of moving/resizing the object under the initial press.
+  A marquee must intersect a line/arrow/ink stroke or a filled pen area,
+  not just empty space inside its outer bounds. Bounded shapes and text
+  use their actual rotated frames, matching their click-selection behavior.
+  Plain empty-space clicks clear selection; a marquee needs at least 4 screen
+  pixels of mouse movement or 8 for touch, independent of zoom. A click
+  inside overlapping unselected line frames does not select a group.
+  Ctrl-click toggles individual members on release. Ctrl+drag forces a fresh
+  marquee, replacing selection even when starting over selected objects or
+  handles. Drag an already-selected member to move the whole selection;
+  a selected member can still move from inside its frame.
+  Both single and group selections show a move cursor over movable members.
+  Faint member frames identify membership inside the strong group boundary.
+  Small objects keep their selection frame but hide resize/rotation handles
+  when those would obscure the object or overlap. Hidden handles are inactive;
+  drag to move, or zoom in to restore editing controls. Lines/arrows use their
+  endpoint distance, so long horizontal/vertical lines remain resizable.
+  Shift/Alt force move/resize when controls are available, including with Ctrl.
+  In Select mode, press Ctrl after starting a handle drag to constrain its
+  resizing, endpoint angle, or rotation; holding Ctrl before the press starts
+  a marquee. Escape/focus loss cancels pending selection without an edit.
+  With no active edit/gesture, Escape clears selection without changing the
+  current tool or document. Style changes then affect the next annotation.
+  During text editing/dragging, the first Escape reverts that pending change;
+  press Escape again to clear the retained selection. Resizing the window or
+  losing focus does not clear an idle selection.
 - **Bulk styles:** color applies to every selected object. Thickness applies
   to shapes/ink; fill applies only to rectangles, ovals, and pen paths.
   Selections containing text also show font, size, and B/I/U controls; these

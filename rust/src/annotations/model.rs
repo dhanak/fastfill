@@ -154,6 +154,9 @@ pub const RESIZE_CORNERS: [ResizeCorner; 4] = [
 ];
 
 pub const ROTATION_HANDLE_OFFSET: f32 = 32.0;
+// Logical screen pixels shared by handle drawing and hit-test eligibility.
+pub const SELECTION_HANDLE_SIZE: f32 = 14.0;
+pub const SELECTION_STROKE: f32 = 2.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EditHit {

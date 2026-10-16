@@ -494,6 +494,52 @@ The old C# full-frame processor loses one pixel in each dimension. Preserve
 the Rust viewer's exact full-frame dimensions instead; document this intended
 difference rather than porting the off-by-one into the new pipeline.
 
+##### 6D1. Portable form-feature detection — accepted
+
+- [x] Port line/checkbox analysis and nearest-feature queries independently
+      of GUI state, zoom, or annotation coordinates. Retain the calibrated
+      1600-pixel analysis edge, line/mark/gap thresholds, and short-axis
+      distance metric. Avoid a native OpenCV dependency.
+- [x] Cover solid/dashed/dotted lines, adjacent labels, separate same-row
+      fields, small boxes inside bordered forms, transparency, bad queries,
+      and the existing sample-form/Hungarian Dátum fixtures.
+- [x] Provide a bounded native diagnostic producing candidate overlays and
+      JSON; compare against the existing Snap Lab before placement wiring.
+- [x] User confirms legacy project opening and baseline line/box detection
+      matches the C# implementation. Retain valid table/box top borders.
+- [x] Add table-cell candidates at vertical dividers without removing full
+      row rules. Cover stacked cells, merged rows, and stray text stems.
+- [x] User confirms crowded-area click selection improves with drag slop.
+- [x] User approves click-vs-drag rules and Ctrl-forced marquee gestures.
+- [x] User confirms geometry-aware marquees and new gesture rules work.
+- [x] User accepts group move cursors and all 6D1 follow-ups. Mark this
+      slice complete and proceed to 6D2 on 2026-10-16; no commit requested.
+
+##### 6D2. Smart-snap annotation placement — accepted
+
+- [x] Keep a session-global, default-off Smart snap toggle for Text, Check,
+      and Cross; retain it across tools/pages/projects, outside document data.
+- [x] Cache calibrated features by corrected-display identity. Run one
+      native worker at a time, coalesce to the current page, reject stale
+      project/image completions, and bound the cache to live page images.
+- [x] Snap clicked/tapped marks to a centered 78% inset square in detected
+      boxes. Keep manual drag sizing and edits of existing objects intact.
+- [x] Start new text at a nearby rule's left end, bottom-anchored above it.
+      Keep natural widths, explicit newlines, and existing-text editing.
+- [x] Show pending/failed analysis; use ordinary placement until ready,
+      without asynchronous changes to annotations already created.
+- [x] Test disabled/fallback snap, zoom independence, tools/pages, canceled
+      gestures/stale workers, corrections/undo, style preservation, one-step
+      history, save/reload, and native/core/WASM builds.
+- [x] User accepts smart-snap placement on 2026-10-16. Address the separate
+      caret, small-object controls, and Escape observations before 6D3.
+
+##### 6D3. Ctrl-assisted crop corners — not started
+
+- Add image-corner snapping only while Ctrl is held during corner dragging.
+  Keep continuous manual adjustment without Ctrl. Test source/preview
+  coordinate conversion, modifier changes, cancellation, and touch handling.
+
 ### 7. Packaging and replacement decision — not started
 
 - Polish the UI for regular use: cohesive visual styling, tool icons, touch
@@ -1792,6 +1838,349 @@ Follow-up checkpoint — accepted 2026-10-16: user confirms all checks passed,
 near-instant page editing, and compact one-decimal font labels. Mark 6C
 complete and commit its pending work unsigned, as requested. Keep subsequent
 6D form-snapping changes separate and stop at its next manual checkpoint.
+
+### 2026-10-16 — 6C committed; portable form snapping checkpoint 6D1
+
+- Commit accepted 6C1/6C2 work unsigned as 154542c. The owner subsequently
+  signs history; current commit 308314a has the identical tree. Do not push.
+- Split 6D into portable form detection, global smart-snap placement, and
+  Ctrl-assisted page corners. Keep each checkpoint independently testable;
+  do not add placement/UI state before the detector comparison is accepted.
+- TDD red: form-feature analysis is absent. Green: add normalized checkbox
+  and solid/dashed/dotted rule candidates with nearest-feature queries.
+  Keep the calibrated 1600-pixel analysis edge, 31-pixel Gaussian window,
+  threshold offset 10, box-size/aspect limits, broken-mark grouping,
+  gap trimming, and short-axis distance units. Reject invalid queries.
+- Use installed image resizing/blur and a small eight-connected component
+  walk instead of introducing OpenCV. Replace horizontal opening with row
+  runs. Include enclosed rectangular white regions so boxes connected to
+  larger table borders survive. Composite transparency on white first.
+- Intentional limit: axis-aligned edge/interior checks, not arbitrary
+  perspective/rotated contour approximation. Intended input is corrected,
+  upright form pixels. Image resampling is not OpenCV pixelwise parity.
+- TDD red from visual review: padded letter counters produce 72/60 boxes
+  instead of the forms' five/14. Green: check rectangular white interiors
+  as well as ink frames and narrow the edge bands. Lock both actual counts;
+  retain the real checkboxes while excluding letters in titles/body text.
+- Copy the existing Hungarian form PNG into tests/samples/datum-form.png
+  so Dátum/short-dotted-line regressions also run on CI. Extend workflow
+  triggers to all sample fixtures. Leave C# algorithms/labs untouched.
+- Add tests for attached boxes, separate same-row fields, short dots, label
+  exclusion, ordinary text, transparency, small/empty images, normalized
+  output at the final row, invalid queries, and resized-image consistency.
+- Composite onto white before grayscale downsampling; hidden transparent
+  RGB otherwise makes false ink rules. Keep a regression for those fringes.
+- Add form_probe: bounded native PNG/JSON diagnostics with atomic,
+  non-overwriting output. Test empty/malformed arguments, candidate overlay
+  pixels, existing outputs, and invalid input without filesystem changes.
+- Generate and inspect both refined overlays under
+  artifacts/previews/form-snap-6d1.UbfZ3p/. Sample form: 14 boxes, 40 rules;
+  Hungarian form: five boxes, 33 rules. Table borders are valid rules, not
+  OCR-classified fields. No new application snapping controls in this slice.
+- Validation: 359 all-feature/all-target tests and 195 core/example tests
+  pass. Strict native/WASM all-target Clippy, formatting, whitespace checks,
+  and full Trunk build pass. Keep all compilation output under /tmp.
+
+Manual checkpoint 6D1 — baseline accepted 2026-10-16; follow-up below:
+
+1. Open the generated comparison index.html or sample-form-refined.png and
+   datum-form-refined.png. Blue boxes should match real checkboxes, not
+   enclosed letters. Orange rules should leave printed labels/text alone.
+2. Inspect part B's dotted field, the Dátum field, the three short dotted
+   fields near év/hónap, and separate same-row solid fields. Test another
+   PNG/JPEG with form_probe if useful; use a new output filename each time.
+3. Accept detector output before 6D2 placement. Corner snapping stays 6D3.
+
+### 2026-10-16 — legacy text loading compatibility follow-up
+
+- User requires loading existing C# projects, without adding Rust auto-wrap.
+  Inspect Scan 2026-09-15 09-00.docscan: two short texts, hahó and bubu.
+  Their absent maximumWidth fields default to 0.4; neither word needs wrap.
+  The prior rejection treated a creation/fitting hint as proof of soft wrap.
+- TDD red: setting a valid legacy width hint blocks editable conversion.
+  Green: remove that false rejection. Keep annotation content, explicit
+  newlines, bounds, translations, rotation, and untouched schema metadata.
+  Retain existing format/range validation; do not introduce wrapping state.
+- Add regression coverage for missing early-C# font/width fields, accented
+  content and explicit newlines, annotation geometry, and unchanged saves.
+  Genuine legacy automatic wrapping may flow differently under Rust's
+  explicit-newline policy; document this without blocking project loading.
+- Inspect the original C# font picker too: Arial/Calibri are valid choices
+  missing from the Rust mapping. Load them as Sans and preserve their family
+  names through non-font edits, rather than reject legacy pages or silently
+  rewrite family metadata. Test every original picker choice and Consolas.
+- Run the actual 09-00 archive through the GUI's open/save/reopen pipeline
+  using FASTFILL_DOCSCAN_FIXTURE. Both pages load successfully. Repeat for
+  11-19, blank-with-annot, images-with-annot, and sample-page: all five
+  provided .docscan files pass. No source files change. Leave this follow-up
+  uncommitted for the user's check.
+
+### 2026-10-16 — click selection and table-cell detection follow-up
+
+- User confirms legacy loading succeeds and detector output matches C#.
+  Keep table/box top edges as valid candidates; do not add OCR filtering.
+- TDD red: an empty-space click inside overlapping diagonal-line frames
+  selects a group. A zero-area marquee still intersects those frames.
+  Green: require 4 mouse/8 touch screen pixels before displaying or applying
+  a marquee. Derive page-space thresholds from zoom at gesture start.
+  Preserve ordinary single-object picking, Ctrl-click, real marquee drags,
+  and dragging an existing group from its members' frames.
+- Cover exact clicks and small jitter at three zoom levels for mouse and
+  synthetic touch. Confirm real drags select both overlapping frames and
+  a subsequent click on an actual stroke selects only one object.
+- TDD red: a synthetic three-column, three-row table snaps to full rows.
+  Green: add cell segments where vertical ink connects two horizontal rules.
+  Coalesce thick divider columns; prefer the shorter candidate on distance
+  ties. Keep every original row rule, including top and bottom borders.
+- Cover shared stacked borders, T-junctions, merged rows, scaled images,
+  thin/thick rules, and text stems touching just one rule. Retain real-form
+  tests, including checkboxes, Dátum, short dots, and part B's dotted field.
+- Do not wire annotation snapping or change C# code in this follow-up.
+  Ask for a crowded-area click check before continuing to 6D2 placement.
+- Validation: 363 all-feature/all-target tests and 199 core/example tests
+  pass. Strict native/WASM all-target Clippy, formatting, and whitespace
+  checks pass. Physical touch remains untested; use synthetic touch events.
+  Keep all compilation output isolated under /tmp.
+
+### 2026-10-16 — consistent marquee geometry follow-up
+
+- User accepts click-drag slop, but notes small marquees still pick distant
+  diagonal lines/arrows when only their outer bounds intersect the marquee.
+- TDD red: reproduce bounding-box-only hits for diagonal lines, arrowheads,
+  open/filled pen, highlighter, and rotated frames. Green: intersect line
+  shafts/arrowheads and transformed ink paths, including stroke thickness.
+  Test filled ink as a polygon, including its closing stroke. For bounded
+  shapes and text, intersect the actual rotated frame, matching point picks.
+- Keep mouse/touch drag thresholds, Ctrl-click membership, and existing
+  selected-frame movement. A small empty marquee must no longer select
+  overlapping diagonal frames; a larger one crossing their strokes must.
+- Put rectangle hit queries in one focused annotations/marquee.rs module.
+  Keep geometry independent of GUI rendering and avoid new dependencies.
+  Test contained polygons and edge-only overlap, not just corner inclusion.
+  Measure stroke distance instead of inflating marquees along screen axes;
+  diagonal strokes must not acquire wider hit areas at rectangle corners.
+- TDD red: thick line edges at high zoom and filled pen closing edges are
+  not clickable. Green: include physical line width and the filled closing
+  stroke in existing point queries, retaining the mouse/touch hit tolerance.
+- Pause for a crowded-area mouse check. No commit or 6D2 wiring requested.
+- Validation: 373 all-feature/all-target tests and 209 core/example tests
+  pass. Strict native/WASM all-target Clippy, formatting, and whitespace
+  checks pass. Mouse/touch thresholds retain synthetic coverage; physical
+  touch remains untested. Compilation output stays isolated under /tmp.
+
+### 2026-10-16 — selection gesture intent follow-up
+
+- User reports marquee starts over selectable objects immediately moving
+  or resizing them. Ask about the intended gesture rules; user approves
+  click-to-select, unselected-drag-to-marquee, selected-drag-to-edit, and
+  Ctrl+drag forcing a fresh marquee while Ctrl-click toggles membership.
+- TDD red: presses on unselected bodies/corners immediately edit them;
+  Ctrl presses toggle too early to allow forced marquees. Green: defer
+  ordinary/Control click picks until release, retaining the previous
+  selection while pending. Marquee completion replaces selection; cancel,
+  foreign pointers, and invalid releases cannot commit a click or edit.
+- Latch movement past the existing mouse/touch screen-pixel threshold.
+  A real drag returning to its start must not become a toggle click.
+  Keep geometry-based marquee hits and selection changes outside history.
+- Preserve selected-object, selected-group, and drawing-tool edits. Keep
+  Shift/Alt explicit move/resize overrides, including Ctrl constraints.
+  In Select, press Ctrl after starting a handle drag to constrain it;
+  Ctrl held before pointer press instead forces a marquee.
+- Match cursor feedback to pending/forced marquees. Only selected text
+  offers the move cursor; group members retain their selected move target.
+- Cover mouse and synthetic touch at three zoom levels across rectangle,
+  oval, line, arrow, pen, highlighter, and text. Test corners, rotation
+  handles, Ctrl toggling/replacement, cancellation, pointer ownership,
+  release positions, no content/history changes, and cursor feedback.
+  Update earlier click fixtures to send both pointer press and release;
+  explicitly select a loaded object before testing its undoable move.
+- Pause for manual mouse checks. Do not commit or begin 6D2 placement.
+
+### 2026-10-16 — selected-group cursor follow-up
+
+- User confirms gesture behavior, but group members show a crosshair even
+  though dragging moves the group. The cursor queried only single-object
+  controls and selected text; group hit testing lived in the press handler.
+- TDD red: group-member edit hits are absent. Green: share group targets
+  through the existing selected-object hit query and use that result for
+  both cursor feedback and gesture dispatch. Retain move access through
+  members' frames, but do not treat empty combined-group gaps or an
+  unselected topmost object as group-move targets.
+- Keep the move cursor throughout an active group drag. Only Ctrl held
+  before a new press offers a forced-marquee crosshair; Ctrl pressed during
+  an existing edit cannot change its cursor to a different gesture mode.
+- Cover shape, ink, and text groups, mouse/touch, three zoom levels, invalid
+  query scales, overlapping unselected layers, Ctrl override, and cursor
+  feedback before/during movement. Retain all earlier selection tests.
+- Pause for the cursor check; leave changes uncommitted and 6D2 untouched.
+- Validation: 383 all-feature/all-target tests and 218 core/example tests
+  pass. Strict native/WASM all-target Clippy, formatting, and whitespace
+  checks pass. Keep compilation isolated under /tmp; physical touch remains
+  untested beyond synthetic input coverage.
+
+### 2026-10-16 — 6D1 accepted; smart-snap placement checkpoint 6D2
+
+- User accepts the final selected-group cursor follow-up. Close 6D1 and
+  connect the existing portable detector without changing its calibration
+  or the C# implementation. Leave all current changes uncommitted.
+- Add a session-global, default-off Smart snap button for Text, Check,
+  and Cross. Retain its state across tools, pages, and projects, including
+  temporary selected-object editing. Do not serialize it or dirty history.
+  Intentionally reset it at application restart; no preference file yet.
+- Keep scheduling/cache/placement in app/snap, pixel work in its worker,
+  and the two small draft-placement hooks in the portable annotation core.
+  Reuse corrected display identities, existing tasks, and undo history;
+  add no dependencies or new annotation/document types.
+- Native analysis uses one background thread at a time. Coalesce page
+  changes to the current image after it finishes. Cache only live displayed
+  images, reject removed/replaced/corrected images and other projects, and
+  process completions even while a modal editor is open. Browser analysis
+  intentionally uses the existing UI-thread fallback until worker support.
+- Query in page/image coordinates with the C# short-axis radius of 0.04,
+  independent of zoom. Clicked/tapped marks use centered 78% inset squares;
+  moving beyond 8 logical screen pixels keeps manual drag sizing instead.
+  Preserve styles and existing-object editing. Freeze each gesture's hint;
+  late completions cannot alter drafts or committed annotations.
+- New text starts at a nearby rule's left end, bottom-anchored above it.
+  Reuse natural-width measurement, explicit newlines, format controls, and
+  table-cell candidates. Content/font changes keep its bottom on the rule;
+  later editing of accepted text does not snap it again. Save only ordinary
+  annotation geometry, not an ongoing relationship to the printed rule.
+- Show Off/No image/Analyzing/Ready/Unavailable. Pending, missing, failed,
+  and unmatched features fall back to normal placement. Cache failures to
+  avoid retry loops; toggling off/on explicitly retries. Analysis alone
+  cannot modify annotations, history, or project dirty state.
+- TDD: draft tests cover inset previews, manual drags, existing edits,
+  pointer ownership, invalid hints, text anchoring, styles, and history.
+  App regressions cover zoom, synthetic touch, global state, stale results,
+  page coalescing, live cache pruning, correction undo/redo, modal delivery,
+  failures/retries, the real sample form/Dátum fixtures, and table cells.
+  Save/reload retains text/mark geometry within existing normalized-float
+  precision and preserves original source bytes. Native worker delivery
+  also runs without a GUI runtime.
+- Additional TDD red: a rejected duplicate pointer press could overwrite
+  an active mark's frozen hint. Green: attach hints only after a successful
+  interaction start. Foreign pointers and canceled gestures stay harmless.
+- Validation: 402 all-feature/all-target tests and 222 core/example tests
+  pass. Strict native/WASM all-target Clippy, formatting, whitespace, and
+  Trunk browser-build checks pass. Keep build output isolated under /tmp;
+  physical touch remains untested beyond synthetic input coverage.
+
+Manual checkpoint 6D2 — accepted 2026-10-16:
+
+1. Open tests/samples/sample-form.png. Select Check or Cross, enable Smart
+   snap, and wait for Ready. Click/tap several boxes at different zooms;
+   marks should fit inside them with the chosen color/thickness. The snap
+   button should remain available after placement. Drag to size manually;
+   moving/resizing an existing mark must not snap it somewhere else.
+2. Select Text and click above solid/dotted fields, including Part B.
+   New text should begin at the field's left end and stay immediately
+   above its rule while typing/changing format. Explicit newlines work;
+   long text does not wrap automatically. Accept/Escape and later editing
+   keep their usual behavior. Check Dátum in tests/samples/datum-form.png
+   and a multi-column bordered table if available.
+3. Switch tools, pages, and projects: the toggle should stay on during the
+   run, but a fresh app launch starts off. Turning it off restores ordinary
+   placement. Blank pages and analysis still pending also place normally;
+   objects must not jump when analysis finishes.
+4. Accept a crop/rotation/filter change and wait for Ready before placing
+   again. Snap must follow the corrected image, including after undo/redo.
+   Snap creation itself is one undo step; canceling a gesture adds none.
+5. Save/reopen and export a PDF. Snapped marks/text should stay where
+   placed. Browser smoke checks are useful if convenient; expect a brief
+   UI-thread analysis pause rather than native background responsiveness.
+
+Stop here for user acceptance; do not begin 6D3 or create a commit.
+
+### 2026-10-16 — 6D2 accepted; annotation interaction follow-up
+
+- User accepts smart-snap placement and reports three separate interaction
+  issues. Close 6D2; address these without starting crop-corner snapping.
+- TDD red: reopening text starts the caret at the beginning regardless of
+  the click; tiny selected objects still intercept presses as resize hits;
+  idle Escape leaves the last annotation selected. Green: reuse iced's
+  shaped-text editor hit testing, share handle eligibility between rendering
+  and picking, and clear idle selection outside content/history.
+- Position the first-click caret using the annotation's inverse rotation,
+  selected font/style, actual zoom, and explicit newlines. Keep the editor
+  horizontal and preserve its existing unrotated sizing. Let iced handle
+  Unicode caret boundaries rather than estimating character widths.
+- Keep small-object frames visible and movable. Hide/inactivate corner,
+  endpoint, and shape rotation controls below a conservative screen-space
+  threshold leaving at least half each edge/shaft clear. Share handle size
+  and stroke constants with drawing. Account for diagonal shafts and
+  rotated, axis-aligned handle squares so visible controls never overlap.
+  Zoom restores handles; even Alt cannot activate a hidden resize target.
+  Existing resize gestures can still finish after shrinking below cutoff.
+- Include the thin visible frame stroke in small-object move hits, avoiding
+  accidental new objects from screen/page rounding at a selected corner.
+  Retain normal mouse/touch stroke-picking tolerance. Test small moves and
+  zoom-restored resizing through the application, not only core hit queries.
+- Escape clears selection only when no text editor, annotation gesture, or
+  page reorder is active. It keeps the current tool/settings, content, dirty
+  state, and history. During an active edit, the first Escape still reverts
+  it and retains selection; a second Escape clears it. Focus loss/window
+  resize and confirmation-dialog Escape keep their prior behavior.
+- Cover mouse/touch targets, all shape kinds, invalid scales, zoom,
+  rotated/narrow-frame non-overlap, inactive Alt targets, Unicode/formatted
+  caret placement, undo/redo, and pending text cancellation. Software-render
+  tiny check/cross/arrow selections at 1x/2x DPI to verify that only their
+  frames remain. Update old resize/rotation fixtures to zoom in where their
+  narrow objects now intentionally hide controls.
+- Validation: 410 all-feature/all-target tests and 225 core/example tests
+  pass. Strict native/WASM all-target Clippy, formatting, whitespace, and
+  Trunk browser-build checks pass. Keep all build output under /tmp and
+  preserve the host target/dist directories. Physical touch remains untested.
+
+Manual checkpoint — accepted 2026-10-16:
+
+1. With Text, click existing text near its middle and on different lines.
+   The initial caret should be near the clicked glyph. Repeat after zooming
+   and rotating; verify typing and Escape still behave normally.
+2. Select small checks/crosses and arrows, then zoom out. Only the thin
+   frame should remain; dragging inside it moves rather than resizes, even
+   with Alt. Zoom in to restore non-overlapping controls and verify resizing.
+3. Place an annotation, press Escape, and change its style. The last object
+   should stay unchanged; the next annotation should use the new style.
+   While editing/moving, first Escape should revert, second should deselect.
+
+Leave changes uncommitted and stop before 6D3 for user acceptance.
+
+### 2026-10-16 — reuse text already placed on a snapped rule
+
+- User accepts the caret, small-handle, and Escape follow-ups. A new request:
+  clicking a filled rule should reopen its existing text with the caret at
+  the end instead of creating another annotation over it.
+- TDD red: clicking past a short field's text creates a new empty draft ID.
+  Reuse the topmost text whose left/bottom anchor matches the detected rule
+  within one page point, allowing normalized-coordinate rounding. Derive
+  this from ordinary geometry; add no persisted field links or schema data.
+  Text overflowing from a neighboring cell is not an anchor match.
+- Keep direct text clicks ahead of snap lookup, preserving glyph-based caret
+  positioning. Reopening through a rule moves the caret to DocumentEnd,
+  including multiline/Unicode content, without moving or restyling the text.
+  Opening/canceling creates no content/history change; accepted typing edits
+  the existing ID in one undo step. Off/pending/unmatched snap stays ordinary.
+- Remove the obsolete editor reset on pointer release: annotation finish
+  cannot open a text draft. A stray release must not reset the chosen caret
+  or replace content while an editor is already active.
+- Cover mouse/touch at three zoom levels, direct caret picks, missing/pending
+  features, late results, format/geometry/ID preservation, Escape, undo/redo,
+  overlapping neighboring fields, layer order, invalid queries, and drafts.
+- Validation: 414 all-feature/all-target tests and 227 core/example tests
+  pass. Strict native/WASM all-target Clippy, formatting, and whitespace
+  checks pass. Keep build output isolated under /tmp; no commit requested.
+
+Manual checkpoint — accepted 2026-10-16:
+
+1. Fill a short text value on a long rule. With Text and Smart snap on,
+   click an empty part of that same rule: reopen the original text at its
+   end. Typing should append; Escape should discard that edit, not the field.
+2. Click existing text directly: caret should still follow the clicked glyph.
+   Check another field/table cell and snap off: do not reuse the first field.
+
+User confirms the filled-rule reuse check and requests an unsigned commit
+of the accepted 6D1/6D2 work and follow-ups, then continuation with 6D3.
 
 ## References
 

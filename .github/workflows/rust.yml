@@ -6,13 +6,13 @@ on:
       - ".github/workflows/rust.yml"
       - "rust/**"
       - "docs/samples/fastfill-camera-sample-form.pdf"
-      - "tests/samples/sample-form.png"
+      - "tests/samples/**"
   pull_request:
     paths:
       - ".github/workflows/rust.yml"
       - "rust/**"
       - "docs/samples/fastfill-camera-sample-form.pdf"
-      - "tests/samples/sample-form.png"
+      - "tests/samples/**"
   workflow_dispatch:
 
 permissions:

@@ -156,6 +156,14 @@ fn editing_a_loaded_object_preserves_identity_and_supports_undo() {
         1.0,
         DragModifiers::default(),
     );
+    assert!(editor.finish(MOUSE, Point::new(120.0, 110.0), false));
+    editor.begin_interaction(
+        MOUSE,
+        Point::new(120.0, 110.0),
+        size,
+        1.0,
+        DragModifiers::default(),
+    );
     editor.finish(MOUSE, Point::new(150.0, 130.0), false);
 
     assert_eq!(editor.shapes()[0].id, original_id);
@@ -304,7 +312,7 @@ fn palette_and_custom_argb_preserve_exact_alpha() {
 }
 
 #[test]
-fn unsupported_fonts_and_soft_wrap_fail_without_replacing_source() {
+fn unsupported_fonts_fail_but_legacy_width_hints_load_without_data_loss() {
     let source = blank_page();
     let page = editor_page_size(&source).unwrap();
     let mut editor = Annotations::default();
@@ -333,12 +341,77 @@ fn unsupported_fonts_and_soft_wrap_fail_without_replacing_source() {
         *font_family = "Segoe UI".into();
         *maximum_width = 0.4;
     }
-    assert!(
-        decode_editor_page(&manifest)
-            .unwrap_err()
-            .to_string()
-            .contains("text layout")
-    );
+    let editor = decode_editor_page(&manifest).unwrap();
+    assert_eq!(editor.texts()[0].text, "Sample");
+    assert_eq!(encode_editor_page(&manifest, &editor).unwrap(), manifest);
+}
+
+#[test]
+fn early_csharp_text_defaults_preserve_content_bounds_and_save_data() {
+    let mut source = blank_page();
+    let legacy = serde_json::json!({
+        "kind": "text",
+        "id": "eaebc00a-591e-411d-9c24-9a204cc341c4",
+        "text": "hahó\nbubu",
+        "fontSize": 15,
+        "bounds": { "x": 0.2, "y": 0.3, "width": 0.4, "height": 0.12 }
+    });
+    source
+        .annotations
+        .push(serde_json::from_value(legacy).unwrap());
+    let editor = decode_editor_page(&source).unwrap();
+    assert_eq!(editor.texts()[0].text, "hahó\nbubu");
+    assert_eq!(editor.texts()[0].format.font_size, 15.0);
+    assert_eq!(editor.texts()[0].format.typeface, TextTypeface::Sans);
+    assert!((editor.texts()[0].bounds.x - 122.4).abs() < 0.001);
+    assert_eq!(encode_editor_page(&source, &editor).unwrap(), source);
+}
+
+#[test]
+fn legacy_csharp_font_choices_load_and_survive_non_font_edits() {
+    for (family, typeface) in [
+        ("Segoe UI", TextTypeface::Sans),
+        ("Arial", TextTypeface::Sans),
+        ("Calibri", TextTypeface::Sans),
+        ("Times New Roman", TextTypeface::Serif),
+        ("Consolas", TextTypeface::Monospace),
+    ] {
+        let mut source = blank_page();
+        source.annotations.push(
+            serde_json::from_value(serde_json::json!({
+                "kind": "text", "id": Uuid::new_v4(),
+                "text": "Legacy text", "fontSize": 15,
+                "fontFamily": family,
+                "bounds": { "x": 0.2, "y": 0.3, "width": 0.4, "height": 0.12 }
+            }))
+            .unwrap(),
+        );
+        let mut editor = decode_editor_page(&source).unwrap();
+        assert_eq!(editor.texts()[0].format.typeface, typeface);
+        assert_eq!(encode_editor_page(&source, &editor).unwrap(), source);
+        editor.set_tool(Tool::Select);
+        let center = editor.texts()[0].bounds.center();
+        editor.begin_interaction(
+            MOUSE,
+            center,
+            editor_page_size(&source).unwrap(),
+            1.0,
+            DragModifiers::default(),
+        );
+        editor.finish(MOUSE, center, false);
+        editor.set_color(AnnotationColor::Red);
+        let edited = encode_editor_page(&source, &editor).unwrap();
+        let ProjectAnnotation::Text {
+            font_family,
+            color_argb,
+            ..
+        } = &edited.annotations[0]
+        else {
+            panic!("text required")
+        };
+        assert_eq!(font_family, family);
+        assert_eq!(*color_argb, AnnotationColor::Red.to_argb());
+    }
 }
 
 #[test]
@@ -391,13 +464,14 @@ fn newly_rotated_shapes_and_ink_keep_frames_on_a_corrected_page() {
         editor.set_tool(Tool::Select);
         let shape = &editor.shapes()[0];
         let id = shape.id;
-        let handle = shape.rotation_handle(1.0).unwrap();
+        // Zoom in so narrow shapes expose their editing controls.
+        let handle = shape.rotation_handle(4.0).unwrap();
         let center = shape.bounds().center();
         editor.begin_interaction(
             MOUSE,
             handle,
             page,
-            1.0,
+            4.0,
             DragModifiers::default(),
         );
         editor.finish(
@@ -406,6 +480,7 @@ fn newly_rotated_shapes_and_ink_keep_frames_on_a_corrected_page() {
             false,
         );
         assert_eq!(editor.shapes()[0].id, id);
+        assert!(editor.shapes()[0].rotation.abs() > 0.01);
         let expected = editor.shapes()[0].frame_corners().unwrap();
         let manifest = encode_editor_page(&source, &editor).unwrap();
         let decoded = decode_editor_page(&manifest).unwrap();

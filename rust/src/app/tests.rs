@@ -117,6 +117,10 @@ fn select_ctrl_click_and_marquee_keep_text_in_mixed_groups() {
         &mut state,
         Message::DrawPressed(Pointer::Mouse, PagePoint::new(30.0, 45.0), 1.0),
     );
+    let _ = update(
+        &mut state,
+        Message::DrawReleased(Pointer::Mouse, PagePoint::new(30.0, 45.0), true),
+    );
     assert_eq!(state.annotations().selected_count(), 2);
     assert!(state.annotations().active_pointer().is_none());
     state.modifiers.square = false;
@@ -370,38 +374,56 @@ fn select_drag_is_pending_escape_reverts_and_delete_removes_selection() {
 }
 
 #[test]
-fn rectangle_mode_can_resize_selected_object_through_its_handle() {
-    let mut state = annotated_page();
-    let original = state.annotations().shapes()[0].clone();
-    let view = state
-        .navigation
-        .view(DEFAULT_PAGE, page_viewport(CANVAS.size()))
-        .unwrap();
-    let scale = view.page_rect().width / DEFAULT_PAGE.width;
-    let controls = state.annotations().selection_bounds(scale).unwrap();
-    let handle = ResizeCorner::BottomRight.position(controls);
-    let start = screen_point(&state, handle);
-    let end = Point::new(start.x + 20.0, start.y + 30.0);
-    let mut canvas_state = CanvasState::default();
-    canvas_event(
-        &mut state,
-        &mut canvas_state,
-        &canvas::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
-        start,
-    );
-    canvas_event(
-        &mut state,
-        &mut canvas_state,
-        &canvas::Event::Mouse(mouse::Event::ButtonReleased(
-            mouse::Button::Left,
-        )),
-        end,
-    );
-    assert_eq!(state.annotations().shapes().len(), 1);
-    let resized = &state.annotations().shapes()[0];
-    assert!(resized.bounds().width > original.bounds().width);
-    assert!(resized.bounds().height > original.bounds().height);
-    assert_eq!(resized.stroke_width, original.stroke_width);
+fn rectangle_mode_moves_tiny_objects_and_resizes_after_zooming_in() {
+    for zoom in [1.0, 4.0] {
+        let mut state = annotated_page();
+        let original = state.annotations().shapes()[0].clone();
+        let viewport = page_viewport(CANVAS.size());
+        let view = state.navigation.view(DEFAULT_PAGE, viewport).unwrap();
+        state.navigation.zoom_at(
+            zoom,
+            view.page_to_view(original.bounds().center()),
+            DEFAULT_PAGE,
+            viewport,
+        );
+        let view = state
+            .navigation
+            .view(DEFAULT_PAGE, page_viewport(CANVAS.size()))
+            .unwrap();
+        let scale = view.page_rect().width / DEFAULT_PAGE.width;
+        let controls = state.annotations().selection_bounds(scale).unwrap();
+        let handle = ResizeCorner::BottomRight.position(controls);
+        let start = screen_point(&state, handle);
+        let end = Point::new(start.x + 20.0, start.y + 30.0);
+        let mut canvas_state = CanvasState::default();
+        canvas_event(
+            &mut state,
+            &mut canvas_state,
+            &canvas::Event::Mouse(mouse::Event::ButtonPressed(
+                mouse::Button::Left,
+            )),
+            start,
+        );
+        canvas_event(
+            &mut state,
+            &mut canvas_state,
+            &canvas::Event::Mouse(mouse::Event::ButtonReleased(
+                mouse::Button::Left,
+            )),
+            end,
+        );
+        assert_eq!(state.annotations().shapes().len(), 1);
+        let resized = &state.annotations().shapes()[0];
+        if original.edit_handles_visible(scale) {
+            assert!(resized.bounds().width > original.bounds().width);
+            assert!(resized.bounds().height > original.bounds().height);
+        } else {
+            assert_eq!(resized.bounds().width, original.bounds().width);
+            assert_eq!(resized.bounds().height, original.bounds().height);
+            assert!(resized.bounds().x > original.bounds().x);
+        }
+        assert_eq!(resized.stroke_width, original.stroke_width);
+    }
 }
 
 #[test]
@@ -933,6 +955,7 @@ fn group_membership_changes_are_visually_distinct() {
             1.0,
             ctrl,
         ));
+        assert!(state.annotations_mut().finish(Pointer::Mouse, point, true));
     }
     assert_eq!(state.annotations().selected_indices(), [0, 1]);
     let without_middle = render_document(&state, 1, 1.0);
@@ -944,6 +967,11 @@ fn group_membership_changes_are_visually_distinct() {
         page,
         1.0,
         ctrl,
+    ));
+    assert!(state.annotations_mut().finish(
+        Pointer::Mouse,
+        PagePoint::new(275.0, 125.0),
+        true,
     ));
     assert_eq!(state.annotations().selected_indices(), [0, 1, 2]);
     let with_middle = render_document(&state, 1, 1.0);

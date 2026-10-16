@@ -5,7 +5,7 @@ use super::geometry::{
 use super::{
     AnnotationGeometry, Annotations, Draft, DragModifiers, EditDraft, EditHit,
     GroupMoveDraft, Layer, LineEndpoint, Pointer, RESIZE_CORNERS,
-    SelectionDraft, ShapeAnnotation, Tool,
+    SELECTION_STROKE, SelectionDraft, ShapeAnnotation, Tool,
 };
 use crate::geometry::{Point, Rect, Size};
 
@@ -68,6 +68,12 @@ impl Annotations {
     #[must_use]
     pub fn has_selection(&self) -> bool {
         self.selected_count() != 0
+    }
+
+    /// Selection is transient; clearing it never changes content or history.
+    pub fn clear_selection(&mut self) {
+        self.selected.clear();
+        self.selected_texts.clear();
     }
 
     #[must_use]
@@ -175,9 +181,14 @@ impl Annotations {
     #[must_use]
     pub fn selection_box(&self) -> Option<Rect> {
         match &self.draft {
-            Some(Draft::Selection(draft)) => Some(draft.bounds()),
+            Some(Draft::Selection(draft)) => draft.bounds(),
             _ => None,
         }
+    }
+
+    #[must_use]
+    pub fn is_selecting(&self) -> bool {
+        matches!(self.draft, Some(Draft::Selection(_)))
     }
 
     #[must_use]
@@ -188,8 +199,14 @@ impl Annotations {
         scale: f32,
         modifiers: DragModifiers,
     ) -> Option<EditHit> {
-        if !valid(point) {
+        if !valid(point) || !valid_scale(scale) {
             return None;
+        }
+        if self.tool == Tool::Select && self.selected_count() > 1 {
+            let picked = self.hit_layer(point, pointer, scale);
+            return (matches!(self.draft, Some(Draft::GroupMove(_)))
+                || self.hit_group(point, picked))
+            .then_some(EditHit::Move);
         }
         let index = self.selected_index()?;
         let annotation = if self.edited_index() == Some(index) {
@@ -198,6 +215,23 @@ impl Annotations {
             self.shapes.get(index)?.clone()
         };
         let controls = annotation.bounds();
+        if !annotation.edit_handles_visible(scale) {
+            // Include the visible frame stroke and screen/page rounding.
+            let margin = SELECTION_STROKE / (2.0 * scale);
+            let frame = Rect::new(
+                controls.x - margin,
+                controls.y - margin,
+                controls.width + 2.0 * margin,
+                controls.height + 2.0 * margin,
+            );
+            return (contains(frame, annotation.unrotated_point(point))
+                || annotation_contains(
+                    &annotation,
+                    point,
+                    line_hit_radius(pointer) / scale,
+                ))
+            .then_some(EditHit::Move);
+        }
         let radius = match pointer {
             Pointer::Mouse => 12.0,
             Pointer::Touch(_) => 22.0,
@@ -263,6 +297,27 @@ impl Annotations {
         }
     }
 
+    fn hit_group(&self, point: Point, picked: Option<Layer>) -> bool {
+        picked.map_or_else(
+            || {
+                self.selected.iter().any(|index| {
+                    contains(self.shapes[*index].visible_bounds(), point)
+                }) || self.selected_texts.iter().any(|index| {
+                    let text = &self.texts[*index];
+                    contains(text.bounds, text.unrotated_point(point))
+                })
+            },
+            |layer| match layer {
+                Layer::Shape(index) => {
+                    self.selected.binary_search(&index).is_ok()
+                }
+                Layer::Text(index) => {
+                    self.selected_texts.binary_search(&index).is_ok()
+                }
+            },
+        )
+    }
+
     pub fn begin_interaction(
         &mut self,
         pointer: Pointer,
@@ -310,6 +365,12 @@ impl Annotations {
         modifiers: DragModifiers,
         hit: Option<EditHit>,
     ) -> bool {
+        let force_edit = modifiers.force_move || modifiers.force_resize;
+        if modifiers.square && !force_edit {
+            let picked = self.hit_layer(point, pointer, scale);
+            self.start_selection(pointer, point, scale, picked, true);
+            return true;
+        }
         let handle_hit = matches!(
             hit,
             Some(EditHit::Resize(_) | EditHit::Endpoint(_) | EditHit::Rotate)
@@ -326,68 +387,35 @@ impl Annotations {
         {
             return self.begin_text_move(pointer, point, page, scale);
         }
+        if self.selected_count() > 1 && hit == Some(EditHit::Move) {
+            self.start_group_move(pointer, point, page);
+            return true;
+        }
         let picked = self.hit_layer(point, pointer, scale);
         if picked.is_none()
             && let (Some(index), Some(EditHit::Move)) =
                 (self.selected_index(), hit)
         {
-            if modifiers.square {
-                self.selected.clear();
-                self.selected_texts.clear();
-            } else {
-                self.start_edit(
-                    pointer,
-                    index,
-                    point,
-                    page,
-                    modifiers,
-                    EditHit::Move,
-                );
-            }
-            return true;
-        }
-        if modifiers.square
-            && let Some(layer) = picked
-        {
-            let (indices, index) = match layer {
-                Layer::Shape(index) => (&mut self.selected, index),
-                Layer::Text(index) => (&mut self.selected_texts, index),
-            };
-            match indices.binary_search(&index) {
-                Ok(position) => {
-                    indices.remove(position);
-                }
-                Err(position) => indices.insert(position, index),
-            }
-            return true;
-        }
-        let group_hit = self.selected_count() > 1
-            && picked.map_or_else(
-                || {
-                    self.selected.iter().any(|index| {
-                        contains(self.shapes[*index].visible_bounds(), point)
-                    }) || self.selected_texts.iter().any(|index| {
-                        let text = &self.texts[*index];
-                        contains(text.bounds, text.unrotated_point(point))
-                    })
-                },
-                |layer| match layer {
-                    Layer::Shape(index) => {
-                        self.selected.binary_search(&index).is_ok()
-                    }
-                    Layer::Text(index) => {
-                        self.selected_texts.binary_search(&index).is_ok()
-                    }
-                },
+            self.start_edit(
+                pointer,
+                index,
+                point,
+                page,
+                modifiers,
+                EditHit::Move,
             );
-        if group_hit {
-            self.start_group_move(pointer, point, page);
             return true;
         }
-        if let Some(Layer::Text(_)) = picked {
+        if let Some(Layer::Text(index)) = picked
+            && (force_edit
+                || self.selected_count() == 1
+                    && self.selected_texts.binary_search(&index).is_ok())
+        {
             return self.begin_text_move(pointer, point, page, scale);
         }
-        if let Some(Layer::Shape(index)) = picked {
+        if let Some(Layer::Shape(index)) = picked
+            && (force_edit || self.selected_index() == Some(index))
+        {
             self.selected_texts.clear();
             self.selected = vec![index];
             let hit = self
@@ -396,14 +424,54 @@ impl Annotations {
             self.start_edit(pointer, index, point, page, modifiers, hit);
             return true;
         }
-        self.selected.clear();
-        self.selected_texts.clear();
+        self.start_selection(pointer, point, scale, picked, false);
+        true
+    }
+
+    fn start_selection(
+        &mut self,
+        pointer: Pointer,
+        point: Point,
+        scale: f32,
+        picked: Option<Layer>,
+        toggle: bool,
+    ) {
+        // Defer clicks until release so movement can instead become a marquee.
         self.draft = Some(Draft::Selection(SelectionDraft {
             start: point,
             end: point,
             pointer,
+            // Ignore click/tap jitter in screen pixels, independent of zoom.
+            minimum_drag: match pointer {
+                Pointer::Mouse => 4.0,
+                Pointer::Touch(_) => 8.0,
+            } / scale,
+            picked,
+            toggle,
+            dragged: false,
         }));
-        true
+    }
+
+    pub(super) fn apply_selection_click(
+        &mut self,
+        picked: Option<Layer>,
+        toggle: bool,
+    ) {
+        if !toggle {
+            self.selected.clear();
+            self.selected_texts.clear();
+        }
+        let Some(layer) = picked else { return };
+        let (indices, index) = match layer {
+            Layer::Shape(index) => (&mut self.selected, index),
+            Layer::Text(index) => (&mut self.selected_texts, index),
+        };
+        match indices.binary_search(&index) {
+            Ok(position) => {
+                indices.remove(position);
+            }
+            Err(position) => indices.insert(position, index),
+        }
     }
 
     fn start_group_move(&mut self, pointer: Pointer, point: Point, page: Size) {

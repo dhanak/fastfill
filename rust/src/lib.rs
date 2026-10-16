@@ -2,6 +2,7 @@
 
 pub mod annotations;
 pub mod correction;
+pub mod form_snap;
 pub mod geometry;
 pub mod image_input;
 pub mod interaction;

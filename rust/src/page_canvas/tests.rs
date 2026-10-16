@@ -7,6 +7,108 @@ use fastfill_rust::geometry::Point as PagePoint;
 use iced::{Point, Rectangle};
 
 #[test]
+fn select_cursor_distinguishes_marquees_from_selected_object_edits() {
+    use super::{CanvasLayer, CanvasState, PageCanvas, page_viewport};
+    use fastfill_rust::annotations::{
+        Annotations, DragModifiers, Pointer, Tool,
+    };
+    use fastfill_rust::geometry::{Navigation, Size};
+    use iced::mouse;
+    use iced::widget::canvas;
+
+    let page_size = Size::new(800.0, 1100.0);
+    let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(800.0, 800.0));
+    let view = Navigation::default()
+        .view(page_size, page_viewport(bounds.size()))
+        .unwrap();
+    let scale = view.page_rect().width / page_size.width;
+    let plain = DragModifiers::default();
+    let ctrl = DragModifiers {
+        square: true,
+        ..plain
+    };
+    let cursor = |annotations: &Annotations, modifiers, point| {
+        let page = PageCanvas {
+            image: None,
+            navigation: Navigation::default(),
+            page_size,
+            annotations,
+            input_epoch: 0,
+            input_enabled: true,
+            modifiers,
+            layer: CanvasLayer::Overlay,
+        };
+        let point = view.page_to_view(point);
+        canvas::Program::mouse_interaction(
+            &page,
+            &CanvasState::default(),
+            bounds,
+            mouse::Cursor::Available(Point::new(point.x, point.y)),
+        )
+    };
+    let mut annotations = Annotations::default();
+    let mouse = Pointer::Mouse;
+    let corner = PagePoint::new(100.0, 100.0);
+    annotations.set_tool(Tool::Rectangle);
+    annotations.begin(mouse, corner, page_size);
+    annotations.finish(mouse, PagePoint::new(250.0, 200.0), false);
+    annotations.set_tool(Tool::Select);
+    assert_eq!(
+        cursor(&annotations, plain, corner),
+        mouse::Interaction::ResizingDiagonallyDown
+    );
+    assert_eq!(
+        cursor(&annotations, ctrl, corner),
+        mouse::Interaction::Crosshair
+    );
+    annotations.begin_interaction(mouse, corner, page_size, scale, ctrl);
+    assert_eq!(
+        cursor(&annotations, plain, corner),
+        mouse::Interaction::Crosshair
+    );
+    annotations.cancel();
+
+    annotations.set_tool(Tool::Text);
+    annotations.begin_text(PagePoint::new(300.0, 300.0), page_size, scale);
+    annotations.update_text("Text", Size::new(80.0, 30.0));
+    annotations.accept_text();
+    annotations.set_tool(Tool::Select);
+    let empty = PagePoint::new(700.0, 900.0);
+    annotations.begin_interaction(mouse, empty, page_size, scale, plain);
+    annotations.finish(mouse, empty, false);
+    let text = annotations.texts()[0].bounds.center();
+    assert_eq!(
+        cursor(&annotations, plain, text),
+        mouse::Interaction::Crosshair
+    );
+    annotations.begin_interaction(mouse, text, page_size, scale, plain);
+    annotations.finish(mouse, text, false);
+    assert_eq!(cursor(&annotations, plain, text), mouse::Interaction::Move);
+    let member = PagePoint::new(175.0, 150.0);
+    annotations.begin_interaction(mouse, member, page_size, scale, ctrl);
+    annotations.finish(mouse, member, true);
+    assert_eq!(annotations.selected_count(), 2);
+    assert_eq!(
+        cursor(&annotations, plain, member),
+        mouse::Interaction::Move
+    );
+    assert_eq!(
+        cursor(&annotations, plain, corner),
+        mouse::Interaction::Move
+    );
+    assert_eq!(
+        cursor(&annotations, ctrl, member),
+        mouse::Interaction::Crosshair
+    );
+    annotations.begin_interaction(mouse, member, page_size, scale, plain);
+    let moved = PagePoint::new(500.0, 500.0);
+    annotations.drag(mouse, moved, false);
+    assert_eq!(cursor(&annotations, plain, moved), mouse::Interaction::Move);
+    assert_eq!(cursor(&annotations, ctrl, moved), mouse::Interaction::Move);
+    annotations.cancel();
+}
+
+#[test]
 fn segment_clipping_handles_crossing_inside_and_outside_lines() {
     let clip =
         Rectangle::new(Point::new(10.0, 20.0), iced::Size::new(30.0, 40.0));

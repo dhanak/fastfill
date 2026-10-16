@@ -1,12 +1,39 @@
 use crate::appearance::text_font;
-use fastfill_rust::annotations::{TEXT_LINE_HEIGHT, TextFormat};
-use fastfill_rust::geometry::Size as PageSize;
-use iced::advanced::graphics::text::Paragraph as GraphicsParagraph;
-use iced::advanced::text::{self, Paragraph as _, Text};
+use fastfill_rust::annotations::{
+    TEXT_LINE_HEIGHT, TextAnnotation, TextFormat,
+};
+use fastfill_rust::geometry::{Point as PagePoint, Size as PageSize};
+use iced::advanced::graphics::text::{
+    Editor as GraphicsEditor, Paragraph as GraphicsParagraph,
+};
+use iced::advanced::text::{self, Editor as _, Paragraph as _, Text};
 use iced::{Pixels, Size, alignment};
 
 const MIN_CONTENT_WIDTH: f32 = 48.0;
 const CARET_SPACE: f32 = 2.0;
+
+pub(super) fn cursor_at(
+    annotation: &TextAnnotation,
+    point: PagePoint,
+    scale: f32,
+) -> text::editor::Cursor {
+    // Reuse iced's shaped-text hit testing, including Unicode and newlines.
+    let mut editor = GraphicsEditor::with_text(&annotation.text);
+    editor.update(
+        Size::INFINITE,
+        text_font(annotation.format),
+        Pixels(annotation.format.font_size * scale),
+        text::LineHeight::Relative(TEXT_LINE_HEIGHT),
+        text::Wrapping::None,
+        &mut text::highlighter::PlainText,
+    );
+    let point = annotation.unrotated_point(point);
+    editor.perform(text::editor::Action::Click(iced::Point::new(
+        (point.x - annotation.bounds.x) * scale,
+        (point.y - annotation.bounds.y) * scale,
+    )));
+    editor.cursor()
+}
 
 pub(super) fn measure_text(
     content: &str,
@@ -92,5 +119,52 @@ mod tests {
 
         assert!(formatted.height > plain.height);
         assert_ne!(formatted.width, plain.width);
+    }
+
+    #[test]
+    fn caret_hit_testing_uses_local_glyphs_at_every_rotation_and_zoom() {
+        use fastfill_rust::annotations::TextTypeface;
+        use fastfill_rust::geometry::Rect;
+
+        for scale in [0.5, 1.0, 3.0] {
+            for rotation in [0.0, std::f32::consts::FRAC_PI_4, -1.2] {
+                for typeface in TextTypeface::ALL {
+                    let format = TextFormat {
+                        typeface,
+                        bold: true,
+                        italic: true,
+                        ..TextFormat::default()
+                    };
+                    let content = "First line\nárvíztűrő 👋🏽 text";
+                    let measured = measure_text(content, format, scale);
+                    let text = TextAnnotation {
+                        id: uuid::Uuid::new_v4(),
+                        text: content.into(),
+                        bounds: Rect::new(
+                            200.0,
+                            200.0,
+                            measured.width,
+                            measured.height,
+                        ),
+                        format,
+                        rotation,
+                    };
+                    let point = PagePoint::new(
+                        282.0,
+                        200.0 + format.font_size * TEXT_LINE_HEIGHT * 1.5,
+                    );
+                    let cursor =
+                        cursor_at(&text, text.rotated_point(point), scale);
+                    assert_eq!(cursor.position.line, 1);
+                    assert!(cursor.position.column > 0);
+                    assert!(cursor.position.column < "árvíztűrő 👋🏽 text".len());
+                    assert!(
+                        "árvíztűrő 👋🏽 text"
+                            .is_char_boundary(cursor.position.column)
+                    );
+                    assert!(cursor.selection.is_none());
+                }
+            }
+        }
     }
 }

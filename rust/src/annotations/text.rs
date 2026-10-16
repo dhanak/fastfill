@@ -109,7 +109,9 @@ impl TextAnnotation {
         rotate_point(point, self.bounds.center(), self.rotation)
     }
 
-    pub(super) fn unrotated_point(&self, point: Point) -> Point {
+    /// Convert a page point to this text's unrotated frame.
+    #[must_use]
+    pub fn unrotated_point(&self, point: Point) -> Point {
         rotate_point(point, self.bounds.center(), -self.rotation)
     }
 
@@ -123,6 +125,7 @@ pub(super) struct TextDraft {
     annotation: TextAnnotation,
     index: Option<usize>,
     scale: f32,
+    bottom_anchor: Option<f32>,
 }
 
 #[derive(Debug)]
@@ -298,6 +301,7 @@ impl Annotations {
     }
 
     #[must_use]
+    /// Hit movable selected text members/controls, not unselected text.
     pub fn hit_text_interaction(
         &self,
         point: Point,
@@ -305,6 +309,9 @@ impl Annotations {
         scale: f32,
     ) -> Option<TextEditHit> {
         self.text_interaction_target(point, pointer, scale)
+            .filter(|(index, _)| {
+                self.selected_texts.binary_search(index).is_ok()
+            })
             .map(|(_, hit)| hit)
     }
 
@@ -434,7 +441,28 @@ impl Annotations {
             },
             index: None,
             scale,
+            bottom_anchor: None,
         });
+        true
+    }
+
+    /// Bottom-anchor new text above a detected rule; never reposition edits.
+    pub fn set_text_line_anchor(&mut self, point: Point) -> bool {
+        let Some(draft) = &mut self.text_draft else {
+            return false;
+        };
+        if draft.index.is_some()
+            || !valid(point)
+            || !valid(Point::new(
+                point.x + draft.annotation.bounds.width,
+                point.y - draft.annotation.bounds.height,
+            ))
+        {
+            return false;
+        }
+        draft.annotation.bounds.x = point.x;
+        draft.annotation.bounds.y = point.y - draft.annotation.bounds.height;
+        draft.bottom_anchor = Some(point.y);
         true
     }
 
@@ -451,6 +479,30 @@ impl Annotations {
             return false;
         };
         self.begin_existing_text(index, scale)
+    }
+
+    /// Reopen the topmost text at a rule's left/bottom anchor, not its overlap.
+    pub fn begin_text_edit_on_line(
+        &mut self,
+        point: Point,
+        anchor: Point,
+        page: Size,
+        scale: f32,
+    ) -> bool {
+        if !self.can_begin_text(point, page, scale) || !valid(anchor) {
+            return false;
+        }
+        let index = self.layers.iter().rev().find_map(|layer| {
+            let Layer::Text(index) = *layer else {
+                return None;
+            };
+            let bounds = self.texts[index].bounds;
+            // One page point allows saved-coordinate rounding, not zoom drift.
+            ((bounds.x - anchor.x).abs() <= 1.0
+                && (bounds.y + bounds.height - anchor.y).abs() <= 1.0)
+                .then_some(index)
+        });
+        index.is_some_and(|index| self.begin_existing_text(index, scale))
     }
 
     pub fn begin_text_move(
@@ -501,6 +553,9 @@ impl Annotations {
             draft.annotation.text = text.into();
             draft.annotation.bounds.width = size.width;
             draft.annotation.bounds.height = size.height;
+            if let Some(bottom) = draft.bottom_anchor {
+                draft.annotation.bounds.y = bottom - size.height;
+            }
         }
     }
 
@@ -605,6 +660,7 @@ impl Annotations {
             annotation,
             index: Some(index),
             scale,
+            bottom_anchor: None,
         });
         true
     }

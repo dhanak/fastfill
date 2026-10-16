@@ -11,8 +11,9 @@ pub(crate) const TOOLBAR_PADDING: [u16; 2] = [8, 12];
 pub(crate) const PAGE_MARGIN: f32 = 36.0;
 pub(crate) const PAGE_SHADOW_X: f32 = 5.0;
 pub(crate) const PAGE_SHADOW_Y: f32 = 7.0;
-pub(crate) const SELECTION_HANDLE_SIZE: f32 = 14.0;
-pub(crate) const SELECTION_STROKE: f32 = 2.0;
+pub(crate) use fastfill_rust::annotations::{
+    SELECTION_HANDLE_SIZE, SELECTION_STROKE,
+};
 
 pub(crate) fn accent() -> Color {
     Color::from_rgb8(0, 102, 204)

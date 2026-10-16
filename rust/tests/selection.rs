@@ -44,6 +44,7 @@ fn creation_selects_the_object_and_body_hit_selects_topmost() {
         1.0,
         PLAIN,
     );
+    assert!(annotations.finish(MOUSE, Point::new(10.0, 10.0), false));
     assert_eq!(annotations.selected_index(), None);
 }
 
@@ -217,7 +218,7 @@ fn reachability_limit_is_continuous_when_crossing_and_reversing() {
 }
 
 #[test]
-fn small_objects_have_separate_move_and_resize_targets_at_any_zoom() {
+fn small_objects_move_until_zoom_reveals_their_resize_targets() {
     for scale in [0.25, 1.0, 4.0] {
         let mut annotations = Annotations::default();
         annotations.set_tool(Tool::Rectangle);
@@ -239,7 +240,7 @@ fn small_objects_have_separate_move_and_resize_targets_at_any_zoom() {
             Point::new(controls.x - 2.0 / scale, controls.y - 2.0 / scale);
         assert_eq!(
             annotations.hit_selected(handle, Pointer::Touch(1), scale, PLAIN),
-            Some(EditHit::Resize(ResizeCorner::TopLeft)),
+            (scale >= 4.0).then_some(EditHit::Resize(ResizeCorner::TopLeft)),
         );
     }
 }

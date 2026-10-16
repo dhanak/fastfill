@@ -1,6 +1,8 @@
 mod controller;
 mod export;
 mod export_io;
+#[cfg(test)]
+mod interaction_tests;
 mod page_edit;
 mod pages;
 mod pdf;
@@ -10,6 +12,7 @@ mod project_view;
 mod rail;
 #[cfg(not(target_arch = "wasm32"))]
 mod recovery;
+mod snap;
 mod text;
 mod view;
 
@@ -65,6 +68,7 @@ struct FastFill {
     export_directory: Option<std::path::PathBuf>,
     text_content: text_editor::Content,
     page_editor: page_edit::PageEditor,
+    smart_snap: snap::SmartSnap,
     #[cfg(not(target_arch = "wasm32"))]
     recovery: recovery::Recovery,
 }
@@ -100,6 +104,7 @@ enum ImagePicker {
 #[derive(Clone, Debug)]
 pub(crate) enum Message {
     PageEdit(page_edit::Event),
+    SmartSnap(snap::Event),
     ViewportResized,
     #[cfg(not(target_arch = "wasm32"))]
     Recovery(recovery::Event),

@@ -4,7 +4,7 @@ use super::geometry::{
     resize_ink_points, rotate_point,
 };
 use super::{
-    AnnotationGeometry, AnnotationStyle, CreationKind, EditHit, InkKind,
+    AnnotationGeometry, AnnotationStyle, CreationKind, EditHit, InkKind, Layer,
     LineEndpoint, Pointer, ShapeAnnotation, TextAnnotation,
 };
 use crate::geometry::{Point, Rect, Size};
@@ -21,6 +21,7 @@ pub(super) struct ShapeDraft {
     pub(super) page: Size,
     pub(super) style: AnnotationStyle,
     pub(super) points: Vec<Point>,
+    pub(super) mark_snap: Option<(Rect, f32)>,
 }
 
 #[derive(Debug)]
@@ -99,11 +100,16 @@ pub(super) struct SelectionDraft {
     pub(super) pointer: Pointer,
     pub(super) start: Point,
     pub(super) end: Point,
+    pub(super) minimum_drag: f32,
+    pub(super) picked: Option<Layer>,
+    pub(super) toggle: bool,
+    pub(super) dragged: bool,
 }
 
 impl SelectionDraft {
-    pub(super) fn bounds(&self) -> Rect {
-        drag_bounds(self.start, self.end, false)
+    pub(super) fn bounds(&self) -> Option<Rect> {
+        self.dragged
+            .then(|| drag_bounds(self.start, self.end, false))
     }
 }
 
@@ -295,7 +301,12 @@ impl Draft {
                 draft.square = square;
             }
             Self::GroupMove(draft) => draft.end = point,
-            Self::Selection(draft) => draft.end = point,
+            Self::Selection(draft) => {
+                draft.end = point;
+                // A real drag cannot become a toggle if it returns to start.
+                draft.dragged |=
+                    distance(draft.start, point) >= draft.minimum_drag;
+            }
         }
     }
 
@@ -318,7 +329,14 @@ impl ShapeDraft {
             CreationKind::Bounded(kind) => AnnotationGeometry::Bounded {
                 kind,
                 bounds: if kind.is_mark() {
-                    mark_bounds(self.start, self.end, self.page)
+                    self.mark_snap
+                        .filter(|(_, threshold)| {
+                            distance(self.start, self.end) < *threshold
+                        })
+                        .map_or_else(
+                            || mark_bounds(self.start, self.end, self.page),
+                            |(bounds, _)| bounds,
+                        )
                 } else {
                     drag_bounds(self.start, self.end, self.square)
                 },

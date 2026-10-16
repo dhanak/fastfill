@@ -16,6 +16,9 @@ pub(super) fn draw_selection(
     let frame_points = annotation_frame_points(view, annotation);
     let path = annotation_frame_path(view, annotation, scale, frame_points);
     frame.stroke(&path, canvas::Stroke::default().with_color(blue));
+    if !annotation.edit_handles_visible(scale) {
+        return;
+    }
     let handles: Vec<Point> = match &annotation.geometry {
         AnnotationGeometry::Bounded { .. } | AnnotationGeometry::Ink { .. } => {
             frame_points

@@ -240,12 +240,7 @@ fn encode_annotation(
             text: text.text.clone(),
             bounds: coordinates::normalized_rect(text.bounds, page),
             font_size: text.format.font_size,
-            font_family: match text.format.typeface {
-                TextTypeface::Sans => "Segoe UI",
-                TextTypeface::Serif => "Times New Roman",
-                TextTypeface::Monospace => "Consolas",
-            }
-            .into(),
+            font_family: encode_typeface(text.format.typeface, previous),
             maximum_width: 1.0,
             is_bold: text.format.bold,
             is_italic: text.format.italic,
@@ -336,7 +331,6 @@ fn decode_text(
         bounds,
         font_size,
         font_family,
-        maximum_width,
         is_bold,
         is_italic,
         is_underlined,
@@ -347,10 +341,8 @@ fn decode_text(
     else {
         unreachable!("text decoder requires text");
     };
-    // No silent reflow: legacy soft-wrapped text needs a later slice.
-    if maximum_width.to_bits() != 1.0_f32.to_bits() {
-        return Err(error("Soft-wrapped text layout is unsupported."));
-    }
+    // maximumWidth is a legacy fitting hint, not evidence of wrapped text.
+    // Import content/bounds intact; the Rust editor uses explicit line breaks.
     let mut bounds = coordinates::rect(*bounds, page);
     let delta = coordinates::translation(bounds.center(), *transform, page);
     bounds.x += delta.x;
@@ -390,11 +382,28 @@ fn translate_geometry(geometry: &mut AnnotationGeometry, delta: Point) {
 
 fn decode_typeface(family: &str) -> Result<TextTypeface, ProjectEditError> {
     match family {
-        "Segoe UI" => Ok(TextTypeface::Sans),
+        "Segoe UI" | "Arial" | "Calibri" => Ok(TextTypeface::Sans),
         "Times New Roman" => Ok(TextTypeface::Serif),
         "Consolas" => Ok(TextTypeface::Monospace),
         _ => Err(error("Text font family is not supported by the editor.")),
     }
+}
+
+fn encode_typeface(
+    typeface: TextTypeface,
+    previous: Option<&ProjectAnnotation>,
+) -> String {
+    if let Some(ProjectAnnotation::Text { font_family, .. }) = previous
+        && decode_typeface(font_family).is_ok_and(|old| old == typeface)
+    {
+        return font_family.clone();
+    }
+    match typeface {
+        TextTypeface::Sans => "Segoe UI",
+        TextTypeface::Serif => "Times New Roman",
+        TextTypeface::Monospace => "Consolas",
+    }
+    .into()
 }
 
 fn validate_editor_bounds(bounds: Rect) -> Result<(), ProjectEditError> {

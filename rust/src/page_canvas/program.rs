@@ -224,6 +224,14 @@ impl canvas::Program<Message> for PageCanvas<'_> {
         } else if !self.annotations.tool().handles_annotations() {
             mouse::Interaction::Grab
         } else if self.annotations.tool() == Tool::Select
+            && (self.annotations.is_selecting()
+                || self.modifiers.square
+                    && self.annotations.active_pointer().is_none()
+                    && !self.modifiers.force_move
+                    && !self.modifiers.force_resize)
+        {
+            mouse::Interaction::Crosshair
+        } else if self.annotations.tool() == Tool::Select
             && let Some(point) = cursor.position_in(bounds)
             && let Some(point) =
                 self.to_page(PagePoint::new(point.x, point.y), bounds)
@@ -255,7 +263,9 @@ impl canvas::Program<Message> for PageCanvas<'_> {
             )
         {
             edit_cursor(hit)
-        } else if self.annotations.tool().creates_annotations() {
+        } else if self.annotations.tool().creates_annotations()
+            || self.annotations.tool() == Tool::Select
+        {
             mouse::Interaction::Crosshair
         } else {
             mouse::Interaction::None

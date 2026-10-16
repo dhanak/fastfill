@@ -258,8 +258,31 @@ fn style_row(state: &FastFill) -> Element<'_, Message> {
             .height(TOOLBAR_ROW_HEIGHT)
             .into();
     };
-    let mut styles = format
-        .map_or_else(Row::new, |format| text_style_controls(state, format));
+    let mut styles = Row::new();
+    if super::snap::supports(state.annotations().tool()) {
+        styles =
+            styles
+                .push(
+                    button(if state.smart_snap.enabled {
+                        "Smart snap ✓"
+                    } else {
+                        "Smart snap"
+                    })
+                    .on_press_maybe(super::snap::can_toggle(state).then_some(
+                        Message::SmartSnap(super::snap::Event::Toggle),
+                    ))
+                    .style(if state.smart_snap.enabled {
+                        button::primary
+                    } else {
+                        button::secondary
+                    })
+                    .height(CONTROL_HEIGHT),
+                )
+                .push(text(super::snap::status(state)).size(14));
+    }
+    if let Some(format) = format {
+        styles = styles.push(text_style_controls(state, format));
+    }
     for (label, value) in [
         ("Black", AnnotationColor::Black),
         ("White", AnnotationColor::White),

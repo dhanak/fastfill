@@ -1,6 +1,7 @@
 use super::{
     AnnotationGeometry, LineKind, Pointer, RESIZE_CORNERS,
-    ROTATION_HANDLE_OFFSET, ShapeAnnotation,
+    ROTATION_HANDLE_OFFSET, SELECTION_HANDLE_SIZE, SELECTION_STROKE,
+    ShapeAnnotation,
 };
 use crate::geometry::{Point, Rect, Size};
 
@@ -32,9 +33,26 @@ impl ShapeAnnotation {
         })
     }
 
+    /// Hide controls that would obscure tiny objects or overlap each other.
+    #[must_use]
+    pub fn edit_handles_visible(&self, scale: f32) -> bool {
+        if !valid_scale(scale) {
+            return false;
+        }
+        // Conservative proxy: leave at least half each edge/shaft clear.
+        let span = 2.0 * (SELECTION_HANDLE_SIZE + SELECTION_STROKE);
+        if let AnnotationGeometry::Linear { start, end, .. } = self.geometry {
+            // Diagonal shafts cross a square handle's longer diagonal.
+            distance(start, end) * scale >= span * std::f32::consts::SQRT_2
+        } else {
+            let bounds = self.bounds();
+            bounds.width.min(bounds.height) * scale >= span
+        }
+    }
+
     #[must_use]
     pub fn rotation_handle(&self, scale: f32) -> Option<Point> {
-        if !self.supports_rotation() || !valid_scale(scale) {
+        if !self.supports_rotation() || !self.edit_handles_visible(scale) {
             return None;
         }
         let bounds = self.bounds();
@@ -159,6 +177,8 @@ pub(super) fn annotation_contains(
     match &annotation.geometry {
         AnnotationGeometry::Bounded { bounds, .. } => contains(*bounds, point),
         AnnotationGeometry::Linear { kind, start, end } => {
+            let line_tolerance =
+                line_tolerance.max(annotation.stroke_width / 2.0);
             let shaft = point_segment_distance(point, *start, *end);
             if shaft <= line_tolerance {
                 return true;
@@ -174,7 +194,15 @@ pub(super) fn annotation_contains(
                 )
         }
         AnnotationGeometry::Ink { points, .. } => {
-            (annotation.filled && point_in_polygon(point, points))
+            (annotation.filled
+                && (point_in_polygon(point, points)
+                    || points.last().zip(points.first()).is_some_and(
+                        |(last, first)| {
+                            point_segment_distance(point, *last, *first)
+                                <= line_tolerance
+                                    + annotation.stroke_width / 2.0
+                        },
+                    )))
                 || points.windows(2).any(|segment| {
                     point_segment_distance(point, segment[0], segment[1])
                         <= line_tolerance + annotation.stroke_width / 2.0

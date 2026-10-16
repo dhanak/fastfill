@@ -1,5 +1,6 @@
 mod geometry;
 mod interaction;
+mod marquee;
 mod model;
 mod page;
 mod selection;
@@ -15,7 +16,8 @@ use interaction::{
 pub use model::{
     AnnotationColor, AnnotationGeometry, AnnotationStyle, DragModifiers,
     EditHit, InkKind, LineEndpoint, LineKind, Pointer, RESIZE_CORNERS,
-    ROTATION_HANDLE_OFFSET, ResizeCorner, ShapeAnnotation, ShapeKind,
+    ROTATION_HANDLE_OFFSET, ResizeCorner, SELECTION_HANDLE_SIZE,
+    SELECTION_STROKE, ShapeAnnotation, ShapeKind,
 };
 pub use page::PageChange;
 use text::TextDraft;

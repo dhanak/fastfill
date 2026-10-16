@@ -79,31 +79,33 @@ impl FastFill {
         self.annotations_mut().update_text(content, size);
     }
 
-    fn start_text_editor(&mut self) -> Task<Message> {
-        let Some((content, ..)) = self.annotations().text_edit() else {
+    fn start_text_editor(
+        &mut self,
+        point: PagePoint,
+        at_end: bool,
+    ) -> Task<Message> {
+        let Some((content, _, _, scale)) = self.annotations().text_edit()
+        else {
             return Task::none();
         };
         self.text_content = text_editor::Content::with_text(content);
+        if at_end {
+            self.text_content.perform(text_editor::Action::Move(
+                text_editor::Motion::DocumentEnd,
+            ));
+        } else if let Some(annotation) = self.annotations().text_preview() {
+            self.text_content.move_to(super::text::cursor_at(
+                &annotation,
+                point,
+                scale,
+            ));
+        }
         iced::widget::operation::focus(TEXT_EDITOR_ID)
     }
 
     fn edit_text(&mut self, action: text_editor::Action) {
         self.text_content.perform(action);
         self.sync_text();
-    }
-
-    fn finish_interaction(
-        &mut self,
-        pointer: Pointer,
-        point: PagePoint,
-        square: bool,
-    ) -> Task<Message> {
-        self.annotations_mut().finish(pointer, point, square);
-        if self.annotations().has_text_edit() {
-            self.start_text_editor()
-        } else {
-            Task::none()
-        }
     }
 
     fn undo(&mut self) {
@@ -166,22 +168,29 @@ impl FastFill {
         if self.image_picker == ImagePicker::Idle {
             let size = page_size(self);
             let modifiers = self.modifiers;
-            self.annotations_mut()
-                .begin_interaction(pointer, point, size, scale, modifiers);
+            if self
+                .annotations_mut()
+                .begin_interaction(pointer, point, size, scale, modifiers)
+            {
+                super::snap::place_mark(self, pointer, point, scale);
+            }
         }
     }
 }
 
 pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
+    if super::snap::update(state, &message) {
+        return super::snap::synchronize(state);
+    }
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(task) = super::recovery::update(state, &message) {
-        return task;
+        return Task::batch([task, super::snap::synchronize(state)]);
     }
     let task = update_editor(state, message);
     state.pages.current_mut().prune_versions();
     #[cfg(not(target_arch = "wasm32"))]
     super::recovery::synchronize(state);
-    task
+    Task::batch([task, super::snap::synchronize(state)])
 }
 
 fn update_editor(state: &mut FastFill, message: Message) -> Task<Message> {
@@ -249,14 +258,21 @@ fn update_editor(state: &mut FastFill, message: Message) -> Task<Message> {
             state.annotations_mut().drag(pointer, point, square);
         }
         Message::DrawReleased(pointer, point, square) => {
-            return state.finish_interaction(pointer, point, square);
+            state.annotations_mut().finish(pointer, point, square);
         }
         Message::ModifiersChanged(modifiers) => {
             state.modifiers = modifiers;
             state.annotations_mut().constrain_square(modifiers.square);
         }
         Message::CancelInteraction | Message::ViewportResized => {
+            let deselect = matches!(message, Message::CancelInteraction)
+                && state.annotations().active_pointer().is_none()
+                && !state.annotations().has_text_edit()
+                && state.dragged_page.is_none();
             state.cancel_interaction();
+            if deselect {
+                state.annotations_mut().clear_selection();
+            }
             if state.image_picker == ImagePicker::ConfirmReplace {
                 state.image_picker = ImagePicker::Idle;
             }
@@ -335,10 +351,10 @@ fn draw_pressed(
     let size = page_size(state);
     match state.annotations().tool() {
         Tool::Text => {
-            if !state.annotations_mut().begin_text_edit(point, size, scale) {
-                state.annotations_mut().begin_text(point, size, scale);
-            }
-            return state.start_text_editor();
+            let at_end =
+                !state.annotations_mut().begin_text_edit(point, size, scale)
+                    && super::snap::begin_text(state, point, scale);
+            return state.start_text_editor(point, at_end);
         }
         _ => state.begin_interaction(pointer, point, scale),
     }

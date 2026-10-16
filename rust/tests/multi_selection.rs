@@ -28,6 +28,7 @@ fn rectangles(xs: &[f32]) -> Annotations {
 
 fn ctrl_click(annotations: &mut Annotations, point: Point) {
     assert!(annotations.begin_interaction(MOUSE, point, PAGE, 1.0, CTRL));
+    assert!(annotations.finish(MOUSE, point, true));
     assert!(annotations.active_pointer().is_none());
 }
 
@@ -37,7 +38,7 @@ fn marquee(annotations: &mut Annotations, start: Point, end: Point) {
 }
 
 #[test]
-fn ctrl_click_toggles_objects_without_starting_a_drag() {
+fn ctrl_click_toggles_objects_without_editing_geometry() {
     let mut annotations = rectangles(&[100.0, 200.0, 300.0]);
     assert_eq!(annotations.selected_indices(), [2]);
 
@@ -53,6 +54,7 @@ fn ctrl_click_toggles_objects_without_starting_a_drag() {
         1.0,
         PLAIN,
     ));
+    assert!(annotations.finish(MOUSE, Point::new(225.0, 125.0), false));
     assert_eq!(annotations.selected_indices(), [1]);
     annotations.cancel();
 }
@@ -67,6 +69,78 @@ fn empty_area_drag_selects_every_intersecting_object() {
     );
 
     assert_eq!(annotations.selected_indices(), [0, 1]);
+}
+
+#[test]
+fn clicks_and_small_jitter_do_not_marquee_overlapping_line_frames() {
+    for scale in [0.25, 1.0, 4.0] {
+        for pointer in [MOUSE, Pointer::Touch(17)] {
+            let mut annotations = Annotations::default();
+            annotations.set_tool(Tool::Line);
+            for offset in [0.0, 50.0] {
+                annotations.begin(
+                    pointer,
+                    Point::new(100.0, 100.0 + offset),
+                    PAGE,
+                );
+                annotations.finish(
+                    pointer,
+                    Point::new(700.0, 700.0 + offset),
+                    false,
+                );
+            }
+            annotations.set_tool(Tool::Select);
+            let empty = Point::new(750.0, 950.0);
+            annotations.begin_interaction(pointer, empty, PAGE, scale, PLAIN);
+            annotations.finish(pointer, empty, false);
+            assert!(!annotations.has_selection());
+
+            let start = Point::new(180.0, 600.0);
+            for pixels in [0.0, 2.0] {
+                assert!(
+                    annotations
+                        .begin_interaction(pointer, start, PAGE, scale, PLAIN,)
+                );
+                let end = Point::new(start.x + pixels / scale, start.y);
+                assert!(annotations.finish(pointer, end, false));
+                assert!(
+                    !annotations.has_selection(),
+                    "a click is not a marquee: {pointer:?}, {scale}, {pixels}"
+                );
+                assert!(annotations.selection_box().is_none());
+            }
+
+            assert!(
+                annotations
+                    .begin_interaction(pointer, start, PAGE, scale, PLAIN,)
+            );
+            assert!(annotations.selection_box().is_none());
+            let end = Point::new(start.x + 12.0 / scale, start.y);
+            annotations.drag(pointer, end, false);
+            assert!(annotations.selection_box().is_some());
+            assert!(annotations.finish(pointer, end, false));
+            assert!(!annotations.has_selection());
+
+            // A real marquee must cross the strokes, not just their frames.
+            assert!(
+                annotations
+                    .begin_interaction(pointer, start, PAGE, scale, PLAIN,)
+            );
+            assert!(annotations.finish(
+                pointer,
+                Point::new(600.0, 180.0),
+                false,
+            ));
+            assert_eq!(annotations.selected_indices(), [0, 1]);
+
+            annotations.begin_interaction(pointer, empty, PAGE, scale, PLAIN);
+            annotations.finish(pointer, empty, false);
+            let stroke = Point::new(300.0, 300.0);
+            annotations.begin_interaction(pointer, stroke, PAGE, scale, PLAIN);
+            assert!(annotations.finish(pointer, stroke, false));
+            assert_eq!(annotations.selected_count(), 1);
+        }
+    }
 }
 
 #[test]
