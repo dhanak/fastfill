@@ -9,6 +9,9 @@ use fastfill_rust::project::{load_archive, save_archive};
 use iced::widget::image::Handle;
 use std::io::Cursor;
 
+mod auto_frame;
+mod corner_snap;
+
 fn state() -> FastFill {
     let pixels = image::RgbaImage::from_fn(120, 180, |x, y| {
         image::Rgba([
@@ -70,7 +73,7 @@ fn send(state: &mut FastFill, event: Event) {
 
 fn finish_one(state: &mut FastFill) {
     let job = state.page_editor.running.as_ref().expect("pending job");
-    let (id, settings) = (job.id, job.settings);
+    let (id, settings, auto_frame) = (job.id, job.settings, job.auto_frame);
     let input = state
         .page_editor
         .draft
@@ -78,7 +81,13 @@ fn finish_one(state: &mut FastFill) {
         .and_then(|draft| draft.original.as_ref())
         .map_or_else(
             || Input::Image(state.image().unwrap().handle.clone()),
-            |original| Input::Decoded(original.clone()),
+            |original| {
+                if auto_frame {
+                    Input::Frame(original.clone())
+                } else {
+                    Input::Decoded(original.clone())
+                }
+            },
         );
     send(state, Event::Ready(id, preview::build(input, settings)));
 }
@@ -212,6 +221,7 @@ fn canceled_job_cannot_update_a_new_editor_session_or_commit_its_pixels() {
     assert_eq!(state.page_editor.running.as_ref().unwrap().id, old_id);
     send(&mut state, Event::Ready(old_id, Ok(old_result)));
     assert!(state.page_editor.draft.as_ref().unwrap().ready.is_none());
+    assert!(state.page_editor.draft.as_ref().unwrap().original.is_none());
     settle(&mut state);
     send(&mut state, Event::Accept);
     assert_eq!(state.pages.current().metadata.brightness, 25);
@@ -448,6 +458,8 @@ fn corner_dragging_keeps_pointer_ownership_and_lost_touch_reverts() {
         image: Some(&handle),
         source_size: Size::new(100.0, 100.0),
         crop: CropQuad::default(),
+        corners: None,
+        snap: false,
         epoch: 0,
         background: false,
     };

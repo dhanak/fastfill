@@ -11,10 +11,11 @@ use iced::{Element, Fill};
 
 pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
     let draft = state.page_editor.draft.as_ref().expect("active editor");
-    let ready = draft
-        .ready
-        .as_ref()
-        .is_some_and(|p| p.settings == draft.settings && draft.error.is_none());
+    let framing = state.page_editor.is_framing();
+    let ready = !framing
+        && draft.ready.as_ref().is_some_and(|p| {
+            p.settings == draft.settings && draft.error.is_none()
+        });
     let page = state.pages.current();
     #[allow(clippy::cast_precision_loss)]
     let source_size = Size::new(
@@ -25,6 +26,11 @@ pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
         image: draft.original.as_ref().map(|original| &original.handle),
         source_size,
         crop: draft.settings.crop,
+        corners: draft
+            .original
+            .as_ref()
+            .and_then(|original| original.corners.as_ref().ok()),
+        snap: state.modifiers.square,
         epoch: state.input_epoch,
         background: false,
     };
@@ -56,10 +62,12 @@ pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
                 .into()
         },
     );
+    let can_frame =
+        state.page_editor.running.is_none() && draft.original.is_some();
     let sidebar = column![
         text("Corrected preview"),
         preview,
-        scrollable(options(draft)).height(Fill)
+        scrollable(options(draft, can_frame)).height(Fill)
     ]
     .spacing(8)
     .width(312)
@@ -82,12 +90,15 @@ pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center),
-        status(draft, ready),
+        status(draft, ready, state.modifiers.square, framing),
         row![
-            column![text("Original — drag corner handles"), original]
-                .spacing(8)
-                .width(Fill)
-                .height(Fill),
+            column![
+                text("Original — drag corners; hold Ctrl to snap"),
+                original
+            ]
+            .spacing(8)
+            .width(Fill)
+            .height(Fill),
             sidebar
         ]
         .spacing(16)
@@ -100,17 +111,37 @@ pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
     .into()
 }
 
-fn status(draft: &Draft, ready: bool) -> Element<'_, Message> {
+fn status(
+    draft: &Draft,
+    ready: bool,
+    snap: bool,
+    framing: bool,
+) -> Element<'_, Message> {
     if let Some(error) = &draft.error {
         container(text(error))
             .padding(8)
             .style(container::danger)
             .into()
+    } else if !framing && let Some(notice) = &draft.notice {
+        container(text(notice))
+            .padding(8)
+            .style(container::warning)
+            .into()
     } else {
-        text(if let Some(notice) = &draft.notice {
-            notice.as_str()
+        text(if framing {
+            "Detecting document frame… Manual changes take priority."
         } else if ready {
-            "Drag corners on the original. Accept applies all changes."
+            if draft
+                .original
+                .as_ref()
+                .is_some_and(|original| original.corners.is_err())
+            {
+                "Corner hints unavailable; manual dragging still works."
+            } else if snap {
+                "Ctrl: snap to nearby corners. Release Ctrl for free dragging."
+            } else {
+                "Drag freely; hold Ctrl to snap. Accept applies all changes."
+            }
         } else {
             "Updating corrected preview…"
         })
@@ -118,7 +149,7 @@ fn status(draft: &Draft, ready: bool) -> Element<'_, Message> {
     }
 }
 
-fn options(draft: &Draft) -> Element<'static, Message> {
+fn options(draft: &Draft, can_frame: bool) -> Element<'static, Message> {
     let choose = |label, mode| {
         button(label)
             .on_press(Message::PageEdit(Event::Mode(mode)))
@@ -131,10 +162,19 @@ fn options(draft: &Draft) -> Element<'static, Message> {
             })
     };
     column![
-        button("Full frame")
-            .width(Fill)
-            .height(CONTROL_HEIGHT)
-            .on_press(Message::PageEdit(Event::FullFrame)),
+        row![
+            button("Auto frame")
+                .width(Fill)
+                .height(CONTROL_HEIGHT)
+                .on_press_maybe(
+                    can_frame.then_some(Message::PageEdit(Event::AutoFrame))
+                ),
+            button("Full frame")
+                .width(Fill)
+                .height(CONTROL_HEIGHT)
+                .on_press(Message::PageEdit(Event::FullFrame)),
+        ]
+        .spacing(8),
         row![
             button("Rotate left")
                 .width(Fill)

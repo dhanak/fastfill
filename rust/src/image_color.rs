@@ -1,6 +1,9 @@
 //! sRGB/D65 <-> 8-bit CIE Lab; L spans 0..255, a/b are offset by 128.
 
-use super::byte;
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+pub(super) fn byte(value: f32) -> u8 {
+    value.round().clamp(0.0, 255.0) as u8
+}
 
 pub(super) fn linear_table() -> [f32; 256] {
     std::array::from_fn(|index| {

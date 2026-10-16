@@ -130,7 +130,9 @@ impl CropQuad {
         ]
     }
 
-    pub(crate) fn is_valid(self) -> bool {
+    /// Finite, strictly convex corners inside the image, in either winding.
+    #[must_use]
+    pub fn is_valid(self) -> bool {
         let points = self.points();
         if points.iter().any(|point| {
             !point.x.is_finite()

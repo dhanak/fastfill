@@ -1,7 +1,10 @@
-//! Form rules/checkboxes in normalized image space, independent of GUI zoom.
+//! Form rules, checkboxes, and corner hints in normalized image space.
 
 mod components;
+mod corners;
 mod lines;
+
+pub use corners::CornerFeatures;
 
 use crate::image_input::{ImageInputError, MAX_IMAGE_PIXELS};
 use crate::project::{NormalizedPoint, NormalizedRect};

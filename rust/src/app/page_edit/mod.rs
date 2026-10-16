@@ -28,12 +28,15 @@ struct Draft {
     ready: Option<Arc<Preview>>,
     error: Option<String>,
     notice: Option<String>,
+    revision: u64,
 }
 
 struct Job {
     id: u64,
     session: u64,
     settings: PageCorrection,
+    auto_frame: bool,
+    revision: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -42,6 +45,7 @@ pub(crate) enum Event {
     Cancel,
     Accept,
     FullFrame,
+    AutoFrame,
     Rotate(i32),
     Mode(PageFilterMode),
     Brightness(i32),
@@ -54,6 +58,16 @@ pub(crate) enum Event {
 impl PageEditor {
     pub(super) const fn is_open(&self) -> bool {
         self.draft.is_some()
+    }
+
+    fn is_framing(&self) -> bool {
+        self.running.as_ref().is_some_and(|job| {
+            job.auto_frame
+                && self
+                    .draft
+                    .as_ref()
+                    .is_some_and(|draft| draft.id == job.session)
+        })
     }
 }
 
@@ -126,6 +140,7 @@ fn begin(state: &mut FastFill) -> Task<Message> {
         ready: None,
         error: None,
         notice: None,
+        revision: 0,
     });
     schedule(state)
 }
@@ -145,6 +160,9 @@ fn edit(state: &mut FastFill, event: &Event) -> Task<Message> {
     if matches!(event, Event::Accept) {
         accept(state);
         return Task::none();
+    }
+    if matches!(event, Event::AutoFrame) {
+        return auto_frame(state);
     }
     let draft = state.page_editor.draft.as_mut().expect("active page edit");
     let mut settings = draft.settings;
@@ -186,7 +204,34 @@ fn edit(state: &mut FastFill, event: &Event) -> Task<Message> {
     draft.error = None;
     draft.notice = None;
     draft.settings = settings;
+    // Even a no-op Full frame or an edit reverted to its prior value wins
+    // over a framing request that started before the manual action.
+    draft.revision = draft.revision.wrapping_add(1);
     schedule(state)
+}
+
+fn auto_frame(state: &mut FastFill) -> Task<Message> {
+    if state.page_editor.running.is_some() {
+        return Task::none();
+    }
+    let draft = state.page_editor.draft.as_mut().expect("active edit");
+    let Some(original) = &draft.original else {
+        return Task::none();
+    };
+    let job = Job {
+        id: state.project.request_id(),
+        session: draft.id,
+        settings: draft.settings,
+        auto_frame: true,
+        revision: draft.revision,
+    };
+    let task =
+        preview::task(job.id, Input::Frame(original.clone()), job.settings);
+    state.page_editor.running = Some(job);
+    state.input_epoch = state.input_epoch.wrapping_add(1);
+    draft.error = None;
+    draft.notice = None;
+    task
 }
 
 fn schedule(state: &mut FastFill) -> Task<Message> {
@@ -214,6 +259,8 @@ fn schedule(state: &mut FastFill) -> Task<Message> {
         id: state.project.request_id(),
         session: draft.id,
         settings: draft.settings,
+        auto_frame: false,
+        revision: draft.revision,
     };
     let task = preview::task(job.id, input, job.settings);
     state.page_editor.running = Some(job);
@@ -241,16 +288,36 @@ fn ready(
     if let Some(draft) = &mut state.page_editor.draft
         && draft.id == job.session
     {
+        let current = draft.settings == job.settings
+            && (!job.auto_frame || draft.revision == job.revision);
+        if job.auto_frame && !current {
+            draft.notice = Some(
+                "Manual changes kept. Press Auto frame again to reapply \
+                 the suggestion."
+                    .into(),
+            );
+        }
         match result {
             Ok(preview) => {
                 draft.original = Some(preview.original.clone());
-                if draft.settings == job.settings {
+                if current {
+                    if job.auto_frame {
+                        draft.settings = preview.settings;
+                        draft.notice.clone_from(&preview.notice);
+                    }
                     draft.ready = Some(preview.clone());
                     draft.error = None;
                 }
             }
-            Err(error) if draft.settings == job.settings => {
-                draft.error = Some(error.clone());
+            Err(error) if current => {
+                if job.auto_frame {
+                    draft.notice = Some(format!(
+                        "Auto frame failed ({error}). \
+                         Crop unchanged; adjust corners manually."
+                    ));
+                } else {
+                    draft.error = Some(error.clone());
+                }
             }
             Err(_) => {}
         }
@@ -259,6 +326,9 @@ fn ready(
 }
 
 fn accept(state: &mut FastFill) {
+    if state.page_editor.is_framing() {
+        return;
+    }
     let draft = state.page_editor.draft.as_ref().expect("active edit");
     let Some(preview) = draft.ready.as_ref().filter(|preview| {
         preview.settings == draft.settings && draft.error.is_none()

@@ -2,8 +2,10 @@
 
 pub mod annotations;
 pub mod correction;
+pub mod document_detection;
 pub mod form_snap;
 pub mod geometry;
+mod image_color;
 pub mod image_input;
 pub mod interaction;
 #[cfg(feature = "pdf-import")]

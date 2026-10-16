@@ -1,9 +1,9 @@
 //! Color filters and tone adjustments; no document-format changes.
 
 mod clahe;
-mod color;
 
 use super::CorrectionError;
+use crate::image_color::{self as color, byte};
 use crate::project::{PageFilterMode, PageFilterSettings};
 use image::{DynamicImage, GrayImage, Luma, Rgba, RgbaImage};
 
@@ -129,9 +129,4 @@ fn enhance(image: &mut RgbaImage) {
         let rgb = color::to_rgb([pixel[0], pixel[1], pixel[2]]);
         pixel.0[..3].copy_from_slice(&rgb);
     }
-}
-
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn byte(value: f32) -> u8 {
-    value.round().clamp(0.0, 255.0) as u8
 }

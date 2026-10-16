@@ -181,8 +181,8 @@ Checkpoint 6C2 adds **Edit page** to the page rail for image pages:
 
 Native previews run one background job plus the latest queued settings;
 stale results cannot replace a newer preview. The browser harness still runs
-correction work on its UI thread. Automatic framing, Ctrl-assisted crop
-corner snapping, and camera capture remain later checkpoints.
+correction work on its UI thread. Live/temporal framing and camera capture
+remain later checkpoints; Auto frame for existing pages is described below.
 
 Checkpoint 6D2 adds **Smart snap** placement:
 
@@ -236,7 +236,77 @@ The portable box check uses straight edge bands and rectangular interiors,
 avoiding rounded letter counters without OpenCV. Strongly rotated or
 perspective-distorted boxes are outside this slice; analyze corrected,
 upright pages. Scaling uses the installed image resampler, not OpenCV's exact
-pixels. Ctrl-assisted crop corners follow separately in 6D3.
+pixels.
+
+Checkpoint 6D3 adds **Ctrl-assisted crop corners** in **Edit page**:
+
+- Drag freely as before. Hold **Ctrl** while dragging a corner to snap to
+  nearby image corners. Pressing/releasing Ctrl updates the target without
+  moving the pointer; releasing it restores the unsnapped pointer position.
+- Hints use original image pixels, regardless of crop, rotation, or filters.
+  Analysis runs once in the existing native preview worker and is reused
+  for the rest of that editing session. The browser uses its UI thread.
+- This is independent of the annotation Smart snap button. No nearby hint,
+  failed analysis, or a hint that would cross/collapse the crop leaves normal
+  manual dragging available. Cancel/Escape and Accept/Undo work as before.
+
+These are local corner hints, not automatic document framing. The portable
+Shi–Tomasi detector retains the C# 1600-pixel analysis edge, 300-feature cap,
+0.02 quality threshold, 8-pixel spacing, and 5-pixel window. Resampling and
+border handling need not match OpenCV pixel-for-pixel.
+
+Checkpoint 6E1 adds an **offline document-framing diagnostic**. From `rust/`,
+choose a photographed PNG/JPEG and a new output filename:
+
+```sh
+mise exec -- cargo run --no-default-features --example frame_probe -- \
+  photo.jpg framed.png
+```
+
+Green shows an accepted document; amber shows the best rejected candidate,
+not an automatic crop. JSON on stdout reports normalized ordered corners,
+confidence, area ratio, Laplacian sharpness, and analysis dimensions. The
+score is a heuristic, not a probability. Input is bounded to 100 MiB/50 MP;
+analysis to a 1280-pixel edge. Sources and existing outputs are never replaced.
+
+Related outline and line-pair candidates use the original paper-mask,
+edge, geometry, boundary, and continuing-side calibrations. Hough sampling
+uses a fixed seed; no native OpenCV library is required. See the
+[upstream Hough reference].
+Portable resampling, contours, and numeric details can still differ. The
+current port uses connected-component hulls and enclosed edge regions;
+original concave contours remain a parity follow-up. Three low-contrast
+booklet photos remain rejected; do not lower the threshold to accept them.
+The gallery's minor framing errors and background-related misses are
+accepted limitations. No live camera/temporal wiring is present yet.
+Background edges can also outrank the correct outline: a speaker or cable
+beside a card can pull its right corners outward, even at a high score.
+Check every suggestion and adjust corners manually; Ctrl snapping can help.
+
+[upstream Hough reference]:
+  https://github.com/opencv/opencv/blob/4.x/modules/imgproc/src/hough.cpp
+
+Checkpoint 6E2 adds **Auto frame** beside **Full frame** in **Edit page**:
+
+- Opening the editor never changes the crop automatically. Press Auto frame
+  to propose four corners on the original image and update the corrected
+  preview. Rotation, filters, brightness, and contrast stay as selected.
+- Native analysis runs in the existing background preview worker and caches
+  its result for that editor session, independent of correction settings.
+  Auto frame is disabled while another preview/analysis job is running.
+  The browser harness still runs this work on its UI thread and may pause.
+- Manual review retains the C# 0.45 candidate cutoff, below the detector's
+  0.72 automatic acceptance threshold. Weaker suggestions carry an explicit
+  **Low-confidence** notice. Always check the frame: sharp, high-contrast
+  backgrounds can mislead it. No usable result or an analysis failure leaves
+  the current crop intact and manual corner dragging available.
+- Manual changes made while analysis runs take priority over its result,
+  including Full frame when already full. Once the worker finishes, Auto
+  frame can be pressed again to reuse the cached suggestion. Cancel/Escape
+  remains available; a late result cannot affect a different editing session.
+- Nothing is committed until Accept. It waits for the current completed
+  preview. Accepted crop/corrections and image-anchored annotations remain
+  one Undo/Redo step and survive Save, reopening, recovery, and PDF export.
 
 Checkpoint 5C adds multiple image pages:
 

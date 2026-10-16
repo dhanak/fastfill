@@ -3,24 +3,36 @@
 use super::{Event, Message};
 use crate::page_canvas::page_viewport;
 use fastfill_rust::annotations::Pointer;
+use fastfill_rust::form_snap::CornerFeatures;
 use fastfill_rust::geometry::{PageView, Size, fit_contain};
 use fastfill_rust::project::{CropQuad, NormalizedPoint};
 use iced::widget::{canvas, image::Handle};
-use iced::{Color, Point, Rectangle, Renderer, Theme, mouse, touch};
+use iced::{Color, Point, Rectangle, Renderer, Theme, keyboard, mouse, touch};
 
 #[derive(Clone, Copy)]
 pub(super) struct CropCanvas<'a> {
     pub(super) image: Option<&'a Handle>,
     pub(super) source_size: Size,
     pub(super) crop: CropQuad,
+    pub(super) corners: Option<&'a CornerFeatures>,
+    pub(super) snap: bool,
     pub(super) epoch: u64,
     pub(super) background: bool,
 }
 
 #[derive(Default)]
 pub(super) struct CropState {
-    drag: Option<(Pointer, usize, NormalizedPoint)>,
+    drag: Option<Drag>,
+    control: Option<bool>,
     epoch: u64,
+}
+
+#[derive(Clone, Copy)]
+struct Drag {
+    pointer: Pointer,
+    index: usize,
+    original: NormalizedPoint,
+    raw: NormalizedPoint,
 }
 
 #[derive(Clone, Copy)]
@@ -59,6 +71,37 @@ fn corners(crop: CropQuad) -> [NormalizedPoint; 4] {
 }
 
 impl CropCanvas<'_> {
+    fn snapped(
+        &self,
+        index: usize,
+        raw: NormalizedPoint,
+        bounds: Rectangle,
+        enabled: bool,
+    ) -> NormalizedPoint {
+        if !enabled {
+            return raw;
+        }
+        let (Some(features), Some(rect)) = (self.corners, self.rect(bounds))
+        else {
+            return raw;
+        };
+        let radius =
+            (52.0 / rect.width.min(rect.height).max(1.0)).clamp(0.015, 0.09);
+        let Some(target) = features.find_corner(raw, radius) else {
+            return raw;
+        };
+        let mut points = corners(self.crop);
+        points[index] = target;
+        let crop = CropQuad {
+            top_left: points[0],
+            top_right: points[1],
+            bottom_right: points[2],
+            bottom_left: points[3],
+        };
+        // A nearby hint must not turn a valid manual drag into a crossed crop.
+        if crop.is_valid() { target } else { raw }
+    }
+
     fn rect(&self, bounds: Rectangle) -> Option<fastfill_rust::geometry::Rect> {
         fit_contain(self.source_size, page_viewport(bounds.size()))
             .map(PageView::page_rect)
@@ -115,6 +158,16 @@ impl canvas::Program<Message> for CropCanvas<'_> {
                 ..CropState::default()
             };
         }
+        if let canvas::Event::Keyboard(keyboard::Event::ModifiersChanged(m)) =
+            event
+        {
+            // Pointer events may arrive before the root rebuilds this view.
+            state.control = Some(m.control());
+            let drag = state.drag?;
+            let point = self.snapped(drag.index, drag.raw, bounds, m.control());
+            let change = Message::PageEdit(Event::Corner(drag.index, point));
+            return Some(canvas::Action::publish(change).and_capture());
+        }
         let local =
             |point: Point| Point::new(point.x - bounds.x, point.y - bounds.y);
         let (pointer, position, pressed, released, lost) = match event {
@@ -163,27 +216,38 @@ impl canvas::Program<Message> for CropCanvas<'_> {
                 12.0
             };
             let index = self.hit(bounds, position, radius)?;
-            state.drag = Some((pointer, index, corners(self.crop)[index]));
+            let original = corners(self.crop)[index];
+            state.drag = Some(Drag {
+                pointer,
+                index,
+                original,
+                raw: original,
+            });
             return Some(canvas::Action::capture());
         }
-        let (owner, index, original) = state.drag?;
-        if owner != pointer {
+        let drag = state.drag?;
+        if drag.pointer != pointer {
             return None;
         }
         if released {
             state.drag = None;
         }
-        let point = if lost {
-            original
+        let point = if lost || position.is_none() {
+            drag.original
         } else {
-            self.normalized(bounds, position?)?
+            let raw = self.normalized(bounds, position?)?;
+            if let Some(drag) = &mut state.drag {
+                drag.raw = raw;
+            }
+            self.snapped(
+                drag.index,
+                raw,
+                bounds,
+                state.control.unwrap_or(self.snap),
+            )
         };
-        Some(
-            canvas::Action::publish(Message::PageEdit(Event::Corner(
-                index, point,
-            )))
-            .and_capture(),
-        )
+        let change = Message::PageEdit(Event::Corner(drag.index, point));
+        Some(canvas::Action::publish(change).and_capture())
     }
 
     fn draw(

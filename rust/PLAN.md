@@ -534,11 +534,61 @@ difference rather than porting the off-by-one into the new pipeline.
 - [x] User accepts smart-snap placement on 2026-10-16. Address the separate
       caret, small-object controls, and Escape observations before 6D3.
 
-##### 6D3. Ctrl-assisted crop corners — not started
+##### 6D3. Ctrl-assisted crop corners — accepted
 
-- Add image-corner snapping only while Ctrl is held during corner dragging.
-  Keep continuous manual adjustment without Ctrl. Test source/preview
-  coordinate conversion, modifier changes, cancellation, and touch handling.
+- [x] Add portable grayscale corner features with the C# calibration:
+      1600-pixel analysis edge, up to 300 features, quality 0.02, minimum
+      spacing 8 analysis pixels, and a 5-pixel structure-tensor window.
+- [x] Analyze original pixels once in the existing native preview worker.
+      Reuse results across crop, filter, and rotation changes; keep manual
+      editing available if analysis is unavailable. No global snap toggle.
+- [x] Snap only while Ctrl is held during a corner drag. Restore raw pointer
+      placement immediately when Ctrl is released, without moving the mouse.
+      Retain the calibrated 52-screen-pixel radius, clamped to 0.015–0.09
+      of the displayed image's shorter side. Reject invalid snapped quads.
+- [x] Test original/preview coordinates, letterboxing, modifier changes,
+      convexity, cancellation, pointer ownership, lost touch, and stale jobs.
+      Cover bounded analysis, real forms, transparency, and native/core/WASM.
+- [x] User confirms Ctrl snapping, free dragging, and page-edit behavior
+      on 2026-10-16. Continue with still-image document detection in 6E.
+
+##### 6E1. Offline document detector and diagnostics — accepted
+
+- [x] Port bounded still-image analysis and related outline/line candidates
+      before GUI wiring. Keep the 1280-pixel edge, two Canny threshold pairs,
+      paper-mask thresholds/morphology, polygon simplification, geometry,
+      seeded progressive Hough, paper/Lab boundaries, continuing-side checks,
+      and the C# 0.72 acceptance threshold. Add no native dependency.
+- [x] Add a native probe with normalized JSON and candidate/accepted overlays;
+      preserve source files and reject invalid/oversized inputs and outputs.
+- [x] Cover synthetic perspective documents, distracting background lines,
+      printed forms without outer boundaries, transparency, scale, and a
+      representative subset of the committed laptop-camera recording.
+- [x] Record gaps against the full C# detector rather than weaken tolerances
+      or present this connected-outline checkpoint as complete lab parity.
+- [x] User accepts the gallery on 2026-10-16, including minor errors and known
+      misses against misleading high-contrast backgrounds. Retain these as
+      documented limitations rather than block GUI integration on parity.
+
+##### 6E2. Auto frame in Edit page — accepted
+
+- [x] Record user acceptance of current detector limits. Defer further
+      contour/pixel parity work; do not change accepted thresholds/fixtures.
+- [x] Add explicit Auto frame alongside Full frame. Analyze original pixels
+      lazily in the existing native worker, caching the result per session.
+      Opening Edit page must not detect or alter existing crops.
+- [x] Use the C# manual-review cutoff 0.45 for rejected candidates; label
+      weaker suggestions. No usable result/failure must preserve the crop
+      and manual editing. Keep tone/rotation settings and original bytes.
+- [x] Reject stale sessions/results and let intervening manual edits win,
+      including Full frame when already full. Block stale Accept during
+      framing, keep Cancel/Escape available, and avoid overlapping workers.
+- [x] Cover cache reuse, errors, races, current preview, history/annotations,
+      save/reload, and native/core/WASM checks.
+- [x] User confirms Auto frame, manual override, correction settings, and
+      Cancel/Accept/Undo/Redo on 2026-10-16. Retain the documented 11-19
+      background-edge limitation after a small scoring experiment regresses
+      an existing fixture. Stop before temporal/countdown work in 6F.
 
 ### 7. Packaging and replacement decision — not started
 
@@ -2181,6 +2231,217 @@ Manual checkpoint — accepted 2026-10-16:
 
 User confirms the filled-rule reuse check and requests an unsigned commit
 of the accepted 6D1/6D2 work and follow-ups, then continuation with 6D3.
+
+### 2026-10-16 — accepted snapping committed; crop-corner checkpoint 6D3
+
+- Commit accepted 6D1/6D2 and their interaction/compatibility follow-ups as
+  `1c8da37`, unsigned, without pushing. Keep the C# application unchanged.
+- Add portable Shi–Tomasi corner hints using grayscale source pixels and
+  the existing 1600-pixel analysis bound. Retain 300 corners, quality 0.02,
+  8-pixel spacing, and a 5-pixel structure-tensor window. Reuse image/alpha
+  handling; add no dependency. Portable borders/resampling need not match
+  OpenCV pixelwise. These are local hints, not document auto-framing.
+- Analyze once while the existing preview worker decodes the original;
+  reuse the same source/hints across crop, rotation, and filter adjustments.
+  Existing session guards reject stale hints along with stale previews.
+  A hint-analysis error leaves manual corrections available. The browser
+  retains the existing UI-thread fallback rather than adding a worker stack.
+- Keep raw pointer positions separate from snapped targets. Ctrl press or
+  release changes the target immediately, without moving the pointer. Cache
+  modifier events locally too: another pointer event can arrive before the
+  root rebuilds the view. Reject snapped quads that cross or collapse, using
+  the existing convexity validator; keep ordinary manual placement instead.
+- Use the original image's fitted/letterboxed dimensions for the calibrated
+  52-screen-pixel radius, clamped to 0.015–0.09 of the short image axis.
+  Lost touch or unavailable release positions restore the exact unsnapped
+  starting corner. Keep the annotation Smart snap toggle independent.
+- TDD: first reproduce missing modifier/touch snapping, then the root-view
+  modifier lag. Cover rectangular/skewed targets, straight-edge rejection,
+  resize normalization, feature spacing/caps, real forms, transparency, bad
+  queries, letterboxing, pointer ownership, lost touch, invalid snaps, hint
+  reuse, stale jobs, and transactional Accept/Cancel/Undo/Redo.
+- Validation: 425 all-feature/all-target tests and 232 core/example tests
+  pass. Strict native/WASM all-target Clippy, formatting, whitespace, and
+  Trunk browser-build checks pass. Keep target/dist output isolated under
+  /tmp. Physical touch remains untested; browser validation is build-only.
+
+Manual checkpoint 6D3 — accepted 2026-10-16:
+
+1. Open an image page, choose Edit page, and drag a corner near a visible
+   document/printed-box corner. Without Ctrl, movement stays free. Hold Ctrl
+   to snap; release Ctrl without moving the mouse to restore the raw point.
+   Press Ctrl again, release the mouse, and verify the snapped point stays.
+2. Change rotation, filters, brightness, and contrast. Snapping on the left
+   continues to follow the original image, not the corrected preview. Try a
+   different window shape to check letterboxing. No nearby corner means
+   ordinary dragging; the annotation Smart snap button is unrelated.
+3. Cancel/Escape leaves the page unchanged. Accept commits the crop as one
+   Undo/Redo step. If touch is available, verify free corner dragging and
+   cancellation still work; no physical touch check has run in the container.
+
+User confirms behavior and requests continuation with 6E. Keep accepted 6D3
+changes uncommitted; no new commit was requested.
+
+### 2026-10-16 — 6D3 accepted; offline framing checkpoint 6E1
+
+- User confirms crop-corner snapping. Close 6D3 and proceed without a new
+  commit. Split 6E into offline detector inspection and difficult-frame/GUI
+  integration; keep the C# application and all capture/temporal code intact.
+- Add a portable still-image detector and `frame_probe INPUT OUTPUT.png`.
+  Return normalized accepted/rejected corners separately, confidence, area,
+  sharpness, and analysis dimensions. Emit green accepted/amber rejected
+  overlays and JSON; keep inputs intact and reject existing output files.
+  Apply existing 100 MiB/50 MP trust limits before processing/allocation.
+- Keep the 1280-pixel analysis edge; grayscale 5-tap binomial smoothing;
+  Canny 60/180 and 35/120 with the original repeated rectangular closing;
+  HSV paper V >= 115/S <= 105, elliptical closing/opening; hull perimeter
+  tolerances 0.01/0.015/0.02/0.03/0.04; convexity, minimum area 0.05,
+  aspect <= 5, 40% area saturation, and 2% border/0.12-corner penalties.
+- Add line-pair recovery in this offline slice after real frames prove
+  connected outlines insufficient. Retain 1 px/1 degree progressive Hough,
+  votes 70/50, lengths 18%/12%, gaps 60/80, 14 distinct lines per orientation,
+  3 degree/1.5% line deduplication, pair spacing, and intersection margins.
+  Seed sampling deterministically and consume traced pixels; a full global
+  Hough peak approximation invented rays and failed the clutter fixture.
+- Retain 24 samples per side, 1.5% boundary offsets, paper/Lab contrast,
+  9-pixel Lab smoothing, and paired continuing-side penalties. Reuse the
+  existing tested Lab conversion in a private shared image-color module;
+  do not duplicate it or expose correction internals to the detector.
+- TDD: observe missing detector imports, then recorded-frame misses, then
+  a cluttered synthetic document's displaced bottom. Fix implementation
+  differences without weakening the 0.72 acceptance threshold or existing
+  synthetic 0.04/0.02 and recording 0.1 normalized corner tolerances.
+  Cover blanks, transparent hidden RGB, tiny images, scale, input preservation,
+  saturated documents, internal form rules, candidate JSON, and command I/O.
+- Test frames 0059/0112/0168 directly from the trusted committed laptop-camera
+  TAR, without an archive dependency/extraction. This is still-image coverage,
+  not the full 224-frame temporal/countdown checkpoint in 6F.
+- Generate 14 local fixture overlays: the original card screenshot, seven
+  HOYA still/sequence images, three recorded sheets, and three booklets.
+  Card/HOYA/sheet frames are accepted; inspected representative outlines
+  follow their boundaries. Booklet 1/2/3 remain rejected at approximately
+  0.657/0.712/0.640, with
+  incorrect candidate outlines. Do not treat those polygons as valid crops
+  merely because manual review can use a lower confidence threshold.
+- Explicit parity gaps: component hulls/enclosed edge regions are present,
+  but original concave-contour candidates are not. Portable resampling,
+  border/rounding, Lab smoothing, and segment enumeration may differ from
+  OpenCV. Investigate these for the booklet misses in 6E2; no blanket
+  threshold reduction. No previous-frame hints/stabilization are added yet.
+- Validation: 437 all-feature/all-target tests and 244 core/example tests
+  pass. Strict native/WASM all-target Clippy, formatting, whitespace, and
+  Trunk browser-build checks pass. Keep compilation/distribution under /tmp;
+  only generated review previews go under the ignored artifacts directory.
+  Browser validation is build-only; no new physical-camera claim is made.
+
+Manual checkpoint 6E1 — accepted 2026-10-16:
+
+1. Open `artifacts/previews/framing-6e1.Z0H3zH/index.html` in a browser.
+   Inspect the green card/HOYA/sheet outlines; each image links to full size
+   and the untouched original. Report any corner that misses the boundary.
+2. The three amber booklet outlines are known misses, deliberately rejected
+   by automatic detection. Following gallery acceptance, retain them as
+   documented limits rather than block manual Auto frame integration.
+3. Optionally run `frame_probe` on another photographed PNG/JPEG. Existing
+   output files must be refused. The desktop editor intentionally has no new
+   button yet; current manual correction and Ctrl snapping remain available.
+
+User accepts the gallery, including minor errors and known misses against
+misleading high-contrast backgrounds, and requests continuation with 6E2.
+Proceed with Auto frame integration; retain detector limits and defer
+further parity tuning. Keep changes uncommitted; no commit requested.
+
+### 2026-10-16 — 6E1 accepted; Auto frame checkpoint 6E2
+
+- User accepts the gallery's minor errors/known misses against misleading,
+  high-contrast backgrounds. Retain the detector as accepted; defer further
+  contour/pixel parity work rather than recalibrate thresholds or fixtures.
+- Add explicit Auto frame beside Full frame in Edit page. Opening the
+  editor stays manual and never changes an existing crop automatically.
+  Reuse the existing preview worker and decoded original, with a lazy
+  standard-library OnceLock for analysis results per editor session.
+  No second worker, native dependency, or document-format change.
+- Apply a detected quad only to the draft and corrected preview. Retain the
+  C# 0.45 manual-review cutoff for candidates below automatic acceptance;
+  label those Low-confidence. Render notices in a visible warning panel.
+  All results still require checking corners and explicit Accept. Missing,
+  unusable, or failed detection keeps the current crop and manual workflow.
+- Reuse analysis across repeated clicks, crops, filters, tone, and rotation;
+  always analyze original pixels, not the corrected preview. Preserve all
+  non-crop settings and original encoded assets. Browser analysis retains
+  the existing UI-thread fallback; responsiveness is not claimed here.
+- Disable duplicate requests during preview/analysis work. Accept cannot
+  commit a cached old preview during framing; Cancel/Escape stays available.
+  Invalidate active crop gestures when Auto frame starts. Old sessions and
+  late worker completions cannot reframe another editor or page.
+- Track manual edit revisions as well as settings. Any intervening valid
+  manual change wins, including an unchanged Full frame or settings changed
+  and restored. Discard the late crop, finish the latest manual preview, and
+  report that manual changes were kept. A later Auto frame reuses the cache.
+  Worker failures are nonfatal notices, not blockers for manual acceptance.
+- TDD: first reproduce missing request/cache APIs. Add ten regressions for
+  explicit requests, pending Accept, duplicate jobs, original-space cache
+  reuse, 0.45 cutoff, invalid/weak/failed results, worker failure, manual/ABA
+  races, stale sessions, Cancel, one-step history, text/shape preservation,
+  original asset bytes, Save/reload, and corrected-dimension PDF export.
+- Validation: 447 all-feature/all-target tests and 244 core/example tests
+  pass. Strict native/WASM all-target Clippy, formatting, and whitespace
+  checks and the Trunk browser build pass. Compilation remains isolated
+  under /tmp; no C# source or CI changes. Inspect the software-rendered panel at
+  `artifacts/previews/auto-frame-6e2.sMqDXi/panel.png`; physical touch and
+  browser interaction are untested in this container.
+
+Manual checkpoint 6E2 — accepted 2026-10-16:
+
+1. Import a photographed document or open an existing image project. Enter
+   Edit page: the saved crop must stay unchanged. Press Auto frame and check
+   all four original-image corners plus the corrected preview. Full frame
+   restores the source; Ctrl-assisted dragging remains available.
+2. Try rotation, color mode, brightness, and contrast before/after framing.
+   They stay as selected. A booklet photo may yield a Low-confidence warning
+   and an imperfect suggestion at the intentional lower review threshold.
+   Adjust it manually. If changing settings while analysis runs, those edits
+   win; press Auto frame again after completion to reapply its suggestion.
+3. Cancel/Escape leaves the original page/annotations unchanged. Reopen,
+   Auto frame, Accept, then Undo/Redo: corrections and image-anchored objects
+   change together in one step. Optionally Save/reopen or export the PDF.
+
+Leave changes uncommitted and stop before recorded temporal replay in 6F.
+
+### 2026-10-16 — 6E2 accepted; bounded 11-19 framing investigation
+
+- User confirms the editor checkpoint, but reports incorrect right corners
+  in `artifacts/reviews/docscans/Scan 2026-09-15 11-19.docscan`.
+  Compare the original 3264 x 1836 image with its saved manual crop; never
+  modify the project, asset, or saved crop. Generate a diagnostic overlay at
+  `artifacts/previews/framing-11-19.JIXI7I/before.png`.
+- Candidate generation finds the card: its closest quad is within 4.3 px
+  of every saved manual corner at the 1280 x 720 analysis resolution.
+  Selection is the failure: that quad scores 0.786, while a larger quad
+  joining the card's left edge to speaker/cable edges scores 0.854.
+  Confidence is a heuristic, not a correctness guarantee.
+- Try a bounded scoring change: require nearby Canny-edge support for
+  sampled paper/Lab boundary contrast, reusing the existing distance map
+  and 0.6% tolerance. It still chooses the wrong 11-19 outline and breaks
+  the existing recorded-frame 0168 corner tolerance. Remove the experiment
+  and temporary instrumentation; leave detector behavior, thresholds, and
+  tests unchanged. Do not weaken the regression or tune to this one image.
+- Also test the user's rectangularity suggestion. This already contributes
+  0.33 of the existing score through area/minimum-enclosing-rectangle area.
+  Add a stronger 0.75 penalty for missing rectangularity as an experiment:
+  it rejects the speaker edge, but picks an incorrect, shorter crop that
+  cuts off about 13% of the card's height. Frame 0168 regresses too.
+  Keep the comparison overlay at
+  `artifacts/previews/framing-11-19.JIXI7I/stronger-rectangularity.png`.
+  Remove the extra penalty; stronger shape bias is not a safe small fix
+  and must not exclude genuine perspective-skewed documents.
+- Accept this as a known background-edge ranking limitation, as requested.
+  Manual corner adjustment and Ctrl snapping remain the workaround. A
+  broader scoring/candidate investigation is separate future work, not a
+  prerequisite for accepting 6E2. No new manual checkpoint or commit.
+- Validation after restoring the detector: all eight still-image framing
+  regressions pass with their original tolerances. Formatting and whitespace
+  checks pass. Retained changes for this investigation are documentation only.
 
 ## References
 
