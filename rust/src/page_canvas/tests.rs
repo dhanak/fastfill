@@ -76,7 +76,7 @@ fn select_cursor_distinguishes_marquees_from_selected_object_edits() {
     let empty = PagePoint::new(700.0, 900.0);
     annotations.begin_interaction(mouse, empty, page_size, scale, plain);
     annotations.finish(mouse, empty, false);
-    let text = annotations.texts()[0].bounds.center();
+    let text = annotations.texts().next().unwrap().bounds.center();
     assert_eq!(
         cursor(&annotations, plain, text),
         mouse::Interaction::Crosshair

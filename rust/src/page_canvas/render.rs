@@ -4,29 +4,18 @@ use super::clipping::{
 };
 use crate::appearance::{annotation_color, text_font};
 use fastfill_rust::annotations::{
-    AnnotationRef, ShapeAnnotation, TEXT_LINE_HEIGHT, TextAnnotation,
+    AnnotationRef, TEXT_LINE_HEIGHT, TextAnnotation,
 };
 use fastfill_rust::geometry::PageView;
 use fastfill_rust::geometry::Point as PagePoint;
 use fastfill_rust::rendering::{
     RenderAnnotation, SceneLineCap, SceneLineJoin, ScenePaint, ScenePath,
-    layout_annotation, layout_shape,
+    layout_annotation,
 };
 use iced::advanced::graphics::text::Paragraph as GraphicsParagraph;
 use iced::advanced::text::{self, Paragraph as _, Text as ParagraphText};
 use iced::widget::canvas;
 use iced::{Color, Pixels, Point, Rectangle, Size, Vector, alignment};
-
-pub(super) fn draw_shape(
-    frame: &mut canvas::Frame,
-    view: PageView,
-    annotation: &ShapeAnnotation,
-    scale: f32,
-) {
-    for path in layout_shape(annotation) {
-        draw_path(frame, view, &path, scale);
-    }
-}
 
 pub(super) fn draw_annotation(
     frame: &mut canvas::Frame,
@@ -46,7 +35,7 @@ pub(super) fn draw_annotation(
     }
 }
 
-pub(super) fn draw_text(
+fn draw_text(
     frame: &mut canvas::Frame,
     view: PageView,
     annotation: &TextAnnotation,

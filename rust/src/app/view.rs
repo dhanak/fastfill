@@ -294,8 +294,7 @@ fn style_row(state: &FastFill) -> Element<'_, Message> {
         styles = styles.push(color_button(label, value, color));
     }
     if let Some(style) = style
-        && (state.annotations().tool() != Tool::Select
-            || !state.annotations().selected_indices().is_empty())
+        && state.annotations().stroke_available()
     {
         styles = styles
             .push(
@@ -357,15 +356,13 @@ fn text_style_controls(
     state: &FastFill,
     format: TextFormat,
 ) -> Row<'static, Message> {
-    let selected = state.annotations().selected_text_indices();
-    let common_typeface = selected.iter().all(|index| {
-        state.annotations().texts()[*index].format.typeface == format.typeface
-    });
-    let common_size = selected.iter().all(|index| {
-        (state.annotations().texts()[*index].format.font_size
-            - format.font_size)
-            .abs()
-            < f32::EPSILON
+    let annotations = state.annotations();
+    let selected = annotations.selected_text_indices();
+    let texts = || selected.iter().filter_map(|index| annotations.text(*index));
+    let common_typeface =
+        texts().all(|text| text.format.typeface == format.typeface);
+    let common_size = texts().all(|text| {
+        (text.format.font_size - format.font_size).abs() < f32::EPSILON
     });
     let editing = state.annotations().has_text_edit();
     let toggle = |label, enabled, message| {

@@ -27,7 +27,10 @@ fn click_places_each_mark_centered_with_a_small_default_size() {
         assert!((preview.stroke_width - 2.0).abs() < f32::EPSILON);
 
         assert!(annotations.finish(MOUSE, center, false));
-        assert_eq!(annotations.shapes(), [preview]);
+        assert_eq!(
+            annotations.shapes().cloned().collect::<Vec<_>>(),
+            [preview]
+        );
     }
 }
 
@@ -43,7 +46,7 @@ fn dragging_outward_creates_a_centered_square_in_every_direction() {
         annotations.begin(MOUSE, Point::new(300.0, 400.0), PAGE);
         annotations.finish(MOUSE, end, false);
         assert_eq!(
-            annotations.shapes()[0].bounds(),
+            annotations.shapes().next().unwrap().bounds(),
             Rect::new(260.0, 360.0, 80.0, 80.0),
         );
     }
@@ -54,7 +57,7 @@ fn resizing_a_mark_stays_square_without_ctrl_and_keeps_its_stroke() {
     let mut annotations = mark(Tool::Cross);
     annotations.begin(MOUSE, Point::new(300.0, 400.0), PAGE);
     annotations.finish(MOUSE, Point::new(340.0, 420.0), false);
-    let original = annotations.shapes()[0].clone();
+    let original = annotations.shapes().next().unwrap().clone();
     annotations.set_tool(Tool::Select);
 
     let corner = Point::new(340.0, 440.0);
@@ -66,7 +69,7 @@ fn resizing_a_mark_stays_square_without_ctrl_and_keeps_its_stroke() {
         DragModifiers::default(),
     ));
     annotations.finish(MOUSE, Point::new(380.0, 460.0), false);
-    let resized = annotations.shapes()[0].clone();
+    let resized = annotations.shapes().next().unwrap().clone();
     assert_eq!(resized.bounds().width, resized.bounds().height);
     assert!(resized.bounds().width > original.bounds().width);
     assert_eq!(resized.stroke_width, original.stroke_width);
@@ -78,7 +81,7 @@ fn mark_movement_and_deletion_participate_in_history() {
     let mut annotations = mark(Tool::Checkmark);
     annotations.begin(MOUSE, Point::new(300.0, 400.0), PAGE);
     annotations.finish(MOUSE, Point::new(300.0, 400.0), false);
-    let original = annotations.shapes()[0].clone();
+    let original = annotations.shapes().next().unwrap().clone();
     annotations.set_tool(Tool::Select);
 
     annotations.begin_interaction(
@@ -89,12 +92,15 @@ fn mark_movement_and_deletion_participate_in_history() {
         DragModifiers::default(),
     );
     annotations.finish(MOUSE, Point::new(350.0, 450.0), false);
-    let moved = annotations.shapes()[0].clone();
+    let moved = annotations.shapes().next().unwrap().clone();
     assert!(annotations.delete_selected());
     assert!(annotations.undo());
-    assert_eq!(annotations.shapes(), [moved]);
+    assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), [moved]);
     assert!(annotations.undo());
-    assert_eq!(annotations.shapes(), [original]);
+    assert_eq!(
+        annotations.shapes().cloned().collect::<Vec<_>>(),
+        [original]
+    );
 }
 
 #[test]

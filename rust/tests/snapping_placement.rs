@@ -19,7 +19,7 @@ fn snapped_marks_preview_and_commit_as_one_styled_undoable_creation() {
         assert!(annotations.set_mark_snap(MOUSE, TARGET, 8.0));
         assert_eq!(annotations.preview().unwrap().bounds(), TARGET);
         assert!(annotations.finish(MOUSE, Point::new(301.0, 300.0), false));
-        let mark = annotations.shapes()[0].clone();
+        let mark = annotations.shapes().next().unwrap().clone();
         assert_eq!(mark.bounds(), TARGET);
         assert_eq!(mark.color, AnnotationColor::Green);
         assert_eq!(mark.stroke_width, 2.0);
@@ -27,7 +27,7 @@ fn snapped_marks_preview_and_commit_as_one_styled_undoable_creation() {
         assert!(annotations.is_empty());
         assert!(!annotations.can_undo());
         assert!(annotations.redo());
-        assert_eq!(annotations.shapes(), [mark]);
+        assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), [mark]);
     }
 }
 
@@ -39,7 +39,7 @@ fn manual_mark_drags_and_existing_edits_do_not_snap() {
     annotations.set_mark_snap(MOUSE, TARGET, 8.0);
     assert!(annotations.finish(MOUSE, Point::new(350.0, 350.0), false));
     assert_eq!(
-        annotations.shapes()[0].bounds(),
+        annotations.shapes().next().unwrap().bounds(),
         Rect::new(250.0, 250.0, 100.0, 100.0)
     );
     annotations.set_tool(Tool::Select);
@@ -53,7 +53,7 @@ fn manual_mark_drags_and_existing_edits_do_not_snap() {
     assert!(!annotations.set_mark_snap(MOUSE, TARGET, 8.0));
     assert!(annotations.finish(MOUSE, Point::new(310.0, 320.0), false));
     assert_eq!(
-        annotations.shapes()[0].bounds(),
+        annotations.shapes().next().unwrap().bounds(),
         Rect::new(260.0, 270.0, 100.0, 100.0)
     );
 }
@@ -104,17 +104,20 @@ fn new_text_stays_above_its_line_as_content_and_format_change() {
         Rect::new(100.0, 316.0, 900.0, 84.0)
     );
     assert!(annotations.accept_text());
-    let text = annotations.texts()[0].clone();
+    let text = annotations.texts().next().unwrap().clone();
     assert!(annotations.undo());
     assert!(annotations.is_empty());
     assert!(annotations.redo());
-    assert_eq!(annotations.texts(), std::slice::from_ref(&text));
+    assert_eq!(
+        annotations.texts().cloned().collect::<Vec<_>>(),
+        std::slice::from_ref(&text)
+    );
 
     assert!(annotations.begin_text_edit(text.bounds.center(), PAGE, 1.0));
     assert!(!annotations.set_text_line_anchor(Point::new(200.0, 200.0)));
     annotations.update_text("Canceled", Size::new(80.0, 32.0));
     annotations.cancel();
-    assert_eq!(annotations.texts(), [text]);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), [text]);
 }
 
 #[test]
@@ -136,7 +139,7 @@ fn line_reuse_matches_anchors_not_overflow_and_respects_layer_order() {
         annotations.update_text(label, Size::new(width, 30.0));
         assert!(annotations.accept_text());
     }
-    let saved = annotations.texts().to_vec();
+    let saved = annotations.texts().cloned().collect::<Vec<_>>();
     let revision = annotations.revision();
     for scale in [0.25, 1.0, 4.0] {
         assert!(
@@ -145,7 +148,7 @@ fn line_reuse_matches_anchors_not_overflow_and_respects_layer_order() {
         assert_eq!(annotations.text_preview().unwrap(), saved[2]);
         assert_eq!(annotations.revision(), revision);
         annotations.cancel();
-        assert_eq!(annotations.texts(), saved);
+        assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), saved);
     }
     assert!(annotations.send_selected_to_back());
     assert!(annotations.begin_text_edit_on_line(CLICK, anchor, PAGE, 1.0));
@@ -161,7 +164,7 @@ fn line_reuse_rejects_other_fields_invalid_input_and_pending_drafts() {
     annotations.set_text_line_anchor(anchor);
     annotations.update_text("Existing", Size::new(200.0, 30.0));
     annotations.accept_text();
-    let saved = annotations.texts().to_vec();
+    let saved = annotations.texts().cloned().collect::<Vec<_>>();
     let revision = annotations.revision();
     for (point, target, scale) in [
         (CLICK, Point::new(202.0, 400.0), 1.0),
@@ -176,7 +179,7 @@ fn line_reuse_rejects_other_fields_invalid_input_and_pending_drafts() {
             !annotations.begin_text_edit_on_line(point, target, PAGE, scale,)
         );
         assert!(!annotations.has_text_edit());
-        assert_eq!(annotations.texts(), saved);
+        assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), saved);
         assert_eq!(annotations.revision(), revision);
     }
     assert!(annotations.begin_text(CLICK, PAGE, 1.0));
@@ -186,5 +189,5 @@ fn line_reuse_rejects_other_fields_invalid_input_and_pending_drafts() {
     annotations.cancel();
     annotations.set_tool(Tool::Rectangle);
     assert!(!annotations.begin_text_edit_on_line(CLICK, anchor, PAGE, 1.0));
-    assert_eq!(annotations.texts(), saved);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), saved);
 }

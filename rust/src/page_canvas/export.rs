@@ -1,7 +1,7 @@
 //! Whole-page output; share drawing code, never screenshot the live UI.
 
 use super::render::draw_annotation;
-use fastfill_rust::annotations::{AnnotationRef, Annotations, OwnedAnnotation};
+use fastfill_rust::annotations::{Annotations, OwnedAnnotation};
 use fastfill_rust::geometry::{Rect, Size as PageSize, fit_contain};
 use fastfill_rust::pdf_import::raster_size;
 use iced::advanced::Renderer as _;
@@ -28,14 +28,7 @@ impl ExportPage {
             image,
             annotations: annotations
                 .ordered_annotations()
-                .map(|annotation| match annotation {
-                    AnnotationRef::Shape(_, shape) => {
-                        OwnedAnnotation::Shape(shape.clone())
-                    }
-                    AnnotationRef::Text(_, text) => {
-                        OwnedAnnotation::Text(text.clone())
-                    }
-                })
+                .map(OwnedAnnotation::from)
                 .collect(),
         }
     }

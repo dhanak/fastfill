@@ -107,7 +107,7 @@ fn cancel_and_escape_preserve_page_history_pixels_and_clean_state() {
     for escape in [false, true] {
         let mut state = state();
         let metadata = state.pages.current().metadata.clone();
-        let shapes = state.annotations().shapes().to_vec();
+        let shapes = state.annotations().shapes().cloned().collect::<Vec<_>>();
         let display = state.image().unwrap().display_handle().clone();
         let identity = state.pages.identity();
         send(&mut state, Event::Begin);
@@ -123,7 +123,10 @@ fn cancel_and_escape_preserve_page_history_pixels_and_clean_state() {
         }
         assert!(!state.page_editor.is_open());
         assert_eq!(state.pages.current().metadata, metadata);
-        assert_eq!(state.annotations().shapes(), shapes);
+        assert_eq!(
+            state.annotations().shapes().cloned().collect::<Vec<_>>(),
+            shapes
+        );
         assert_eq!(state.image().unwrap().display_handle(), &display);
         assert_eq!(state.pages.identity(), identity);
     }
@@ -134,7 +137,7 @@ fn accepts_current_preview_and_undo_redo_restore_page_and_annotations_together()
 {
     let mut state = state();
     let metadata = state.pages.current().metadata.clone();
-    let shape = state.annotations().shapes()[0].clone();
+    let shape = state.annotations().shapes().next().unwrap().clone();
     let display = state.image().unwrap().display_handle().clone();
     send(&mut state, Event::Begin);
     send(&mut state, Event::Rotate(1));
@@ -150,7 +153,7 @@ fn accepts_current_preview_and_undo_redo_restore_page_and_annotations_together()
     assert!(state.project.is_dirty(&state.pages));
     assert_eq!(state.pages.current().metadata.rotation_quarter_turns, 1);
     assert_eq!(state.pages.current().metadata.brightness, 15);
-    let changed = state.annotations().shapes()[0].clone();
+    let changed = state.annotations().shapes().next().unwrap().clone();
     assert_eq!(changed.id, shape.id);
     assert_eq!(changed.rotation, shape.rotation);
     assert_eq!(changed.stroke_width, shape.stroke_width);
@@ -160,11 +163,14 @@ fn accepts_current_preview_and_undo_redo_restore_page_and_annotations_together()
     );
     let _ = update(&mut state, Message::Undo);
     assert_eq!(state.pages.current().metadata, metadata);
-    assert_eq!(state.annotations().shapes()[0], shape);
+    assert_eq!(state.annotations().shapes().next().unwrap().clone(), shape);
     assert_eq!(state.image().unwrap().display_handle(), &display);
     assert!(!state.project.is_dirty(&state.pages));
     let _ = update(&mut state, Message::Redo);
-    assert_eq!(state.annotations().shapes()[0], changed);
+    assert_eq!(
+        state.annotations().shapes().next().unwrap().clone(),
+        changed
+    );
     assert_eq!(state.pages.current().metadata.rotation_quarter_turns, 1);
     assert!(state.project.is_dirty(&state.pages));
 }
@@ -309,8 +315,14 @@ fn accepted_changes_survive_save_reload_without_modifying_source_bytes() {
     let archive = load_archive(Cursor::new(bytes)).unwrap();
     assert_eq!(archive.project.pages, saved.project.pages);
     let pages = super::super::pages::Pages::from_opened(&opened).unwrap();
-    let a = pages.current().annotations.shapes()[0].bounds();
-    let b = state.annotations().shapes()[0].bounds();
+    let a = pages
+        .current()
+        .annotations
+        .shapes()
+        .next()
+        .unwrap()
+        .bounds();
+    let b = state.annotations().shapes().next().unwrap().bounds();
     assert!((a.x - b.x).abs() < 0.001 && (a.y - b.y).abs() < 0.001);
     assert!(
         (a.width - b.width).abs() < 0.001
@@ -400,7 +412,7 @@ fn blank_page_cannot_open_an_image_editor() {
 #[test]
 fn displaced_annotations_warn_and_restore_exactly_on_undo() {
     let mut state = state();
-    let before = state.annotations().shapes()[0].clone();
+    let before = state.annotations().shapes().next().unwrap().clone();
     send(&mut state, Event::Begin);
     send(
         &mut state,
@@ -421,11 +433,11 @@ fn displaced_annotations_warn_and_restore_exactly_on_undo() {
             .unwrap()
             .contains("1 annotation")
     );
-    let shape = &state.annotations().shapes()[0];
+    let shape = &state.annotations().shapes().next().unwrap().clone();
     assert!(shape.bounds().y < state.pages.current().size.height);
     assert_eq!(shape.id, before.id);
     let _ = update(&mut state, Message::Undo);
-    assert_eq!(state.annotations().shapes()[0], before);
+    assert_eq!(state.annotations().shapes().next().unwrap().clone(), before);
 }
 
 #[test]
@@ -633,7 +645,7 @@ fn rotation_controls_normalize_turn_counts_without_overflow() {
 #[test]
 fn interleaved_annotation_and_page_edits_restore_each_cached_version() {
     let mut state = state();
-    let original = state.annotations().shapes()[0].clone();
+    let original = state.annotations().shapes().next().unwrap().clone();
     let mut versions = vec![(
         state.pages.current().metadata.clone(),
         original.clone(),
@@ -646,7 +658,7 @@ fn interleaved_annotation_and_page_edits_restore_each_cached_version() {
         send(&mut state, Event::Accept);
         versions.push((
             state.pages.current().metadata.clone(),
-            state.annotations().shapes()[0].clone(),
+            state.annotations().shapes().next().unwrap().clone(),
             state.image().unwrap().display_handle().clone(),
         ));
         let _ = update(
@@ -661,7 +673,10 @@ fn interleaved_annotation_and_page_edits_restore_each_cached_version() {
         assert_eq!(&state.pages.current().metadata, metadata);
         assert_eq!(state.image().unwrap().display_handle(), display);
         if index == 0 {
-            assert_eq!(&state.annotations().shapes()[0], shape);
+            assert_eq!(
+                &state.annotations().shapes().next().unwrap().clone(),
+                shape
+            );
         }
     }
     assert!(!state.project.is_dirty(&state.pages));
@@ -669,6 +684,9 @@ fn interleaved_annotation_and_page_edits_restore_each_cached_version() {
         let _ = update(&mut state, Message::Redo);
     }
     assert_eq!(state.pages.current().metadata, versions[2].0);
-    assert_eq!(state.annotations().shapes()[0], versions[2].1);
+    assert_eq!(
+        state.annotations().shapes().next().unwrap().clone(),
+        versions[2].1
+    );
     assert_eq!(state.image().unwrap().display_handle(), &versions[2].2);
 }

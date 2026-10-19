@@ -8,7 +8,7 @@ const PAGE: Size = Size::new(800.0, 1_100.0);
 const TOUCH: Pointer = Pointer::Touch(7);
 
 fn ink_points(annotations: &Annotations) -> (InkKind, &[Point]) {
-    match &annotations.shapes()[0].geometry {
+    match &annotations.shapes().next().unwrap().geometry {
         AnnotationGeometry::Ink { kind, points } => (*kind, points),
         AnnotationGeometry::Bounded { .. }
         | AnnotationGeometry::Linear { .. } => panic!("expected ink"),
@@ -61,8 +61,8 @@ fn ink_moves_and_resizes_without_scaling_its_stroke() {
     annotations.begin(TOUCH, Point::new(100.0, 100.0), PAGE);
     annotations.drag(TOUCH, Point::new(150.0, 200.0), false);
     annotations.finish(TOUCH, Point::new(200.0, 100.0), false);
-    let original_bounds = annotations.shapes()[0].bounds();
-    let stroke = annotations.shapes()[0].stroke_width;
+    let original_bounds = annotations.shapes().next().unwrap().bounds();
+    let stroke = annotations.shapes().next().unwrap().stroke_width;
 
     annotations.set_tool(Tool::Select);
     assert!(annotations.begin_interaction(
@@ -73,7 +73,7 @@ fn ink_moves_and_resizes_without_scaling_its_stroke() {
         DragModifiers::default(),
     ));
     assert!(annotations.finish(TOUCH, Point::new(225.0, 250.0), false));
-    let moved_bounds = annotations.shapes()[0].bounds();
+    let moved_bounds = annotations.shapes().next().unwrap().bounds();
     assert!((moved_bounds.x - original_bounds.x - 100.0).abs() < 0.001);
     assert!((moved_bounds.y - original_bounds.y - 100.0).abs() < 0.001);
 
@@ -93,7 +93,7 @@ fn ink_moves_and_resizes_without_scaling_its_stroke() {
         Point::new(bottom_right.x + 80.0, bottom_right.y + 40.0),
         false,
     ));
-    let resized = &annotations.shapes()[0];
+    let resized = &annotations.shapes().next().unwrap().clone();
     assert_eq!(resized.stroke_width, stroke);
     assert!(resized.bounds().width > moved_bounds.width + 70.0);
     assert!(resized.bounds().height > moved_bounds.height + 30.0);
@@ -133,7 +133,7 @@ fn ink_cancel_delete_and_history_restore_whole_paths() {
     annotations.begin(TOUCH, Point::new(100.0, 100.0), PAGE);
     annotations.drag(TOUCH, Point::new(150.0, 180.0), false);
     annotations.finish(TOUCH, Point::new(220.0, 120.0), false);
-    let original = annotations.shapes()[0].clone();
+    let original = annotations.shapes().next().unwrap().clone();
 
     annotations.set_tool(Tool::Select);
     annotations.begin_interaction(
@@ -145,7 +145,10 @@ fn ink_cancel_delete_and_history_restore_whole_paths() {
     );
     annotations.drag(TOUCH, Point::new(175.0, 190.0), false);
     annotations.cancel();
-    assert_eq!(annotations.shapes(), std::slice::from_ref(&original));
+    assert_eq!(
+        annotations.shapes().cloned().collect::<Vec<_>>(),
+        std::slice::from_ref(&original)
+    );
 
     annotations.begin_interaction(
         TOUCH,
@@ -155,11 +158,17 @@ fn ink_cancel_delete_and_history_restore_whole_paths() {
         DragModifiers::default(),
     );
     annotations.finish(TOUCH, Point::new(175.0, 190.0), false);
-    let moved = annotations.shapes()[0].clone();
+    let moved = annotations.shapes().next().unwrap().clone();
     assert_ne!(moved, original);
     assert!(annotations.delete_selected());
     assert!(annotations.undo());
-    assert_eq!(annotations.shapes(), std::slice::from_ref(&moved));
+    assert_eq!(
+        annotations.shapes().cloned().collect::<Vec<_>>(),
+        std::slice::from_ref(&moved)
+    );
     assert!(annotations.undo());
-    assert_eq!(annotations.shapes(), std::slice::from_ref(&original));
+    assert_eq!(
+        annotations.shapes().cloned().collect::<Vec<_>>(),
+        std::slice::from_ref(&original)
+    );
 }

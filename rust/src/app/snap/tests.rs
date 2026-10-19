@@ -95,7 +95,10 @@ fn clicked_marks_snap_to_inset_boxes_independently_of_zoom() {
                 send(&mut state, Event::Toggle);
                 settle(&mut state);
                 click(&mut state, pointer, 145.0, 120.0, scale);
-                let mark = state.annotations().shapes()[0].clone();
+                let mark =
+                    state.annotations().shapes().cloned().collect::<Vec<_>>()
+                        [0]
+                    .clone();
                 let bounds = mark.bounds();
                 assert!((25.0..28.0).contains(&bounds.width));
                 assert_eq!(bounds.width, bounds.height);
@@ -107,7 +110,10 @@ fn clicked_marks_snap_to_inset_boxes_independently_of_zoom() {
                 assert!(state.annotations().is_empty());
                 assert!(!state.annotations().can_undo());
                 let _ = update(&mut state, Message::Redo);
-                assert_eq!(state.annotations().shapes(), [mark]);
+                assert_eq!(
+                    state.annotations().shapes().cloned().collect::<Vec<_>>(),
+                    [mark]
+                );
             }
         }
     }
@@ -117,14 +123,23 @@ fn clicked_marks_snap_to_inset_boxes_independently_of_zoom() {
 fn disabled_pending_and_blank_area_placements_stay_ordinary() {
     let mut state = fixture(Tool::Cross);
     click(&mut state, Pointer::Mouse, 145.0, 120.0, 1.0);
-    assert_eq!(state.annotations().shapes()[0].bounds().width, 612.0 / 32.0);
+    assert_eq!(
+        state.annotations().shapes().next().unwrap().bounds().width,
+        612.0 / 32.0
+    );
     send(&mut state, Event::Toggle);
     click(&mut state, Pointer::Mouse, 250.0, 200.0, 1.0);
-    let before = state.annotations().shapes().to_vec();
+    let before = state.annotations().shapes().cloned().collect::<Vec<_>>();
     settle(&mut state);
-    assert_eq!(state.annotations().shapes(), before);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        before
+    );
     click(&mut state, Pointer::Mouse, 700.0, 500.0, 1.0);
-    assert_eq!(state.annotations().shapes()[2].bounds().width, 612.0 / 32.0);
+    assert_eq!(
+        state.annotations().shapes().nth(2).unwrap().bounds().width,
+        612.0 / 32.0
+    );
 }
 
 #[test]
@@ -148,7 +163,7 @@ fn text_snaps_above_the_rule_but_editing_it_does_not_resnap() {
             < 0.001
     );
     let _ = update(&mut state, Message::AcceptText);
-    let text = state.annotations().texts()[0].clone();
+    let text = state.annotations().texts().next().unwrap().clone();
     let point = text.bounds.center();
     let _ =
         update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
@@ -157,7 +172,10 @@ fn text_snaps_above_the_rule_but_editing_it_does_not_resnap() {
         text.bounds
     );
     let _ = update(&mut state, Message::CancelInteraction);
-    assert_eq!(state.annotations().texts(), [text]);
+    assert_eq!(
+        state.annotations().texts().cloned().collect::<Vec<_>>(),
+        [text]
+    );
 }
 
 #[test]
@@ -179,7 +197,14 @@ fn stale_results_never_supply_features_for_a_replaced_image_or_project() {
     settle(&mut state);
     click(&mut state, Pointer::Mouse, 182.0, 122.0, 1.0);
     assert!(
-        (state.annotations().shapes()[0].bounds().center().x
+        (state
+            .annotations()
+            .shapes()
+            .next()
+            .unwrap()
+            .bounds()
+            .center()
+            .x
             - 182.0 / 800.0 * 612.0)
             .abs()
             < 1.0
@@ -217,7 +242,10 @@ fn rejected_presses_cannot_change_an_active_marks_frozen_target() {
             &mut state,
             Message::DrawReleased(Pointer::Mouse, start, false),
         );
-        assert_eq!(state.annotations().shapes(), [original]);
+        assert_eq!(
+            state.annotations().shapes().cloned().collect::<Vec<_>>(),
+            [original]
+        );
     }
 }
 
@@ -279,7 +307,7 @@ fn correction_and_undo_use_display_pixels_instead_of_the_original_asset() {
     assert!(state.smart_snap.cache.is_empty());
     settle(&mut state);
     click(&mut state, Pointer::Mouse, 182.0, 122.0, 1.0);
-    let mark = state.annotations().shapes()[0].clone();
+    let mark = state.annotations().shapes().next().unwrap().clone();
     assert!((mark.bounds().center().x - 139.23).abs() < 1.0);
     let _ = update(&mut state, Message::Undo);
     let _ = update(&mut state, Message::Undo);
@@ -289,7 +317,10 @@ fn correction_and_undo_use_display_pixels_instead_of_the_original_asset() {
     let _ = update(&mut state, Message::Redo);
     settle(&mut state);
     let _ = update(&mut state, Message::Redo);
-    assert_eq!(state.annotations().shapes(), [mark]);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        [mark]
+    );
 }
 
 #[test]
@@ -301,7 +332,10 @@ fn failed_analysis_does_not_spin_and_toggle_retries_without_late_snaps() {
     assert_eq!(status(&state), "Unavailable: Test failure.");
     assert!(state.smart_snap.running.is_none());
     click(&mut state, Pointer::Mouse, 145.0, 120.0, 1.0);
-    assert_eq!(state.annotations().shapes()[0].bounds().width, 19.125);
+    assert_eq!(
+        state.annotations().shapes().next().unwrap().bounds().width,
+        19.125
+    );
     assert!(state.smart_snap.running.is_none());
     send(&mut state, Event::Toggle);
     assert_eq!(status(&state), "Off");
@@ -353,7 +387,7 @@ fn text_line_placement_is_zoom_independent_and_one_persisted_creation() {
         paste_text(&mut state, "Unwrapped text\nSecond line");
         let _ = update(&mut state, Message::SetTextSize(22.0));
         let _ = update(&mut state, Message::AcceptText);
-        let bounds = state.annotations().texts()[0].bounds;
+        let bounds = state.annotations().texts().next().unwrap().bounds;
         if let Some(first) = first_bounds {
             same_bounds(bounds, first);
         }
@@ -366,13 +400,15 @@ fn text_line_placement_is_zoom_independent_and_one_persisted_creation() {
             decode_project(Cursor::new(bytes), None, "snapped.docscan".into())
                 .unwrap();
         let pages = crate::app::pages::Pages::from_opened(&opened).unwrap();
-        let text = &state.annotations().texts()[0];
-        let mut loaded = pages.current().annotations.texts()[0].clone();
+        let text = &state.annotations().texts().next().unwrap().clone();
+        let mut loaded =
+            pages.current().annotations.texts().next().unwrap().clone();
         same_bounds(loaded.bounds, text.bounds);
         loaded.bounds = text.bounds;
         assert_eq!(&loaded, text);
-        let mark = &state.annotations().shapes()[0];
-        let mut loaded = pages.current().annotations.shapes()[0].clone();
+        let mark = &state.annotations().shapes().next().unwrap().clone();
+        let mut loaded =
+            pages.current().annotations.shapes().next().unwrap().clone();
         same_bounds(loaded.bounds(), mark.bounds());
         let fastfill_rust::annotations::AnnotationGeometry::Bounded {
             bounds: loaded_bounds,
@@ -390,10 +426,21 @@ fn text_line_placement_is_zoom_independent_and_one_persisted_creation() {
         };
         assert_eq!(a, b);
         let _ = update(&mut state, Message::Undo);
-        assert_eq!(state.annotations().texts(), []);
-        assert_eq!(state.annotations().shapes().len(), 1);
+        assert_eq!(
+            state.annotations().texts().cloned().collect::<Vec<_>>(),
+            []
+        );
+        assert_eq!(
+            state
+                .annotations()
+                .shapes()
+                .cloned()
+                .collect::<Vec<_>>()
+                .len(),
+            1
+        );
         let _ = update(&mut state, Message::Redo);
-        assert_eq!(state.annotations().texts()[0].bounds, bounds);
+        assert_eq!(state.annotations().texts().next().unwrap().bounds, bounds);
     }
 }
 
@@ -466,7 +513,7 @@ fn real_forms_place_marks_inside_boxes_and_text_after_labels() {
             paste_text(&mut state, "Sample value");
             state.annotations().text_preview().unwrap().bounds
         } else {
-            let bounds = state.annotations().shapes()[0].bounds();
+            let bounds = state.annotations().shapes().next().unwrap().bounds();
             assert!(bounds.width < 30.0 * page_units);
             bounds
         };

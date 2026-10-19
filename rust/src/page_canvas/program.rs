@@ -1,8 +1,7 @@
 use super::{
     CanvasLayer, CanvasState, PageCanvas, draw_annotation, draw_group_member,
-    draw_group_selection, draw_marquee, draw_selection, draw_shape, draw_text,
-    draw_text_group_member, draw_text_selection, draw_text_underline,
-    page_viewport,
+    draw_group_selection, draw_marquee, draw_selection, draw_text_group_member,
+    draw_text_selection, draw_text_underline, page_viewport,
 };
 use crate::app::Message;
 use crate::appearance::{
@@ -296,11 +295,8 @@ impl PageCanvas<'_> {
         view: fastfill_rust::geometry::PageView,
         scale: f32,
     ) {
-        for preview in self.annotations.previews() {
-            draw_shape(frame, view, &preview, scale);
-        }
-        for preview in self.annotations.text_move_previews() {
-            draw_text(frame, view, &preview, scale);
+        for preview in self.annotations.geometric_previews() {
+            draw_annotation(frame, view, preview.as_ref(), scale);
         }
         if let Some(mut preview) = self.annotations.text_preview() {
             // The editor stays horizontal even for rotated text.

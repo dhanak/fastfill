@@ -1,6 +1,6 @@
 //! Stage page-bound changes; share history without depending on image types.
 
-use super::{AnnotationGeometry, Annotations};
+use super::{AnnotationGeometry, Annotations, OwnedAnnotation};
 use crate::geometry::{Point, Rect, Size};
 
 pub struct PageChange {
@@ -62,7 +62,11 @@ impl Annotations {
         let mut annotations = Self::default();
         annotations.restore(self.snapshot());
         let mut moved = 0;
-        for shape in &mut annotations.shapes {
+        for shape in annotations
+            .content
+            .iter_mut()
+            .filter_map(OwnedAnnotation::shape_mut)
+        {
             let bounds = shape.bounds();
             let center = bounds.center();
             let (target, scale) = checked_placement(placement(center)?)?;
@@ -108,7 +112,11 @@ impl Annotations {
                 moved += 1;
             }
         }
-        for text in &mut annotations.texts {
+        for text in annotations
+            .content
+            .iter_mut()
+            .filter_map(OwnedAnnotation::text_mut)
+        {
             let center = text.bounds.center();
             let (target, scale) = checked_placement(placement(center)?)?;
             let font_size = text.format.font_size * scale.height;

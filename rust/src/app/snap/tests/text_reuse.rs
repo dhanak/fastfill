@@ -13,7 +13,7 @@ fn clicking_a_filled_rule_reopens_its_text_at_the_end_without_a_duplicate() {
             click(&mut state, pointer, 450.0, 350.0, scale);
             paste_text(&mut state, "First\nárvíztűrő");
             let _ = update(&mut state, Message::AcceptText);
-            let original = state.annotations().texts()[0].clone();
+            let original = state.annotations().texts().next().unwrap().clone();
             let identity = state.pages.identity();
             let _ = update(&mut state, Message::CancelInteraction);
 
@@ -31,7 +31,7 @@ fn clicking_a_filled_rule_reopens_its_text_at_the_end_without_a_duplicate() {
             assert_eq!(state.annotations().len(), 1);
             let _ = update(&mut state, Message::CancelInteraction);
             assert_eq!(
-                state.annotations().texts(),
+                state.annotations().texts().cloned().collect::<Vec<_>>(),
                 std::slice::from_ref(&original)
             );
             assert_eq!(state.pages.identity(), identity);
@@ -39,16 +39,22 @@ fn clicking_a_filled_rule_reopens_its_text_at_the_end_without_a_duplicate() {
             click(&mut state, pointer, 600.0, 350.0, scale);
             paste_text(&mut state, "!");
             let _ = update(&mut state, Message::AcceptText);
-            let changed = state.annotations().texts()[0].clone();
+            let changed = state.annotations().texts().next().unwrap().clone();
             assert_eq!(state.annotations().len(), 1);
             assert_eq!(changed.id, original.id);
             assert_eq!(changed.text, "First\nárvíztűrő!");
             assert_eq!(changed.format, original.format);
             assert_eq!(changed.rotation, original.rotation);
             let _ = update(&mut state, Message::Undo);
-            assert_eq!(state.annotations().texts(), [original]);
+            assert_eq!(
+                state.annotations().texts().cloned().collect::<Vec<_>>(),
+                [original]
+            );
             let _ = update(&mut state, Message::Redo);
-            assert_eq!(state.annotations().texts(), [changed]);
+            assert_eq!(
+                state.annotations().texts().cloned().collect::<Vec<_>>(),
+                [changed]
+            );
         }
     }
 }
@@ -61,7 +67,7 @@ fn direct_clicks_still_pick_the_caret_and_missing_features_never_reuse() {
     click(&mut state, Pointer::Mouse, 450.0, 350.0, 1.0);
     paste_text(&mut state, "Existing field");
     let _ = update(&mut state, Message::AcceptText);
-    let original = state.annotations().texts()[0].clone();
+    let original = state.annotations().texts().next().unwrap().clone();
     let point = Point::new(
         original.bounds.x + 1.0,
         original.bounds.y + original.bounds.height / 2.0,
@@ -88,7 +94,7 @@ fn direct_clicks_still_pick_the_caret_and_missing_features_never_reuse() {
         }
         let _ = update(&mut state, Message::CancelInteraction);
         assert_eq!(
-            state.annotations().texts(),
+            state.annotations().texts().cloned().collect::<Vec<_>>(),
             std::slice::from_ref(&original)
         );
     }

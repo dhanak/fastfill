@@ -1,5 +1,6 @@
 use fastfill_rust::annotations::{
-    Annotations, DragModifiers, EditHit, Pointer, Tool,
+    Annotations, DragModifiers, EditHit, OwnedAnnotation, Pointer, TextEditHit,
+    Tool,
 };
 use fastfill_rust::geometry::{Point, Size};
 
@@ -57,8 +58,10 @@ fn dragging_an_unselected_object_marquees_instead_of_editing() {
                     [Point::new(175.0, 150.0), Point::new(100.0, 100.0)]
                 {
                     let mut annotations = objects(tool);
-                    let shapes = annotations.shapes().to_vec();
-                    let texts = annotations.texts().to_vec();
+                    let shapes =
+                        annotations.shapes().cloned().collect::<Vec<_>>();
+                    let texts =
+                        annotations.texts().cloned().collect::<Vec<_>>();
                     let revision = annotations.revision();
                     let end = Point::new(600.0, 250.0);
                     assert!(
@@ -73,8 +76,14 @@ fn dragging_an_unselected_object_marquees_instead_of_editing() {
                     );
                     assert!(annotations.finish(pointer, end, false));
                     assert_eq!(annotations.selected_count(), 2);
-                    assert_eq!(annotations.shapes(), shapes);
-                    assert_eq!(annotations.texts(), texts);
+                    assert_eq!(
+                        annotations.shapes().cloned().collect::<Vec<_>>(),
+                        shapes
+                    );
+                    assert_eq!(
+                        annotations.texts().cloned().collect::<Vec<_>>(),
+                        texts
+                    );
                     assert_eq!(annotations.revision(), revision);
                 }
             }
@@ -125,13 +134,15 @@ fn ctrl_drag_forces_marquee_over_selected_bodies_and_handles() {
             if let Some(shape) = initial.shapes().last() {
                 starts.extend(shape.rotation_handle(1.0));
             } else {
-                starts.extend(initial.texts()[1].rotation_handle(1.0));
+                starts.extend(
+                    initial.texts().nth(1).unwrap().rotation_handle(1.0),
+                );
             }
             for start in starts {
                 let mut annotations = objects(tool);
                 let revision = annotations.revision();
-                let shapes = annotations.shapes().to_vec();
-                let texts = annotations.texts().to_vec();
+                let shapes = annotations.shapes().cloned().collect::<Vec<_>>();
+                let texts = annotations.texts().cloned().collect::<Vec<_>>();
                 assert!(
                     annotations
                         .begin_interaction(pointer, start, PAGE, 1.0, CTRL,)
@@ -142,8 +153,14 @@ fn ctrl_drag_forces_marquee_over_selected_bodies_and_handles() {
                 assert!(annotations.selection_box().is_some());
                 assert!(annotations.finish(pointer, end, false));
                 assert_eq!(annotations.selected_count(), 2);
-                assert_eq!(annotations.shapes(), shapes);
-                assert_eq!(annotations.texts(), texts);
+                assert_eq!(
+                    annotations.shapes().cloned().collect::<Vec<_>>(),
+                    shapes
+                );
+                assert_eq!(
+                    annotations.texts().cloned().collect::<Vec<_>>(),
+                    texts
+                );
                 assert_eq!(annotations.revision(), revision);
             }
         }
@@ -235,7 +252,7 @@ fn explicit_move_and_resize_overrides_win_over_ctrl_marquee() {
             true,
         ));
         assert_eq!(annotations.selected_indices(), [0]);
-        let bounds = annotations.shapes()[0].bounds();
+        let bounds = annotations.shapes().next().unwrap().bounds();
         if force_resize {
             assert_eq!(bounds.width, bounds.height);
         } else {
@@ -315,4 +332,138 @@ fn unselected_top_layer_is_not_a_group_move_target() {
         annotations.hit_selected(Point::new(110.0, 110.0), mouse, 1.0, PLAIN,),
         Some(EditHit::Move)
     );
+}
+
+fn covered_object(tool: Tool, cover: Tool) -> Annotations {
+    let mut annotations = objects(tool);
+    assert!(annotations.delete_selected());
+    annotations.set_tool(cover);
+    if cover == Tool::Text {
+        assert!(annotations.begin_text(Point::new(50.0, 50.0), PAGE, 1.0));
+        annotations.update_text("Cover", Size::new(300.0, 300.0));
+        assert!(annotations.accept_text());
+    } else {
+        annotations.set_filled(true);
+        assert!(annotations.begin(
+            Pointer::Mouse,
+            Point::new(50.0, 50.0),
+            PAGE
+        ));
+        assert!(annotations.finish(
+            Pointer::Mouse,
+            Point::new(350.0, 350.0),
+            false
+        ));
+    }
+    annotations.set_tool(Tool::Select);
+    assert!(annotations.begin_interaction(
+        Pointer::Mouse,
+        Point::new(20.0, 20.0),
+        PAGE,
+        1.0,
+        PLAIN,
+    ));
+    assert!(annotations.finish(
+        Pointer::Mouse,
+        Point::new(380.0, 380.0),
+        false
+    ));
+    assert_eq!(annotations.selected_count(), 2);
+    let point = Point::new(175.0, 150.0);
+    assert!(annotations.begin_interaction(
+        Pointer::Mouse,
+        point,
+        PAGE,
+        1.0,
+        CTRL
+    ));
+    assert!(annotations.finish(Pointer::Mouse, point, true));
+    assert_eq!(annotations.selected_count(), 1);
+    annotations
+}
+
+#[test]
+fn single_selected_object_drags_from_behind_an_unselected_cover() {
+    for tool in Tool::ALL
+        .into_iter()
+        .filter(|tool| tool.creates_annotations())
+    {
+        for cover in [Tool::Rectangle, Tool::Text] {
+            for scale in [0.25, 1.0, 4.0] {
+                for pointer in [Pointer::Mouse, Pointer::Touch(7)] {
+                    let mut annotations = covered_object(tool, cover);
+                    let before = annotations
+                        .ordered_annotations()
+                        .map(OwnedAnnotation::from)
+                        .collect::<Vec<_>>();
+                    assert_eq!(annotations.selected_ids(), [before[0].id()]);
+                    let bounds = annotations.selection_bounds(scale).unwrap();
+                    let start = Point::new(175.0, 150.0);
+                    let end = Point::new(195.0, 180.0);
+
+                    // Ctrl still forces a marquee over the selected body.
+                    assert!(
+                        annotations.begin_interaction(
+                            pointer, start, PAGE, scale, CTRL,
+                        )
+                    );
+                    annotations.drag(pointer, end, true);
+                    assert!(annotations.selection_box().is_some());
+                    annotations.cancel();
+                    assert_eq!(annotations.selected_ids(), [before[0].id()]);
+                    if tool == Tool::Text {
+                        assert_eq!(
+                            annotations
+                                .hit_text_interaction(start, pointer, scale),
+                            Some(TextEditHit::Move)
+                        );
+                    } else {
+                        assert_eq!(
+                            annotations
+                                .hit_selected(start, pointer, scale, PLAIN),
+                            Some(EditHit::Move)
+                        );
+                    }
+                    assert!(
+                        annotations.begin_interaction(
+                            pointer, start, PAGE, scale, PLAIN,
+                        )
+                    );
+                    assert!(
+                        !annotations.is_selecting(),
+                        "{tool:?} behind {cover:?}, {pointer:?}, {scale}"
+                    );
+                    annotations.drag(pointer, end, false);
+                    assert!(annotations.finish(pointer, end, false));
+                    let moved = annotations.selection_bounds(scale).unwrap();
+                    assert!((moved.x - bounds.x - 20.0).abs() < 0.001);
+                    assert!((moved.y - bounds.y - 30.0).abs() < 0.001);
+                    assert_eq!(moved.width, bounds.width);
+                    assert_eq!(moved.height, bounds.height);
+                    let after = annotations
+                        .ordered_annotations()
+                        .map(OwnedAnnotation::from)
+                        .collect::<Vec<_>>();
+                    assert_eq!(after[1], before[1]);
+                    assert_eq!(annotations.selected_ids(), [before[0].id()]);
+                    assert!(annotations.undo());
+                    assert_eq!(
+                        annotations
+                            .ordered_annotations()
+                            .map(OwnedAnnotation::from)
+                            .collect::<Vec<_>>(),
+                        before
+                    );
+                    assert!(annotations.redo());
+                    assert_eq!(
+                        annotations
+                            .ordered_annotations()
+                            .map(OwnedAnnotation::from)
+                            .collect::<Vec<_>>(),
+                        after
+                    );
+                }
+            }
+        }
+    }
 }

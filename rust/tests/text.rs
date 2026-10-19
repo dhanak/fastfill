@@ -27,10 +27,10 @@ fn plain_text_stays_pending_until_non_empty_acceptance() {
     assert!(!annotations.can_undo());
 
     annotations.update_text("  Applicant name  ", Size::new(180.0, 31.2));
-    assert_eq!(annotations.texts(), []);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), []);
     assert!(annotations.accept_text());
     assert_eq!(
-        annotations.texts(),
+        annotations.texts().cloned().collect::<Vec<_>>(),
         [TextAnnotation {
             id,
             text: "Applicant name".into(),
@@ -97,14 +97,14 @@ fn empty_acceptance_and_cancel_leave_no_annotation_or_history() {
     assert!(annotations.begin_text(Point::new(100.0, 200.0), PAGE, 1.0));
     annotations.update_text("   ", Size::new(48.0, 31.2));
     assert!(annotations.accept_text());
-    assert_eq!(annotations.texts(), []);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), []);
     assert!(!annotations.can_undo());
 
     assert!(annotations.begin_text(Point::new(200.0, 300.0), PAGE, 1.0));
     annotations.update_text("Discard me", Size::new(120.0, 31.2));
     annotations.cancel();
     assert!(annotations.text_preview().is_none());
-    assert_eq!(annotations.texts(), []);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), []);
     assert!(!annotations.can_undo());
 }
 
@@ -115,12 +115,12 @@ fn accepted_text_participates_in_undo_and_redo() {
     annotations.begin_text(Point::new(300.0, 400.0), PAGE, 1.0);
     annotations.update_text("Date", Size::new(60.0, 31.2));
     annotations.accept_text();
-    let accepted = annotations.texts().to_vec();
+    let accepted = annotations.texts().cloned().collect::<Vec<_>>();
 
     assert!(annotations.undo());
-    assert_eq!(annotations.texts(), []);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), []);
     assert!(annotations.redo());
-    assert_eq!(annotations.texts(), accepted);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), accepted);
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn delete_all_removes_text_and_undo_restores_it() {
     assert!(annotations.delete_all());
     assert!(annotations.is_empty());
     assert!(annotations.undo());
-    assert_eq!(annotations.texts()[0].text, "Date");
+    assert_eq!(annotations.texts().next().unwrap().text, "Date");
 }
 
 #[test]
@@ -160,13 +160,13 @@ fn existing_text_can_be_reopened_and_canceled_without_data_loss() {
     annotations.begin_text(Point::new(300.0, 400.0), PAGE, 1.0);
     annotations.update_text("Original", Size::new(100.0, 31.2));
     annotations.accept_text();
-    let original = annotations.texts()[0].clone();
+    let original = annotations.texts().next().unwrap().clone();
 
     assert!(annotations.begin_text_edit(Point::new(320.0, 400.0), PAGE, 1.0,));
     annotations.update_text("Changed", Size::new(110.0, 31.2));
     annotations.cancel();
 
-    assert_eq!(annotations.texts(), [original]);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), [original]);
 }
 
 #[test]
@@ -180,10 +180,10 @@ fn accepted_text_edit_is_one_undoable_change() {
     assert!(annotations.begin_text_edit(Point::new(320.0, 400.0), PAGE, 1.0,));
     annotations.update_text("Changed", Size::new(110.0, 31.2));
     assert!(annotations.accept_text());
-    assert_eq!(annotations.texts()[0].text, "Changed");
+    assert_eq!(annotations.texts().next().unwrap().text, "Changed");
 
     assert!(annotations.undo());
-    assert_eq!(annotations.texts()[0].text, "Original");
+    assert_eq!(annotations.texts().next().unwrap().text, "Original");
 }
 
 #[test]
@@ -197,7 +197,7 @@ fn pending_text_edit_cannot_delete_its_committed_source() {
     assert!(annotations.begin_text_edit(Point::new(320.0, 400.0), PAGE, 1.0,));
     assert!(!annotations.delete_selected());
     annotations.cancel();
-    assert_eq!(annotations.texts()[0].text, "Original");
+    assert_eq!(annotations.texts().next().unwrap().text, "Original");
 }
 
 #[test]
@@ -207,7 +207,7 @@ fn text_drag_moves_as_one_undoable_edit() {
     annotations.begin_text(Point::new(300.0, 400.0), PAGE, 1.0);
     annotations.update_text("Move", Size::new(80.0, 31.2));
     annotations.accept_text();
-    let original = annotations.texts()[0].clone();
+    let original = annotations.texts().next().unwrap().clone();
     annotations.set_tool(Tool::Select);
 
     assert!(annotations.begin_text_move(
@@ -226,10 +226,16 @@ fn text_drag_moves_as_one_undoable_edit() {
         Point::new(350.0, 420.0),
         false,
     ));
-    assert_eq!(annotations.texts()[0].bounds.x, original.bounds.x + 30.0);
-    assert_eq!(annotations.texts()[0].bounds.y, original.bounds.y + 20.0);
+    assert_eq!(
+        annotations.texts().next().unwrap().bounds.x,
+        original.bounds.x + 30.0
+    );
+    assert_eq!(
+        annotations.texts().next().unwrap().bounds.y,
+        original.bounds.y + 20.0
+    );
     assert!(annotations.undo());
-    assert_eq!(annotations.texts(), [original]);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), [original]);
 }
 
 #[test]
@@ -257,7 +263,7 @@ fn inactive_selected_text_format_is_immediate_and_undoable() {
     annotations.update_text("Format", Size::new(90.0, 31.2));
     annotations.accept_text();
     annotations.set_tool(Tool::Select);
-    let original = annotations.texts()[0].clone();
+    let original = annotations.texts().next().unwrap().clone();
     let mut format = original.format;
     format.bold = true;
     format.font_size = 40.0;
@@ -266,12 +272,12 @@ fn inactive_selected_text_format_is_immediate_and_undoable() {
     assert!(
         annotations.set_selected_text_format(format, Size::new(160.0, 52.0),)
     );
-    assert_eq!(annotations.texts()[0].format, format);
-    assert_eq!(annotations.texts()[0].bounds.width, 160.0);
+    assert_eq!(annotations.texts().next().unwrap().format, format);
+    assert_eq!(annotations.texts().next().unwrap().bounds.width, 160.0);
     assert!(!annotations.has_text_edit());
 
     assert!(annotations.undo());
-    assert_eq!(annotations.texts(), [original]);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), [original]);
 }
 
 #[test]
@@ -281,7 +287,7 @@ fn text_format_is_pending_and_escape_restores_the_committed_text() {
     annotations.begin_text(Point::new(300.0, 400.0), PAGE, 1.0);
     annotations.update_text("Original", Size::new(100.0, 31.2));
     annotations.accept_text();
-    let original = annotations.texts()[0].clone();
+    let original = annotations.texts().next().unwrap().clone();
 
     assert!(annotations.begin_text_edit(Point::new(320.0, 400.0), PAGE, 1.0));
     let format = TextFormat {
@@ -294,10 +300,13 @@ fn text_format_is_pending_and_escape_restores_the_committed_text() {
     };
     assert!(annotations.set_text_format(format));
     assert_eq!(annotations.text_preview().unwrap().format, format);
-    assert_eq!(annotations.texts(), std::slice::from_ref(&original));
+    assert_eq!(
+        annotations.texts().cloned().collect::<Vec<_>>(),
+        std::slice::from_ref(&original)
+    );
 
     annotations.cancel();
-    assert_eq!(annotations.texts(), [original]);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), [original]);
 }
 
 #[test]
@@ -307,7 +316,7 @@ fn accepted_text_format_is_one_undoable_change_and_becomes_default() {
     annotations.begin_text(Point::new(300.0, 400.0), PAGE, 1.0);
     annotations.update_text("Original", Size::new(100.0, 31.2));
     annotations.accept_text();
-    let original = annotations.texts()[0].clone();
+    let original = annotations.texts().next().unwrap().clone();
 
     assert!(annotations.begin_text_edit(Point::new(320.0, 400.0), PAGE, 1.0));
     let format = TextFormat {
@@ -321,12 +330,12 @@ fn accepted_text_format_is_one_undoable_change_and_becomes_default() {
     assert!(annotations.set_text_format(format));
     annotations.update_text("Original", Size::new(180.0, 52.0));
     assert!(annotations.accept_text());
-    assert_eq!(annotations.texts()[0].format, format);
+    assert_eq!(annotations.texts().next().unwrap().format, format);
 
     assert!(annotations.undo());
-    assert_eq!(annotations.texts(), [original]);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), [original]);
     assert!(annotations.redo());
-    assert_eq!(annotations.texts()[0].format, format);
+    assert_eq!(annotations.texts().next().unwrap().format, format);
 
     annotations.set_tool(Tool::Text);
     assert!(annotations.begin_text(Point::new(100.0, 100.0), PAGE, 1.0));
@@ -342,7 +351,7 @@ fn text_rotation_uses_a_handle_ctrl_snap_and_history() {
     annotations.accept_text();
     annotations.set_tool(Tool::Select);
 
-    let original = annotations.texts()[0].clone();
+    let original = annotations.texts().next().unwrap().clone();
     let handle = original.rotation_handle(1.0).unwrap();
     assert_eq!(
         annotations.hit_selected_text(handle, Pointer::Mouse, 1.0),
@@ -354,17 +363,19 @@ fn text_rotation_uses_a_handle_ctrl_snap_and_history() {
     annotations.drag(Pointer::Mouse, end, true);
     assert!(annotations.finish(Pointer::Mouse, end, true));
     assert!(
-        (annotations.texts()[0].rotation - std::f32::consts::FRAC_PI_4).abs()
+        (annotations.texts().next().unwrap().rotation
+            - std::f32::consts::FRAC_PI_4)
+            .abs()
             < 0.001,
     );
     assert_eq!(annotations.text_hit(center), Some(0));
 
     assert!(annotations.undo());
-    assert_eq!(annotations.texts(), [original]);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), [original]);
     assert!(annotations.redo());
     assert!(annotations.can_reset_rotation());
     assert!(annotations.reset_rotation());
-    assert_eq!(annotations.texts()[0].rotation, 0.0);
+    assert_eq!(annotations.texts().next().unwrap().rotation, 0.0);
 }
 
 #[test]

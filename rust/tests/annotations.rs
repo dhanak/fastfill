@@ -46,7 +46,7 @@ fn bounded_shape_tools_commit_their_shape_kind() {
         annotations.begin(MOUSE, Point::new(100.0, 100.0), PAGE);
         assert_eq!(annotations.preview().unwrap().kind(), Some(kind));
         annotations.finish(MOUSE, Point::new(200.0, 150.0), false);
-        assert_eq!(annotations.shapes()[0].kind(), Some(kind));
+        assert_eq!(annotations.shapes().next().unwrap().kind(), Some(kind));
     }
 }
 
@@ -67,9 +67,12 @@ fn preview_is_pending_until_release_in_each_drag_direction() {
             preview.bounds(),
             Rect::new(end.x.min(100.0), end.y.min(100.0), 20.0, 40.0),
         );
-        assert_eq!(annotations.shapes(), []);
+        assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), []);
         assert!(annotations.finish(MOUSE, end, false));
-        assert_eq!(annotations.shapes(), &[preview]);
+        assert_eq!(
+            annotations.shapes().cloned().collect::<Vec<_>>(),
+            &[preview]
+        );
         assert!(annotations.preview().is_none());
     }
 }
@@ -81,7 +84,7 @@ fn release_position_is_used_without_an_intermediate_move() {
 
     assert!(annotations.finish(MOUSE, Point::new(50.0, 70.0), false));
     assert_eq!(
-        annotations.shapes()[0].bounds(),
+        annotations.shapes().next().unwrap().bounds(),
         Rect::new(10.0, 20.0, 40.0, 50.0),
     );
 }
@@ -104,7 +107,7 @@ fn square_constraint_can_change_without_moving_the_pointer() {
     );
     annotations.finish(MOUSE, Point::new(70.0, 150.0), true);
     assert_eq!(
-        annotations.shapes()[0].bounds(),
+        annotations.shapes().next().unwrap().bounds(),
         Rect::new(50.0, 100.0, 50.0, 50.0),
     );
 }
@@ -124,7 +127,7 @@ fn other_fingers_and_mouse_cannot_take_over_a_touch_draft() {
     assert!(!annotations.finish(MOUSE, Point::new(100.0, 100.0), false));
     assert_eq!(annotations.active_pointer(), Some(finger));
     assert!(annotations.finish(finger, Point::new(30.0, 40.0), false));
-    assert_eq!(annotations.shapes().len(), 1);
+    assert_eq!(annotations.shapes().count(), 1);
 }
 
 #[test]
@@ -132,17 +135,17 @@ fn cancel_and_tool_switch_discard_only_the_draft() {
     let mut annotations = rectangle_tool();
     annotations.begin(MOUSE, Point::new(10.0, 20.0), PAGE);
     annotations.finish(MOUSE, Point::new(50.0, 70.0), false);
-    let committed = annotations.shapes().to_vec();
+    let committed = annotations.shapes().cloned().collect::<Vec<_>>();
 
     annotations.begin(MOUSE, Point::new(80.0, 90.0), PAGE);
     annotations.cancel();
     assert!(annotations.active_pointer().is_none());
-    assert_eq!(annotations.shapes(), committed);
+    assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), committed);
 
     annotations.begin(MOUSE, Point::new(80.0, 90.0), PAGE);
     annotations.set_tool(Tool::Navigate);
     assert!(annotations.active_pointer().is_none());
-    assert_eq!(annotations.shapes(), committed);
+    assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), committed);
     assert!(!annotations.begin(MOUSE, Point::new(10.0, 20.0), PAGE));
 }
 
@@ -152,7 +155,7 @@ fn partial_off_page_rectangle_keeps_its_unclipped_geometry() {
     annotations.begin(MOUSE, Point::new(10.0, 20.0), PAGE);
     assert!(annotations.finish(MOUSE, Point::new(-30.0, -40.0), false));
     assert_eq!(
-        annotations.shapes()[0].bounds(),
+        annotations.shapes().next().unwrap().bounds(),
         Rect::new(-30.0, -40.0, 40.0, 60.0),
     );
 }
@@ -183,7 +186,7 @@ fn invalid_outside_and_degenerate_input_cannot_commit() {
     }
     annotations.begin(MOUSE, Point::new(0.0, 0.0), PAGE);
     assert!(!annotations.finish(MOUSE, Point::new(-30.0, -40.0), false));
-    assert_eq!(annotations.shapes(), []);
+    assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), []);
 }
 
 #[test]
@@ -208,7 +211,7 @@ fn drawing_maps_to_the_same_page_coordinates_at_different_zooms() {
             view.view_to_page(view.page_to_view(end)),
             false,
         );
-        let bounds = annotations.shapes()[0].bounds();
+        let bounds = annotations.shapes().next().unwrap().bounds();
         assert!((bounds.x - start.x).abs() < 0.001);
         assert!((bounds.y - start.y).abs() < 0.001);
         assert!((bounds.width - 150.0).abs() < 0.001);

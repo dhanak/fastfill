@@ -61,10 +61,16 @@ fn new_project_accepts_pending_text_and_cancel_keeps_it() {
         state.project.operation,
         Operation::Confirm(LeaveAction::New)
     ));
-    assert_eq!(state.annotations().texts()[0].text, "Keep this");
+    assert_eq!(
+        state.annotations().texts().next().unwrap().text,
+        "Keep this"
+    );
     let _ = update(&mut state, Message::KeepProject);
     assert!(state.project.is_idle());
-    assert_eq!(state.annotations().texts()[0].text, "Keep this");
+    assert_eq!(
+        state.annotations().texts().next().unwrap().text,
+        "Keep this"
+    );
     let _ = update(&mut state, Message::NewProject);
     let _ = update(&mut state, Message::DiscardProject);
     assert!(!state.project.is_dirty(&state.pages));
@@ -74,7 +80,7 @@ fn new_project_accepts_pending_text_and_cancel_keeps_it() {
 #[test]
 fn failed_or_canceled_open_keeps_every_page_and_history() {
     let mut state = annotated_page();
-    let original = state.annotations().shapes()[0].clone();
+    let original = state.annotations().shapes().next().unwrap().clone();
     let _ = update(&mut state, Message::OpenProject);
     let _ = update(&mut state, Message::DiscardProject);
     let Operation::Opening(id) = state.project.operation else {
@@ -85,7 +91,10 @@ fn failed_or_canceled_open_keeps_every_page_and_history() {
         Message::ProjectOpened(id, Err("Broken ZIP".into())),
     );
     assert!(state.status_is_error);
-    assert_eq!(state.annotations().shapes()[0], original);
+    assert_eq!(
+        state.annotations().shapes().next().unwrap().clone(),
+        original
+    );
     assert!(state.annotations().can_undo());
     assert!(state.project.is_dirty(&state.pages));
     let _ = update(&mut state, Message::OpenProject);
@@ -94,7 +103,10 @@ fn failed_or_canceled_open_keeps_every_page_and_history() {
         panic!("open must be pending");
     };
     let _ = update(&mut state, Message::ProjectOpened(id, Ok(None)));
-    assert_eq!(state.annotations().shapes()[0], original);
+    assert_eq!(
+        state.annotations().shapes().next().unwrap().clone(),
+        original
+    );
     assert!(state.project.is_dirty(&state.pages));
 }
 
@@ -142,7 +154,7 @@ fn successful_save_cleans_state_and_undo_redo_restore_dirty_identity() {
 #[test]
 fn canceled_or_failed_save_cannot_continue_a_destructive_action() {
     let mut state = annotated_page();
-    let original = state.annotations().shapes()[0].clone();
+    let original = state.annotations().shapes().next().unwrap().clone();
     for result in [Ok(None), Err("Disk full".into())] {
         let _ = update(&mut state, Message::NewProject);
         let _ = update(&mut state, Message::SaveBeforeLeave);
@@ -150,14 +162,17 @@ fn canceled_or_failed_save_cannot_continue_a_destructive_action() {
         let _ = update(&mut state, Message::ProjectSaved(id, result));
         assert!(state.project.is_idle());
         assert!(state.project.is_dirty(&state.pages));
-        assert_eq!(state.annotations().shapes()[0], original);
+        assert_eq!(
+            state.annotations().shapes().next().unwrap().clone(),
+            original
+        );
     }
 }
 
 #[test]
 fn busy_operations_ignore_editing_and_stale_completion_messages() {
     let mut state = annotated_page();
-    let original = state.annotations().shapes()[0].clone();
+    let original = state.annotations().shapes().next().unwrap().clone();
     let _ = update(&mut state, Message::SaveProject);
     let id = state.project.operation.request_id().unwrap();
     for message in [
@@ -170,7 +185,10 @@ fn busy_operations_ignore_editing_and_stale_completion_messages() {
     ] {
         let _ = update(&mut state, message);
     }
-    assert_eq!(state.annotations().shapes()[0], original);
+    assert_eq!(
+        state.annotations().shapes().next().unwrap().clone(),
+        original
+    );
     let _ = update(&mut state, Message::ProjectSaved(id + 1, Ok(None)));
     assert_eq!(state.project.operation.request_id(), Some(id));
     let _ = update(&mut state, Message::ProjectSaved(id, Ok(None)));
@@ -226,7 +244,15 @@ fn window_close_is_guarded_and_escape_keeps_the_current_project() {
     let _ = update(&mut state, Message::CancelInteraction);
     assert!(state.project.is_idle());
     assert!(state.project.is_dirty(&state.pages));
-    assert_eq!(state.annotations().shapes().len(), 1);
+    assert_eq!(
+        state
+            .annotations()
+            .shapes()
+            .cloned()
+            .collect::<Vec<_>>()
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -299,7 +325,7 @@ fn save_reload_keeps_pages_original_image_bytes_ids_and_empty_history() {
             false,
         ),
     );
-    let id = state.annotations().shapes()[0].id;
+    let id = state.annotations().shapes().next().unwrap().id;
     add_image(&mut state, "landscape", 900, 600);
     let _ = update(&mut state, Message::SetTool(Tool::Text));
     let _ = update(
@@ -333,11 +359,14 @@ fn save_reload_keeps_pages_original_image_bytes_ids_and_empty_history() {
     );
     assert!(!state.status_is_error, "{}", state.status);
     assert_eq!(state.pages.len(), 2);
-    assert_eq!(state.annotations().shapes()[0].id, id);
+    assert_eq!(state.annotations().shapes().next().unwrap().id, id);
     assert!(!state.annotations().can_undo());
     assert!(!state.project.is_dirty(&state.pages));
     let _ = update(&mut state, Message::SelectPage(1));
-    assert_eq!(state.annotations().texts()[0].text, "Round trip");
+    assert_eq!(
+        state.annotations().texts().next().unwrap().text,
+        "Round trip"
+    );
     assert!(!state.annotations().can_undo());
 }
 
@@ -363,7 +392,15 @@ fn unsupported_page_load_fails_before_replacing_any_page() {
         .unwrap_err()
         .contains("Page 1")
     );
-    assert_eq!(state.annotations().shapes().len(), 1);
+    assert_eq!(
+        state
+            .annotations()
+            .shapes()
+            .cloned()
+            .collect::<Vec<_>>()
+            .len(),
+        1
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]

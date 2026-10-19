@@ -1,6 +1,6 @@
 use super::{
-    AnnotationColor, AnnotationGeometry, AnnotationStyle, Annotations, InkKind,
-    ShapeAnnotation, ShapeKind, Tool,
+    AnnotationColor, AnnotationStyle, Annotations, OwnedAnnotation,
+    ShapeAnnotation, Tool,
 };
 
 impl ShapeAnnotation {
@@ -12,193 +12,113 @@ impl ShapeAnnotation {
             filled: self.filled,
         }
     }
-
-    pub(super) fn supports_fill(&self) -> bool {
-        matches!(
-            self.geometry,
-            AnnotationGeometry::Bounded {
-                kind: ShapeKind::Rectangle | ShapeKind::Oval,
-                ..
-            } | AnnotationGeometry::Ink {
-                kind: InkKind::Pen,
-                ..
-            }
-        )
-    }
 }
 
 impl Annotations {
     #[must_use]
     pub fn current_style(&self) -> Option<AnnotationStyle> {
-        if let Some(index) = self.style_target_indices().last().copied() {
-            let annotation = self.shapes.get(index)?;
-            return Some(annotation.style());
-        }
-        if self.tool == Tool::Select && self.selected_count() > 1 {
-            return self.selected_texts.last().map(|index| AnnotationStyle {
-                color: self.texts[*index].format.color,
-                ..AnnotationStyle::default()
-            });
-        }
-        self.styles.get(self.tool)
+        self.style_targets()
+            .filter_map(|(_, a)| a.shape())
+            .last()
+            .map(ShapeAnnotation::style)
+            .or_else(|| {
+                (self.tool == Tool::Select && self.selected_count() > 1)
+                    .then(|| {
+                        self.style_targets().last().map(|(_, a)| a.style())
+                    })
+                    .flatten()
+            })
+            .or_else(|| self.styles.get(self.tool))
     }
 
     #[must_use]
     pub fn current_fill(&self) -> Option<bool> {
-        self.style_target_indices()
-            .into_iter()
-            .rev()
-            .find_map(|index| {
-                self.shapes
-                    .get(index)
-                    .filter(|annotation| annotation.supports_fill())
-                    .map(|annotation| annotation.filled)
-            })
+        self.style_targets()
+            .filter(|(_, a)| a.tool().supports_fill())
+            .last()
+            .map(|(_, a)| a.style().filled)
             .or_else(|| self.styles.get(self.tool).map(|style| style.filled))
     }
 
     #[must_use]
     pub fn fill_available(&self) -> bool {
-        let targets = self.style_target_indices();
-        if !targets.is_empty() {
-            return targets.into_iter().any(|index| {
-                self.shapes
-                    .get(index)
-                    .is_some_and(ShapeAnnotation::supports_fill)
-            });
-        }
         self.tool.supports_fill()
+            || self.style_targets().any(|(_, a)| a.tool().supports_fill())
+    }
+
+    #[must_use]
+    pub fn stroke_available(&self) -> bool {
+        self.tool.supports_stroke_width()
+            || self
+                .style_targets()
+                .any(|(_, a)| a.tool().supports_stroke_width())
     }
 
     pub fn set_color(&mut self, color: AnnotationColor) -> bool {
-        if self.draft.is_some() {
-            return false;
-        }
-        let targets = self.style_target_indices();
-        let object_changed = targets
-            .iter()
-            .any(|index| self.shapes[*index].color != color)
-            || self.tool == Tool::Select
-                && self
-                    .selected_texts
-                    .iter()
-                    .any(|index| self.texts[*index].format.color != color);
-        let default_changed = self
-            .styles
-            .get(self.tool)
-            .is_some_and(|style| style.color != color);
-        if !object_changed && !default_changed {
-            return false;
-        }
-        if object_changed {
-            self.record_change();
-            for index in targets {
-                self.shapes[index].color = color;
-            }
-            if self.tool == Tool::Select {
-                for index in &self.selected_texts {
-                    self.texts[*index].format.color = color;
-                }
-            }
-        }
-        if let Some(style) = self.styles.get_mut(self.tool) {
-            style.color = color;
-        }
-        true
+        self.update_style(|_| true, |style| style.color = color)
     }
 
     pub fn set_stroke_width(&mut self, stroke_width: f32) -> bool {
-        if self.draft.is_some()
-            || !stroke_width.is_finite()
-            || !(1.0..=20.0).contains(&stroke_width)
-        {
+        if !stroke_width.is_finite() || !(1.0..=20.0).contains(&stroke_width) {
             return false;
         }
-        let targets = self.style_target_indices();
-        let object_changed = targets.iter().any(|index| {
-            (self.shapes[*index].stroke_width - stroke_width).abs()
-                > f32::EPSILON
-        });
-        let default_changed = self.styles.get(self.tool).is_some_and(|style| {
-            (style.stroke_width - stroke_width).abs() > f32::EPSILON
-        });
-        if !object_changed && !default_changed {
-            return false;
-        }
-        if object_changed {
-            self.record_change();
-            for index in targets {
-                self.shapes[index].stroke_width = stroke_width;
+        self.update_style(Tool::supports_stroke_width, |style| {
+            if (style.stroke_width - stroke_width).abs() > f32::EPSILON {
+                style.stroke_width = stroke_width;
             }
-        }
-        if let Some(style) = self.styles.get_mut(self.tool) {
-            style.stroke_width = stroke_width;
-        }
-        true
+        })
     }
 
     pub fn set_filled(&mut self, filled: bool) -> bool {
-        if self.draft.is_some() {
-            return false;
-        }
-        let targets: Vec<_> = self
-            .style_target_indices()
-            .into_iter()
-            .filter(|index| self.shapes[*index].supports_fill())
-            .collect();
-        if self.tool == Tool::Select {
-            if targets.is_empty()
-                || targets
-                    .iter()
-                    .all(|index| self.shapes[*index].filled == filled)
-            {
-                return false;
-            }
-            self.record_change();
-            for index in targets {
-                self.shapes[index].filled = filled;
-            }
-            return true;
-        }
-        if !self.tool.supports_fill() {
-            return false;
-        }
-        let object_changed = targets
-            .iter()
-            .any(|index| self.shapes[*index].filled != filled);
-        let default_changed = self
-            .styles
-            .get(self.tool)
-            .is_some_and(|style| style.filled != filled);
-        if !object_changed && !default_changed {
-            return false;
-        }
-        if object_changed {
-            self.record_change();
-            for index in targets {
-                self.shapes[index].filled = filled;
-            }
-        }
-        if let Some(style) = self.styles.get_mut(self.tool) {
-            style.filled = filled;
-        }
-        true
+        self.update_style(Tool::supports_fill, |style| style.filled = filled)
     }
 
-    fn style_target_indices(&self) -> Vec<usize> {
-        if self.tool == Tool::Select {
-            return self.selected.clone();
+    fn update_style(
+        &mut self,
+        supports: fn(Tool) -> bool,
+        update: impl Fn(&mut AnnotationStyle),
+    ) -> bool {
+        if self.has_pending_edit() {
+            return false;
         }
-        let [index] = self.selected.as_slice() else {
-            return Vec::new();
-        };
-        self.shapes
-            .get(*index)
-            .filter(|annotation| {
-                self.tool
-                    .creation_kind()
-                    .is_some_and(|kind| kind.matches(annotation))
+        let updates = self
+            .style_targets()
+            .filter(|(_, a)| supports(a.tool()))
+            .filter_map(|(index, original)| {
+                let original_style = original.style();
+                let mut style = original_style;
+                update(&mut style);
+                if style == original_style {
+                    return None;
+                }
+                let mut annotation = original.clone();
+                annotation.set_style(style);
+                Some((Some(index), annotation))
             })
-            .map_or_else(Vec::new, |_| vec![*index])
+            .collect();
+        let content_changed = self.commit_content(updates);
+        let default_changed = self
+            .styles
+            .get_mut(self.tool)
+            .filter(|_| supports(self.tool))
+            .is_some_and(|style| {
+                let original = *style;
+                update(style);
+                *style != original
+            });
+        content_changed || default_changed
+    }
+
+    fn style_targets(&self) -> impl Iterator<Item = (usize, &OwnedAnnotation)> {
+        let mut shapes =
+            self.selected_content().filter(|(_, a)| a.shape().is_some());
+        let single_shape = shapes
+            .next()
+            .filter(|_| shapes.next().is_none())
+            .map(|(index, _)| index);
+        self.selected_content().filter(move |(index, a)| {
+            self.tool == Tool::Select
+                || single_shape == Some(*index) && self.tool == a.tool()
+        })
     }
 }

@@ -36,11 +36,11 @@ fn group_font_changes_preserve_other_properties_and_shape_controls() {
         ),
     );
     assert_eq!(state.annotations().selected_count(), 3);
-    let before = state.annotations().texts().to_vec();
-    let shapes = state.annotations().shapes().to_vec();
+    let before = state.annotations().texts().cloned().collect::<Vec<_>>();
+    let shapes = state.annotations().shapes().cloned().collect::<Vec<_>>();
     assert!(state.annotations().current_text_format().is_some());
     let _ = update(&mut state, Message::ToggleTextBold);
-    for (text, original) in state.annotations().texts().iter().zip(&before) {
+    for (text, original) in state.annotations().texts().zip(&before) {
         assert!(text.format.bold);
         assert_eq!(text.format.typeface, original.format.typeface);
         assert_eq!(text.format.font_size, original.format.font_size);
@@ -53,52 +53,44 @@ fn group_font_changes_preserve_other_properties_and_shape_controls() {
             (size.width, size.height)
         );
     }
-    assert_eq!(state.annotations().shapes(), shapes);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        shapes
+    );
     let _ = update(&mut state, Message::Undo);
-    assert_eq!(state.annotations().texts(), before);
+    assert_eq!(
+        state.annotations().texts().cloned().collect::<Vec<_>>(),
+        before
+    );
     let _ = update(&mut state, Message::Redo);
     let _ = update(&mut state, Message::ToggleTextItalic);
-    assert!(
-        state
-            .annotations()
-            .texts()
-            .iter()
-            .all(|text| text.format.italic)
-    );
+    assert!(state.annotations().texts().all(|text| text.format.italic));
     let _ = update(&mut state, Message::ToggleTextItalic);
-    assert!(
-        state
-            .annotations()
-            .texts()
-            .iter()
-            .all(|text| !text.format.italic)
-    );
+    assert!(state.annotations().texts().all(|text| !text.format.italic));
     let _ = update(&mut state, Message::ToggleTextUnderline);
     let _ = update(&mut state, Message::SetTextSize(40.0));
     let _ = update(
         &mut state,
         Message::SetTextTypeface(TextTypeface::Monospace),
     );
-    assert!(state.annotations().texts().iter().all(
-        |text| text.format.underline
-            && text.format.typeface == TextTypeface::Monospace
-            && (text.format.font_size - 40.0).abs() < 0.01
-    ));
+    assert!(state.annotations().texts().all(|text| text.format.underline
+        && text.format.typeface == TextTypeface::Monospace
+        && (text.format.font_size - 40.0).abs() < 0.01));
     let _ = update(&mut state, Message::SetColor(AnnotationColor::Green));
     assert!(
         state
             .annotations()
             .texts()
-            .iter()
             .all(|text| text.format.color == AnnotationColor::Green)
     );
     assert_eq!(
-        state.annotations().shapes()[0].color,
+        state.annotations().shapes().next().unwrap().color,
         AnnotationColor::Green
     );
     let _ = update(&mut state, Message::AdjustThickness(1.0));
     assert!(
-        state.annotations().shapes()[0].stroke_width > shapes[0].stroke_width
+        state.annotations().shapes().next().unwrap().stroke_width
+            > shapes[0].stroke_width
     );
 }
 
@@ -135,7 +127,7 @@ fn select_ctrl_click_and_marquee_keep_text_in_mixed_groups() {
         ),
     );
     assert_eq!(state.annotations().selected_count(), 2);
-    assert_eq!(state.annotations().texts()[0].bounds.x, 320.0);
+    assert_eq!(state.annotations().texts().next().unwrap().bounds.x, 320.0);
     let _ = update(&mut state, Message::Undo);
     let _ = update(
         &mut state,
@@ -155,12 +147,15 @@ fn select_ctrl_click_and_marquee_keep_text_in_mixed_groups() {
 #[test]
 fn undo_redo_messages_apply_only_to_committed_edits() {
     let mut state = annotated_page();
-    let rectangle = state.annotations().shapes()[0].clone();
+    let rectangle = state.annotations().shapes().next().unwrap().clone();
     let _ = update(&mut state, Message::Undo);
-    assert_eq!(state.annotations().shapes(), []);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        []
+    );
     let _ = update(&mut state, Message::Redo);
     assert_eq!(
-        state.annotations().shapes(),
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
         std::slice::from_ref(&rectangle),
     );
 
@@ -179,7 +174,10 @@ fn undo_redo_messages_apply_only_to_committed_edits() {
     let preview = state.annotations().preview();
     let _ = update(&mut state, Message::Undo);
     assert_eq!(state.annotations().preview(), preview);
-    assert_eq!(state.annotations().shapes(), [rectangle]);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        [rectangle]
+    );
 }
 
 #[test]
@@ -221,7 +219,7 @@ fn plain_text_messages_accept_cancel_and_commit_on_click_away() {
     assert_eq!(first_bounds.x, first.x);
     assert!(first_bounds.y < first.y);
     let _ = update(&mut state, Message::CancelInteraction);
-    assert_eq!(state.annotations().texts(), []);
+    assert_eq!(state.annotations().texts().cloned().collect::<Vec<_>>(), []);
     assert!(!state.annotations().can_undo());
 
     let _ =
@@ -231,7 +229,7 @@ fn plain_text_messages_accept_cancel_and_commit_on_click_away() {
         &mut state,
         Message::DrawPressed(Pointer::Mouse, second, 1.0),
     );
-    assert_eq!(state.annotations().texts()[0].text, "First");
+    assert_eq!(state.annotations().texts().next().unwrap().text, "First");
     assert_eq!(
         state.annotations().text_preview().unwrap().bounds.x,
         second.x,
@@ -239,7 +237,15 @@ fn plain_text_messages_accept_cancel_and_commit_on_click_away() {
 
     paste_text(&mut state, "Second");
     let _ = update(&mut state, Message::AcceptText);
-    assert_eq!(state.annotations().texts().len(), 2);
+    assert_eq!(
+        state
+            .annotations()
+            .texts()
+            .cloned()
+            .collect::<Vec<_>>()
+            .len(),
+        2
+    );
     assert!(state.annotations().text_preview().is_none());
 }
 
@@ -254,7 +260,7 @@ fn switching_tools_accepts_pending_text() {
     paste_text(&mut state, "Accepted");
 
     let _ = update(&mut state, Message::SetTool(Tool::Rectangle));
-    assert_eq!(state.annotations().texts()[0].text, "Accepted");
+    assert_eq!(state.annotations().texts().next().unwrap().text, "Accepted");
     assert_eq!(state.annotations().tool(), Tool::Rectangle);
 }
 
@@ -303,7 +309,7 @@ fn text_format_messages_stay_pending_until_acceptance() {
         update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
     paste_text(&mut state, "Format me");
     let _ = update(&mut state, Message::AcceptText);
-    let original = state.annotations().texts()[0].clone();
+    let original = state.annotations().texts().next().unwrap().clone();
 
     let _ =
         update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
@@ -321,10 +327,16 @@ fn text_format_messages_stay_pending_until_acceptance() {
     assert!(preview.format.underline);
     assert_eq!(preview.format.color, AnnotationColor::Blue);
     assert!(preview.bounds.height > original.bounds.height);
-    assert_eq!(state.annotations().texts(), std::slice::from_ref(&original),);
+    assert_eq!(
+        state.annotations().texts().cloned().collect::<Vec<_>>(),
+        std::slice::from_ref(&original),
+    );
 
     let _ = update(&mut state, Message::CancelInteraction);
-    assert_eq!(state.annotations().texts(), [original]);
+    assert_eq!(
+        state.annotations().texts().cloned().collect::<Vec<_>>(),
+        [original]
+    );
 }
 
 #[test]
@@ -342,14 +354,14 @@ fn accepted_text_requires_confirmation_before_page_replacement() {
 
     let _ = update(&mut state, Message::AskReplacePage);
     assert_eq!(state.image_picker, ImagePicker::ConfirmReplace);
-    assert_eq!(state.annotations().texts()[0].text, "Keep me");
+    assert_eq!(state.annotations().texts().next().unwrap().text, "Keep me");
 }
 
 #[test]
 fn select_drag_is_pending_escape_reverts_and_delete_removes_selection() {
     let mut state = annotated_page();
     let _ = update(&mut state, Message::SetTool(Tool::Select));
-    let original = state.annotations().shapes()[0].clone();
+    let original = state.annotations().shapes().next().unwrap().clone();
     let start = screen_point(&state, PagePoint::new(30.0, 45.0));
     let end = Point::new(start.x + 20.0, start.y + 30.0);
     let mut canvas_state = CanvasState::default();
@@ -366,18 +378,27 @@ fn select_drag_is_pending_escape_reverts_and_delete_removes_selection() {
         end,
     );
     assert!(state.annotations().preview().is_some());
-    assert_eq!(state.annotations().shapes()[0], original);
+    assert_eq!(
+        state.annotations().shapes().next().unwrap().clone(),
+        original
+    );
     let _ = update(&mut state, Message::CancelInteraction);
-    assert_eq!(state.annotations().shapes()[0], original);
+    assert_eq!(
+        state.annotations().shapes().next().unwrap().clone(),
+        original
+    );
     let _ = update(&mut state, Message::DeleteSelected);
-    assert_eq!(state.annotations().shapes(), []);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        []
+    );
 }
 
 #[test]
 fn rectangle_mode_moves_tiny_objects_and_resizes_after_zooming_in() {
     for zoom in [1.0, 4.0] {
         let mut state = annotated_page();
-        let original = state.annotations().shapes()[0].clone();
+        let original = state.annotations().shapes().next().unwrap().clone();
         let viewport = page_viewport(CANVAS.size());
         let view = state.navigation.view(DEFAULT_PAGE, viewport).unwrap();
         state.navigation.zoom_at(
@@ -412,8 +433,16 @@ fn rectangle_mode_moves_tiny_objects_and_resizes_after_zooming_in() {
             )),
             end,
         );
-        assert_eq!(state.annotations().shapes().len(), 1);
-        let resized = &state.annotations().shapes()[0];
+        assert_eq!(
+            state
+                .annotations()
+                .shapes()
+                .cloned()
+                .collect::<Vec<_>>()
+                .len(),
+            1
+        );
+        let resized = &state.annotations().shapes().next().unwrap().clone();
         if original.edit_handles_visible(scale) {
             assert!(resized.bounds().width > original.bounds().width);
             assert!(resized.bounds().height > original.bounds().height);
@@ -430,7 +459,7 @@ fn rectangle_mode_moves_tiny_objects_and_resizes_after_zooming_in() {
 fn lost_touch_in_select_mode_reverts_edit_without_navigating() {
     let mut state = annotated_page();
     let _ = update(&mut state, Message::SetTool(Tool::Select));
-    let original = state.annotations().shapes()[0].clone();
+    let original = state.annotations().shapes().next().unwrap().clone();
     let navigation = state.navigation;
     let start = screen_point(&state, PagePoint::new(30.0, 45.0));
     let end = Point::new(start.x + 20.0, start.y + 30.0);
@@ -464,7 +493,10 @@ fn lost_touch_in_select_mode_reverts_edit_without_navigating() {
         end,
     );
     assert!(state.annotations().preview().is_none());
-    assert_eq!(state.annotations().shapes()[0], original);
+    assert_eq!(
+        state.annotations().shapes().next().unwrap().clone(),
+        original
+    );
     assert_eq!(state.navigation, navigation);
 }
 
@@ -884,7 +916,11 @@ fn rotated_rectangle_renders_around_its_frame_center() {
         false,
     );
     state.annotations_mut().set_tool(Tool::Select);
-    let handle = state.annotations().shapes()[0]
+    let handle = state
+        .annotations()
+        .shapes()
+        .next()
+        .unwrap()
         .rotation_handle(1.0)
         .unwrap();
     let page = page_size(&state);
@@ -1009,7 +1045,7 @@ fn text_and_shapes_follow_shared_layer_order() {
         update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
     paste_text(&mut state, "Layer");
     let _ = update(&mut state, Message::AcceptText);
-    let text = state.annotations().texts()[0].clone();
+    let text = state.annotations().texts().next().unwrap().clone();
     state.annotations_mut().set_tool(Tool::Navigate);
 
     let text_only = render_document(&state, 1, 1.0);
@@ -1071,7 +1107,7 @@ fn formatted_text_color_and_rotation_reach_canvas_rendering() {
     let _ = update(&mut state, Message::AcceptText);
 
     state.annotations_mut().set_tool(Tool::Select);
-    let text = state.annotations().texts()[0].clone();
+    let text = state.annotations().texts().next().unwrap().clone();
     let handle = text.rotation_handle(1.0).unwrap();
     let center = text.bounds.center();
     let page = page_size(&state);
@@ -1406,9 +1442,20 @@ fn canceling_page_replacement_keeps_annotations() {
 
     let _ = update(&mut state, Message::KeepPage);
     assert_eq!(state.image_picker, ImagePicker::Idle);
-    assert_eq!(state.annotations().shapes().len(), 1);
+    assert_eq!(
+        state
+            .annotations()
+            .shapes()
+            .cloned()
+            .collect::<Vec<_>>()
+            .len(),
+        1
+    );
     let _ = update(&mut state, Message::Undo);
-    assert_eq!(state.annotations().shapes(), []);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        []
+    );
 }
 
 #[test]
@@ -1425,7 +1472,15 @@ fn canceled_or_failed_picker_keeps_annotations() {
         Message::ImagePicked(PickPurpose::Replace, Ok(None)),
     );
     assert_eq!(state.image_picker, ImagePicker::Idle);
-    assert_eq!(state.annotations().shapes().len(), 1);
+    assert_eq!(
+        state
+            .annotations()
+            .shapes()
+            .cloned()
+            .collect::<Vec<_>>()
+            .len(),
+        1
+    );
 
     let _ = update(&mut state, Message::AskReplacePage);
     let _ = update(&mut state, Message::ConfirmReplacePage);
@@ -1434,7 +1489,15 @@ fn canceled_or_failed_picker_keeps_annotations() {
         Message::ImagePicked(PickPurpose::Replace, Err("Corrupt image".into())),
     );
     assert!(state.status_is_error);
-    assert_eq!(state.annotations().shapes().len(), 1);
+    assert_eq!(
+        state
+            .annotations()
+            .shapes()
+            .cloned()
+            .collect::<Vec<_>>()
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -1459,7 +1522,10 @@ fn successful_import_resets_annotations_and_retains_tool() {
         Message::ImagePicked(PickPurpose::Replace, Ok(Some(image))),
     );
 
-    assert_eq!(state.annotations().shapes(), []);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        []
+    );
     assert_eq!(state.annotations().tool(), Tool::Rectangle);
     assert!(!state.annotations().can_undo());
     assert!(!state.annotations().can_redo());
@@ -1471,19 +1537,46 @@ fn delete_all_requires_confirmation_and_remains_undoable() {
     let mut state = annotated_page();
     let _ = update(&mut state, Message::AskDeleteAll);
     assert!(state.confirm_delete_all);
-    assert_eq!(state.annotations().shapes().len(), 1);
+    assert_eq!(
+        state
+            .annotations()
+            .shapes()
+            .cloned()
+            .collect::<Vec<_>>()
+            .len(),
+        1
+    );
 
     let _ = update(&mut state, Message::Undo);
-    assert_eq!(state.annotations().shapes().len(), 1);
+    assert_eq!(
+        state
+            .annotations()
+            .shapes()
+            .cloned()
+            .collect::<Vec<_>>()
+            .len(),
+        1
+    );
     let _ = update(&mut state, Message::KeepAll);
     assert!(!state.confirm_delete_all);
 
     let _ = update(&mut state, Message::AskDeleteAll);
     let _ = update(&mut state, Message::ConfirmDeleteAll);
     assert!(!state.confirm_delete_all);
-    assert_eq!(state.annotations().shapes(), []);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        []
+    );
     let _ = update(&mut state, Message::Undo);
-    assert_eq!(state.annotations().shapes().len(), 1);
+    assert_eq!(
+        state
+            .annotations()
+            .shapes()
+            .cloned()
+            .collect::<Vec<_>>()
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -1493,7 +1586,15 @@ fn escape_closes_delete_all_confirmation_without_deleting() {
     let _ = update(&mut state, Message::CancelInteraction);
 
     assert!(!state.confirm_delete_all);
-    assert_eq!(state.annotations().shapes().len(), 1);
+    assert_eq!(
+        state
+            .annotations()
+            .shapes()
+            .cloned()
+            .collect::<Vec<_>>()
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -1519,7 +1620,15 @@ fn cancel_and_navigation_changes_never_commit_a_draft() {
         );
         let _ = update(&mut state, message);
         assert!(state.annotations().active_pointer().is_none());
-        assert_eq!(state.annotations().shapes().len(), 1);
+        assert_eq!(
+            state
+                .annotations()
+                .shapes()
+                .cloned()
+                .collect::<Vec<_>>()
+                .len(),
+            1
+        );
     }
 }
 
@@ -1604,7 +1713,7 @@ fn mouse_drawing_uses_canvas_offset_and_ctrl_without_panning() {
         end,
     );
     assert_eq!(state.navigation, navigation);
-    let rectangle = state.annotations().shapes()[0].bounds();
+    let rectangle = state.annotations().shapes().next().unwrap().bounds();
     assert!((rectangle.x - 100.0).abs() < 0.001);
     assert!((rectangle.y - 200.0).abs() < 0.001);
     assert!((rectangle.width - 120.0).abs() < 0.001);
@@ -1637,7 +1746,10 @@ fn right_drag_pans_in_rectangle_mode_without_creating_an_object() {
     let after = screen_point(&state, PagePoint::new(0.0, 0.0));
     assert!((after.x - before.x - 20.0).abs() < 0.001);
     assert!((after.y - before.y - 30.0).abs() < 0.001);
-    assert_eq!(state.annotations().shapes(), []);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        []
+    );
 }
 
 #[test]
@@ -1670,7 +1782,10 @@ fn wheel_zooms_around_pointer_in_all_tools() {
         let after = screen_point(&state, anchor);
         assert!((after.x - before.x).abs() < 0.001);
         assert!((after.y - before.y).abs() < 0.001);
-        assert_eq!(state.annotations().shapes(), []);
+        assert_eq!(
+            state.annotations().shapes().cloned().collect::<Vec<_>>(),
+            []
+        );
     }
 }
 
@@ -1733,7 +1848,7 @@ fn mouse_release_outside_canvas_keeps_partial_page_geometry() {
         )),
         end,
     );
-    assert!(state.annotations().shapes()[0].bounds().x < 0.0);
+    assert!(state.annotations().shapes().next().unwrap().bounds().x < 0.0);
     assert!(state.annotations().active_pointer().is_none());
 }
 
@@ -1782,7 +1897,10 @@ fn drawing_touch_ignores_second_finger_and_lost_touch_cancels() {
         state.annotations().active_pointer(),
         Some(Pointer::Touch(1))
     );
-    assert_eq!(state.annotations().shapes(), []);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        []
+    );
     canvas_event(
         &mut state,
         &mut canvas_state,
@@ -1793,7 +1911,10 @@ fn drawing_touch_ignores_second_finger_and_lost_touch_cancels() {
         end,
     );
     assert!(state.annotations().active_pointer().is_none());
-    assert_eq!(state.annotations().shapes(), []);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        []
+    );
 
     for event in [
         touch::Event::FingerPressed {
@@ -1812,6 +1933,14 @@ fn drawing_touch_ignores_second_finger_and_lost_touch_cancels() {
             end,
         );
     }
-    assert_eq!(state.annotations().shapes().len(), 1);
+    assert_eq!(
+        state
+            .annotations()
+            .shapes()
+            .cloned()
+            .collect::<Vec<_>>()
+            .len(),
+        1
+    );
     assert_eq!(state.navigation, navigation);
 }

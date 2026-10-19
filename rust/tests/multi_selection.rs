@@ -151,7 +151,7 @@ fn moving_a_selection_is_one_undoable_change() {
         Point::new(80.0, 80.0),
         Point::new(280.0, 180.0),
     );
-    let original = annotations.shapes().to_vec();
+    let original = annotations.shapes().cloned().collect::<Vec<_>>();
 
     assert!(annotations.begin_interaction(
         MOUSE,
@@ -161,16 +161,16 @@ fn moving_a_selection_is_one_undoable_change() {
         PLAIN,
     ));
     assert!(annotations.finish(MOUSE, Point::new(175.0, 165.0), false));
-    assert_eq!(annotations.shapes()[0].bounds().x, 150.0);
-    assert_eq!(annotations.shapes()[1].bounds().x, 250.0);
-    assert_eq!(annotations.shapes()[2], original[2]);
+    assert_eq!(annotations.shapes().next().unwrap().bounds().x, 150.0);
+    assert_eq!(annotations.shapes().nth(1).unwrap().bounds().x, 250.0);
+    assert_eq!(annotations.shapes().nth(2).unwrap().clone(), original[2]);
 
     assert!(annotations.undo());
-    assert_eq!(annotations.shapes(), original);
+    assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), original);
     assert_eq!(annotations.selected_indices(), [0, 1]);
     assert!(annotations.redo());
-    assert_eq!(annotations.shapes()[0].bounds().x, 150.0);
-    assert_eq!(annotations.shapes()[1].bounds().x, 250.0);
+    assert_eq!(annotations.shapes().next().unwrap().bounds().x, 150.0);
+    assert_eq!(annotations.shapes().nth(1).unwrap().bounds().x, 250.0);
 }
 
 #[test]
@@ -191,8 +191,8 @@ fn group_move_keeps_every_selected_object_reachable() {
     ));
     assert!(annotations.finish(MOUSE, Point::new(-875.0, 125.0), false));
 
-    assert_eq!(annotations.shapes()[0].bounds().x, -49.0);
-    assert_eq!(annotations.shapes()[1].bounds().x, 251.0);
+    assert_eq!(annotations.shapes().next().unwrap().bounds().x, -49.0);
+    assert_eq!(annotations.shapes().nth(1).unwrap().bounds().x, 251.0);
 }
 
 #[test]
@@ -217,11 +217,8 @@ fn group_moves_from_inside_a_selected_lines_frame() {
         Point::new(80.0, 80.0),
         Point::new(380.0, 180.0),
     );
-    let before: Vec<_> = annotations
-        .shapes()
-        .iter()
-        .map(|shape| shape.bounds().x)
-        .collect();
+    let before: Vec<_> =
+        annotations.shapes().map(|shape| shape.bounds().x).collect();
 
     assert!(annotations.begin_interaction(
         MOUSE,
@@ -232,11 +229,8 @@ fn group_moves_from_inside_a_selected_lines_frame() {
     ));
     assert!(annotations.finish(MOUSE, Point::new(125.0, 145.0), false));
 
-    let after: Vec<_> = annotations
-        .shapes()
-        .iter()
-        .map(|shape| shape.bounds().x)
-        .collect();
+    let after: Vec<_> =
+        annotations.shapes().map(|shape| shape.bounds().x).collect();
     assert_eq!(after, before.iter().map(|x| x + 20.0).collect::<Vec<_>>());
 }
 
@@ -259,18 +253,16 @@ fn bulk_styles_apply_once_and_fill_only_compatible_objects() {
     assert!(
         annotations
             .shapes()
-            .iter()
             .all(|shape| shape.color == AnnotationColor::Red)
     );
     assert!(
         annotations
             .shapes()
-            .iter()
             .all(|shape| (shape.stroke_width - 7.0).abs() < f32::EPSILON)
     );
-    assert!(annotations.shapes()[0].filled);
-    assert!(annotations.shapes()[1].filled);
-    assert!(!annotations.shapes()[2].filled);
+    assert!(annotations.shapes().next().unwrap().filled);
+    assert!(annotations.shapes().nth(1).unwrap().filled);
+    assert!(!annotations.shapes().nth(2).unwrap().filled);
 }
 
 #[test]
@@ -282,16 +274,16 @@ fn selected_and_all_deletion_are_single_undoable_changes() {
         Point::new(280.0, 180.0),
     );
     assert!(annotations.delete_selected());
-    assert_eq!(annotations.shapes().len(), 1);
+    assert_eq!(annotations.shapes().count(), 1);
     assert_eq!(annotations.selected_indices(), &[] as &[usize]);
     assert!(annotations.undo());
-    assert_eq!(annotations.shapes().len(), 3);
+    assert_eq!(annotations.shapes().count(), 3);
     assert_eq!(annotations.selected_indices(), [0, 1]);
 
     assert!(annotations.delete_all());
-    assert_eq!(annotations.shapes(), []);
+    assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), []);
     assert!(annotations.undo());
-    assert_eq!(annotations.shapes().len(), 3);
+    assert_eq!(annotations.shapes().count(), 3);
 }
 
 #[test]
@@ -299,18 +291,19 @@ fn layer_commands_keep_relative_order_and_selection_through_history() {
     let mut annotations = rectangles(&[100.0, 200.0, 300.0, 400.0]);
     ctrl_click(&mut annotations, Point::new(225.0, 125.0));
     assert_eq!(annotations.selected_indices(), [1, 3]);
+    let selected = annotations.selected_ids().to_vec();
 
     assert!(annotations.send_selected_to_back());
     let xs = ordered_shape_xs(&annotations);
     assert_eq!(xs, [200.0, 400.0, 100.0, 300.0]);
-    assert_eq!(annotations.selected_indices(), [1, 3]);
+    assert_eq!(annotations.selected_ids(), selected);
 
     assert!(annotations.undo());
-    assert_eq!(annotations.selected_indices(), [1, 3]);
+    assert_eq!(annotations.selected_ids(), selected);
     assert!(annotations.bring_selected_to_front());
     let xs = ordered_shape_xs(&annotations);
     assert_eq!(xs, [100.0, 300.0, 200.0, 400.0]);
-    assert_eq!(annotations.selected_indices(), [1, 3]);
+    assert_eq!(annotations.selected_ids(), selected);
 }
 
 fn ordered_shape_xs(annotations: &Annotations) -> Vec<f32> {
@@ -344,13 +337,22 @@ fn marquee_and_ctrl_click_include_text_in_a_mixed_selection() {
         Point::new(380.0, 180.0),
     );
     assert_eq!(annotations.selected_indices(), [0]);
-    assert_eq!(annotations.selected_text_indices(), [0, 1]);
+    assert_eq!(
+        annotations.selection_texts(),
+        annotations.texts().cloned().collect::<Vec<_>>()
+    );
     assert!(annotations.selected_index().is_none());
     assert!(annotations.selected_text_annotation().is_none());
     ctrl_click(&mut annotations, Point::new(220.0, 125.0));
-    assert_eq!(annotations.selected_text_indices(), [1]);
+    assert_eq!(
+        annotations.selection_texts(),
+        [annotations.texts().nth(1).unwrap().clone()]
+    );
     ctrl_click(&mut annotations, Point::new(220.0, 125.0));
-    assert_eq!(annotations.selected_text_indices(), [0, 1]);
+    assert_eq!(
+        annotations.selection_texts(),
+        annotations.texts().cloned().collect::<Vec<_>>()
+    );
 }
 
 #[test]
@@ -361,8 +363,8 @@ fn mixed_group_moves_cancels_and_undoes_as_one_change() {
         Point::new(80.0, 80.0),
         Point::new(380.0, 180.0),
     );
-    let shapes = annotations.shapes().to_vec();
-    let texts = annotations.texts().to_vec();
+    let shapes = annotations.shapes().cloned().collect::<Vec<_>>();
+    let texts = annotations.texts().cloned().collect::<Vec<_>>();
     assert!(annotations.begin_interaction(
         MOUSE,
         Point::new(220.0, 125.0),
@@ -371,9 +373,14 @@ fn mixed_group_moves_cancels_and_undoes_as_one_change() {
         PLAIN
     ));
     annotations.drag(MOUSE, Point::new(240.0, 155.0), false);
-    assert_eq!(annotations.text_move_previews()[0].bounds.x, 220.0);
+    assert_eq!(
+        annotations
+            .geometric_previews()
+            .find_map(|a| a.text().map(|text| text.bounds.x)),
+        Some(220.0)
+    );
     annotations.cancel();
-    assert_eq!(annotations.texts(), texts);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), texts);
     assert!(annotations.begin_interaction(
         MOUSE,
         Point::new(125.0, 125.0),
@@ -382,16 +389,19 @@ fn mixed_group_moves_cancels_and_undoes_as_one_change() {
         PLAIN
     ));
     assert!(annotations.finish(MOUSE, Point::new(145.0, 155.0), false));
-    assert_eq!(annotations.shapes()[0].bounds().x, 120.0);
-    assert_eq!(annotations.shapes()[1], shapes[1]);
-    assert_eq!(annotations.texts()[0].bounds.x, 220.0);
-    assert_eq!(annotations.texts()[1].bounds.x, 320.0);
+    assert_eq!(annotations.shapes().next().unwrap().bounds().x, 120.0);
+    assert_eq!(annotations.shapes().nth(1).unwrap().clone(), shapes[1]);
+    assert_eq!(annotations.texts().next().unwrap().bounds.x, 220.0);
+    assert_eq!(annotations.texts().nth(1).unwrap().bounds.x, 320.0);
     assert!(annotations.undo());
-    assert_eq!(annotations.shapes(), shapes);
-    assert_eq!(annotations.texts(), texts);
-    assert_eq!(annotations.selected_text_indices(), [0, 1]);
+    assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), shapes);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), texts);
+    assert_eq!(
+        annotations.selection_texts(),
+        annotations.texts().cloned().collect::<Vec<_>>()
+    );
     assert!(annotations.redo());
-    assert_eq!(annotations.texts()[0].bounds.x, 220.0);
+    assert_eq!(annotations.texts().next().unwrap().bounds.x, 220.0);
 }
 
 #[test]
@@ -403,15 +413,17 @@ fn mixed_color_layers_and_delete_preserve_membership_and_history() {
         Point::new(380.0, 180.0),
     );
     assert!(annotations.set_color(AnnotationColor::Red));
-    assert_eq!(annotations.shapes()[0].color, AnnotationColor::Red);
+    assert_eq!(
+        annotations.shapes().next().unwrap().color,
+        AnnotationColor::Red
+    );
     assert!(
         annotations
             .texts()
-            .iter()
             .all(|text| text.format.color == AnnotationColor::Red)
     );
     assert!(annotations.set_stroke_width(7.0));
-    assert_eq!(annotations.texts()[0].format.font_size, 24.0);
+    assert_eq!(annotations.texts().next().unwrap().format.font_size, 24.0);
     assert!(annotations.send_selected_to_back());
     let ids = annotations
         .ordered_annotations()
@@ -420,13 +432,16 @@ fn mixed_color_layers_and_delete_preserve_membership_and_history() {
             AnnotationRef::Text(_, t) => t.id,
         })
         .collect::<Vec<_>>();
-    assert_eq!(ids.last(), Some(&annotations.shapes()[1].id));
+    assert_eq!(ids.last(), Some(&annotations.shapes().nth(1).unwrap().id));
     assert!(annotations.delete_selected());
     assert_eq!(annotations.len(), 1);
-    assert_eq!(annotations.texts(), []);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), []);
     assert!(annotations.undo());
     assert_eq!(annotations.len(), 4);
-    assert_eq!(annotations.selected_text_indices(), [0, 1]);
+    assert_eq!(
+        annotations.selection_texts(),
+        annotations.texts().cloned().collect::<Vec<_>>()
+    );
 }
 
 #[test]
@@ -437,8 +452,8 @@ fn bulk_text_formatting_is_one_validated_undoable_change() {
         Point::new(80.0, 80.0),
         Point::new(380.0, 180.0),
     );
-    let texts = annotations.texts().to_vec();
-    let shapes = annotations.shapes().to_vec();
+    let texts = annotations.texts().cloned().collect::<Vec<_>>();
+    let shapes = annotations.shapes().cloned().collect::<Vec<_>>();
     assert!(annotations.update_selected_text_formats(|text| {
         let mut format = text.format;
         format.bold = true;
@@ -446,17 +461,23 @@ fn bulk_text_formatting_is_one_validated_undoable_change() {
         (format, Size::new(90.0, 42.0))
     }));
     assert!(
-        annotations.texts().iter().all(|text| text.format.bold
+        annotations.texts().all(|text| text.format.bold
             && (text.format.font_size - 32.0).abs() < 0.01)
     );
-    assert_eq!(annotations.shapes(), shapes);
-    assert_eq!(annotations.texts()[0].bounds.x, texts[0].bounds.x);
-    assert_eq!(annotations.texts()[0].id, texts[0].id);
+    assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), shapes);
+    assert_eq!(
+        annotations.texts().next().unwrap().bounds.x,
+        texts[0].bounds.x
+    );
+    assert_eq!(annotations.texts().next().unwrap().id, texts[0].id);
     assert!(annotations.undo());
-    assert_eq!(annotations.texts(), texts);
-    assert_eq!(annotations.selected_text_indices(), [0, 1]);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), texts);
+    assert_eq!(
+        annotations.selection_texts(),
+        annotations.texts().cloned().collect::<Vec<_>>()
+    );
     assert!(annotations.redo());
-    let before = annotations.texts().to_vec();
+    let before = annotations.texts().cloned().collect::<Vec<_>>();
     let revision = annotations.revision();
     let last = before[1].id;
     assert!(!annotations.update_selected_text_formats(|text| {
@@ -464,13 +485,13 @@ fn bulk_text_formatting_is_one_validated_undoable_change() {
         format.font_size = if text.id == last { f32::NAN } else { 48.0 };
         (format, Size::new(100.0, 50.0))
     }));
-    assert_eq!(annotations.texts(), before);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), before);
     assert_eq!(annotations.revision(), revision);
     assert!(!annotations.update_selected_text_formats(|text| (
         text.format,
         Size::new(f32::INFINITY, 50.0)
     )));
-    assert_eq!(annotations.texts(), before);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), before);
     assert!(annotations.begin_interaction(
         MOUSE,
         Point::new(220.0, 125.0),
@@ -482,7 +503,7 @@ fn bulk_text_formatting_is_one_validated_undoable_change() {
         panic!("active drag must block formatting before calling the updater")
     }));
     annotations.cancel();
-    assert_eq!(annotations.texts(), before);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), before);
 }
 
 #[test]
@@ -494,7 +515,10 @@ fn text_only_group_keeps_each_member_reachable_and_restores_selection() {
         Point::new(380.0, 180.0),
     );
     assert_eq!(annotations.selected_indices(), &[] as &[usize]);
-    assert_eq!(annotations.selected_text_indices(), [0, 1]);
+    assert_eq!(
+        annotations.selection_texts(),
+        annotations.texts().cloned().collect::<Vec<_>>()
+    );
     assert!(annotations.current_text_format().is_some());
     assert!(annotations.current_style().is_some());
     assert!(annotations.begin_interaction(
@@ -505,8 +529,11 @@ fn text_only_group_keeps_each_member_reachable_and_restores_selection() {
         PLAIN
     ));
     assert!(annotations.finish(MOUSE, Point::new(-1_000.0, 125.0), false));
-    assert_eq!(annotations.texts()[0].bounds.x, -59.0);
-    assert_eq!(annotations.texts()[1].bounds.x, 41.0);
+    assert_eq!(annotations.texts().next().unwrap().bounds.x, -59.0);
+    assert_eq!(annotations.texts().nth(1).unwrap().bounds.x, 41.0);
     assert!(annotations.undo());
-    assert_eq!(annotations.selected_text_indices(), [0, 1]);
+    assert_eq!(
+        annotations.selection_texts(),
+        annotations.texts().cloned().collect::<Vec<_>>()
+    );
 }

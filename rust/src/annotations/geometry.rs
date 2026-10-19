@@ -21,7 +21,7 @@ impl ShapeAnnotation {
 
     #[must_use]
     pub fn supports_rotation(&self) -> bool {
-        !matches!(self.geometry, AnnotationGeometry::Linear { .. })
+        self.tool().supports_rotation()
     }
 
     #[must_use]

@@ -156,7 +156,10 @@ fn export_accepts_pending_text_and_cancels_unfinished_shapes() {
     paste_text(&mut state, "Pending text");
     let id = begin(&mut state);
     assert!(!state.annotations().has_text_edit());
-    assert_eq!(state.annotations().texts()[0].text, "Pending text");
+    assert_eq!(
+        state.annotations().texts().next().unwrap().text,
+        "Pending text"
+    );
     assert!(state.project.is_dirty(&state.pages));
     let _ = update(&mut state, Message::PdfExported(id, Ok(None)));
     let _ = update(&mut state, Message::SetTool(Tool::Rectangle));

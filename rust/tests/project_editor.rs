@@ -61,7 +61,10 @@ fn every_tool_survives_schema_conversion_with_layer_order_and_identity() {
             .collect::<Vec<_>>()
     };
     assert_eq!(ids(&editor), ids(&decoded));
-    for (first, second) in editor.shapes().iter().zip(decoded.shapes()) {
+    for (first, second) in editor
+        .shapes()
+        .zip(decoded.shapes().cloned().collect::<Vec<_>>())
+    {
         assert_eq!(first.kind(), second.kind());
         assert_eq!(first.color, second.color);
         assert_eq!(first.filled, second.filled);
@@ -128,7 +131,7 @@ fn rigid_transform_on_a_portrait_page_does_not_flatten_rotation() {
     });
 
     let editor = decode_editor_page(&source).unwrap();
-    let shape = &editor.shapes()[0];
+    let shape = &editor.shapes().next().unwrap().clone();
     assert!((shape.rotation - angle).abs() < 0.0001);
     assert_eq!(shape.id, Uuid::from_u128(2));
     assert_eq!(shape.color.to_argb(), 0x8033_ffaa);
@@ -145,7 +148,7 @@ fn editing_a_loaded_object_preserves_identity_and_supports_undo() {
     first.set_tool(Tool::Rectangle);
     first.begin(MOUSE, Point::new(60.0, 70.0), size);
     first.finish(MOUSE, Point::new(180.0, 150.0), false);
-    let original_id = first.shapes()[0].id;
+    let original_id = first.shapes().next().unwrap().id;
     let manifest = encode_editor_page(&source, &first).unwrap();
     let mut editor = decode_editor_page(&manifest).unwrap();
     editor.set_tool(Tool::Select);
@@ -166,7 +169,7 @@ fn editing_a_loaded_object_preserves_identity_and_supports_undo() {
     );
     editor.finish(MOUSE, Point::new(150.0, 130.0), false);
 
-    assert_eq!(editor.shapes()[0].id, original_id);
+    assert_eq!(editor.shapes().next().unwrap().id, original_id);
     assert!(editor.revision() > 0);
     let edited = encode_editor_page(&manifest, &editor).unwrap();
     assert_ne!(edited, manifest);
@@ -194,7 +197,7 @@ fn corrected_pages_use_output_geometry_and_keep_annotation_metadata() {
     assert_eq!(page.filter, source.filter);
     let decoded = decode_editor_page(&page).unwrap();
     assert_eq!(encode_editor_page(&page, &decoded).unwrap(), page);
-    let bounds = decoded.shapes()[0].bounds();
+    let bounds = decoded.shapes().next().unwrap().bounds();
     assert!((bounds.x - 100.0).abs() < 0.001);
     assert!((bounds.y - 60.0).abs() < 0.001);
     assert!((bounds.width - 100.0).abs() < 0.001);
@@ -255,7 +258,7 @@ fn content_revisions_track_commits_not_selection_defaults_or_cancel() {
     editor.drag(MOUSE, Point::new(180.0, 150.0), false);
     assert_eq!(editor.preview().unwrap().id, id);
     editor.finish(MOUSE, Point::new(180.0, 150.0), false);
-    assert_eq!(editor.shapes()[0].id, id);
+    assert_eq!(editor.shapes().next().unwrap().id, id);
     let saved = editor.revision();
     assert!(saved > 0);
     editor.set_tool(Tool::Select);
@@ -342,7 +345,7 @@ fn unsupported_fonts_fail_but_legacy_width_hints_load_without_data_loss() {
         *maximum_width = 0.4;
     }
     let editor = decode_editor_page(&manifest).unwrap();
-    assert_eq!(editor.texts()[0].text, "Sample");
+    assert_eq!(editor.texts().next().unwrap().text, "Sample");
     assert_eq!(encode_editor_page(&manifest, &editor).unwrap(), manifest);
 }
 
@@ -360,10 +363,13 @@ fn early_csharp_text_defaults_preserve_content_bounds_and_save_data() {
         .annotations
         .push(serde_json::from_value(legacy).unwrap());
     let editor = decode_editor_page(&source).unwrap();
-    assert_eq!(editor.texts()[0].text, "hahó\nbubu");
-    assert_eq!(editor.texts()[0].format.font_size, 15.0);
-    assert_eq!(editor.texts()[0].format.typeface, TextTypeface::Sans);
-    assert!((editor.texts()[0].bounds.x - 122.4).abs() < 0.001);
+    assert_eq!(editor.texts().next().unwrap().text, "hahó\nbubu");
+    assert_eq!(editor.texts().next().unwrap().format.font_size, 15.0);
+    assert_eq!(
+        editor.texts().next().unwrap().format.typeface,
+        TextTypeface::Sans
+    );
+    assert!((editor.texts().next().unwrap().bounds.x - 122.4).abs() < 0.001);
     assert_eq!(encode_editor_page(&source, &editor).unwrap(), source);
 }
 
@@ -387,10 +393,10 @@ fn legacy_csharp_font_choices_load_and_survive_non_font_edits() {
             .unwrap(),
         );
         let mut editor = decode_editor_page(&source).unwrap();
-        assert_eq!(editor.texts()[0].format.typeface, typeface);
+        assert_eq!(editor.texts().next().unwrap().format.typeface, typeface);
         assert_eq!(encode_editor_page(&source, &editor).unwrap(), source);
         editor.set_tool(Tool::Select);
-        let center = editor.texts()[0].bounds.center();
+        let center = editor.texts().next().unwrap().bounds.center();
         editor.begin_interaction(
             MOUSE,
             center,
@@ -462,7 +468,7 @@ fn newly_rotated_shapes_and_ink_keep_frames_on_a_corrected_page() {
         editor.drag(MOUSE, Point::new(190.0, 220.0), false);
         editor.finish(MOUSE, Point::new(250.0, 180.0), false);
         editor.set_tool(Tool::Select);
-        let shape = &editor.shapes()[0];
+        let shape = &editor.shapes().next().unwrap().clone();
         let id = shape.id;
         // Zoom in so narrow shapes expose their editing controls.
         let handle = shape.rotation_handle(4.0).unwrap();
@@ -479,17 +485,17 @@ fn newly_rotated_shapes_and_ink_keep_frames_on_a_corrected_page() {
             Point::new(center.x + 100.0, center.y + 50.0),
             false,
         );
-        assert_eq!(editor.shapes()[0].id, id);
-        assert!(editor.shapes()[0].rotation.abs() > 0.01);
-        let expected = editor.shapes()[0].frame_corners().unwrap();
+        assert_eq!(editor.shapes().next().unwrap().id, id);
+        assert!(editor.shapes().next().unwrap().rotation.abs() > 0.01);
+        let expected = editor.shapes().next().unwrap().frame_corners().unwrap();
         let manifest = encode_editor_page(&source, &editor).unwrap();
         let decoded = decode_editor_page(&manifest).unwrap();
-        let actual = decoded.shapes()[0].frame_corners().unwrap();
+        let actual = decoded.shapes().next().unwrap().frame_corners().unwrap();
         for (expected, actual) in expected.into_iter().zip(actual) {
             assert!((expected.x - actual.x).abs() < 0.001, "{tool:?}");
             assert!((expected.y - actual.y).abs() < 0.001, "{tool:?}");
         }
-        assert_eq!(decoded.shapes()[0].id, id);
+        assert_eq!(decoded.shapes().next().unwrap().id, id);
     }
 }
 
@@ -505,4 +511,225 @@ fn blank_page() -> ProjectPage {
         brightness: 0,
         annotations: Vec::new(),
     }
+}
+
+fn mixed_contract_page() -> ProjectPage {
+    let page = blank_page();
+    let size = editor_page_size(&page).unwrap();
+    let mut editor = Annotations::default();
+    editor.set_tool(Tool::Rectangle);
+    editor.set_color(AnnotationColor::Argb(0x8055_aa77));
+    assert!(editor.begin(MOUSE, Point::new(76.5, 114.75), size));
+    assert!(editor.finish(MOUSE, Point::new(-76.5, 229.5), false));
+    editor.set_tool(Tool::Text);
+    assert!(editor.begin_text(Point::new(153.0, 344.25), size, 1.0));
+    editor.update_text("Contract\ntext", Size::new(76.5, 57.375));
+    assert!(editor.accept_text());
+    editor.set_tool(Tool::Line);
+    assert!(editor.begin(MOUSE, Point::new(306.0, 573.75), size));
+    assert!(editor.finish(MOUSE, Point::new(459.0, 688.5), false));
+    encode_editor_page(&page, &editor).unwrap()
+}
+
+fn annotation_id(annotation: &ProjectAnnotation) -> Uuid {
+    match annotation {
+        ProjectAnnotation::Shape { id, .. }
+        | ProjectAnnotation::Text { id, .. }
+        | ProjectAnnotation::Freehand { id, .. } => *id,
+    }
+}
+
+#[test]
+fn mixed_history_matches_schema_oracle_without_storage_indices() {
+    let source = mixed_contract_page();
+    let size = editor_page_size(&source).unwrap();
+    let mut editor = decode_editor_page(&source).unwrap();
+    editor.set_tool(Tool::Select);
+    assert!(editor.begin_interaction(
+        MOUSE,
+        Point::new(250.0, 500.0),
+        size,
+        1.0,
+        DragModifiers::default(),
+    ));
+    assert!(editor.finish(MOUSE, Point::new(-100.0, 0.0), false));
+    assert_eq!(editor.selected_count(), 2);
+    let line_id = annotation_id(&source.annotations[2]);
+    let mut expected = source.clone();
+    let mut states = vec![(source.clone(), editor.revision())];
+    for step in 0..6 {
+        match step {
+            0 => {
+                assert!(editor.set_color(AnnotationColor::Argb(0x6066_7788)));
+                for annotation in &mut expected.annotations[..2] {
+                    match annotation {
+                        ProjectAnnotation::Shape { color_argb, .. }
+                        | ProjectAnnotation::Text { color_argb, .. } => {
+                            *color_argb = 0x6066_7788;
+                        }
+                        ProjectAnnotation::Freehand { .. } => unreachable!(),
+                    }
+                }
+            }
+            1 => {
+                assert!(editor.set_stroke_width(7.0));
+                let ProjectAnnotation::Shape { stroke_width, .. } =
+                    &mut expected.annotations[0]
+                else {
+                    unreachable!()
+                };
+                *stroke_width = 7.0;
+            }
+            2 => {
+                assert!(editor.set_filled(true));
+                let ProjectAnnotation::Shape { filled, .. } =
+                    &mut expected.annotations[0]
+                else {
+                    unreachable!()
+                };
+                *filled = true;
+            }
+            3 => {
+                assert!(editor.bring_selected_to_front());
+                expected.annotations.rotate_right(1);
+            }
+            4 => {
+                assert!(editor.send_selected_to_back());
+                expected.annotations.rotate_left(1);
+            }
+            _ => {
+                assert!(editor.delete_selected());
+                expected.annotations.retain(|a| annotation_id(a) == line_id);
+            }
+        }
+        let encoded = encode_editor_page(&source, &editor).unwrap();
+        assert_eq!(encoded, expected, "operation {step}");
+        let reopened = decode_editor_page(&encoded).unwrap();
+        assert_eq!(encode_editor_page(&encoded, &reopened).unwrap(), encoded);
+        states.push((expected.clone(), editor.revision()));
+    }
+    for (page, revision) in states[..states.len() - 1].iter().rev() {
+        assert!(editor.undo());
+        assert_eq!(encode_editor_page(&source, &editor).unwrap(), *page);
+        assert_eq!(editor.revision(), *revision);
+        assert_eq!(editor.selected_count(), 2);
+    }
+    assert!(!editor.can_undo());
+    for (page, revision) in &states[1..] {
+        assert!(editor.redo());
+        assert_eq!(encode_editor_page(&source, &editor).unwrap(), *page);
+        assert_eq!(editor.revision(), *revision);
+    }
+    assert!(!editor.has_selection());
+    assert!(!editor.can_redo());
+}
+
+#[test]
+fn reordered_mixed_group_keeps_geometry_and_text_edit_targets_by_id() {
+    let source = mixed_contract_page();
+    let size = editor_page_size(&source).unwrap();
+    let mut editor = decode_editor_page(&source).unwrap();
+    let shape = editor.shapes().next().unwrap().clone();
+    let text = editor.texts().next().unwrap().clone();
+    editor.set_tool(Tool::Select);
+    assert!(editor.begin_interaction(
+        MOUSE,
+        Point::new(250.0, 500.0),
+        size,
+        1.0,
+        DragModifiers::default(),
+    ));
+    assert!(editor.finish(MOUSE, Point::new(-100.0, 0.0), false));
+    let selected = editor.selected_ids().to_vec();
+    assert!(editor.bring_selected_to_front());
+    let before_move = encode_editor_page(&source, &editor).unwrap();
+    assert!(editor.begin_interaction(
+        MOUSE,
+        Point::new(160.0, 350.0),
+        size,
+        1.0,
+        DragModifiers::default(),
+    ));
+    assert_eq!(
+        editor
+            .geometric_previews()
+            .filter(|a| a.text().is_some())
+            .count(),
+        1
+    );
+    assert_eq!(
+        editor
+            .geometric_previews()
+            .filter(|a| a.shape().is_some())
+            .count(),
+        1
+    );
+    assert!(editor.finish(MOUSE, Point::new(180.0, 380.0), false));
+    assert_eq!(editor.selected_ids(), selected);
+    let moved = editor.shapes().find(|a| a.id == shape.id).unwrap();
+    assert_eq!(moved.bounds().x, shape.bounds().x + 20.0);
+    assert_eq!(moved.bounds().y, shape.bounds().y + 30.0);
+    let moved = editor.texts().find(|a| a.id == text.id).unwrap();
+    assert_eq!(moved.bounds.x, text.bounds.x + 20.0);
+    assert_eq!(moved.bounds.y, text.bounds.y + 30.0);
+    assert!(editor.undo());
+    assert_eq!(encode_editor_page(&source, &editor).unwrap(), before_move);
+    assert!(editor.redo());
+    editor.set_tool(Tool::Text);
+    assert!(editor.begin_text_edit(Point::new(180.0, 380.0), size, 1.0));
+    editor.update_text("Edited after reorder", Size::new(150.0, 40.0));
+    assert!(editor.accept_text());
+    let saved = encode_editor_page(&source, &editor).unwrap();
+    assert_eq!(saved.annotations[0], source.annotations[2]);
+    assert_eq!(annotation_id(&saved.annotations[1]), shape.id);
+    assert_eq!(annotation_id(&saved.annotations[2]), text.id);
+    let reopened = decode_editor_page(&saved).unwrap();
+    assert_eq!(
+        reopened.texts().next().unwrap().text,
+        "Edited after reorder"
+    );
+    assert_eq!(encode_editor_page(&saved, &reopened).unwrap(), saved);
+}
+
+#[test]
+fn pending_text_formats_cancel_or_accept_without_changing_other_layers() {
+    let source = mixed_contract_page();
+    let size = editor_page_size(&source).unwrap();
+    let mut editor = decode_editor_page(&source).unwrap();
+    editor.set_tool(Tool::Text);
+    let point = Point::new(160.0, 350.0);
+    let format = TextFormat {
+        typeface: TextTypeface::Monospace,
+        font_size: 32.0,
+        bold: true,
+        italic: true,
+        underline: true,
+        color: AnnotationColor::Argb(0x8033_66ff),
+    };
+    for accept in [false, true] {
+        assert!(editor.begin_text_edit(point, size, 1.0));
+        assert!(editor.set_text_format(format));
+        editor.update_text("Changed", Size::new(153.0, 57.375));
+        assert!(encode_editor_page(&source, &editor).is_err());
+        assert_eq!(editor.revision(), 0);
+        if accept {
+            assert!(editor.accept_text());
+        } else {
+            editor.cancel();
+            assert_eq!(encode_editor_page(&source, &editor).unwrap(), source);
+        }
+    }
+    let changed = encode_editor_page(&source, &editor).unwrap();
+    assert_eq!(changed.annotations[0], source.annotations[0]);
+    assert_eq!(changed.annotations[2], source.annotations[2]);
+    assert_eq!(
+        annotation_id(&changed.annotations[1]),
+        annotation_id(&source.annotations[1])
+    );
+    assert_ne!(changed.annotations[1], source.annotations[1]);
+    assert!(editor.undo());
+    assert_eq!(encode_editor_page(&source, &editor).unwrap(), source);
+    assert!(!editor.can_undo());
+    assert!(editor.redo());
+    assert_eq!(encode_editor_page(&source, &editor).unwrap(), changed);
 }

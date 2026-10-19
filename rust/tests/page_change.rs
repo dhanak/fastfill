@@ -17,41 +17,47 @@ fn annotated() -> Annotations {
 #[test]
 fn page_changes_stage_without_mutation_and_undo_as_one_step() {
     let mut state = annotated();
-    let shapes = state.shapes().to_vec();
-    let texts = state.texts().to_vec();
+    let shapes = state.shapes().cloned().collect::<Vec<_>>();
+    let texts = state.texts().cloned().collect::<Vec<_>>();
     let revision = state.revision();
     let staged = state.prepare_page_change(Size::new(612.0, 400.0)).unwrap();
-    assert_eq!(state.shapes(), shapes);
-    assert_eq!(state.texts(), texts);
+    assert_eq!(state.shapes().cloned().collect::<Vec<_>>(), shapes);
+    assert_eq!(state.texts().cloned().collect::<Vec<_>>(), texts);
     assert_eq!(state.revision(), revision);
-    assert_eq!(staged.annotations().shapes()[0].id, shapes[0].id);
-    assert!(staged.annotations().shapes()[0].bounds().y < 400.0);
-    assert!(staged.annotations().texts()[0].bounds.y < 400.0);
+    assert_eq!(
+        staged.annotations().shapes().next().unwrap().id,
+        shapes[0].id
+    );
+    assert!(staged.annotations().shapes().next().unwrap().bounds().y < 400.0);
+    assert!(staged.annotations().texts().next().unwrap().bounds.y < 400.0);
     assert_eq!(state.commit_page_change(staged, 1), Some(2));
     assert_eq!(state.page_context(), 1);
     assert_ne!(state.revision(), revision);
-    let moved_shapes = state.shapes().to_vec();
-    let moved_texts = state.texts().to_vec();
+    let moved_shapes = state.shapes().cloned().collect::<Vec<_>>();
+    let moved_texts = state.texts().cloned().collect::<Vec<_>>();
     assert!(state.undo());
     assert_eq!(state.page_context(), 0);
     assert_eq!(state.revision(), revision);
-    assert_eq!(state.shapes(), shapes);
-    assert_eq!(state.texts(), texts);
+    assert_eq!(state.shapes().cloned().collect::<Vec<_>>(), shapes);
+    assert_eq!(state.texts().cloned().collect::<Vec<_>>(), texts);
     assert!(state.redo());
     assert_eq!(state.page_context(), 1);
-    assert_eq!(state.shapes(), moved_shapes);
-    assert_eq!(state.texts(), moved_texts);
+    assert_eq!(state.shapes().cloned().collect::<Vec<_>>(), moved_shapes);
+    assert_eq!(state.texts().cloned().collect::<Vec<_>>(), moved_texts);
 }
 
 #[test]
 fn partly_visible_objects_are_not_clamped_or_resized() {
     let mut state = annotated();
-    let shapes = state.shapes().to_vec();
+    let shapes = state.shapes().cloned().collect::<Vec<_>>();
     let staged = state.prepare_page_change(Size::new(612.0, 550.0)).unwrap();
-    assert_eq!(staged.annotations().shapes(), shapes);
+    assert_eq!(
+        staged.annotations().shapes().cloned().collect::<Vec<_>>(),
+        shapes
+    );
     assert_eq!(state.commit_page_change(staged, 1), Some(1));
-    assert_eq!(state.shapes(), shapes);
-    assert_eq!(state.texts()[0].format.font_size, 24.0);
+    assert_eq!(state.shapes().cloned().collect::<Vec<_>>(), shapes);
+    assert_eq!(state.texts().next().unwrap().format.font_size, 24.0);
 }
 
 #[test]
@@ -86,15 +92,18 @@ fn scaling_is_independent_for_shapes_and_keeps_text_proportions_and_strokes() {
             ))
         })
         .unwrap();
-    let shape = &staged.annotations().shapes()[0];
+    let shape = &staged.annotations().shapes().next().unwrap().clone();
     let bounds = shape.bounds();
     assert_eq!(
         bounds,
         fastfill_rust::geometry::Rect::new(112.5, 372.5, 150.0, 80.0)
     );
-    assert_eq!(shape.stroke_width, state.shapes()[0].stroke_width);
-    assert_eq!(shape.rotation, state.shapes()[0].rotation);
-    let text = &staged.annotations().texts()[0];
+    assert_eq!(
+        shape.stroke_width,
+        state.shapes().next().unwrap().stroke_width
+    );
+    assert_eq!(shape.rotation, state.shapes().next().unwrap().rotation);
+    let text = &staged.annotations().texts().next().unwrap().clone();
     assert!((text.format.font_size - 19.2).abs() < 0.001);
     assert!((text.bounds.width - 96.0).abs() < 0.001);
     assert!((text.bounds.height - 24.0).abs() < 0.001);

@@ -8,7 +8,7 @@ const PAGE: Size = Size::new(800.0, 1_100.0);
 const MOUSE: Pointer = Pointer::Mouse;
 
 fn linear_geometry(annotations: &Annotations) -> (LineKind, Point, Point) {
-    match &annotations.shapes()[0].geometry {
+    match &annotations.shapes().next().unwrap().geometry {
         AnnotationGeometry::Linear { kind, start, end } => {
             (*kind, *start, *end)
         }
@@ -41,7 +41,7 @@ fn arrow_kind_survives_move_endpoint_edit_and_history() {
     annotations.set_tool(Tool::Arrow);
     annotations.begin(MOUSE, Point::new(100.0, 100.0), PAGE);
     annotations.finish(MOUSE, Point::new(300.0, 200.0), false);
-    let original = annotations.shapes()[0].clone();
+    let original = annotations.shapes().next().unwrap().clone();
 
     annotations.set_tool(Tool::Select);
     annotations.begin_interaction(
@@ -68,7 +68,10 @@ fn arrow_kind_survives_move_endpoint_edit_and_history() {
     assert!(annotations.undo());
     assert_eq!(linear_geometry(&annotations).0, LineKind::Arrow);
     assert!(annotations.undo());
-    assert_eq!(annotations.shapes(), [original]);
+    assert_eq!(
+        annotations.shapes().cloned().collect::<Vec<_>>(),
+        [original]
+    );
 }
 
 #[test]
@@ -79,11 +82,11 @@ fn arrowhead_is_part_of_bounds_and_hit_testing() {
     annotations.finish(MOUSE, Point::new(300.0, 100.0), false);
     annotations.set_tool(Tool::Select);
 
-    let bounds = annotations.shapes()[0].bounds();
+    let bounds = annotations.shapes().next().unwrap().bounds();
     assert!(bounds.y < 100.0);
     assert!(bounds.y + bounds.height > 100.0);
     let AnnotationGeometry::Linear { start, end, .. } =
-        &annotations.shapes()[0].geometry
+        &annotations.shapes().next().unwrap().geometry
     else {
         panic!("expected arrow");
     };
@@ -91,7 +94,7 @@ fn arrowhead_is_part_of_bounds_and_hit_testing() {
         fastfill_rust::annotations::arrowhead_points(*start, *end).unwrap();
     assert!(bounds.y < left.y.min(right.y));
     assert!(bounds.y + bounds.height > left.y.max(right.y));
-    let half_stroke = annotations.shapes()[0].stroke_width / 2.0;
+    let half_stroke = annotations.shapes().next().unwrap().stroke_width / 2.0;
     assert!((bounds.x + bounds.width - (end.x + half_stroke)).abs() < 0.001);
     assert_eq!(
         annotations.hit_selected(

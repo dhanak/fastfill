@@ -137,8 +137,8 @@ fn corrected_projects_edit_and_round_trip_without_baking_in_corrections() {
     let reloaded = reopen(&saved);
     let pages = Pages::from_opened(&reloaded).unwrap();
     let annotations = &pages.iter().nth(1).unwrap().annotations;
-    let expected = &state.annotations().shapes()[0];
-    let actual = &annotations.shapes()[0];
+    let expected = &state.annotations().shapes().next().unwrap().clone();
+    let actual = &annotations.shapes().next().unwrap().clone();
     assert_eq!(actual.id, expected.id);
     assert_eq!(actual.color, expected.color);
     assert_eq!(actual.stroke_width, expected.stroke_width);

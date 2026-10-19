@@ -163,7 +163,7 @@ fn rotated_ink_uses_its_transformed_strokes() {
         ],
         false,
     );
-    let shape = &annotations.shapes()[0];
+    let shape = &annotations.shapes().next().unwrap().clone();
     let handle = shape.rotation_handle(1.0).unwrap();
     let center = shape.bounds().center();
     let radius = (handle.y - center.y).abs();
@@ -249,7 +249,7 @@ fn rotated_frames_do_not_select_empty_corners_of_their_outer_bounds() {
         &[Point::new(100.0, 200.0), Point::new(500.0, 250.0)],
         false,
     );
-    let shape = &annotations.shapes()[0];
+    let shape = &annotations.shapes().next().unwrap().clone();
     let handle = shape.rotation_handle(1.0).unwrap();
     let center = shape.bounds().center();
     let radius = (handle.y - center.y).abs();

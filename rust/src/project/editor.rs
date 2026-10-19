@@ -112,25 +112,12 @@ pub fn encode_corrected_editor_page(
     page.annotations = editor
         .ordered_annotations()
         .map(|annotation| {
-            let id = match annotation {
-                AnnotationRef::Shape(_, shape) => shape.id,
-                AnnotationRef::Text(_, text) => text.id,
-            };
-            if let Some((source, decoded)) = previous.get(&id) {
-                let unchanged = match (annotation, decoded) {
-                    (
-                        AnnotationRef::Shape(_, shape),
-                        OwnedAnnotation::Shape(old),
-                    ) => shape == old,
-                    (
-                        AnnotationRef::Text(_, text),
-                        OwnedAnnotation::Text(old),
-                    ) => text == old,
-                    _ => false,
-                };
-                if unchanged && size == old_size {
-                    return (*source).clone();
-                }
+            let id = annotation.id();
+            if let Some((source, decoded)) = previous.get(&id)
+                && decoded.matches(annotation)
+                && size == old_size
+            {
+                return (*source).clone();
             }
             let old = previous.get(&id).map(|(source, _)| *source);
             encode_annotation(annotation, old, size)

@@ -4,7 +4,7 @@ use super::geometry::{
 };
 use super::{
     AnnotationGeometry, Annotations, Draft, DragModifiers, EditDraft, EditHit,
-    GroupMoveDraft, Layer, LineEndpoint, Pointer, RESIZE_CORNERS,
+    GroupMoveDraft, LineEndpoint, OwnedAnnotation, Pointer, RESIZE_CORNERS,
     SELECTION_STROKE, SelectionDraft, ShapeAnnotation, Tool,
 };
 use crate::geometry::{Point, Rect, Size};
@@ -15,54 +15,59 @@ impl Annotations {
         point: Point,
         pointer: Pointer,
         scale: f32,
-    ) -> Option<Layer> {
+    ) -> Option<uuid::Uuid> {
         if !valid(point) || !valid_scale(scale) {
             return None;
         }
         let tolerance = line_hit_radius(pointer) / scale;
-        self.layers.iter().rev().find_map(|layer| match *layer {
-            Layer::Shape(index)
-                if self.shapes.get(index).is_some_and(|annotation| {
-                    annotation_contains(annotation, point, tolerance)
-                }) =>
-            {
-                Some(*layer)
-            }
-            Layer::Text(index)
-                if self.texts.get(index).is_some_and(|annotation| {
-                    contains(
-                        annotation.bounds,
-                        annotation.unrotated_point(point),
-                    )
-                }) =>
-            {
-                Some(*layer)
-            }
-            Layer::Shape(_) | Layer::Text(_) => None,
+        self.content.iter().rev().find_map(|annotation| {
+            annotation
+                .contains(point, tolerance)
+                .then_some(annotation.id())
         })
     }
 
     #[must_use]
     pub fn selected_index(&self) -> Option<usize> {
-        match (self.selected.as_slice(), self.selected_texts.as_slice()) {
-            ([index], []) => Some(*index),
-            _ => None,
-        }
+        let [id] = self.selected.as_slice() else {
+            return None;
+        };
+        self.content
+            .iter()
+            .position(|a| a.id() == *id && a.shape().is_some())
     }
 
     #[must_use]
-    pub fn selected_indices(&self) -> &[usize] {
+    pub fn selected_indices(&self) -> Vec<usize> {
+        self.selected_content()
+            .filter_map(|(index, a)| a.shape().map(|_| index))
+            .collect()
+    }
+
+    #[must_use]
+    pub fn selected_text_indices(&self) -> Vec<usize> {
+        self.selected_content()
+            .filter_map(|(index, a)| a.text().map(|_| index))
+            .collect()
+    }
+
+    pub(super) fn selected_content(
+        &self,
+    ) -> impl Iterator<Item = (usize, &OwnedAnnotation)> {
+        self.content
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| self.selected.contains(&a.id()))
+    }
+
+    #[must_use]
+    pub fn selected_ids(&self) -> &[uuid::Uuid] {
         &self.selected
     }
 
     #[must_use]
-    pub fn selected_text_indices(&self) -> &[usize] {
-        &self.selected_texts
-    }
-
-    #[must_use]
     pub fn selected_count(&self) -> usize {
-        self.selected.len() + self.selected_texts.len()
+        self.selected.len()
     }
 
     #[must_use]
@@ -73,24 +78,20 @@ impl Annotations {
     /// Selection is transient; clearing it never changes content or history.
     pub fn clear_selection(&mut self) {
         self.selected.clear();
-        self.selected_texts.clear();
     }
 
     #[must_use]
     pub fn can_reset_rotation(&self) -> bool {
-        self.draft.is_none()
-            && self.text_draft.is_none()
-            && self.text_move.is_none()
-            && (self.selected.iter().any(|index| {
-                self.shapes.get(*index).is_some_and(|annotation| {
-                    annotation.supports_rotation()
-                        && annotation.rotation.abs() > f32::EPSILON
-                })
-            }) || self.selected_texts.iter().any(|index| {
-                self.texts
-                    .get(*index)
-                    .is_some_and(|text| text.rotation.abs() > f32::EPSILON)
-            }))
+        !self.has_pending_edit()
+            && self.selected_content().any(|(_, a)| match a {
+                OwnedAnnotation::Shape(shape) => {
+                    shape.supports_rotation()
+                        && shape.rotation.abs() > f32::EPSILON
+                }
+                OwnedAnnotation::Text(text) => {
+                    text.rotation.abs() > f32::EPSILON
+                }
+            })
     }
 
     pub fn reset_rotation(&mut self) -> bool {
@@ -98,33 +99,34 @@ impl Annotations {
             return false;
         }
         self.record_change();
-        for index in &self.selected {
-            if self.shapes[*index].supports_rotation() {
-                self.shapes[*index].rotation = 0.0;
+        for annotation in &mut self.content {
+            if self.selected.contains(&annotation.id()) {
+                match annotation {
+                    OwnedAnnotation::Shape(shape)
+                        if shape.supports_rotation() =>
+                    {
+                        shape.rotation = 0.0;
+                    }
+                    OwnedAnnotation::Text(text) => text.rotation = 0.0,
+                    OwnedAnnotation::Shape(_) => {}
+                }
             }
-        }
-        for index in &self.selected_texts {
-            self.texts[*index].rotation = 0.0;
         }
         true
     }
 
     #[must_use]
     pub fn edited_index(&self) -> Option<usize> {
-        match &self.draft {
-            Some(Draft::Edit(draft)) => Some(draft.index),
-            _ => None,
-        }
+        self.draft.as_ref().and_then(Draft::edited_index)
     }
 
     #[must_use]
     pub fn is_edited(&self, index: usize) -> bool {
         match &self.draft {
-            Some(Draft::Edit(draft)) => draft.index == index,
             Some(Draft::GroupMove(draft)) => {
                 draft.originals.iter().any(|(edited, _)| *edited == index)
             }
-            Some(Draft::Create(_) | Draft::Selection(_)) | None => false,
+            _ => self.edited_index() == Some(index),
         }
     }
 
@@ -137,7 +139,7 @@ impl Annotations {
         if self.edited_index() == Some(index) {
             self.preview()
         } else {
-            self.shapes.get(index).cloned()
+            self.shape(index).cloned()
         }
     }
 
@@ -146,14 +148,9 @@ impl Annotations {
         if !valid_scale(scale) {
             return None;
         }
-        self.selection_annotations(scale)
-            .into_iter()
-            .map(|annotation| annotation.visible_bounds())
-            .chain(
-                self.selection_texts()
-                    .iter()
-                    .map(super::TextAnnotation::visible_bounds),
-            )
+        self.selected_previews()
+            .iter()
+            .map(OwnedAnnotation::visible_bounds)
             .reduce(union_bounds)
     }
 
@@ -162,18 +159,27 @@ impl Annotations {
         if !valid_scale(scale) || matches!(self.draft, Some(Draft::Create(_))) {
             return Vec::new();
         }
-        let previews =
-            self.draft.as_ref().map_or_else(Vec::new, Draft::previews);
-        self.selected
-            .iter()
-            .filter_map(|index| {
+        self.selected_previews()
+            .into_iter()
+            .filter_map(|a| match a {
+                OwnedAnnotation::Shape(shape) => Some(shape),
+                OwnedAnnotation::Text(_) => None,
+            })
+            .collect()
+    }
+
+    pub(super) fn selected_previews(&self) -> Vec<OwnedAnnotation> {
+        if matches!(self.draft, Some(Draft::Create(_))) {
+            return Vec::new();
+        }
+        let previews = self.draft_previews();
+        self.selected_content()
+            .map(|(index, original)| {
                 previews
                     .iter()
-                    .find_map(|(preview_index, annotation)| {
-                        (preview_index == &Some(*index))
-                            .then(|| annotation.clone())
-                    })
-                    .or_else(|| self.shapes.get(*index).cloned())
+                    .find(|(edited, _)| *edited == Some(index))
+                    .map_or(original, |(_, annotation)| annotation)
+                    .clone()
             })
             .collect()
     }
@@ -212,7 +218,7 @@ impl Annotations {
         let annotation = if self.edited_index() == Some(index) {
             self.preview()?
         } else {
-            self.shapes.get(index)?.clone()
+            self.shape(index)?.clone()
         };
         let controls = annotation.bounds();
         if !annotation.edit_handles_visible(scale) {
@@ -297,24 +303,19 @@ impl Annotations {
         }
     }
 
-    fn hit_group(&self, point: Point, picked: Option<Layer>) -> bool {
+    fn hit_group(&self, point: Point, picked: Option<uuid::Uuid>) -> bool {
         picked.map_or_else(
             || {
-                self.selected.iter().any(|index| {
-                    contains(self.shapes[*index].visible_bounds(), point)
-                }) || self.selected_texts.iter().any(|index| {
-                    let text = &self.texts[*index];
-                    contains(text.bounds, text.unrotated_point(point))
+                self.selected_content().any(|(_, a)| match a {
+                    OwnedAnnotation::Shape(shape) => {
+                        contains(shape.visible_bounds(), point)
+                    }
+                    OwnedAnnotation::Text(text) => {
+                        contains(text.bounds, text.unrotated_point(point))
+                    }
                 })
             },
-            |layer| match layer {
-                Layer::Shape(index) => {
-                    self.selected.binary_search(&index).is_ok()
-                }
-                Layer::Text(index) => {
-                    self.selected_texts.binary_search(&index).is_ok()
-                }
-            },
+            |id| self.selected.contains(&id),
         )
     }
 
@@ -326,8 +327,7 @@ impl Annotations {
         scale: f32,
         modifiers: DragModifiers,
     ) -> bool {
-        if self.draft.is_some()
-            || self.text_move.is_some()
+        if self.has_pending_edit()
             || !valid(point)
             || !valid_scale(scale)
             || !page.width.is_finite()
@@ -346,7 +346,6 @@ impl Annotations {
         }
 
         if let (Some(index), Some(hit)) = (self.selected_index(), hit) {
-            self.selected_texts.clear();
             self.start_edit(pointer, index, point, page, modifiers, hit);
             return true;
         }
@@ -371,20 +370,14 @@ impl Annotations {
             self.start_selection(pointer, point, scale, picked, true);
             return true;
         }
-        let handle_hit = matches!(
-            hit,
-            Some(EditHit::Resize(_) | EditHit::Endpoint(_) | EditHit::Rotate)
-        );
-        if (handle_hit || modifiers.force_move && hit.is_some())
-            && let (Some(index), Some(hit)) = (self.selected_index(), hit)
-        {
+        // An existing single selection owns its controls/body, even behind
+        // another layer. Ctrl above still selects/toggles the topmost layer.
+        if let (Some(index), Some(hit)) = (self.selected_index(), hit) {
             self.start_edit(pointer, index, point, page, modifiers, hit);
             return true;
         }
 
-        if self.hit_selected_text(point, pointer, scale)
-            == Some(super::TextEditHit::Rotate)
-        {
+        if self.hit_selected_text(point, pointer, scale).is_some() {
             return self.begin_text_move(pointer, point, page, scale);
         }
         if self.selected_count() > 1 && hit == Some(EditHit::Move) {
@@ -392,32 +385,21 @@ impl Annotations {
             return true;
         }
         let picked = self.hit_layer(point, pointer, scale);
-        if picked.is_none()
-            && let (Some(index), Some(EditHit::Move)) =
-                (self.selected_index(), hit)
-        {
-            self.start_edit(
-                pointer,
-                index,
-                point,
-                page,
-                modifiers,
-                EditHit::Move,
-            );
-            return true;
-        }
-        if let Some(Layer::Text(index)) = picked
+        let index = picked
+            .and_then(|id| self.content.iter().position(|a| a.id() == id));
+        if let Some(index) = index
+            && self.text(index).is_some()
             && (force_edit
                 || self.selected_count() == 1
-                    && self.selected_texts.binary_search(&index).is_ok())
+                    && self.selected.contains(&self.content[index].id()))
         {
             return self.begin_text_move(pointer, point, page, scale);
         }
-        if let Some(Layer::Shape(index)) = picked
+        if let Some(index) = index
+            && self.shape(index).is_some()
             && (force_edit || self.selected_index() == Some(index))
         {
-            self.selected_texts.clear();
-            self.selected = vec![index];
+            self.selected = vec![self.content[index].id()];
             let hit = self
                 .hit_selected(point, pointer, scale, modifiers)
                 .unwrap_or(EditHit::Move);
@@ -433,7 +415,7 @@ impl Annotations {
         pointer: Pointer,
         point: Point,
         scale: f32,
-        picked: Option<Layer>,
+        picked: Option<uuid::Uuid>,
         toggle: bool,
     ) {
         // Defer clicks until release so movement can instead become a marquee.
@@ -454,40 +436,30 @@ impl Annotations {
 
     pub(super) fn apply_selection_click(
         &mut self,
-        picked: Option<Layer>,
+        picked: Option<uuid::Uuid>,
         toggle: bool,
     ) {
         if !toggle {
             self.selected.clear();
-            self.selected_texts.clear();
         }
-        let Some(layer) = picked else { return };
-        let (indices, index) = match layer {
-            Layer::Shape(index) => (&mut self.selected, index),
-            Layer::Text(index) => (&mut self.selected_texts, index),
-        };
-        match indices.binary_search(&index) {
-            Ok(position) => {
-                indices.remove(position);
-            }
-            Err(position) => indices.insert(position, index),
+        let Some(id) = picked else { return };
+        if let Some(position) =
+            self.selected.iter().position(|selected| *selected == id)
+        {
+            self.selected.remove(position);
+        } else {
+            self.selected.push(id);
         }
     }
 
     fn start_group_move(&mut self, pointer: Pointer, point: Point, page: Size) {
         let originals = self
-            .selected
-            .iter()
-            .map(|index| (*index, self.shapes[*index].clone()))
+            .selected_content()
+            .map(|(index, a)| (index, a.clone()))
             .collect();
         self.draft = Some(Draft::GroupMove(GroupMoveDraft {
             pointer,
             originals,
-            original_texts: self
-                .selected_texts
-                .iter()
-                .map(|index| (*index, self.texts[*index].clone()))
-                .collect(),
             start: point,
             end: point,
             page,
@@ -506,7 +478,7 @@ impl Annotations {
         self.draft = Some(Draft::Edit(EditDraft {
             pointer,
             index,
-            original: self.shapes[index].clone(),
+            original: self.shape(index).expect("shape edit target").clone(),
             start: point,
             end: point,
             square: modifiers.square,
@@ -516,38 +488,22 @@ impl Annotations {
     }
 
     pub fn delete_selected(&mut self) -> bool {
-        if self.draft.is_some()
-            || self.text_draft.is_some()
-            || self.text_move.is_some()
-            || !self.has_selection()
-        {
+        if self.has_pending_edit() || !self.has_selection() {
             return false;
         }
         self.record_change();
-        self.remove_shape_layers(&self.selected.clone());
-        for index in self.selected.iter().rev() {
-            self.shapes.remove(*index);
-        }
+        self.content.retain(|a| !self.selected.contains(&a.id()));
         self.selected.clear();
-        for index in self.selected_texts.clone().into_iter().rev() {
-            self.remove_text_layer(index);
-            self.texts.remove(index);
-        }
-        self.selected_texts.clear();
         true
     }
 
     pub fn delete_all(&mut self) -> bool {
-        if self.draft.is_some() || self.text_draft.is_some() || self.is_empty()
-        {
+        if self.has_pending_edit() || self.is_empty() {
             return false;
         }
         self.record_change();
-        self.shapes.clear();
-        self.texts.clear();
-        self.layers.clear();
+        self.content.clear();
         self.selected.clear();
-        self.selected_texts.clear();
         true
     }
 
@@ -560,39 +516,18 @@ impl Annotations {
     }
 
     fn reorder_selected(&mut self, selected_first: bool) -> bool {
-        if self.draft.is_some()
-            || self.text_draft.is_some()
-            || self.text_move.is_some()
-            || !self.has_selection()
-        {
+        if self.has_pending_edit() || !self.has_selection() {
             return false;
         }
-        let is_selected = |layer: &super::Layer| match layer {
-            super::Layer::Shape(index) => {
-                self.selected.binary_search(index).is_ok()
-            }
-            super::Layer::Text(index) => {
-                self.selected_texts.binary_search(index).is_ok()
-            }
-        };
-        let selected: Vec<_> =
-            self.layers.iter().copied().filter(is_selected).collect();
-        let unselected: Vec<_> = self
-            .layers
-            .iter()
-            .copied()
-            .filter(|layer| !is_selected(layer))
-            .collect();
-        let order: Vec<_> = if selected_first {
-            selected.iter().chain(&unselected).copied().collect()
-        } else {
-            unselected.iter().chain(&selected).copied().collect()
-        };
-        if order == self.layers {
+        if self.content.is_sorted_by_key(|a| {
+            self.selected.contains(&a.id()) != selected_first
+        }) {
             return false;
         }
         self.record_change();
-        self.layers = order;
+        // Stable boolean partition; no second clone of all annotation data.
+        self.content
+            .sort_by_key(|a| self.selected.contains(&a.id()) != selected_first);
         true
     }
 }

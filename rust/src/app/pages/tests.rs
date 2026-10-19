@@ -8,7 +8,7 @@ use iced::widget::image::Handle;
 #[test]
 fn pages_keep_independent_annotations_and_history_when_switched() {
     let mut state = annotated_image_page();
-    let first = state.annotations().shapes()[0].clone();
+    let first = state.annotations().shapes().next().unwrap().clone();
 
     let _ = update(&mut state, Message::AddPage);
     let _ = update(
@@ -17,7 +17,10 @@ fn pages_keep_independent_annotations_and_history_when_switched() {
     );
     assert_eq!(state.pages.len(), 2);
     assert_eq!(state.pages.active_index(), 1);
-    assert_eq!(state.annotations().shapes(), []);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        []
+    );
     assert_eq!(state.annotations().tool(), Tool::Rectangle);
 
     let page = page_size(&state);
@@ -31,15 +34,24 @@ fn pages_keep_independent_annotations_and_history_when_switched() {
         PagePoint::new(200.0, 200.0),
         false,
     );
-    let second = state.annotations().shapes()[0].clone();
+    let second = state.annotations().shapes().next().unwrap().clone();
 
     let _ = update(&mut state, Message::SelectPage(0));
-    assert_eq!(state.annotations().shapes(), std::slice::from_ref(&first));
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        std::slice::from_ref(&first)
+    );
     let _ = update(&mut state, Message::Undo);
-    assert_eq!(state.annotations().shapes(), []);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        []
+    );
 
     let _ = update(&mut state, Message::SelectPage(1));
-    assert_eq!(state.annotations().shapes(), [second]);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        [second]
+    );
     assert!(state.annotations().can_undo());
 }
 
@@ -93,18 +105,18 @@ fn deleting_pages_requires_confirmation_and_keeps_one_blank_page() {
 #[test]
 fn first_image_requires_confirmation_before_replacing_an_annotated_blank() {
     let mut state = annotated_page();
-    let original = state.annotations().shapes()[0].clone();
+    let original = state.annotations().shapes().next().unwrap().clone();
     let _ = update(&mut state, Message::AddPage);
     assert_eq!(state.image_picker, ImagePicker::ConfirmReplace);
     assert_eq!(state.pages.len(), 1);
     assert_eq!(
-        state.annotations().shapes(),
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
         std::slice::from_ref(&original)
     );
 
     let _ = update(&mut state, Message::KeepPage);
     assert_eq!(
-        state.annotations().shapes(),
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
         std::slice::from_ref(&original)
     );
     let _ = update(&mut state, Message::AddPage);
@@ -113,7 +125,10 @@ fn first_image_requires_confirmation_before_replacing_an_annotated_blank() {
         &mut state,
         Message::ImagePicked(PickPurpose::Replace, Ok(None)),
     );
-    assert_eq!(state.annotations().shapes(), [original]);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        [original]
+    );
 
     let _ = update(&mut state, Message::AddPage);
     let _ = update(&mut state, Message::ConfirmReplacePage);
@@ -209,7 +224,10 @@ fn page_switch_accepts_pending_text_and_cancels_a_shape_draft() {
     paste_text(&mut state, "Keep on page two");
     let _ = update(&mut state, Message::SelectPage(0));
     let _ = update(&mut state, Message::SelectPage(1));
-    assert_eq!(state.annotations().texts()[0].text, "Keep on page two");
+    assert_eq!(
+        state.annotations().texts().next().unwrap().text,
+        "Keep on page two"
+    );
     assert!(!state.annotations().has_text_edit());
 
     let _ = update(&mut state, Message::SetTool(Tool::Rectangle));
@@ -220,7 +238,10 @@ fn page_switch_accepts_pending_text_and_cancels_a_shape_draft() {
     let _ = update(&mut state, Message::SelectPage(0));
     let _ = update(&mut state, Message::SelectPage(1));
     assert!(state.annotations().active_pointer().is_none());
-    assert_eq!(state.annotations().shapes(), []);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        []
+    );
 }
 
 #[test]
@@ -230,14 +251,30 @@ fn invalid_or_modal_page_messages_cannot_change_the_document() {
     let _ = update(&mut state, Message::MovePageLeft);
     let _ = update(&mut state, Message::MovePageRight);
     assert_eq!(state.pages.active_index(), 0);
-    assert_eq!(state.annotations().shapes().len(), 1);
+    assert_eq!(
+        state
+            .annotations()
+            .shapes()
+            .cloned()
+            .collect::<Vec<_>>()
+            .len(),
+        1
+    );
 
     let _ = update(&mut state, Message::AskDeletePage);
     for message in [Message::Undo, Message::AddPage, Message::SelectPage(1)] {
         let _ = update(&mut state, message);
     }
     assert_eq!(state.pages.len(), 1);
-    assert_eq!(state.annotations().shapes().len(), 1);
+    assert_eq!(
+        state
+            .annotations()
+            .shapes()
+            .cloned()
+            .collect::<Vec<_>>()
+            .len(),
+        1
+    );
     let _ = update(&mut state, Message::CancelInteraction);
     assert!(!state.confirm_delete_page);
 
@@ -250,13 +287,21 @@ fn invalid_or_modal_page_messages_cannot_change_the_document() {
         ),
     );
     assert!(state.image().is_none());
-    assert_eq!(state.annotations().shapes().len(), 1);
+    assert_eq!(
+        state
+            .annotations()
+            .shapes()
+            .cloned()
+            .collect::<Vec<_>>()
+            .len(),
+        1
+    );
 }
 
 #[test]
 fn tool_defaults_follow_page_switches_without_mutating_old_objects() {
     let mut state = annotated_image_page();
-    let original = state.annotations().shapes()[0].clone();
+    let original = state.annotations().shapes().next().unwrap().clone();
     let _ = update(&mut state, Message::SetTool(Tool::Line));
     let _ = update(
         &mut state,
@@ -279,5 +324,8 @@ fn tool_defaults_follow_page_switches_without_mutating_old_objects() {
     let _ = update(&mut state, Message::SelectPage(0));
     let style = state.annotations().current_style().unwrap();
     assert_eq!(style.color, crate::app::AnnotationColor::Blue);
-    assert_eq!(state.annotations().shapes(), [original]);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        [original]
+    );
 }

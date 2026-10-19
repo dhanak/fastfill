@@ -284,8 +284,8 @@ fn framing_preserves_annotations_original_bytes_and_one_step_history() {
     state.annotations_mut().accept_text();
     mark_saved(&mut state);
     let before = state.pages.current().metadata.clone();
-    let shapes = state.annotations().shapes().to_vec();
-    let texts = state.annotations().texts().to_vec();
+    let shapes = state.annotations().shapes().cloned().collect::<Vec<_>>();
+    let texts = state.annotations().texts().cloned().collect::<Vec<_>>();
     let original = encode_snapshot(state.project_snapshot().unwrap()).unwrap();
     send(&mut state, Event::Begin);
     settle(&mut state);
@@ -296,13 +296,19 @@ fn framing_preserves_annotations_original_bytes_and_one_step_history() {
     send(&mut state, Event::AutoFrame);
     settle(&mut state);
     assert_eq!(state.pages.current().metadata, before);
-    assert_eq!(state.annotations().shapes(), shapes);
-    assert_eq!(state.annotations().texts(), texts);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        shapes
+    );
+    assert_eq!(
+        state.annotations().texts().cloned().collect::<Vec<_>>(),
+        texts
+    );
     assert!(!state.project.is_dirty(&state.pages));
     send(&mut state, Event::Accept);
     let accepted = state.pages.current().metadata.clone();
-    let changed = state.annotations().shapes()[0].clone();
-    let text = state.annotations().texts()[0].clone();
+    let changed = state.annotations().shapes().next().unwrap().clone();
+    let text = state.annotations().texts().next().unwrap().clone();
     assert_eq!(accepted.crop, detected_crop());
     assert_eq!(accepted.brightness, 15);
     assert_eq!(accepted.rotation_quarter_turns, 1);
@@ -323,13 +329,22 @@ fn framing_preserves_annotations_original_bytes_and_one_step_history() {
     assert_eq!(opened.project.pages[0].crop, accepted.crop);
     let _ = update(&mut state, Message::Undo);
     assert_eq!(state.pages.current().metadata, before);
-    assert_eq!(state.annotations().shapes(), shapes);
-    assert_eq!(state.annotations().texts(), texts);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        shapes
+    );
+    assert_eq!(
+        state.annotations().texts().cloned().collect::<Vec<_>>(),
+        texts
+    );
     assert!(!state.project.is_dirty(&state.pages));
     let _ = update(&mut state, Message::Redo);
     assert_eq!(state.pages.current().metadata, accepted);
-    assert_eq!(state.annotations().shapes()[0], changed);
-    assert_eq!(state.annotations().texts()[0], text);
+    assert_eq!(
+        state.annotations().shapes().next().unwrap().clone(),
+        changed
+    );
+    assert_eq!(state.annotations().texts().next().unwrap().clone(), text);
 }
 
 #[test]

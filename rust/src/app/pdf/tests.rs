@@ -31,14 +31,17 @@ fn replaces_only_an_empty_starter_and_preserves_import_order() {
 #[test]
 fn keeps_an_annotated_starter_and_its_undo_history() {
     let mut state = annotated_page();
-    let original = state.annotations().shapes()[0].clone();
+    let original = state.annotations().shapes().next().unwrap().clone();
     assert_eq!(state.pages.pdf_capacity(), 19);
     let id = begin(&mut state);
     complete(&mut state, id, &["form"]);
     assert_eq!(state.pages.len(), 2);
     assert_eq!(state.pages.active_index(), 1);
     let _ = update(&mut state, Message::SelectPage(0));
-    assert_eq!(state.annotations().shapes(), [original]);
+    assert_eq!(
+        state.annotations().shapes().cloned().collect::<Vec<_>>(),
+        [original]
+    );
     assert!(state.annotations().can_undo());
 }
 
@@ -141,7 +144,7 @@ fn pending_text_is_accepted_and_shapes_are_canceled_before_import() {
     complete(&mut state, id, &["form"]);
     assert_eq!(state.pages.len(), 2);
     let _ = update(&mut state, Message::SelectPage(0));
-    assert_eq!(state.annotations().texts()[0].text, "Keep me");
+    assert_eq!(state.annotations().texts().next().unwrap().text, "Keep me");
     let _ = update(&mut state, Message::SetTool(Tool::Rectangle));
     let _ = update(
         &mut state,

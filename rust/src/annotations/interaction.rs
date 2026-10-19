@@ -4,8 +4,8 @@ use super::geometry::{
     resize_ink_points, rotate_point,
 };
 use super::{
-    AnnotationGeometry, AnnotationStyle, CreationKind, EditHit, InkKind, Layer,
-    LineEndpoint, Pointer, ShapeAnnotation, TextAnnotation,
+    AnnotationGeometry, AnnotationStyle, CreationKind, EditHit, LineEndpoint,
+    OwnedAnnotation, Pointer, ShapeAnnotation, TextMoveDraft,
 };
 use crate::geometry::{Point, Rect, Size};
 use uuid::Uuid;
@@ -39,15 +39,14 @@ pub(super) struct EditDraft {
 #[derive(Debug)]
 pub(super) struct GroupMoveDraft {
     pub(super) pointer: Pointer,
-    pub(super) originals: Vec<(usize, ShapeAnnotation)>,
-    pub(super) original_texts: Vec<(usize, TextAnnotation)>,
+    pub(super) originals: Vec<(usize, OwnedAnnotation)>,
     pub(super) start: Point,
     pub(super) end: Point,
     pub(super) page: Size,
 }
 
 impl GroupMoveDraft {
-    pub(super) fn annotations(&self) -> Vec<(usize, ShapeAnnotation)> {
+    pub(super) fn annotations(&self) -> Vec<(usize, OwnedAnnotation)> {
         let (dx, dy) = self.delta();
         self.originals
             .iter()
@@ -55,21 +54,9 @@ impl GroupMoveDraft {
             .collect()
     }
 
-    pub(super) fn texts(&self) -> Vec<(usize, TextAnnotation)> {
-        let (dx, dy) = self.delta();
-        self.original_texts
-            .iter()
-            .map(|(index, annotation)| (*index, annotation.translated(dx, dy)))
-            .collect()
-    }
-
     fn delta(&self) -> (f32, f32) {
-        let (left_limit, right_limit, top_limit, bottom_limit) = self
-            .originals
-            .iter()
-            .map(|(_, a)| a.visible_bounds())
-            .chain(self.original_texts.iter().map(|(_, a)| a.visible_bounds()))
-            .fold(
+        let (left_limit, right_limit, top_limit, bottom_limit) =
+            self.originals.iter().map(|(_, a)| a.visible_bounds()).fold(
                 (
                     f32::NEG_INFINITY,
                     f32::INFINITY,
@@ -101,7 +88,7 @@ pub(super) struct SelectionDraft {
     pub(super) start: Point,
     pub(super) end: Point,
     pub(super) minimum_drag: f32,
-    pub(super) picked: Option<Layer>,
+    pub(super) picked: Option<Uuid>,
     pub(super) toggle: bool,
     pub(super) dragged: bool,
 }
@@ -245,6 +232,7 @@ impl EditDraft {
 pub(super) enum Draft {
     Create(ShapeDraft),
     Edit(EditDraft),
+    TextMove(TextMoveDraft),
     GroupMove(GroupMoveDraft),
     Selection(SelectionDraft),
 }
@@ -254,31 +242,47 @@ impl Draft {
         match self {
             Self::Create(draft) => draft.pointer,
             Self::Edit(draft) => draft.pointer,
+            Self::TextMove(draft) => draft.pointer,
             Self::GroupMove(draft) => draft.pointer,
             Self::Selection(draft) => draft.pointer,
         }
     }
 
-    pub(super) fn annotation(&self) -> Option<ShapeAnnotation> {
+    pub(super) fn annotation(&self) -> Option<OwnedAnnotation> {
         match self {
-            Self::Create(draft) => Some(draft.annotation()),
-            Self::Edit(draft) => Some(draft.annotation()),
+            Self::Create(draft) => {
+                Some(OwnedAnnotation::Shape(draft.annotation()))
+            }
+            Self::Edit(draft) => {
+                Some(OwnedAnnotation::Shape(draft.annotation()))
+            }
+            Self::TextMove(draft) => {
+                Some(OwnedAnnotation::Text(draft.annotation()))
+            }
             Self::GroupMove(_) | Self::Selection(_) => None,
         }
     }
 
-    pub(super) fn previews(&self) -> Vec<(Option<usize>, ShapeAnnotation)> {
+    pub(super) fn edited_index(&self) -> Option<usize> {
         match self {
-            Self::Create(draft) => vec![(None, draft.annotation())],
-            Self::Edit(draft) => {
-                vec![(Some(draft.index), draft.annotation())]
-            }
+            Self::Edit(draft) => Some(draft.index),
+            Self::TextMove(draft) => Some(draft.index),
+            Self::Create(_) | Self::GroupMove(_) | Self::Selection(_) => None,
+        }
+    }
+
+    pub(super) fn previews(&self) -> Vec<(Option<usize>, OwnedAnnotation)> {
+        match self {
             Self::GroupMove(draft) => draft
                 .annotations()
                 .into_iter()
                 .map(|(index, annotation)| (Some(index), annotation))
                 .collect(),
-            Self::Selection(_) => Vec::new(),
+            _ => self
+                .annotation()
+                .into_iter()
+                .map(|annotation| (self.edited_index(), annotation))
+                .collect(),
         }
     }
 
@@ -300,6 +304,10 @@ impl Draft {
                 draft.end = point;
                 draft.square = square;
             }
+            Self::TextMove(draft) => {
+                draft.end = point;
+                draft.snap = square;
+            }
             Self::GroupMove(draft) => draft.end = point,
             Self::Selection(draft) => {
                 draft.end = point;
@@ -314,6 +322,7 @@ impl Draft {
         match self {
             Self::Create(draft) => draft.square = square,
             Self::Edit(draft) => draft.square = square,
+            Self::TextMove(draft) => draft.snap = square,
             Self::GroupMove(_) | Self::Selection(_) => {}
         }
     }
@@ -321,10 +330,6 @@ impl Draft {
 
 impl ShapeDraft {
     pub(super) fn annotation(&self) -> ShapeAnnotation {
-        let is_mark = matches!(
-            self.kind,
-            CreationKind::Bounded(kind) if kind.is_mark()
-        );
         let geometry = match self.kind {
             CreationKind::Bounded(kind) => AnnotationGeometry::Bounded {
                 kind,
@@ -351,18 +356,16 @@ impl ShapeDraft {
                 points: self.points.clone(),
             },
         };
-        ShapeAnnotation {
+        let mut annotation = ShapeAnnotation {
             id: self.id,
             geometry,
             stroke_width: self.style.stroke_width,
             color: self.style.color,
-            filled: self.style.filled
-                && !is_mark
-                && !matches!(
-                    self.kind,
-                    CreationKind::Ink(InkKind::Highlighter)
-                ),
+            filled: false,
             rotation: 0.0,
-        }
+        };
+        annotation.filled =
+            self.style.filled && annotation.tool().supports_fill();
+        annotation
     }
 }

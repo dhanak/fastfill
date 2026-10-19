@@ -79,8 +79,30 @@ impl Tool {
         }
     }
 
-    pub(super) const fn supports_fill(self) -> bool {
+    #[must_use]
+    pub const fn supports_fill(self) -> bool {
         matches!(self, Self::Rectangle | Self::Oval | Self::Pen)
+    }
+
+    #[must_use]
+    pub const fn supports_stroke_width(self) -> bool {
+        self.creation_kind().is_some()
+    }
+
+    #[must_use]
+    pub const fn uses_endpoints(self) -> bool {
+        matches!(self, Self::Line | Self::Arrow)
+    }
+
+    #[must_use]
+    pub const fn supports_text_format(self) -> bool {
+        matches!(self, Self::Text)
+    }
+
+    #[must_use]
+    pub const fn supports_rotation(self) -> bool {
+        self.supports_text_format()
+            || self.supports_stroke_width() && !self.uses_endpoints()
     }
 
     fn default_style(self) -> AnnotationStyle {
@@ -143,21 +165,23 @@ pub(super) enum CreationKind {
     Ink(InkKind),
 }
 
-impl CreationKind {
-    pub(super) fn matches(self, annotation: &ShapeAnnotation) -> bool {
-        match (self, &annotation.geometry) {
-            (
-                Self::Bounded(expected),
-                AnnotationGeometry::Bounded { kind, .. },
-            ) => *kind == expected,
-            (
-                Self::Linear(expected),
-                AnnotationGeometry::Linear { kind, .. },
-            ) => *kind == expected,
-            (Self::Ink(expected), AnnotationGeometry::Ink { kind, .. }) => {
-                *kind == expected
-            }
-            _ => false,
+impl ShapeAnnotation {
+    pub(super) fn tool(&self) -> Tool {
+        match self.geometry {
+            AnnotationGeometry::Bounded { kind, .. } => match kind {
+                ShapeKind::Rectangle => Tool::Rectangle,
+                ShapeKind::Oval => Tool::Oval,
+                ShapeKind::Checkmark => Tool::Checkmark,
+                ShapeKind::Cross => Tool::Cross,
+            },
+            AnnotationGeometry::Linear { kind, .. } => match kind {
+                LineKind::Line => Tool::Line,
+                LineKind::Arrow => Tool::Arrow,
+            },
+            AnnotationGeometry::Ink { kind, .. } => match kind {
+                InkKind::Pen => Tool::Pen,
+                InkKind::Highlighter => Tool::Highlighter,
+            },
         }
     }
 }

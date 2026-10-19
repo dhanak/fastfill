@@ -2619,6 +2619,24 @@ native capture in 6G unstarted until the user requests continuation.
   rerunning the unchanged corpus. Formatting, core Clippy, and whitespace
   checks pass. Keep changes uncommitted; no commit requested.
 
+### 2026-10-19 — simplify annotation state and editing
+
+- Replace parallel shape/text stores and layer bookkeeping with ordered
+  enum content and UUID selection; simplify snapshots and mixed operations.
+- Share geometric drafts, previews, commits and style updates. Centralize
+  tool capabilities while keeping text layout and concrete geometry separate.
+- Preserve project schemas, legacy metadata, identity, alpha, off-page
+  geometry, defaults, pending-text acceptance/cancellation and history.
+- Fix dragging a single selected object behind unselected layers. Preserve
+  Ctrl toggles/marquees; cover all tools, zoom, mouse/touch and undo/redo.
+- Add schema-oracle and editing contracts plus a dependency-free source-size
+  check: `node tools/source-size.mjs`. Remove 220 production source lines
+  without new production files, dependencies or generic frameworks.
+- Validation: 473 native and 270 core tests pass; the full replay stays
+  opt-in. Strict Clippy, WASM, formatting and whitespace checks pass.
+  User accepts manual refactor checks and the overlap-drag follow-up.
+- Keep native camera/exposure work stashed separately; C# remains unchanged.
+
 ## References
 
 - [iced 0.14 documentation](https://docs.rs/iced/0.14.0/iced/)

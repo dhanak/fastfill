@@ -29,7 +29,7 @@ fn tiny_shapes_move_instead_of_using_hidden_handles_even_with_alt() {
             };
             state.finish(MOUSE, end, false);
             state.set_tool(Tool::Select);
-            let shape = state.shapes()[0].clone();
+            let shape = state.shapes().next().unwrap().clone();
             let corner = shape
                 .frame_corners()
                 .map_or(Point::new(200.0, 200.0), |corners| corners[0]);
@@ -54,11 +54,11 @@ fn tiny_shapes_move_instead_of_using_hidden_handles_even_with_alt() {
                     false,
                 );
                 assert_eq!(
-                    state.shapes()[0].bounds().width,
+                    state.shapes().next().unwrap().bounds().width,
                     shape.bounds().width
                 );
                 assert_eq!(
-                    state.shapes()[0].bounds().height,
+                    state.shapes().next().unwrap().bounds().height,
                     shape.bounds().height
                 );
                 assert!(state.undo());

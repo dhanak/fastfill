@@ -16,7 +16,7 @@ fn first_text_tool_click_places_the_caret_under_the_pointer() {
         let size = text::measure_text(content, format, scale);
         state.annotations_mut().update_text(content, size);
         state.annotations_mut().accept_text();
-        let text = state.annotations().texts()[0].clone();
+        let text = state.annotations().texts().next().unwrap().clone();
         let point = PagePoint::new(
             text.bounds.x + 82.0,
             text.bounds.y + format.font_size * 1.3 * 1.5,
@@ -31,7 +31,10 @@ fn first_text_tool_click_places_the_caret_under_the_pointer() {
         assert!(cursor.position.column < "árvíztűrő 👋🏽 text".len());
         assert!(cursor.selection.is_none());
         assert!("árvíztűrő 👋🏽 text".is_char_boundary(cursor.position.column));
-        assert_eq!(state.annotations().texts(), [text]);
+        assert_eq!(
+            state.annotations().texts().cloned().collect::<Vec<_>>(),
+            [text]
+        );
     }
 }
 
@@ -59,8 +62,8 @@ fn idle_escape_clears_selection_without_editing_the_last_annotation() {
             );
         }
         let identity = state.pages.identity();
-        let shapes = state.annotations().shapes().to_vec();
-        let texts = state.annotations().texts().to_vec();
+        let shapes = state.annotations().shapes().cloned().collect::<Vec<_>>();
+        let texts = state.annotations().texts().cloned().collect::<Vec<_>>();
         assert!(state.annotations().has_selection());
         let _ = update(&mut state, Message::ViewportResized);
         assert!(state.annotations().has_selection());
@@ -69,14 +72,26 @@ fn idle_escape_clears_selection_without_editing_the_last_annotation() {
         assert_eq!(state.pages.identity(), identity);
         assert_eq!(state.annotations().tool(), tool);
         let _ = update(&mut state, Message::SetColor(AnnotationColor::Red));
-        assert_eq!(state.annotations().shapes(), shapes);
-        assert_eq!(state.annotations().texts(), texts);
+        assert_eq!(
+            state.annotations().shapes().cloned().collect::<Vec<_>>(),
+            shapes
+        );
+        assert_eq!(
+            state.annotations().texts().cloned().collect::<Vec<_>>(),
+            texts
+        );
         assert_eq!(state.pages.identity(), identity);
         let _ = update(&mut state, Message::Undo);
         assert!(state.annotations().is_empty());
         let _ = update(&mut state, Message::Redo);
-        assert_eq!(state.annotations().shapes(), shapes);
-        assert_eq!(state.annotations().texts(), texts);
+        assert_eq!(
+            state.annotations().shapes().cloned().collect::<Vec<_>>(),
+            shapes
+        );
+        assert_eq!(
+            state.annotations().texts().cloned().collect::<Vec<_>>(),
+            texts
+        );
     }
 }
 
@@ -89,7 +104,7 @@ fn escape_reverts_a_text_edit_before_clearing_its_selection() {
         update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
     paste_text(&mut state, "Original");
     let _ = update(&mut state, Message::AcceptText);
-    let original = state.annotations().texts()[0].clone();
+    let original = state.annotations().texts().next().unwrap().clone();
     let identity = state.pages.identity();
     let _ =
         update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
@@ -98,7 +113,10 @@ fn escape_reverts_a_text_edit_before_clearing_its_selection() {
     let _ = update(&mut state, Message::CancelInteraction);
     assert!(!state.annotations().has_text_edit());
     assert!(state.annotations().has_selection());
-    assert_eq!(state.annotations().texts(), [original]);
+    assert_eq!(
+        state.annotations().texts().cloned().collect::<Vec<_>>(),
+        [original]
+    );
     assert_eq!(state.pages.identity(), identity);
     let _ = update(&mut state, Message::CancelInteraction);
     assert!(!state.annotations().has_selection());
@@ -125,7 +143,7 @@ fn tiny_selection_renders_only_its_frame_at_both_dpi_scales() {
             page_size,
         );
         annotations.finish(Pointer::Mouse, PagePoint::new(110.0, 110.0), false);
-        let bounds = annotations.shapes()[0].bounds();
+        let bounds = annotations.shapes().next().unwrap().bounds();
         let top_left = view.page_to_view(PagePoint::new(bounds.x, bounds.y));
         for dpi in [1, 2] {
             let page = PageCanvas {

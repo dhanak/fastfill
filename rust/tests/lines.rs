@@ -21,7 +21,7 @@ fn line() -> Annotations {
 }
 
 fn endpoints(annotations: &Annotations) -> (Point, Point) {
-    match &annotations.shapes()[0].geometry {
+    match &annotations.shapes().next().unwrap().geometry {
         AnnotationGeometry::Linear {
             kind: LineKind::Line,
             start,
@@ -59,7 +59,7 @@ fn lines_keep_explicit_endpoints_in_every_direction() {
             },
         );
         assert!(annotations.finish(MOUSE, end, false));
-        assert_eq!(annotations.shapes()[0], preview);
+        assert_eq!(annotations.shapes().next().unwrap().clone(), preview);
     }
 }
 
@@ -110,7 +110,7 @@ fn horizontal_and_vertical_lines_commit_but_zero_length_does_not() {
 #[test]
 fn line_body_moves_and_each_endpoint_edits_independently() {
     let mut annotations = line();
-    let stroke = annotations.shapes()[0].stroke_width;
+    let stroke = annotations.shapes().next().unwrap().stroke_width;
     annotations.set_tool(Tool::Select);
     assert!(annotations.begin_interaction(
         MOUSE,
@@ -145,7 +145,7 @@ fn line_body_moves_and_each_endpoint_edits_independently() {
         endpoints(&annotations),
         (Point::new(80.0, 90.0), Point::new(320.0, 230.0)),
     );
-    assert_eq!(annotations.shapes()[0].stroke_width, stroke);
+    assert_eq!(annotations.shapes().next().unwrap().stroke_width, stroke);
 }
 
 #[test]
@@ -169,7 +169,7 @@ fn ctrl_snaps_endpoint_edit_around_the_fixed_endpoint() {
 #[test]
 fn line_edits_participate_in_cancel_delete_and_history() {
     let mut annotations = line();
-    let original = annotations.shapes()[0].clone();
+    let original = annotations.shapes().next().unwrap().clone();
     annotations.set_tool(Tool::Select);
     annotations.begin_interaction(
         MOUSE,
@@ -180,7 +180,7 @@ fn line_edits_participate_in_cancel_delete_and_history() {
     );
     annotations.drag(MOUSE, Point::new(250.0, 175.0), false);
     annotations.cancel();
-    assert_eq!(annotations.shapes()[0], original);
+    assert_eq!(annotations.shapes().next().unwrap().clone(), original);
 
     annotations.begin_interaction(
         MOUSE,
@@ -190,13 +190,16 @@ fn line_edits_participate_in_cancel_delete_and_history() {
         PLAIN,
     );
     annotations.finish(MOUSE, Point::new(250.0, 175.0), false);
-    let moved = annotations.shapes()[0].clone();
+    let moved = annotations.shapes().next().unwrap().clone();
     assert_ne!(moved, original);
     assert!(annotations.delete_selected());
     assert!(annotations.undo());
-    assert_eq!(annotations.shapes(), [moved]);
+    assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), [moved]);
     assert!(annotations.undo());
-    assert_eq!(annotations.shapes(), [original]);
+    assert_eq!(
+        annotations.shapes().cloned().collect::<Vec<_>>(),
+        [original]
+    );
 }
 
 #[test]
@@ -233,7 +236,7 @@ fn moving_a_line_off_page_keeps_a_reachable_part_without_scaling_it() {
         Point::new(moved.1.x - moved.0.x, moved.1.y - moved.0.y),
         Point::new(original.1.x - original.0.x, original.1.y - original.0.y),
     );
-    let bounds = annotations.shapes()[0].bounds();
+    let bounds = annotations.shapes().next().unwrap().bounds();
     assert!(bounds.x < 0.0 && bounds.x + bounds.width > 0.0);
     assert!(bounds.y < 0.0 && bounds.y + bounds.height > 0.0);
 }
@@ -282,7 +285,7 @@ fn selected_line_moves_from_its_box_and_modifiers_disambiguate() {
 #[test]
 fn line_bounds_contain_the_full_directional_stroke() {
     let annotations = line();
-    let annotation = &annotations.shapes()[0];
+    let annotation = &annotations.shapes().next().unwrap().clone();
     let half = annotation.stroke_width / 2.0;
     let diagonal_padding = half / 5.0_f32.sqrt();
     let bounds = annotation.bounds();
