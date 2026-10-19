@@ -1,0 +1,16 @@
+FastFill Rust prototype - Windows x64
+
+Extract this ZIP anywhere. Run FastFill-Rust.exe from the extracted folder.
+No Rust toolchain, compiler, .NET, installer, certificate import, or separate
+Visual C++ runtime is required. Windows 10/11 x64 is the target platform.
+
+This experimental build is unsigned. Windows may show an unrecognized-app
+warning. Only run downloads you trust; do not disable Windows protection.
+The production C#/WinUI application and its file associations are unchanged.
+
+Open an image, PDF or .docscan using the app. Save a copy of valuable projects
+while testing. Print sample-form.pdf at actual size for camera/form checks.
+See BUILD.txt for the exact source revision and workflow run.
+
+Documentation: https://github.com/dhanak/fastfill/blob/master/rust/README.md
+Downloads: https://github.com/dhanak/fastfill/releases/tag/rust-dev

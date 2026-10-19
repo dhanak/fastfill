@@ -7,16 +7,28 @@ on:
       - "rust/**"
       - "docs/samples/fastfill-camera-sample-form.pdf"
       - "tests/samples/**"
+      - "LICENSE"
   pull_request:
     paths:
       - ".github/workflows/rust.yml"
       - "rust/**"
       - "docs/samples/fastfill-camera-sample-form.pdf"
       - "tests/samples/**"
+      - "LICENSE"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Keep caches small; local debug builds and test assertions stay unchanged.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
 
 jobs:
   native:
@@ -26,18 +38,29 @@ jobs:
         os:
           - ubuntu-latest
           - windows-latest
-          - macos-latest
     runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: rust
-    steps:
+    steps: &native-tests
       - uses: actions/checkout@v7
       - name: Install Rust
         run: >-
           rustup toolchain install 1.99.0
           --profile minimal
           --component clippy,rustfmt
+      - name: Cache native dependencies and compiled tests
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: >-
+            native-${{ runner.os }}-${{ runner.arch }}-rust199-lean-v1-${{
+            hashFiles('rust/Cargo.toml', 'rust/Cargo.lock') }}
+          restore-keys: |
+            native-${{ runner.os }}-${{ runner.arch }}-rust199-lean-v1-
       - name: Check formatting
         run: cargo +1.99.0 fmt --check
       - name: Test platform-independent logic
@@ -45,13 +68,113 @@ jobs:
       - name: Test application state and GUI input
         run: cargo +1.99.0 test --all-features --all-targets
       - name: Lint
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: >-
           cargo +1.99.0 clippy
           --all-targets --all-features -- -D warnings
       - name: Test browser download adapter
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: node web/download.test.mjs
+      - name: Test development release automation
+        if: runner.os == 'Linux'
+        run: node tools/publish-dev.test.mjs
+      - name: Test CI cache configuration
+        if: runner.os == 'Linux'
+        run: node tools/cache.test.mjs
+
+  # Validate macOS without gating Windows publication on its runner capacity.
+  macos:
+    name: macOS compatibility (Intel, independent)
+    runs-on: macos-15-intel
+    defaults:
+      run:
+        working-directory: rust
+    steps: *native-tests
+
+  windows-portable:
+    runs-on: windows-2025
+    defaults:
+      run:
+        working-directory: rust
+        shell: pwsh
+    env:
+      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: >-
+        -C target-feature=+crt-static -D warnings
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure output and check package script syntax
+        run: |
+          $targetDir = Join-Path $env:RUNNER_TEMP "fastfill-rust-target"
+          "CARGO_TARGET_DIR=$targetDir" >> $env:GITHUB_ENV
+          $script = Get-Content ./tools/package-windows.ps1 -Raw
+          [ScriptBlock]::Create($script) | Out-Null
+      - name: Install release toolchain
+        run: rustup toolchain install 1.99.0 --profile minimal
+      - name: Cache release dependencies
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ runner.temp }}/fastfill-rust-target
+          key: >-
+            win-rust199-static-v1-${{
+            hashFiles('rust/Cargo.toml', 'rust/Cargo.lock') }}
+          restore-keys: |
+            win-rust199-static-v1-
+      - name: Build optimized standalone Windows app
+        run: >-
+          cargo +1.99.0 build --locked --release --all-features
+          --target x86_64-pc-windows-msvc --bin fastfill-rust
+      - name: Package and smoke-test extracted app
+        run: ./tools/package-windows.ps1
+      - name: Upload portable Windows ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ runner.temp }}/FastFill-Rust-windows-x64.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-rust-dev:
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/master'
+    needs: [native, wasm, windows-portable]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download tested portable ZIP
+        uses: actions/download-artifact@v8
+        with:
+          name: FastFill-Rust-windows-x64.zip
+          skip-decompress: true
+      - name: Publish separate Rust development build
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          archive=FastFill-Rust-windows-x64.zip
+          test -s "$archive" || {
+            echo "::error::Missing or empty portable ZIP: $archive" >&2
+            exit 1
+          }
+          title="FastFill Rust development build"
+          notes="Experimental Rust prototype at ${GITHUB_SHA}."
+          if gh release view rust-dev >/dev/null 2>&1; then
+            gh release upload rust-dev "$archive" --clobber
+            gh api --method PATCH \
+              "repos/${GITHUB_REPOSITORY}/git/refs/tags/rust-dev" \
+              -f "sha=${GITHUB_SHA}" -F force=true >/dev/null
+            gh release edit rust-dev --prerelease --latest=false \
+              --title "$title" --notes "$notes"
+          else
+            gh release create rust-dev "$archive" --prerelease \
+              --latest=false --target "${GITHUB_SHA}" \
+              --title "$title" --notes "$notes"
+          fi
 
   wasm:
     runs-on: ubuntu-latest
@@ -64,6 +187,18 @@ jobs:
         run: |
           rustup toolchain install 1.99.0 --profile minimal
           rustup target add --toolchain 1.99.0 wasm32-unknown-unknown
+      - name: Cache WASM dependencies and compiled metadata
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: >-
+            wasm-${{ runner.os }}-${{ runner.arch }}-rust199-lean-v1-${{
+            hashFiles('rust/Cargo.toml', 'rust/Cargo.lock') }}
+          restore-keys: |
+            wasm-${{ runner.os }}-${{ runner.arch }}-rust199-lean-v1-
       - name: Check WASM GUI, PDF import, and PDF probe
         run: >-
           cargo +1.99.0 check

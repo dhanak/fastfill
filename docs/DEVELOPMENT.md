@@ -110,6 +110,16 @@ request builds create a private workflow artifact but do not publish a
 release. Pushing a version tag such as `v0.2.0` creates a permanent release
 with the same name and signed `FastFill-portable.zip` asset.
 
+The separate `Rust prototype` workflow also builds an optimized, unsigned
+Windows x64 test ZIP. Successful `master` checks update the public `rust-dev`
+prerelease without changing C# release assets or tags. Its test machines
+need no compiler or Rust dependencies; see the [prototype guide][rust-guide]
+for direct downloads, archive contents, startup checks and known limits.
+Windows/Linux tests, WASM checks and packaging gate Rust publication; the
+independent macOS compatibility check does not block the Windows download.
+
+[rust-guide]: ../rust/README.md
+
 ## Minimal SP6 release gate
 
 Use the Surface only before a release candidate. One short pass:

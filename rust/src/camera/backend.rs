@@ -167,7 +167,7 @@ pub(super) fn modes(index: u32) -> ProbeResult<Vec<Spec>> {
         .compatible_camera_formats()?
         .into_iter()
         .take(4096)
-        .filter_map(|format| {
+        .map(|format| {
             let fourcc = match format.format() {
                 FrameFormat::MJPEG => *b"MJPG",
                 FrameFormat::YUYV => *b"YUYV",
@@ -175,14 +175,13 @@ pub(super) fn modes(index: u32) -> ProbeResult<Vec<Spec>> {
                 FrameFormat::RAWRGB => *b"RGB3",
                 FrameFormat::RAWBGR => *b"BGR3",
                 FrameFormat::GRAY => *b"GREY",
-                _ => return None,
             };
-            Some(Spec {
+            Spec {
                 width: format.resolution().width(),
                 height: format.resolution().height(),
                 fps: format.frame_rate(),
                 fourcc,
-            })
+            }
         })
         .collect())
 }

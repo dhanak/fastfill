@@ -65,6 +65,10 @@ builds on Windows and in GitHub Actions. See the [development
 guide][development] for setup, checks, interactive detection labs, CI releases,
 and the Surface Pro 6 release gate.
 
+The experimental cross-platform Rust rewrite has a separate
+[Windows testing ZIP][rust-download] and [prototype guide][rust-guide].
+The C# application remains the main release.
+
 ## ©️ License
 
 FastFill is available under the [MIT License][license].
@@ -78,6 +82,8 @@ FastFill is available under the [MIT License][license].
 [license]: LICENSE
 [manual]: docs/USER_GUIDE.md
 [release]: https://github.com/dhanak/fastfill/releases/latest/download/FastFill-portable.zip
+[rust-download]: https://github.com/dhanak/fastfill/releases/tag/rust-dev
+[rust-guide]: rust/README.md
 [sample]: docs/samples/fastfill-camera-sample-form.pdf
 [shot-editor]: docs/screenshots/editor-shapes.png
 [windows-badge]: https://img.shields.io/badge/Windows_10%2F11-x64-0078D4

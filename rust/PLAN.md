@@ -727,7 +727,31 @@ SP6 hardware calibration remain deferred, separate from laptop acceptance.
       Repeat SP6 front/rear/orientation and sleep tests there when available;
       do not infer their calibration from container or laptop tests.
 
-### 7. Packaging and replacement decision — not started
+### 7. Packaging and replacement decision — in progress
+
+#### 7A. Prebuilt Windows test ZIP — publication check pending
+
+- [x] Build an optimized Windows x64 EXE in a dedicated CI job, with a static
+      C runtime and release dependency cache; do not require a local compiler.
+- [x] Package only the executable, instructions, license, sample form and
+      revision/run metadata. Extract elsewhere; inspect imports and test
+      loader/helper startup without opening a camera or GUI.
+- [x] Upload a raw ZIP artifact on every run. Publish successful `master`
+      checks separately as `rust-dev`; preserve C# releases and file names.
+- [x] Exercise release creation, replacement and failed uploads locally with
+      the real workflow shell block and a mock CLI; make no GitHub writes.
+- [x] Remove the Windows camera-format unreachable match arm instead of
+      suppressing its warning. Keep exhaustive handling of the six formats.
+- [x] Run the Windows package job in GitHub, including extracted startup
+      checks. User reports success in just under ten minutes; Windows native
+      build/tests also pass. These platforms remain unavailable locally.
+- [ ] Inspect the artifact/prerelease after the publication gate changes.
+      The first publication was blocked by macOS runner acquisition failure.
+- [ ] User checkpoint: download/extract on Windows without Rust installed;
+      launch, open/save/export a project and try the SP6 cameras when available.
+      Keep prior physical sleep/touch/DPI calibration deferrals explicit.
+
+#### Remaining UI polish and replacement gate — not started
 
 - Polish the UI for regular use: cohesive visual styling, tool icons, touch
   layout, and confirmations that overlay the canvas without resizing it.
@@ -3189,6 +3213,92 @@ sleep and Surface calibration remain deferred, not inferred from laptop tests.
   replay opt-in and all compilation outside host-owned target directories.
 - Commit unsigned as requested by repository policy. Do not push or start
   Phase 7/UI polish in this turn; keep the C# app and release workflow intact.
+
+### 2026-10-19 — Phase 7A prebuilt Windows testing and warning cleanup
+
+- User wants Windows testing without installing Rust or compiling a 23 GB
+  target directory. Start only the CI/portable-delivery checkpoint of Phase 7;
+  do not begin the broader UI polish or replace the C# app.
+- Add a dedicated Windows release job using the existing pinned toolchain,
+  explicit MSVC x64 target and static CRT. Cache release dependencies with
+  the official cache action; keep bulky debug output off that job/zip.
+- Add one ZIP containing the renamed prototype EXE, short run instructions,
+  license, sample form and exact build revision/run link. Check PowerShell
+  syntax before compilation, inspect runtime imports, extract the archive
+  away from Cargo output and run a bounded no-camera startup check there.
+- Upload the ZIP without double-wrapping it. Publish only successful master
+  runs after native, WASM and package checks to a separate public `rust-dev`
+  prerelease. Pull requests get artifacts only; grant release writes only
+  to the publishing job. Keep C# dev/version assets and latest release intact.
+- Fix the reported Windows unreachable-pattern warning: the installed enum
+  has exactly six supported formats. Replace filter_map with exhaustive map;
+  a future enum change must be handled explicitly, not silently discarded.
+- Document direct download/extract/run, unsigned-build warnings, artifact
+  retention and remaining hardware checks. No Windows tools are installed
+  in the container; the first Windows CI run remains the packaging gate.
+- Test the workflow's actual publication shell with a mock GitHub CLI for
+  new/existing releases and failed uploads. Assert separate rust-dev names,
+  prerelease/non-latest flags and no tag advancement after upload failure.
+- Validation: all 536 native/all-target tests, three release-automation tests,
+  strict Clippy, all-feature WASM, formatting and whitespace checks pass.
+  Check expression context availability against GitHub's reference; set the
+  runner-temp target directory in a step, not the unavailable job-env context.
+  Windows packaging/script execution and real hardware remain CI/user checks.
+
+### 2026-10-19 — Cache all Rust CI compilation jobs
+
+- The Windows portable job already cached release dependencies, but native
+  Linux/Windows/macOS tests and WASM checks started cold on every run.
+- Cache Cargo registry/git data and compiled target output in each job.
+  Separate native OS/architecture, WASM metadata and static-CRT releases;
+  include pinned Rust and Cargo manifest/lockfile hashes in cache keys.
+- Restore the preceding compatible cache when dependencies change, so Cargo
+  can reuse unchanged crates. Keep all tests and checks running on cache
+  hits; leave C# workflows and local target directories unchanged.
+- Omit CI-only debug symbols and incremental compiler state to keep caches
+  smaller. Preserve existing optimization, debug assertions and local
+  debugging settings. The first successful run must populate the caches.
+- Add dependency-free Node checks for cache paths, key/fallback isolation,
+  restore ordering and compact CI settings; run them in native Linux CI.
+- Validation: all eight Node test entries pass, including the four new
+  cache checks and existing publication/download checks; whitespace checks
+  pass. Actual cache population, hits and timings still require GitHub CI.
+
+### 2026-10-19 — Isolate macOS capacity from Windows publication
+
+- User reports macOS ARM64 runner acquisition failed after about eighteen
+  minutes with GitHub capacity/internal-server errors. No macOS build or
+  test failure is established. Its matrix cancellation blocked publication
+  despite a successful Windows portable job and native Windows checks.
+- Keep Linux/Windows in the required native matrix. Move macOS to an
+  independent Intel runner job and reuse the same cached native steps with
+  a YAML anchor. GitHub documents both the runner label and YAML aliases.
+  Use runner.os for Linux-only steps so the shared list needs no matrix.
+- Keep macOS failures visible in overall workflow status, not ignored with
+  continue-on-error. Publication depends only on Linux/Windows, WASM and
+  the package job; do not bypass any of those checks with always().
+- Add a regression for gate membership, the independent macOS runner and
+  shared tests. All nine Node test entries and whitespace checks pass.
+  Actual scheduling/publication still require another GitHub run.
+- At the time of the report, cache changes were still uncommitted; the
+  seventeen-minute Windows test run did not measure warm-cache performance.
+  Preserve C# workflows, existing release assets and deferred device checks.
+
+### 2026-10-19 — Preserve the portable ZIP during publication
+
+- Inspect rust/logs_106435626898.zip: artifact upload/download and digest
+  verification succeeded, but the download action extracted the raw ZIP.
+  GitHub CLI then failed because the expected archive file was absent.
+- Set skip-decompress on the release download to keep the uploaded ZIP
+  intact. Check that it is nonempty before any release or tag operation,
+  with a clear error if missing. Keep permissions and release gates intact.
+- First reproduce the missing setting and missing/empty-file failures.
+  Extend the real-shell mock tests with archive fixtures and assert no
+  GitHub calls occur without a usable file. All twelve Node test entries
+  and whitespace checks pass; actual publication still awaits GitHub CI.
+- Confirm release dependency caching from the same log: restore succeeded
+  and only FastFill recompiled, finishing the release build in 24.34 seconds.
+  Leave the supplied log ZIP untouched and untracked.
 
 ## References
 

@@ -3,6 +3,44 @@
 Experimental cross-platform rewrite. The production C#/WinUI application is
 unchanged. See [PLAN.md](PLAN.md) for scope, progress, and checkpoint gates.
 
+## Windows testing without a compiler
+
+1. [Download the Windows x64 testing ZIP][rust-dev].
+2. Extract anywhere; run `FastFill-Rust\FastFill-Rust.exe`.
+3. Open images, PDFs or `.docscan` projects from inside the app. Save copies
+   of valuable projects while testing. Print the bundled `sample-form.pdf`
+   at actual size for camera and snapping checks.
+
+No Rust toolchain, compilation, .NET, installer or certificate import is
+needed on the test machine. CI statically links the C runtime and checks
+that the EXE does not import Visual C++ redistributable DLLs. Windows 10/11
+x64 is the target; actual Windows/SP6 hardware testing remains necessary.
+The prototype is unsigned, so Windows may show an unrecognized-app warning.
+Only run downloads you trust; do not disable Windows protection globally.
+
+The `Rust prototype` workflow builds an optimized release EXE, packages it
+with instructions, the license, sample PDF and `BUILD.txt` revision/run
+details, then extracts it elsewhere and checks dependency/loader startup.
+The startup check deliberately uses invalid helper arguments, not a camera
+or GUI on the hosted runner. Device/touch checks still need real hardware.
+
+On `master`, Windows/Linux tests, WASM checks and packaging must succeed
+before the public [`rust-dev` prerelease][rust-dev] is updated. macOS runs
+the same native tests independently on `macos-15-intel`; its failures remain
+visible but runner delays or failures do not block the Windows download.
+No GitHub sign-in is needed for that release. Other branches and PRs produce
+the same `FastFill-Rust-windows-x64.zip` Actions artifact (14-day retention;
+sign-in required), not a public release. `workflow_dispatch` can rebuild it
+without source changes. The first ZIP appears after this workflow runs.
+
+These names and assets are separate from C#'s `dev`, version releases and
+`FastFill-portable.zip`. The C# app, file associations and workflow stay
+unchanged. This checkpoint does not introduce Rust version-tag releases.
+
+[rust-dev]: https://github.com/dhanak/fastfill/releases/tag/rust-dev
+
+## Build and develop locally
+
 Install the pinned toolchain and run routine local checks:
 
 ```sh
@@ -22,6 +60,30 @@ The small browser download adapter also has a dependency-free check
 
 ```sh
 node web/download.test.mjs
+```
+
+On Linux/macOS, check publication gates and release creation/update/failure
+handling without GitHub access or PowerShell (Node.js and Bash only):
+
+```sh
+node tools/publish-dev.test.mjs
+```
+
+CI caches downloaded crates and compiled dependencies separately for each
+native OS/architecture, WASM checks and the static-CRT Windows release.
+Keys include the pinned Rust version and Cargo manifest/lockfile hashes;
+dependency changes can restore the preceding compatible cache, letting
+Cargo rebuild only what changed. Source-only edits reuse dependencies.
+The first successful run populates each cache; later runs show a restore
+in the corresponding `Cache ...` step. Tests still run on cache hits.
+
+CI disables debug symbols and incremental compiler state to keep archives
+small. Optimization and debug assertions are unchanged; local development
+retains debug symbols and incremental builds. Caches can expire or be
+evicted, so cold builds remain possible. Check the workflow configuration:
+
+```sh
+node tools/cache.test.mjs
 ```
 
 The WASM command needs its standard library once per toolchain:
