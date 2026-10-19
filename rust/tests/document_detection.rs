@@ -320,6 +320,7 @@ fn recorded_laptop_frames_find_the_outer_sheet_not_the_fold() {
 }
 
 #[test]
+#[ignore = "Slow 224-frame replay; run explicitly with --ignored"]
 fn recorded_laptop_sequence_finds_the_outer_sheet_and_reaches_capture() {
     // Keep the C# geometry/quality gates intact across the complete recording.
     // The countdown alone uses the user's one-second handheld calibration.

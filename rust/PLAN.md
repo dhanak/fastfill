@@ -616,7 +616,7 @@ difference rather than porting the off-by-one into the new pipeline.
       User clarifies viewfinder screenshots contain app chrome absent from
       actual camera pixels; do not treat that status-bar crop as a blocking
       regression. Keep genuine camera fixtures and generic clutter checks.
-- [x] Pass the enabled full-recording test: 224 frames, raw
+- [x] Pass the full-recording test: 224 frames, raw
       correct >= 160, stable correct >= 180, wrong = 0 for both, and a
       correctly framed capture. Keep 0.1 normalized corner tolerance, image
       quality/geometry calibration, and three unhinted smoke checks. Only
@@ -2598,6 +2598,26 @@ Manual checkpoint 6F — accepted 2026-10-16:
 User accepts the replay checkpoint and requests a commit and stop for today.
 Mark 6F1/6F2 complete, create an unsigned commit, and do not push. Leave
 native capture in 6G unstarted until the user requests continuation.
+
+### 2026-10-19 — keep exhaustive camera replay out of routine tests
+
+- User reports the 224-frame regression takes 191.90 seconds locally and
+  Rust CI jobs exceed 15 minutes. The native matrix runs the corpus twice
+  per platform, once with core features and again with all features.
+- Mark only the exhaustive recording test with standard Rust `#[ignore]`.
+  Keep its 224-frame, correctness, quality, and capture assertions intact;
+  run it only when explicitly requested with `-- --ignored --nocapture`.
+  Existing Cargo/CI commands respect this without workflow changes.
+- Keep three independent real-camera smoke checks, temporal timing/loss/
+  reset checks, and the small replay-command tests in the routine suite.
+  Do not change production detection, countdown, fixtures, or calibration.
+- Document the opt-in command in the Rust README. Leave 6G unstarted.
+- Validation: 258 core/example tests pass; only the full replay is ignored.
+  The detector suite takes 5.43 seconds, excluding compilation, with nine
+  passing tests and one ignored test. Verify the opt-in command with
+  `--ignored --list`: it selects exactly that recording test without
+  rerunning the unchanged corpus. Formatting, core Clippy, and whitespace
+  checks pass. Keep changes uncommitted; no commit requested.
 
 ## References
 

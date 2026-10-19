@@ -3,7 +3,7 @@
 Experimental cross-platform rewrite. The production C#/WinUI application is
 unchanged. See [PLAN.md](PLAN.md) for scope, progress, and checkpoint gates.
 
-Install the pinned toolchain and run all local checks:
+Install the pinned toolchain and run routine local checks:
 
 ```sh
 mise install
@@ -12,6 +12,10 @@ mise exec -- cargo clippy --all-targets --all-features -- -D warnings
 mise exec -- cargo test --all-features --all-targets
 mise exec -- cargo check --target wasm32-unknown-unknown
 ```
+
+Routine tests and CI skip the expensive 224-frame camera replay. The three
+real-frame smoke checks, temporal unit tests, and small replay checks still
+run normally. Run the full recording explicitly as documented below.
 
 The small browser download adapter also has a dependency-free check
 (Node.js 18+; run in CI):
@@ -336,13 +340,15 @@ sharpness, and movement limits stay unchanged.
 Live adapters must reset both tracker and gate on pause, camera/orientation
 changes, and input failures; they must not reuse stale camera results.
 
-The enabled full 224-frame regression retains the original C# geometry and
-quality gates, with the user-requested shorter wait. The three original
-unhinted smoke checks remain separate and unchanged. Run the sequence check:
+The full 224-frame regression retains the original C# geometry and quality
+gates, with the user-requested shorter wait. It can take several minutes and
+is marked `#[ignore]`, so ordinary tests and CI do not run it. The three
+original unhinted smoke checks and fast temporal/capture checks still run
+normally. Run the complete sequence explicitly from `rust/`:
 
 ```sh
 mise exec -- cargo test --no-default-features --test document_detection \
-  recorded_laptop_sequence -- --nocapture
+  recorded_laptop_sequence -- --ignored --nocapture
 ```
 
 Viewfinder screenshots are diagnostic-only: app toolbars/status bars are not
