@@ -179,6 +179,10 @@ impl FastFill {
 }
 
 pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
+    #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+    if let Some(task) = super::camera::update(state, &message) {
+        return task;
+    }
     if super::snap::update(state, &message) {
         return super::snap::synchronize(state);
     }

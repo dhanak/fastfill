@@ -6,13 +6,15 @@ rust-version = "1.99"
 publish = false
 
 [features]
-default = ["gui"]
+default = ["gui", "native-camera"]
 gui = [
-    "dep:iced", "dep:rfd", "pdf-import", "pdf", "krilla/raster-images",
+    "dep:iced", "dep:iced_runtime", "dep:rfd", "pdf-import", "pdf",
+    "krilla/raster-images",
     "dep:wasm-bindgen",
 ]
 pdf-import = ["dep:hayro"]
 pdf = ["dep:krilla"]
+native-camera = ["dep:nokhwa", "dep:rscam"]
 
 [dependencies]
 hayro = { version = "0.8.0", optional = true, default-features = false,
@@ -23,6 +25,9 @@ iced = { version = "0.14.0", optional = true, features = [
     "fira-sans",
     "image-without-codecs",
 ] }
+# Iced's allocator re-export requires its all-codecs image feature.
+# Use the already-transitive runtime instead of adding unused image codecs.
+iced_runtime = { version = "0.14.0", optional = true }
 image = { version = "0.25.8", default-features = false, features = [
     "jpeg",
     "png",
@@ -44,6 +49,14 @@ zip = { version = "9.0.3", default-features = false, features = [
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 atomicwrites = "0.4.4"
+nokhwa = { version = "0.10.11", default-features = false, optional = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+nokhwa = { version = "0.10.11", default-features = false, optional = true,
+    features = ["input-msmf"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rscam = { version = "0.5.5", features = ["no_wrapper"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = { version = "0.2.129", optional = true }
@@ -67,3 +80,7 @@ pedantic = "deny"
 name = "fastfill-rust"
 path = "src/main.rs"
 required-features = ["gui"]
+
+[[example]]
+name = "camera_probe"
+required-features = ["native-camera"]

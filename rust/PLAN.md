@@ -394,7 +394,7 @@ binary project/image data, rather than synchronous, string-only localStorage.
 Handle quota/eviction, private browsing, and multiple live tabs explicitly.
 See [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API).
 
-### 6. Correction, snapping, and camera — in progress
+### 6. Correction, snapping, and camera — accepted
 
 - Port image correction and form snapping, retaining calibrated fixtures.
 - Port document detection and temporal capture gating with all 224 frames.
@@ -403,6 +403,9 @@ See [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API).
   use different adapters; avoid unconditional native-only dependencies.
 - User checkpoints: lab parity first, then laptop camera, then SP6 cameras,
   permissions, orientation, countdown, cancellation, and suspend/resume.
+
+Accepted on available laptop hardware. Physical sleep testing and actual
+Windows/SP6 front/rear calibration remain deferred; do not mark them passed.
 
 #### 6A. Correction geometry and offline preview — accepted
 
@@ -623,6 +626,106 @@ difference rather than porting the off-by-one into the new pipeline.
       countdown duration changes from two seconds to one, as requested.
 - [x] User accepts the complete replay checkpoint on 2026-10-16. Close 6F,
       commit the work unsigned, and stop for today. Leave 6G unstarted.
+
+##### 6G1. Native camera backend probe — manually accepted
+
+- [x] Evaluate native capture without coupling it to document/UI state.
+      Prefer OS APIs over OpenCV/GStreamer or a bundled media runtime.
+- [x] Add an opt-in command to list devices/formats and capture one PNG.
+      Validate arguments, dimensions, frame buffers, and output safety;
+      keep hardware access out of automated tests.
+- [x] Check Linux build/device listing and native-free WASM compilation.
+      Keep Windows Media Foundation and macOS isolation explicit; native
+      Windows/macOS compilation still awaits CI. Install no container tools.
+- [x] User marks the backend probe manually checked on 2026-10-19.
+      Laptop checks cover enumeration, formats, image orientation/color,
+      repeat capture/release, errors and permissions. SP6 checks remain
+      separate; do not infer Surface hardware acceptance from laptop tests.
+
+##### 6G2. Native preview and manual capture — manually accepted
+
+- [x] Restore the stashed camera probe and exposure warm-up after the
+      annotation refactor; share its adapter/decoder with the GUI.
+- [x] Add a camera screen with immediate live preview, manual Capture, Retake,
+      Use photo and Cancel. Add photos without discarding existing pages;
+      reuse the page-correction editor after insertion.
+- [x] Keep driver calls in a killable subprocess, bound frame delivery,
+      prepare PNG off the UI thread and reject stale session completions.
+- [x] Stop/reap workers on cancellation, capture and closure;
+      expose recoverable errors and retain the 20-page limit.
+- [x] User marks native preview/manual capture manually checked on
+      2026-10-19, including immediate capture and uninterrupted window moves.
+      Repeat on Windows/SP6 after laptop checks.
+
+##### 6G3. Live framing and capture integration — manually accepted
+
+Keep follow-ups small and manually testable:
+
+- **6G3a — Live framing/countdown:** reuse the calibrated detector,
+  stabilizer and one-second capture gate off the UI thread. Show a
+  translucent quad and circular capture progress. Freeze the analyzed
+  frame, carry its crop into pending page corrections and keep manual
+  capture immediate. Bound analysis and reject stale sessions/results.
+- **6G3b — Device and capture modes:** camera picker/switching, supported
+  modes and higher-resolution capture, without silently distorting frames.
+- **6G3c — Hardware lifecycle:** orientation, suspend/resume, permissions
+  and actual SP6 front/rear camera calibration. Browser/macOS capture
+  remains outside these native Linux/Windows checkpoints.
+
+6G3a, 6G3b and 6G3c are manually accepted. Physical sleep testing and actual
+SP6 hardware calibration remain deferred, separate from laptop acceptance.
+
+6G3a implementation checklist:
+
+- [x] Run hinted detection, consensus and one-second gating off the UI
+      thread; keep one analysis job across canceled/restarted sessions.
+- [x] Draw a translucent quad aligned with the contained preview and
+      circular capture progress; retain immediate manual capture.
+- [x] Freeze analyzed pixels/corners together, reject stale/current-missing
+      final frames, and pass the crop into pending correction settings.
+- [x] Preserve photo cancellation, manual capture, original pixels, errors,
+      focus/move behavior and the existing recorded-sequence calibration.
+- [x] Validate automated model/rendering, core, native and WASM checks.
+      Pass 505 native/all-target and 270 dependency-light tests; keep the
+      full replay opt-in. Strict Clippy, WASM and formatting checks pass.
+- [x] User checkpoint: live quad, countdown/auto-freeze, motion/blur reset,
+      Retake, manual capture and suggested-crop Accept/Cancel/Full frame.
+      User accepts the captured-corner lag fix and 6G3a on 2026-10-19.
+
+6G3b implementation checklist:
+
+- [x] Discover named cameras and decoder-supported modes off the UI thread;
+      bound discovery output and terminate stalled/canceled driver helpers.
+- [x] Add touch-sized camera/mode pickers and Refresh cameras. Restart
+      preview on changes; reject old frames, queries and queued starts.
+- [x] Prefer full HD when available, at up to 30 FPS. Expose higher reported
+      modes within image limits; never silently substitute a failed request.
+- [x] Use the selected resolution for preview and the untouched photo.
+      Preserve frame/corner alignment, immediate Capture, Retake and editing.
+- [x] Pass 517 native/all-target and 270 dependency-light tests, strict
+      Clippy, WASM, formatting and whitespace checks. Keep full replay opt-in.
+- [x] User accepts device/mode selection, preview and auto-capture after
+      resolution normalization on 2026-10-19. Laptop maximum is 1280×720;
+      full-HD behavior is covered synthetically, not physically accepted.
+
+6G3c implementation checklist — manually accepted:
+
+- [x] Add lossless orientation controls shared by preview, detection and
+      capture; keep window layout changes separate from sensor orientation.
+      Mirror camera preview/review and overlay until Use photo; default on
+      for explicit Front labels. Page editing/output stay unmirrored.
+- [x] Handle sleep/interruption without stale auto-capture; release workers,
+      reset tracking and provide an explicit fresh-preview recovery path.
+- [x] Show actionable Linux/Windows camera permission/device guidance.
+- [x] Automate pixel orientation, interruption, stale-completion, permission
+      and recovery checks; retain native/WASM build coverage.
+      Pass 536 native/all-target and 272 dependency-light checks, strict
+      Clippy, WASM, formatting and whitespace checks; keep replay opt-in.
+- [x] User accepts the final camera workflow on 2026-10-19, including
+      mirrored snapshot review until Use photo opens the normal page editor.
+      User defers physical sleep testing; do not mark it passed.
+      Repeat SP6 front/rear/orientation and sleep tests there when available;
+      do not infer their calibration from container or laptop tests.
 
 ### 7. Packaging and replacement decision — not started
 
@@ -2636,6 +2739,456 @@ native capture in 6G unstarted until the user requests continuation.
   opt-in. Strict Clippy, WASM, formatting and whitespace checks pass.
   User accepts manual refactor checks and the overlap-drag follow-up.
 - Keep native camera/exposure work stashed separately; C# remains unchanged.
+
+### 2026-10-19 — test change committed; native camera probe checkpoint 6G1
+
+- Commit the accepted slow-test change unsigned as `a4bd8bb`, without
+  pushing. Start only the backend spike, not a GUI capture workflow.
+- Evaluate Nokhwa's native adapters. Its Linux V4L wrapper generates
+  bindings with libclang, absent from this container. Use rscam's direct
+  V4L2 mode on Linux instead; it needs only existing libc. Use Nokhwa's
+  Media Foundation adapter on Windows. Do not install missing tools or
+  add OpenCV/GStreamer/libv4l2/mozjpeg runtime requirements.
+- Keep the spike in an opt-in example and optional `native-camera` feature.
+  Reuse Nokhwa's packed-pixel conversions and the existing bounded JPEG
+  decoder. No document/editor/correction/CI source changes. macOS returns
+  Unsupported for now; WASM excludes all native camera dependencies.
+- Add list, formats, and one-frame PNG capture with explicit device/mode
+  selection. Default to 640x480@30 MJPG, without silent mode fallback.
+  Keep 50 MP/100 MiB bounds and reject malformed, padded, or changed frames.
+  Discard three exposure-startup frames, stop streams on read/decode errors,
+  and refuse existing output files with atomic no-overwrite PNG output.
+- Isolate driver calls in a child process with a 20-second timeout. Kill
+  and reap stalled workers, surface failures, and keep all camera access
+  out of automated tests. This diagnostic does not establish GUI threading,
+  streaming latency, full-resolution still capture, orientation, or lifecycle.
+- TDD: first observe missing command/spec/decoder/output APIs. Eight new
+  tests cover empty/malformed arguments, explicit modes and Unicode paths,
+  RGB/BGR/gray/YUYV/NV12/JPEG decoding, bounds/stride/mismatch rejection,
+  output preservation, worker success/failure, and timeout cleanup.
+- Validation: 266 core/example tests pass with `native-camera`, with only
+  the full 224-frame replay ignored. Strict camera-enabled core Clippy,
+  formatting, whitespace, and all-feature/all-target WASM compilation pass.
+  Inspect the WASM dependency tree: no camera crates. Native Windows/macOS
+  builds await existing CI; no cross toolchains are installed here.
+- Smoke-check help, enumeration, empty arguments, existing destinations,
+  and a guaranteed missing device. Enumeration finds the two Linux video
+  nodes without opening a stream. Do not capture from the user's camera
+  in the container; physical image/color/orientation/release checks await
+  the user. Keep new probe changes uncommitted and stop before 6G2.
+
+Manual checkpoint 6G1 — pending:
+
+1. From `rust/`, follow the camera-probe commands in README: list devices,
+   inspect formats for the chosen ID, and capture a photographed document
+   into a new PNG. Start on the Linux laptop; use a listed exact mode if
+   the default is unavailable. Report device ID and selected format.
+2. Check dimensions, orientation, aspect, and colors. Capture again to a
+   different path, then open another camera app to confirm device release.
+   Retry an existing destination: it must fail without replacing the file.
+3. Keep no-device/permission/busy/unsupported-mode errors visible. No live
+   preview/framing/countdown/project insertion is included yet. Confirm
+   this adapter checkpoint before GUI integration in 6G2; repeat on SP6
+   later, since laptop validation does not establish Surface compatibility.
+
+### 2026-10-19 — camera probe exposure warm-up
+
+- User confirms the captured image looks about right, but is dark because
+  the camera has insufficient time to adjust. Three discarded frames give
+  only about 100 ms at 30 FPS, not a useful exposure-settling interval.
+- Drain frames for at least two seconds after receiving the first frame
+  from either native stream, retaining the three-buffer minimum, then
+  read a fresh frame. Do not count slow device opening/first-read latency
+  as exposure-settling time; reproduce that case with a delayed fake frame.
+  Release every discarded buffer immediately; do not sleep over queued
+  stale images. Keep the 20-second worker timeout and existing cleanup.
+  This is deliberately a timed allowance, not exposure-stability analysis.
+- TDD: first reproduce missing warm-up APIs. Add virtual-clock checks at
+  5/30/120 FPS, immediate buffer release, slow initial reads, and errors
+  during startup, warm-up, and final capture. No real waits or camera
+  access in these new checks. Keep 6G1 acceptance pending a brightness retry.
+- Validation: routine camera-enabled core/example tests pass (269 tests;
+  only the exhaustive replay ignored). All 11 probe checks, rerun after
+  first-frame timing calibration, pass in 0.1 seconds. Strict core Clippy,
+  formatting, whitespace checks, and the native probe build pass. Preserve
+  the user's sample image and unrelated untracked simplification notes.
+  Leave changes uncommitted; do not start 6G2 or claim hardware acceptance.
+
+### 2026-10-19 — restore camera work; checkpoint 6G2 manual capture
+
+- User requests removing obsolete text/duplicate camera stashes and popping
+  the remaining camera work. Drop `ac46a5a` and `c85ce43`, restore `2684df6`,
+  preserve both sides of its progress-log conflict and drop the restored
+  stash. Keep the annotation refactor and C# application unchanged.
+- Move the probe's native adapter, decoding, exposure warm-up and checks
+  into the camera library module. The diagnostic example remains available.
+  Reuse that implementation for live preview; add no further dependencies.
+- Add a Camera screen, initially using device 0 and the explicit probe mode.
+  Warm exposure before exposing capture; freeze the actual displayed frame,
+  allow Retake and add the photo only after Use photo. Insert after the
+  active page without replacing its annotations, then open page corrections.
+- Isolate streaming in the current executable's hidden helper mode. Bound
+  dimensions, payloads, errors and GUI frame delivery; discard surplus
+  previews rather than growing a backlog. A watchdog terminates stalled
+  workers; process guards reap them outside UI updates. Signal termination
+  immediately on draft disposal; never hold the UI-shared child lock while
+  waiting for a driver process to exit.
+- Keep preview/PNG work away from document updates. Cancel, Escape, focus
+  loss and close release the stream; stale frames, queued starts and photo
+  preparation completions cannot revive canceled sessions. Resume explicitly
+  after focus loss; retain normal unsaved-project confirmation on close.
+- TDD: first reproduce missing camera protocol/module APIs. Add protocol
+  round trips, malformed/oversized/truncated packets and Unicode errors,
+  timeout/cancellation/reaping checks using fake child processes and modal
+  state tests for capture, preservation, stale events, errors and page limits.
+  No automated test opens a real camera. Keep the long replay opt-in.
+- Validation: all 494 native/all-target tests and 270 dependency-light
+  core tests pass; the full replay remains ignored. Rerun all five camera
+  screen checks after tightening delivery to one in-flight frame across
+  iced's internal event queue. Strict native/camera-core Clippy, formatting,
+  whitespace and all-feature WASM checks pass. Confirm camera dependencies
+  are absent from the WASM tree and the probe's help still works.
+- Manual checkpoint 6G2 is pending. Use the GUI to retry exposure brightness
+  and verify live responsiveness, orientation/color/aspect, retake/cancel,
+  camera release, page correction and project save/reopen. Keep native
+  Windows/SP6 validation explicit. Do not start 6G3 before this check.
+- Keep all restored/new work uncommitted; no new commit was requested.
+
+### 2026-10-19 — immediate camera preview; preserve it across window moves
+
+- User reports the basic GUI capture flow works. Holding back live frames
+  during warm-up looks like a broken camera, and moving the app can trigger
+  focus loss, terminate capture and display a misleading red warning.
+- Show the first live frame immediately, even while dark. Keep only Capture
+  disabled for two seconds after the first displayed frame; use neutral
+  exposure-adjustment text. Preserve the standalone probe's timed warm-up.
+- Keep the live stream, last frame, session ID and exposure timer on focus
+  loss or window move/resize. Clear input modifiers only. Explicit Cancel,
+  Escape, Capture, errors and app closure still stop the worker.
+- TDD: reproduce the focus-loss session reset and missing immediate-preview
+  read path. Cover a single immediate read without clock access, preserved
+  one-shot warm-up, visible startup frames, early-capture rejection, and
+  capture readiness across subsequent frames/focus changes without sleeps.
+- Validation: all 15 camera-core and seven camera-screen checks pass;
+  strict all-feature/all-target Clippy, WASM, formatting and whitespace
+  checks pass. Keep hardware access out of automated tests.
+- User follow-up: confirm immediate preview and moving/defocusing the window
+  no longer pauses it. Keep this change uncommitted; do not start 6G3 yet.
+
+### 2026-10-19 — remove manual capture gate; clarify correction cancellation
+
+- User confirms immediate preview and uninterrupted window moves. Remove
+  the remaining two-second manual-capture gate and its GUI timer; enable
+  Capture as soon as a frame is available. Keep the standalone one-shot
+  diagnostic's warm-up, since it has no live preview to judge exposure.
+- Preserve the accepted Use photo transaction: it adds the page before
+  opening corrections. Cancel in the page editor discards only correction
+  edits; Delete page removes the photo. Explain this in the camera review
+  screen and README instead of changing cancellation into silent deletion.
+- TDD: reproduce the disabled first-frame Capture button. Check capture
+  before any frame stays disabled, the first frame permits capture without
+  clocks/sleeps, and canceling subsequent corrections retains the photo,
+  existing annotations and original correction settings.
+- Validation: all 196 application checks pass, including the first-frame
+  and correction-cancellation regressions. Strict GUI/camera-core Clippy,
+  all-feature WASM, formatting and whitespace checks pass.
+- Keep changes uncommitted; do not start 6G3 in this follow-up.
+
+### 2026-10-19 — accept 6G1/6G2; connect live auto-framing in 6G3a
+
+- User marks both native-camera checkpoints manually checked. Record their
+  acceptance and split 6G3 into live framing, device/mode controls and
+  hardware lifecycle checks. Keep Linux laptop acceptance separate from SP6.
+- Reuse hinted document detection, four-result consensus and the calibrated
+  one-second gate. Run one background analysis across camera sessions while
+  preview continues; coalesce incoming frames without a CPU-work backlog.
+- Overlay a translucent green quadrangle on the contained image, including
+  letterboxing, and draw circular progress around a touch-sized Capture.
+  Keep manual capture immediately available. Auto-capture freezes the exact
+  analyzed pixels and matching crop rather than a newer preview image.
+- Reject stale analysis and reset after long gaps, changed dimensions or
+  input errors. At the final capture, require the current raw quad to agree
+  with consensus at the existing 0.04 gate tolerance. Historical votes alone
+  cannot capture a missing or suddenly moved document. Do not retune the
+  detector, consensus, sharpness threshold or recorded-sequence fixtures.
+- Carry automatic corners into pending page-editor settings. Use photo
+  still inserts an untouched source image; Accept applies the crop, Full
+  frame removes it and Cancel keeps the uncorrected photo. Manual capture
+  retains its displayed frame and can use the editor's Auto frame button.
+- Keep camera I/O/PNG preparation, framing and preview widgets in focused
+  modules. Expose the existing ordered crop-point accessor for the GUI;
+  add no dependencies or generic task framework. Leave the C# app untouched.
+- Tests cover virtual countdown/quality/gap changes, bounded work across
+  cancel/reopen, detector failures with manual capture, exact source-frame
+  freezing and crop handoff. Render portrait/landscape overlays at 100/200%
+  DPI, verify partial/full countdown drawing and pending-crop Cancel/Accept
+  with undo. No real camera opens and the full replay remains opt-in.
+- Validation: 505 native/all-target checks and 270 dependency-light checks
+  pass, with only the full recording ignored. All 14 camera checks pass,
+  including four portrait/landscape and DPI render cases. Strict Clippy,
+  all-feature WASM, formatting and whitespace checks pass. Builds stay in
+  isolated container directories; host target/dist directories are untouched.
+
+Manual checkpoint 6G3a — pending:
+
+1. Run the native app, choose Camera and point at a printed form against a
+   contrasting background. Confirm immediate preview, a green quadrangle
+   around the paper and a ring filling during the one-second steady hold.
+2. Move/blur/remove the document mid-countdown. It must reset or reacquire,
+   not capture an old frame. Hold steady again and check the frozen image
+   matches its corners; no further automatic shot occurs until Retake.
+3. Use photo: inspect the suggested crop in page corrections. Adjust it,
+   choose Full frame or Accept. Cancel must keep the full, uncorrected photo.
+   Save/reopen an accepted cropped page and verify its source is retained.
+4. Retake, press manual Capture immediately, and check it freezes the visible
+   image without waiting. Camera Cancel/Escape must add no page. Move the
+   window or switch focus while previewing; neither should require restart.
+5. Check responsiveness and camera release. This slice still uses the
+   accepted 640×480 MJPG mode; defer device selection/high-resolution stills
+   to 6G3b and real Surface orientation/suspend/resume checks to 6G3c.
+
+Stop here for the user check. Keep restored/new changes uncommitted; no
+commit or push was requested.
+
+### 2026-10-19 — remove averaging lag from the captured crop
+
+- User reports the 6G3a flow works, but slow movement makes the averaged
+  frame trail the document. Keep preview smoothing and countdown unchanged;
+  use the exact frozen image's raw corners for the final crop, after the
+  existing agreement check. No additional detection pass or threshold change.
+- Add a virtual-time gradual-drift regression. Verify capture completes,
+  tracking still smooths, and the crop uses current corners and source pixels.
+  Confirm the test fails with the old averaged crop, then passes with the fix.
+- Validation: all 205 application tests pass, including all 15 camera tests.
+  Strict all-feature/all-target Clippy, formatting and whitespace checks pass.
+- Manual follow-up: gently move the document during auto-capture; verify
+  frozen corners align despite live-overlay lag. Keep 6G3a open for this check;
+  do not start 6G3b or commit without a request.
+
+### 2026-10-19 — accept 6G3a; device/mode checkpoint 6G3b
+
+- User accepts the captured-corner lag fix and requests the next slice,
+  explicitly requiring at least full-HD support. Mark 6G3a manually accepted;
+  keep real SP6 lifecycle/orientation calibration in 6G3c.
+- Replace the numeric device field with named cameras and a supported-mode
+  picker. Discover devices/modes in bounded, killable subprocesses. The modal
+  owns each query handle, so switching, cancellation and closure kill it.
+  Keep driver work off the UI thread and reject stale completion/session IDs.
+- Share typed device/mode results with the standalone probe; add no dependency.
+  Validate dimensions, RGBA byte limits, rate and format at the worker boundary.
+  Filter/deduplicate unsupported modes and retain exact requests, not silent
+  fallback. Linux continuous grids offer endpoints/common sizes and exact
+  integer frame intervals; do not fabricate rounded fractional-FPS support.
+- Prefer the largest supported resolution up to 1920×1080 at <=30 FPS,
+  preferring MJPG at that size. Higher reported modes remain selectable.
+  Stream and capture at the same selected resolution: keep original pixels
+  and matching corners without re-opening the camera for a separate still.
+- Reset preview/tracking on mode/device changes, retain mode on Retake and
+  lock choices for a frozen photo. Keep Capture immediate, recover from missing
+  or busy devices, and leave Use photo/correction cancellation unchanged.
+- Add checks for catalog normalization, full-HD defaults/pixel preservation,
+  Linux rational intervals and stepwise grids, malformed/empty worker args,
+  bounded query output, timeouts, drop cancellation/reaping, camera/mode
+  switching, stale queries/frames, errors and frozen-photo preservation.
+  Use synthetic children and unpolled discovery tasks; no real camera opens.
+- Validation: 517 native/all-target tests and 270 dependency-light tests pass;
+  only the exhaustive recorded replay remains ignored. All 19 camera-screen
+  and 21 camera-core checks pass. Strict Clippy, all-feature WASM, formatting
+  and whitespace checks pass. Build the native app and smoke-check named-device
+  discovery through its real helper flag without opening a stream. Keep all
+  compilation under isolated `/tmp` targets; leave host target/dist untouched.
+  Windows/macOS native compilation and physical capture remain CI/user checks.
+
+Manual checkpoint 6G3b — pending:
+
+1. Open Camera. Check named devices and the selected dimensions/FPS/format.
+   Full HD should be preferred if advertised; higher resolutions remain listed.
+2. Switch between 640×480 and 1920×1080 (or the highest supported mode).
+   Check aspect, colors, preview responsiveness, auto-frame and manual Capture.
+   Changing modes must restart tracking without reusing the old image/crop.
+3. Capture, Retake and capture again. Verify Retake retains the selected mode.
+   Use photo, Full frame, Accept and save/reopen; source pixels should retain
+   the chosen resolution, not the displayed preview widget's dimensions.
+4. If multiple cameras exist, switch between them. Check errors from a busy,
+   unavailable or metadata-only device; retry another choice or Refresh cameras.
+   Cancel during discovery/preview and reopen; no old result should overwrite
+   the new choice or keep a device busy after cancellation.
+5. Repeat front/rear and full-HD checks on SP6 when available. This laptop
+   checkpoint does not establish Surface orientation/suspend/resume support.
+
+Stop for this manual checkpoint. Do not start 6G3c or commit without a request.
+
+### 2026-10-19 — full-HD preview upload flicker
+
+- User reports rapid black/disappearing preview frames at full HD while other
+  modes work. Installed Iced code uploads RGBA images >=2 MiB asynchronously;
+  replacing every visible handle immediately exposes a not-yet-ready image.
+- Use Iced's explicit image-allocation task. Hold the previous visible frame
+  until upload completes, retain its allocation for immediate rendering, and
+  acknowledge delivery only after upload to bound work end to end. Preserve
+  original resolution and exact analyzed/captured pixels; add no resize step.
+- Keep manual Capture on the visible image during an incoming upload. Ignore
+  stale completion after capture, mode/session changes or camera cancellation.
+  Upload failure leaves the previous picture and manual capture available.
+- Reference the already-transitive `iced_runtime` package directly because
+  Iced's allocator re-export requires its unnecessary all-codecs image feature.
+  Add no new package, media runtime, image codec or unsafe code.
+- TDD: reproduce early visible-frame replacement before the fix. Drive real
+  allocation tasks with a headless software renderer; cover delayed full-HD
+  replacement, first-frame readiness, retained full-HD export dimensions,
+  capture during upload, errors/recovery and existing stale-result guards.
+- Validation: all 212 application tests pass, including all 22 camera-screen
+  checks. Strict all-feature/all-target Clippy, WASM, formatting and whitespace
+  checks pass. Keep 6G3b open for a full-HD camera retry; physical GPU/camera
+  acceptance cannot be inferred from headless tests. Leave changes uncommitted.
+
+### 2026-10-19 — resolution-independent live framing
+
+- User confirms the upload-flicker fix and clarifies this laptop camera's
+  maximum is 1280×720, not full HD. Higher resolutions are covered by synthetic
+  tests, not physical acceptance. User reports more sensitive framing and
+  inability to finish automatic capture at the highest available resolution.
+- Corner drift already uses normalized coordinates. The detector's pixel
+  filters, Laplacian sharpness and analysis cost were not similarly bounded
+  across the accepted VGA preview and larger modes, which can change both
+  quality gating and stale-result frequency despite the same apparent scene.
+- Share the existing detector through a small live-preview entry point capped
+  at a 640-pixel longest edge. Keep source validation, aspect, hints, normalized
+  corners and the full-resolution frame for capture. Change no confidence,
+  movement, sharpness or countdown threshold. Still-image Auto frame and
+  offline replay retain the existing 1280-pixel path and calibration.
+- TDD: first reproduce differing analysis dimensions. A rescaled, mildly
+  blurred synthetic form passes the VGA sharpness gate but fails it at raw
+  720p; normalized live analysis detects the same corners and reaches capture
+  at 640×360, 1280×720 and 1920×1080. Add three recorded-camera live samples
+  checking the outer sheet and quality; extend allocation/aspect checks for
+  both analysis limits and portrait inputs. Keep the full replay opt-in.
+- Validation: 522 native/all-target and 272 dependency-light checks pass;
+  keep the full 224-frame replay ignored. Strict Clippy, all-feature WASM,
+  formatting and whitespace checks pass. No camera opens in these tests.
+  Stop for a 1280×720 live-camera retry; do not claim resolution normalization
+  removes genuine blur or hand motion. Keep changes uncommitted.
+
+### 2026-10-19 — accept 6G3b; lifecycle checkpoint 6G3c
+
+- User accepts the normalized 720p preview/framing/countdown and requests
+  the final 6G3 slice. Mark 6G3b manually checked. Laptop maximum is 1280×720;
+  do not claim physical full-HD or SP6 coverage.
+- Add explicit quarter-turn and horizontal-mirror controls. Apply them to
+  accepted frames off the UI thread, before upload, detection and encoding,
+  so preview, crop and saved pixels share coordinates without resampling.
+  Retain orientation for mode changes/Retake/Resume; reset on choosing a
+  different camera. No sensor metadata, display-rotation hook or per-device
+  persistent preferences are added.
+- Add Pause/Resume. User explicitly chooses to remain paused after sleep
+  until Resume preview. Keep pause intent through discovery/configuration
+  changes; reject old frames, uploads, queries, jobs and queued starts.
+  Frozen photos and Use photo/Cancel semantics remain unchanged.
+- Reuse the independent driver watchdog: a three-second wall-clock polling
+  gap or rollback kills/reaps the helper and reports an interruption, mapped
+  to neutral paused status. This catches sleep/long process interruptions
+  without stopping preview for window moves or focus changes. It runs on
+  wake, not before suspend; very brief sleeps are not guaranteed to pause.
+  Also reject analysis by frame wall age: Linux Instant may exclude sleep.
+- Include actionable Windows desktop-camera and Linux session/device-access
+  guidance with camera errors. Never change permissions, require elevation,
+  developer mode or package identity. Keep unsupported macOS/browser capture
+  unchanged; retain the existing native/WASM isolation.
+- Automated checks use exact rotation/mirror pixels, real PNG encoding,
+  headless allocations, synthetic query results and killable test children.
+  Cover pause/configuration, interruption, stale ready-to-capture results,
+  discovery, frozen photos, permission/busy errors and recovery. Inject clock
+  jumps; never sleep a real machine or open a real camera from tests.
+- Validation: 532 native/all-target tests pass, including 221 app checks;
+  all 272 dependency-light tests pass. Keep the full 224-frame replay ignored.
+  Strict all-feature/all-target Clippy, all-feature WASM, formatting and
+  whitespace checks pass. Use only isolated `/tmp` compilation targets.
+  Native Windows/macOS compilation remains a CI check; physical camera,
+  permission prompts and system sleep remain user checks.
+
+Manual checkpoint 6G3c — accepted; sleep/SP6 checks deferred:
+
+1. Rotate a printed form through all four settings, then toggle Mirror preview.
+   Verify preview colors/aspect and quad placement. Capture keeps the same
+   mirrored orientation; Use photo opens the unmirrored page editor. Check
+   Full frame / Accept; save/reopen.
+   A named Front camera defaults to mirrored live preview; unknown names do not.
+2. Retake and change resolution: retain orientation and reset countdown.
+   If multiple cameras exist, select another and check fresh orientation.
+3. Pause; change orientation/mode or Refresh cameras. Stay paused with no
+   old image/countdown until Resume preview. Capture should work immediately
+   after a fresh image appears. Move/resize/focus changes must keep it running.
+4. Deferred by user: sleep with live preview open for at least five seconds.
+   On wake, remain paused, then Resume. No pre-sleep result may trigger a
+   capture. A frozen photo must survive sleep. Cancel/reopen and check release.
+5. Try a busy/denied/unavailable camera. Check inline guidance, retry/refresh,
+   and unchanged project contents after cancellation. Repeat front/rear,
+   portrait/landscape and suspend/resume checks on actual Windows/SP6 hardware.
+
+User accepts this checkpoint after the follow-ups recorded below. Physical
+sleep and Surface calibration remain deferred, not inferred from laptop tests.
+
+### 2026-10-19 — preview-only mirroring and shared camera playback control
+
+- User requests front-camera mirroring only as a live positioning aid.
+  Rotate source pixels, but mirror only the displayed live image and overlay.
+  Detection, captured preview, page corrections and PNG/PDF content retain
+  unmirrored coordinates/pixels, so printed text remains readable.
+- Native adapters expose device names, not facing metadata. Default Mirror
+  preview on for an explicit Front name token, case-insensitively; reject
+  ambiguous Front/Rear labels and leave generic cameras unmirrored. Keep the
+  manual checkbox. Refresh preserves the selected camera and manual override;
+  switching to another camera restores its own default.
+- Keep normal and mirrored renderer allocations ready when mirroring is on.
+  Wait for both before replacing the visible frame, then switch immediately
+  to normal preview on capture. Retain one frame in flight through upload;
+  no high-resolution blank-frame regression or late crop coordinate conversion.
+- Replace separate Pause/Start buttons with one context-sensitive control:
+  Pause while running, Resume preview while paused, Start after errors,
+  Retake after capture. Preserve existing pause/configuration/session guards.
+- User explicitly defers physical sleep testing. Record it as deferred, not
+  passed. Keep existing watchdog/stale-frame checks and hardware limitations.
+- TDD: reproduce mirroring of source pixels before fixing it. Check four
+  lossless rotations, all mirror settings, asymmetric preview/quad reflection,
+  readable captured PNG pixels, full-HD dual allocations, front-name defaults,
+  device switching and manual overrides retained across refresh.
+- Validation: 535 native/all-target tests pass, including 224 app checks
+  and 34 camera-screen checks. Keep exhaustive replay opt-in. Strict Clippy,
+  all-feature WASM, formatting and whitespace checks pass. Hardware checks
+  remain manual; no actual camera or host build directory is used here.
+
+### 2026-10-19 — keep camera review mirrored until Use photo
+
+- User finds the immediate unmirror on capture confusing. Keep camera live
+  preview, frozen review and crop overlay mirrored for the whole camera
+  screen, including PNG preparation. Unmirror only when Use photo leaves
+  that screen for page editing. Source pixels and crop coordinates remain
+  normal throughout; saved/exported content stays readable.
+- Remove the now-unnecessary second renderer allocation per mirrored frame.
+  Upload one display image while retaining the normal source pixels; keep
+  existing upload readiness, backpressure and stale-session guards.
+- TDD: reproduce the capture-time flip in the actual camera view. Verify
+  mirrored pixels before capture, after capture and during Use photo,
+  followed by normal source bytes in the page editor. Preserve asymmetric
+  overlay reflection, PNG encoding and high-resolution allocation checks.
+- All 536 native/all-target checks pass, including 35 camera-screen checks.
+  Strict Clippy, all-feature WASM, formatting and whitespace checks pass.
+  Physical sleep testing remains deferred, not marked accepted.
+
+### 2026-10-19 — accept 6G3c and commit native camera integration
+
+- User accepts the final camera review flow and requests all pending changes
+  be committed. Mark 6G3c, 6G3 and Phase 6 accepted on available hardware.
+- Retain physical sleep and actual Windows/SP6 front/rear calibration as
+  explicit deferred checks. Do not convert deferred coverage into acceptance.
+- Include the restored native probe, Linux/Windows adapters, killable driver
+  helpers, manual capture, live framing/countdown, device/mode controls,
+  orientation, preview-only mirroring, lifecycle recovery and regression tests.
+- Preserve the existing 536 native/all-target and 272 core passing checks,
+  strict Clippy, WASM, formatting and whitespace validation. Keep exhaustive
+  replay opt-in and all compilation outside host-owned target directories.
+- Commit unsigned as requested by repository policy. Do not push or start
+  Phase 7/UI polish in this turn; keep the C# app and release workflow intact.
 
 ## References
 

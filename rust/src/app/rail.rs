@@ -27,8 +27,7 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
             .width(Fill)
             .height(CONTROL_HEIGHT)
     };
-    container(
-        column![
+    let controls = column![
             row![
                 text("Page"),
                 pick_list(
@@ -73,16 +72,29 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
                 ),
             ]
             .spacing(4),
-            // Give the canvas an explicit layer/clip, like the document.
-            iced::widget::stack![
-                iced::widget::Space::new().width(Fill).height(Fill),
-                canvas(Rail { app: state }).width(Fill).height(Fill),
-            ]
-            .width(Fill)
-            .height(Fill)
-            .clip(true),
-        ]
-        .spacing(6),
+        ];
+    #[cfg(all(
+        feature = "native-camera",
+        any(target_os = "linux", target_os = "windows")
+    ))]
+    let controls = controls.push(control(
+        "Camera",
+        Message::Camera(super::camera::Event::Begin),
+        super::camera::can_open(state),
+    ));
+    container(
+        controls
+            .push(
+                // Give the canvas an explicit layer/clip, like the document.
+                iced::widget::stack![
+                    iced::widget::Space::new().width(Fill).height(Fill),
+                    canvas(Rail { app: state }).width(Fill).height(Fill),
+                ]
+                .width(Fill)
+                .height(Fill)
+                .clip(true),
+            )
+            .spacing(6),
     )
     .width(WIDTH)
     .height(Fill)

@@ -40,6 +40,19 @@ pub fn detect_document(
     detect_document_with_hint(source, None)
 }
 
+/// Analyze live tracking at a 640-pixel edge, regardless of capture size.
+/// Keeps pixel filters/sharpness comparable to the accepted VGA preview.
+/// Source pixels and normalized corners retain the full capture geometry.
+///
+/// # Errors
+/// Rejects the same invalid source dimensions as `detect_document`.
+pub fn detect_document_preview(
+    source: &RgbaImage,
+    hint: Option<CropQuad>,
+) -> Result<DocumentDetection, ImageInputError> {
+    detect(source, hint, 640)
+}
+
 /// Rank nearby outlines using the previous stable frame, not its confidence.
 /// Invalid hints are ignored; they cannot invent a quad or pass acceptance.
 ///
@@ -49,8 +62,17 @@ pub fn detect_document_with_hint(
     source: &RgbaImage,
     hint: Option<CropQuad>,
 ) -> Result<DocumentDetection, ImageInputError> {
+    detect(source, hint, 1280)
+}
+
+fn detect(
+    source: &RgbaImage,
+    hint: Option<CropQuad>,
+    max_edge: u32,
+) -> Result<DocumentDetection, ImageInputError> {
     let hint = hint.filter(|quad| quad.is_valid());
-    let (width, height) = analysis_size(source.width(), source.height())?;
+    let (width, height) =
+        analysis_size(source.width(), source.height(), max_edge)?;
     let mut result = DocumentDetection {
         corners: None,
         candidate_corners: None,
@@ -142,6 +164,7 @@ fn quad_distance(first: CropQuad, second: CropQuad) -> f32 {
 fn analysis_size(
     width: u32,
     height: u32,
+    max_edge: u32,
 ) -> Result<(u32, u32), ImageInputError> {
     if width == 0 || height == 0 {
         return Err(ImageInputError::Empty);
@@ -150,15 +173,15 @@ fn analysis_size(
         return Err(ImageInputError::TooManyPixels);
     }
     let longest = width.max(height);
-    if longest <= 1280 {
+    if longest <= max_edge {
         return Ok((width, height));
     }
     let scaled = |axis| {
         u32::try_from(
-            (u64::from(axis) * 1280 + u64::from(longest / 2))
+            (u64::from(axis) * u64::from(max_edge) + u64::from(longest / 2))
                 / u64::from(longest),
         )
-        .unwrap_or(1280)
+        .unwrap_or(max_edge)
         .max(1)
     };
     Ok((scaled(width), scaled(height)))
@@ -326,12 +349,22 @@ mod tests {
 
     #[test]
     fn allocation_limits_are_checked_before_analysis() {
-        assert_eq!(analysis_size(0, 1), Err(ImageInputError::Empty));
-        assert_eq!(
-            analysis_size(u32::MAX, u32::MAX),
-            Err(ImageInputError::TooManyPixels)
-        );
-        assert_eq!(analysis_size(50_000_000, 1), Ok((1280, 1)));
-        assert_eq!(analysis_size(1920, 1080), Ok((1280, 720)));
+        for edge in [640, 1280] {
+            assert_eq!(analysis_size(0, 1, edge), Err(ImageInputError::Empty));
+            assert_eq!(
+                analysis_size(u32::MAX, u32::MAX, edge),
+                Err(ImageInputError::TooManyPixels)
+            );
+            assert_eq!(analysis_size(50_000_000, 1, edge), Ok((edge, 1)));
+            assert_eq!(
+                analysis_size(1920, 1080, edge),
+                Ok((edge, edge * 9 / 16))
+            );
+            assert_eq!(
+                analysis_size(1080, 1920, edge),
+                Ok((edge * 9 / 16, edge))
+            );
+            assert_eq!(analysis_size(320, 240, edge), Ok((320, 240)));
+        }
     }
 }

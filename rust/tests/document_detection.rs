@@ -1,6 +1,6 @@
 use fastfill_rust::document_detection::{
     AutoCaptureGate, CaptureState, DetectionStabilizer, detect_document,
-    detect_document_with_hint,
+    detect_document_preview, detect_document_with_hint,
 };
 use fastfill_rust::project::{CropQuad, NormalizedPoint};
 use image::{Rgba, RgbaImage};
@@ -132,6 +132,59 @@ fn resolution_and_alpha_do_not_change_the_document_geometry() {
     }
     let alpha = detect_document(&translucent).unwrap();
     assert!(distance(first.corners.unwrap(), alpha.corners.unwrap()) < 0.02);
+}
+
+#[test]
+fn live_framing_and_capture_are_consistent_from_vga_to_full_hd() {
+    let mut source = document(
+        640,
+        360,
+        [(90.0, 25.0), (550.0, 40.0), (530.0, 330.0), (70.0, 310.0)],
+    );
+    for top in [80, 115, 150, 185, 220, 255] {
+        for y in top..top + 3 {
+            for x in 150..440 {
+                source[(x, y)] = Rgba([60, 60, 60, 255]);
+            }
+        }
+    }
+    let source = image::imageops::blur(&source, 1.5);
+    let mut baseline = None;
+    for factor in [1, 2, 3] {
+        let pixels = image::imageops::resize(
+            &source,
+            640 * factor,
+            360 * factor,
+            image::imageops::FilterType::Triangle,
+        );
+        let detection = detect_document_preview(&pixels, None).unwrap();
+        eprintln!("{}x{}: {detection:?}", pixels.width(), pixels.height());
+        if factor == 2 {
+            // Before normalization, the same apparent blur failed capture.
+            let unscaled = detect_document_with_hint(&pixels, None).unwrap();
+            assert!(unscaled.sharpness < 25.0, "{unscaled:?}");
+        }
+        assert_eq!(
+            (detection.analysis_width, detection.analysis_height),
+            (640, 360)
+        );
+        assert!(detection.corners.is_some(), "{detection:?}");
+        assert!(detection.sharpness >= 25.0, "{detection:?}");
+        let corners = detection.corners.unwrap();
+        assert!(distance(corners, *baseline.get_or_insert(corners)) < 0.02);
+        let mut tracker = DetectionStabilizer::default();
+        let mut gate = AutoCaptureGate::default();
+        let mut state = CaptureState::NoDocument;
+        for ms in [0, 100, 500, 900, 1100] {
+            state = gate.evaluate(
+                &tracker.update(&detection),
+                std::time::Duration::from_millis(ms),
+            );
+        }
+        assert_eq!(state, CaptureState::Ready, "{detection:?}");
+        assert_eq!(pixels.dimensions(), (640 * factor, 360 * factor));
+    }
+    assert!(detect_document_preview(&RgbaImage::new(0, 0), None).is_err());
 }
 
 #[test]
@@ -314,6 +367,34 @@ fn recorded_laptop_frames_find_the_outer_sheet_not_the_fold() {
             distance(single.corners.unwrap(), recorded_corners()) < 0.1,
             "{name}: {single:?}"
         );
+        checked += 1;
+    }
+    assert_eq!(checked, 3);
+}
+
+#[test]
+fn recorded_laptop_live_samples_keep_the_sheet_at_normalized_resolution() {
+    let mut checked = 0;
+    for (name, bytes) in recorded_frames().filter(|(name, _)| {
+        ["0059.jpg", "0112.jpg", "0168.jpg"]
+            .iter()
+            .any(|suffix| name.ends_with(suffix))
+    }) {
+        let (_, pixels) =
+            fastfill_rust::image_input::decode_image(bytes).unwrap();
+        let detection =
+            detect_document_preview(&pixels.into_rgba8(), None).unwrap();
+        eprintln!("{name}: {detection:?}");
+        assert_eq!(
+            (detection.analysis_width, detection.analysis_height),
+            (640, 360)
+        );
+        assert!(detection.corners.is_some(), "{name}: {detection:?}");
+        assert!(
+            distance(detection.corners.unwrap(), recorded_corners()) < 0.1,
+            "{name}: {detection:?}"
+        );
+        assert!(detection.sharpness >= 25.0, "{name}: {detection:?}");
         checked += 1;
     }
     assert_eq!(checked, 3);

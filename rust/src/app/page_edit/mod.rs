@@ -77,7 +77,7 @@ pub(super) fn update(
 ) -> Option<Task<Message>> {
     if let Message::PageEdit(event) = message {
         return Some(match event {
-            Event::Begin => begin(state),
+            Event::Begin => begin(state, None),
             Event::Ready(id, result) => ready(state, *id, result),
             Event::DismissWarning => {
                 state.page_editor.warning = None;
@@ -118,7 +118,10 @@ pub(super) fn update(
     Some(Task::none())
 }
 
-fn begin(state: &mut FastFill) -> Task<Message> {
+pub(super) fn begin(
+    state: &mut FastFill,
+    crop: Option<CropQuad>,
+) -> Task<Message> {
     if state.page_editor.is_open()
         || !state.project.is_idle()
         || state.image_picker != ImagePicker::Idle
@@ -132,10 +135,14 @@ fn begin(state: &mut FastFill) -> Task<Message> {
     state.accept_text();
     state.cancel_interaction();
     state.page_editor.warning = None;
+    let mut settings = PageCorrection::from(&state.pages.current().metadata);
+    if let Some(crop) = crop.filter(|crop| crop.is_valid()) {
+        settings.crop = crop;
+    }
     state.page_editor.draft = Some(Draft {
         id: state.project.request_id(),
         page: state.pages.current().metadata.id,
-        settings: PageCorrection::from(&state.pages.current().metadata),
+        settings,
         original: None,
         ready: None,
         error: None,

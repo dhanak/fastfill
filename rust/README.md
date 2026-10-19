@@ -356,6 +356,209 @@ part of live camera frames. Keep genuine camera images as the acceptance
 fixtures. Offline replay and repeated-still demos do not validate physical
 camera access, permissions, orientation, or capture latency.
 
+Checkpoint 6G1 adds an **opt-in native camera probe**, not GUI capture:
+
+```sh
+mise exec -- cargo run --no-default-features --features native-camera \
+  --example camera_probe -- list
+mise exec -- cargo run --no-default-features --features native-camera \
+  --example camera_probe -- formats 0
+mise exec -- cargo run --no-default-features --features native-camera \
+  --example camera_probe -- capture 0 camera-test.png
+```
+
+Run from `rust/`, with other camera apps closed. Use the numeric device ID
+printed by `list`; Linux IDs refer to `/dev/videoN`, not list positions.
+Some Linux video nodes contain metadata rather than images and will reject
+capture. `formats` lists supported modes before starting a stream. Existing
+output files are refused, never replaced. No project or annotation is changed.
+
+The default request is exactly **640×480, 30 FPS, MJPG**. There is no silent
+resolution/format fallback. If unavailable, use a mode reported by `formats`:
+
+```sh
+mise exec -- cargo run --no-default-features --features native-camera \
+  --example camera_probe -- capture 0 camera-test-2.png 1280 720 30 YUYV
+```
+
+Supported input tokens: `MJPG`, `YUYV`, `NV12`, `RGB3`, `BGR3`, `GREY`.
+The probe and GUI use these same tokens on Linux and Windows. Requests are
+bounded to 50 MP, 1–120 FPS and 100 MiB decoded RGBA per frame. YUYV needs
+even width; NV12 needs even width/height. Unexpected padding/stride is
+rejected rather than guessed. After receiving the first frame, the probe
+drains frames for at least two seconds, giving auto-exposure time to adjust.
+Slow device opening does not count toward this interval. It discards at
+least three initial buffers, then reads a fresh frame, stops the stream,
+saves PNG, and exits. This is a timed allowance, not stability detection.
+It does not crop, rotate, mirror, detect documents, or run auto-capture.
+Check brightness, orientation, and colors.
+
+Each operation runs in a child process with a 20-second timeout, so a
+normally stalled driver cannot indefinitely block the parent. Ctrl+C stops
+the console probe. Missing/busy cameras, denied permissions, unsupported
+modes, and decoding errors are failures, not blank placeholder images.
+Check OS camera privacy permissions for desktop apps and device access.
+
+Linux uses [rscam's direct V4L2 mode][rscam-native]; Windows uses
+[Nokhwa's Media Foundation backend][nokhwa-native]. Linux needs neither
+libv4l2 nor Clang; JPEG decoding reuses the existing image library rather
+than adding mozjpeg/OpenCV/GStreamer. The native GUI enables `native-camera`
+by default; dependency-light commands can still disable default features.
+macOS currently returns Unsupported; the browser keeps its existing harness
+without native camera dependencies. These adapters remain a hardware spike
+until checked on the laptop, then SP6. No camera opens in automated tests.
+
+Manual checkpoint: list devices/formats, capture twice to different files,
+verify image dimensions/orientation/colors, then open another camera app to
+check release. Retry an existing output path: it must fail without replacing
+the file. The GUI checkpoint below can also verify exposure and release.
+
+Checkpoint 6G2 adds **native live preview and manual capture**. Run the app
+normally, then choose **Camera** in the page rail (Linux/Windows):
+
+1. Live preview appears as soon as the first frame arrives; startup frames
+   may be dark while exposure adjusts. Capture is available immediately;
+   there is no forced warm-up. Camera and resolution selection follow the
+   6G3b controls below; the original 6G2 checkpoint used 640×480 MJPG.
+2. Press **Capture** to freeze the displayed frame. **Retake** restarts the
+   preview. **Use photo** adds a page and opens the existing crop, rotation,
+   brightness, contrast and color editor. Existing annotations/pages remain.
+   Cancel in that editor discards corrections, not the added photo; use
+   **Delete page** afterward to remove the photo itself.
+3. **Cancel** or Escape discards the camera draft. No page is added before
+   Use photo. Moving/resizing the window or switching focus keeps preview
+   running. Cancel, Capture and closing the app release the camera.
+4. After a camera error, choose another **Camera** or supported mode,
+   press **Start preview**, or **Refresh cameras** to discover devices again.
+
+Camera reads run in a child process; a bounded frame queue prevents rendering
+backlogs. A 20-second no-frame watchdog stops stalled workers. Capture,
+cancellation and app closure terminate the stream; PNG preparation happens
+off the UI thread. Driver errors appear on the capture screen, not as blank
+successful photos. No camera is opened by automated tests.
+
+macOS camera capture remains unsupported; the Camera entry is absent from
+the browser harness. Check brightness, orientation, colors, responsiveness,
+retake/cancel/release and a project save/reopen before the next slice.
+
+Checkpoint 6G3a adds **live auto-framing and a one-second auto-capture**:
+
+- A translucent green quadrangle shows the stabilized document frame.
+  Keep the whole sheet visible against a contrasting background. The ring
+  around Capture fills while the document is steady and sufficiently sharp.
+  Manual Capture remains available immediately, without a warm-up delay.
+- Auto-capture freezes the actual analyzed image with its matching corners,
+  not a newer preview frame. The final crop uses that image's unsmoothed
+  corners after the agreement check, avoiding averaging lag during gentle
+  movement. Live preview and countdown still use stabilized corners.
+  Use photo opens pending corrections with that crop suggested. Check all
+  four corners before Accept; Full frame removes clipping. Cancel still
+  keeps the newly added, uncorrected photo.
+- Retake starts a fresh framing/countdown cycle. Moving the window or
+  switching focus does not stop preview. Camera errors, large analysis gaps
+  and changed dimensions reset tracking; stale work cannot complete capture.
+- Preview and document analysis run independently with one analysis job at
+  a time. Extra frames replace the pending preview instead of building a
+  CPU queue. Slow/failed framing leaves manual capture available.
+- Live analysis uses at most a 640-pixel longest edge at every capture
+  resolution. Pixel-sized edge filters and blur checks therefore stay
+  comparable when switching to 720p or higher, with less analysis work.
+  Movement tolerance remains normalized, not measured in source pixels.
+  Captured photos keep their original resolution; the page editor's separate
+  Auto frame and offline replay retain the detailed 1280-pixel detector.
+
+Manual captures retain the displayed full image; use Auto frame in the page
+editor for a fresh suggestion if needed. Automatic capture is enabled by
+default. This slice keeps the existing detector thresholds and replay
+calibration; device/mode and lifecycle controls are below.
+
+Checkpoint 6G3b adds **camera selection and higher-resolution capture**:
+
+- **Camera** lists OS-reported device names and indices. Selecting another
+  camera stops the old preview, clears tracking and lists its supported modes.
+  **Refresh cameras** retries discovery after connecting a device or fixing
+  permissions. Linux metadata-only nodes may appear but cannot capture.
+- **Preview and photo resolution** lists dimensions, FPS and encoding.
+  FastFill initially prefers the largest mode up to full HD (1920×1080),
+  at up to 30 FPS, preferring MJPG at that size. Higher advertised resolutions
+  remain selectable within the image limits. If full HD is unavailable, the
+  displayed selection shows the chosen supported mode; capture failures never
+  silently switch to a different resolution or encoding.
+- Preview and captured source use the **same selected resolution**. Only
+  on-screen display is scaled; the source photo keeps all pixels. This avoids
+  camera reopening, exposure delay and crop mismatch for a separate still.
+  Changing modes restarts preview and countdown. Retake retains the selection;
+  mode/camera choices are locked while a frozen photo awaits Use photo.
+- New frames replace the visible image only after their renderer upload is
+  ready. The previous frame remains visible meanwhile, preventing black-frame
+  flicker at full HD. Keep one frame in flight through upload; Capture freezes
+  the displayed pixels, not an incoming image that has not appeared yet.
+- Discovery runs off the UI thread in timed driver helpers. Failed, missing
+  or busy devices show recoverable errors; canceled/superseded results cannot
+  overwrite the current selection. Switching or closing the camera screen
+  terminates pending discovery as well as preview. Existing auto-framing and
+  manual capture stay available, with no forced exposure wait.
+- Discrete Linux modes are listed directly. Continuous size ranges offer
+  their valid endpoints and common sizes, including full HD, rather than
+  expanding an enormous grid. Only exact integer rates from 1–120 FPS are
+  offered; fractional-only rates remain unsupported in this checkpoint.
+
+Manual check: switch cameras if available; capture at 640×480 and full HD
+(or the highest supported resolution), check aspect/colors/crop, then Retake.
+Use photo, choose Full frame and Accept; save/reopen and verify the retained
+source dimensions. Try a busy/unavailable camera, then retry or refresh.
+Repeat front/rear camera and full-HD checks on SP6 when available.
+
+Checkpoint 6G3c adds **orientation and explicit pause/resume**:
+
+- **Rotate 90°** cycles through four orientations. Rotation is lossless and
+  shared by preview, detection, captured PNG and suggested crop; quarter
+  turns swap photo width/height. Window resizing or tablet display rotation
+  alone does not change the photo: rotate if the image appears sideways.
+- **Mirror preview** flips the camera image and its framing overlay, to
+  make positioning paper in a front camera more intuitive. The captured
+  review stays mirrored until **Use photo** opens the unmirrored page editor.
+  Detection coordinates and saved/exported documents remain **unmirrored**,
+  so printed text remains readable. Explicit Front labels in device names
+  enable this by default; generic/unknown cameras do not. The adapters expose
+  no facing metadata. The checkbox provides a manual override.
+- Orientation changes restart live preview and reset the countdown. Retake,
+  resolution changes and Resume keep the orientation; selecting a different
+  camera resets it. Controls lock while a captured photo awaits Use photo.
+  Settings belong to this camera session, not persistent device preferences.
+- One shared button shows **Pause** while running, **Resume preview** while
+  paused, **Start preview** after an error, and **Retake** after capture.
+  Pause releases the camera and clears the old image and countdown.
+  Resume explicitly opens a fresh stream. Camera/orientation/mode
+  changes while paused never resume it automatically. Refresh cameras can
+  discover devices while paused; press Resume afterward.
+- The independent driver watchdog detects polling gaps of three seconds or
+  more, including system sleep, and clock rollback. It terminates the helper
+  on wake and leaves preview paused until Resume. This is an interruption
+  fallback, not an OS pre-suspend notification. Brief sleep below that limit
+  is not guaranteed to pause. Stale analysis cannot finish the countdown;
+  fresh frames are required. Moving/resizing the window or changing focus
+  does not itself pause preview. Already captured photos remain available.
+- Camera errors include platform guidance. On Windows, check camera access
+  and desktop-app camera access in privacy settings. On Linux, check desktop
+  privacy controls and your session's access to `/dev/videoN`. Close competing
+  camera apps, then retry or Refresh cameras. FastFill does not change device
+  permissions; native capture needs no developer license or package identity.
+
+Manual check: rotate a printed form; toggle Mirror preview and check the
+live quad follows the mirrored paper. Capture must keep the same mirrored
+orientation. Use photo must open an unmirrored page; check Full frame / Accept
+and save/reopen. Check all four orientations, Retake and another resolution.
+Pause, change settings, and check
+that only Resume restarts the stream. Test busy/denied access and recovery.
+Sleep testing is deferred: when convenient, sleep with live preview open for
+at least five seconds. After wake, stay paused with no old countdown; Resume,
+capture, then Cancel/reopen. Repeat front/rear, portrait/landscape and sleep
+checks on SP6; laptop/container checks cannot establish its calibration.
+
+[rscam-native]: https://docs.rs/rscam/0.5.5/rscam/
+[nokhwa-native]: https://docs.rs/nokhwa/0.10.11/nokhwa/
+
 Checkpoint 5C adds multiple image pages:
 
 - **Add image:** choose a PNG or JPEG. The first image uses the starter blank

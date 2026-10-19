@@ -121,7 +121,9 @@ impl Default for CropQuad {
 }
 
 impl CropQuad {
-    pub(crate) fn points(self) -> [NormalizedPoint; 4] {
+    /// Top left, top right, bottom right, bottom left, in stored order.
+    #[must_use]
+    pub fn points(self) -> [NormalizedPoint; 4] {
         [
             self.top_left,
             self.top_right,

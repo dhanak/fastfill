@@ -120,6 +120,10 @@ fn heading(state: &FastFill) -> Element<'_, Message> {
 }
 
 pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
+    #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+    if state.camera.is_open() {
+        return super::camera::view(state);
+    }
     if state.page_editor.is_open() {
         return super::page_edit::view(state);
     }

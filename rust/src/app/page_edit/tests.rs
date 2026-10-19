@@ -103,6 +103,31 @@ fn settle(state: &mut FastFill) {
 }
 
 #[test]
+fn initial_capture_crop_is_pending_until_acceptance() {
+    let mut state = state();
+    let original = state.pages.current().metadata.clone();
+    let mut crop = CropQuad::default();
+    crop.top_left.x = 0.1;
+    crop.bottom_left.x = 0.1;
+    let _ = begin(&mut state, Some(crop));
+    assert_eq!(
+        state.page_editor.draft.as_ref().unwrap().settings.crop,
+        crop
+    );
+    settle(&mut state);
+    assert_eq!(state.pages.current().metadata, original);
+    send(&mut state, Event::Cancel);
+    assert_eq!(state.pages.current().metadata, original);
+
+    let _ = begin(&mut state, Some(crop));
+    settle(&mut state);
+    send(&mut state, Event::Accept);
+    assert_eq!(state.pages.current().metadata.crop, crop);
+    let _ = update(&mut state, Message::Undo);
+    assert_eq!(state.pages.current().metadata.crop, original.crop);
+}
+
+#[test]
 fn cancel_and_escape_preserve_page_history_pixels_and_clean_state() {
     for escape in [false, true] {
         let mut state = state();

@@ -1,3 +1,5 @@
+#[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+mod camera;
 mod controller;
 mod export;
 mod export_io;
@@ -69,6 +71,8 @@ struct FastFill {
     text_content: text_editor::Content,
     page_editor: page_edit::PageEditor,
     smart_snap: snap::SmartSnap,
+    #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+    camera: camera::CameraScreen,
     #[cfg(not(target_arch = "wasm32"))]
     recovery: recovery::Recovery,
 }
@@ -103,6 +107,8 @@ enum ImagePicker {
 
 #[derive(Clone, Debug)]
 pub(crate) enum Message {
+    #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+    Camera(camera::Event),
     PageEdit(page_edit::Event),
     SmartSnap(snap::Event),
     ViewportResized,
