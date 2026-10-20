@@ -2,18 +2,13 @@
 
 use super::project::{LeaveAction, Operation};
 use super::{FastFill, ImagePicker, Message};
-use crate::appearance::{self, CONTROL_GAP, CONTROL_HEIGHT};
-use iced::widget::{
-    Row, button, column, container, mouse_area, opaque, row, text,
-};
+use crate::appearance::{self, CONTROL_GAP, action_button};
+use iced::widget::{Row, column, container, mouse_area, opaque, row, text};
 use iced::{Element, Fill};
 
 pub(super) fn view(state: &FastFill) -> Option<Element<'static, Message>> {
     let action = |label: &'static str, message| {
-        button(text(label).width(Fill).height(Fill).center())
-            .on_press(message)
-            .width(Fill)
-            .height(CONTROL_HEIGHT)
+        action_button(label, Some(message)).width(Fill)
     };
     if let Operation::Confirm(leave) = state.project.operation {
         let description = match leave {
@@ -25,10 +20,11 @@ pub(super) fn view(state: &FastFill) -> Option<Element<'static, Message>> {
             "Unsaved changes",
             description,
             row![
-                action("Save", Message::SaveBeforeLeave),
+                action("Save", Message::SaveBeforeLeave)
+                    .style(appearance::primary_action),
                 action("Discard", Message::DiscardProject)
-                    .style(button::danger),
-                action("Cancel", Message::KeepProject).style(button::secondary),
+                    .style(appearance::destructive_action),
+                action("Cancel", Message::KeepProject),
             ],
         ));
     }
@@ -69,8 +65,8 @@ pub(super) fn view(state: &FastFill) -> Option<Element<'static, Message>> {
         title,
         description,
         row![
-            action(keep_label, keep).style(button::secondary),
-            action(label, confirm).style(button::danger),
+            action(keep_label, keep),
+            action(label, confirm).style(appearance::destructive_action),
         ],
     ))
 }

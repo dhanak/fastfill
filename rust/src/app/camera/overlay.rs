@@ -98,7 +98,7 @@ impl canvas::Program<Message> for Outline {
 }
 
 pub(super) fn countdown(progress: f64) -> Element<'static, Message> {
-    canvas(Ring(progress)).width(96).height(96).into()
+    canvas(Ring(progress)).width(40).height(40).into()
 }
 
 struct Ring(f64);
@@ -116,12 +116,12 @@ impl canvas::Program<Message> for Ring {
     ) -> Vec<canvas::Geometry> {
         let mut frame = canvas::Frame::new(renderer, bounds.size());
         let center = Point::new(bounds.width / 2.0, bounds.height / 2.0);
-        let radius = bounds.width.min(bounds.height) / 2.0 - 4.0;
+        let radius = bounds.width.min(bounds.height) / 2.0 - 3.0;
         let circle = canvas::Path::circle(center, radius);
         frame.stroke(
             &circle,
             canvas::Stroke::default()
-                .with_width(4.0)
+                .with_width(2.0)
                 .with_color(Color::from_rgb8(180, 185, 190)),
         );
         if self.0 > 0.0 {
@@ -143,7 +143,7 @@ impl canvas::Program<Message> for Ring {
             frame.stroke(
                 &path,
                 canvas::Stroke::default()
-                    .with_width(4.0)
+                    .with_width(2.0)
                     .with_color(accent())
                     .with_line_cap(canvas::LineCap::Round),
             );

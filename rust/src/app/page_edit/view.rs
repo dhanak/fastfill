@@ -1,21 +1,114 @@
 use super::canvas::CropCanvas;
 use super::{Draft, Event, FastFill, Message};
-use crate::appearance::CONTROL_HEIGHT;
+use crate::appearance::{self, CONTROL_HEIGHT, action_button};
 use fastfill_rust::geometry::Size;
 use fastfill_rust::project::PageFilterMode;
 use iced::widget::{
-    Space, button, canvas, column, container, image, row, scrollable, slider,
-    text,
+    Space, canvas, column, container, image, responsive, row, rule, scrollable,
+    slider, text,
 };
 use iced::{Element, Fill};
 
 pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
+    responsive(move |available| screen(state, available)).into()
+}
+
+fn screen(state: &FastFill, available: iced::Size) -> Element<'_, Message> {
     let draft = state.page_editor.draft.as_ref().expect("active editor");
     let framing = state.page_editor.is_framing();
     let ready = !framing
         && draft.ready.as_ref().is_some_and(|p| {
             p.settings == draft.settings && draft.error.is_none()
         });
+    let handle = draft.ready.as_ref().map(|p| &p.handle).or_else(|| {
+        state
+            .image()
+            .map(crate::picker::ImportedImage::display_handle)
+    });
+    let preview: Element<'_, Message> = handle.map_or_else(
+        || Space::new().height(180).into(),
+        |handle| {
+            image(handle.clone())
+                .width(Fill)
+                .height(180)
+                .content_fit(iced::ContentFit::Contain)
+                .into()
+        },
+    );
+    let can_frame =
+        state.page_editor.running.is_none() && draft.original.is_some();
+    let wide = available.width >= 760.0;
+    let sidebar = container(
+        scrollable(
+            column![
+                text("Corrections").size(18),
+                options(draft, can_frame),
+                rule::horizontal(1),
+                text("Corrected preview").size(14),
+                container(preview).style(container::dark),
+            ]
+            .spacing(12)
+            .padding(iced::Padding {
+                right: 12.0,
+                ..iced::Padding::ZERO
+            }),
+        )
+        .direction(scrollable::Direction::Vertical(
+            scrollable::Scrollbar::new()
+                .width(6)
+                .scroller_width(6)
+                .margin(2),
+        ))
+        .height(Fill),
+    )
+    .padding(12)
+    .width(if wide { 312.into() } else { Fill })
+    .height(if wide {
+        Fill
+    } else {
+        (available.height * 0.35).clamp(100.0, 240.0).into()
+    })
+    .style(container::bordered_box);
+    let source = column![
+        text("Original — drag corners; hold Ctrl to snap").size(14),
+        original(state),
+    ]
+    .spacing(8)
+    .width(Fill)
+    .height(Fill);
+    let body: Element<'_, Message> = if wide {
+        row![source, sidebar].spacing(12).height(Fill).into()
+    } else {
+        column![source, sidebar].spacing(12).height(Fill).into()
+    };
+    column![
+        row![
+            text(format!("Edit page {}", state.pages.active_index() + 1))
+                .size(24)
+                .width(Fill),
+            action_button("Cancel", Some(Message::PageEdit(Event::Cancel)))
+                .width(100),
+            action_button(
+                "Accept",
+                ready.then_some(Message::PageEdit(Event::Accept))
+            )
+            .width(100)
+            .style(appearance::primary_action),
+        ]
+        .spacing(8)
+        .align_y(iced::Alignment::Center),
+        status(draft, ready, state.modifiers.square, framing),
+        body,
+    ]
+    .spacing(12)
+    .padding(16)
+    .width(Fill)
+    .height(Fill)
+    .into()
+}
+
+fn original(state: &FastFill) -> Element<'_, Message> {
+    let draft = state.page_editor.draft.as_ref().unwrap();
     let page = state.pages.current();
     #[allow(clippy::cast_precision_loss)]
     let source_size = Size::new(
@@ -34,7 +127,7 @@ pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
         epoch: state.input_epoch,
         background: false,
     };
-    let original = iced::widget::stack![
+    iced::widget::stack![
         Space::new().width(Fill).height(Fill),
         canvas(CropCanvas {
             background: true,
@@ -46,68 +139,7 @@ pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
     ]
     .width(Fill)
     .height(Fill)
-    .clip(true);
-    let handle = draft.ready.as_ref().map(|p| &p.handle).or_else(|| {
-        state
-            .image()
-            .map(crate::picker::ImportedImage::display_handle)
-    });
-    let preview: Element<'_, Message> = handle.map_or_else(
-        || Space::new().height(180).into(),
-        |handle| {
-            image(handle.clone())
-                .width(Fill)
-                .height(180)
-                .content_fit(iced::ContentFit::Contain)
-                .into()
-        },
-    );
-    let can_frame =
-        state.page_editor.running.is_none() && draft.original.is_some();
-    let sidebar = column![
-        text("Corrected preview"),
-        preview,
-        scrollable(options(draft, can_frame)).height(Fill)
-    ]
-    .spacing(8)
-    .width(312)
-    .height(Fill);
-    column![
-        row![
-            text(format!("Edit page {}", state.pages.active_index() + 1))
-                .size(24)
-                .width(Fill),
-            button("Cancel")
-                .on_press(Message::PageEdit(Event::Cancel))
-                .height(CONTROL_HEIGHT)
-                .width(100),
-            button("Accept")
-                .on_press_maybe(
-                    ready.then_some(Message::PageEdit(Event::Accept))
-                )
-                .height(CONTROL_HEIGHT)
-                .width(100),
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center),
-        status(draft, ready, state.modifiers.square, framing),
-        row![
-            column![
-                text("Original — drag corners; hold Ctrl to snap"),
-                original
-            ]
-            .spacing(8)
-            .width(Fill)
-            .height(Fill),
-            sidebar
-        ]
-        .spacing(16)
-        .height(Fill),
-    ]
-    .spacing(12)
-    .padding(16)
-    .width(Fill)
-    .height(Fill)
+    .clip(true)
     .into()
 }
 
@@ -145,48 +177,51 @@ fn status(
         } else {
             "Updating corrected preview…"
         })
+        .size(14)
         .into()
     }
 }
 
 fn options(draft: &Draft, can_frame: bool) -> Element<'static, Message> {
     let choose = |label, mode| {
-        button(label)
-            .on_press(Message::PageEdit(Event::Mode(mode)))
-            .height(CONTROL_HEIGHT)
+        action_button(label, Some(Message::PageEdit(Event::Mode(mode))))
             .width(Fill)
             .style(if draft.settings.filter.mode == mode {
-                button::primary
+                appearance::primary_action
             } else {
-                button::secondary
+                appearance::secondary_action
             })
     };
     column![
+        text("Frame").size(14),
         row![
-            button("Auto frame")
-                .width(Fill)
-                .height(CONTROL_HEIGHT)
-                .on_press_maybe(
-                    can_frame.then_some(Message::PageEdit(Event::AutoFrame))
-                ),
-            button("Full frame")
-                .width(Fill)
-                .height(CONTROL_HEIGHT)
-                .on_press(Message::PageEdit(Event::FullFrame)),
+            action_button(
+                "Auto frame",
+                can_frame.then_some(Message::PageEdit(Event::AutoFrame))
+            )
+            .width(Fill),
+            action_button(
+                "Full frame",
+                Some(Message::PageEdit(Event::FullFrame))
+            )
+            .width(Fill),
         ]
         .spacing(8),
         row![
-            button("Rotate left")
-                .width(Fill)
-                .height(CONTROL_HEIGHT)
-                .on_press(Message::PageEdit(Event::Rotate(-1))),
-            button("Rotate right")
-                .width(Fill)
-                .height(CONTROL_HEIGHT)
-                .on_press(Message::PageEdit(Event::Rotate(1))),
+            action_button(
+                "Rotate left",
+                Some(Message::PageEdit(Event::Rotate(-1)))
+            )
+            .width(Fill),
+            action_button(
+                "Rotate right",
+                Some(Message::PageEdit(Event::Rotate(1)))
+            )
+            .width(Fill),
         ]
         .spacing(8),
-        text("Color mode"),
+        rule::horizontal(1),
+        text("Color mode").size(14),
         row![
             choose("Original", PageFilterMode::Original),
             choose("Enhanced", PageFilterMode::EnhancedColor)
@@ -197,6 +232,7 @@ fn options(draft: &Draft, can_frame: bool) -> Element<'static, Message> {
             choose("B&W", PageFilterMode::BlackAndWhite)
         ]
         .spacing(8),
+        rule::horizontal(1),
         tone("Brightness", draft.settings.brightness, Event::Brightness),
         tone("Contrast", draft.settings.filter.contrast, Event::Contrast),
     ]
@@ -210,17 +246,24 @@ fn tone(
     event: fn(i32) -> Event,
 ) -> Element<'static, Message> {
     column![
-        row![text(label).width(Fill), text(format!("{value:+}"))],
         row![
-            button("−").height(CONTROL_HEIGHT).width(44).on_press_maybe(
+            text(label).size(14).width(Fill),
+            text(format!("{value:+}")).size(14)
+        ],
+        row![
+            action_button(
+                "−",
                 (value > -100).then(|| Message::PageEdit(event(value - 1)))
-            ),
+            )
+            .width(CONTROL_HEIGHT),
             slider(-100..=100, value, move |value| Message::PageEdit(event(
                 value
             ))),
-            button("+").height(CONTROL_HEIGHT).width(44).on_press_maybe(
+            action_button(
+                "+",
                 (value < 100).then(|| Message::PageEdit(event(value + 1)))
-            ),
+            )
+            .width(CONTROL_HEIGHT),
         ]
         .spacing(8)
         .align_y(iced::Alignment::Center),
@@ -237,9 +280,10 @@ pub(in crate::app) fn warning(
         container(
             row![
                 text(message).width(Fill),
-                button("Dismiss")
-                    .on_press(Message::PageEdit(Event::DismissWarning))
-                    .height(CONTROL_HEIGHT)
+                action_button(
+                    "Dismiss",
+                    Some(Message::PageEdit(Event::DismissWarning))
+                )
             ]
             .spacing(8)
             .align_y(iced::Alignment::Center),

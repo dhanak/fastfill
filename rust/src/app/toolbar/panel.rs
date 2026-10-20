@@ -3,11 +3,11 @@
 use super::{COLORS, actions, color_button, enabled, icon_button, tool_button};
 use crate::app::{FastFill, Message, snap, text_controls};
 use crate::appearance::{
-    self, CONTROL_GAP, CONTROL_HEIGHT, TOOLS_PANEL_PADDING,
+    self, CONTROL_GAP, CONTROL_HEIGHT, TOOLS_PANEL_PADDING, action_button,
 };
 use crate::icons::Glyph;
 use fastfill_rust::annotations::Tool;
-use iced::widget::{Column, Row, button, column, container, row, rule};
+use iced::widget::{Column, Row, column, container, row, rule};
 use iced::widget::{scrollable, text};
 use iced::{Element, Fill};
 
@@ -103,13 +103,12 @@ pub(super) fn properties(
         && state.annotations().stroke_available()
     {
         let step = |label, amount, available: bool| {
-            button(label)
-                .on_press_maybe(
-                    (enabled && available)
-                        .then_some(Message::AdjustThickness(amount)),
-                )
-                .width(CONTROL_HEIGHT)
-                .height(CONTROL_HEIGHT)
+            action_button(
+                label,
+                (enabled && available)
+                    .then_some(Message::AdjustThickness(amount)),
+            )
+            .width(CONTROL_HEIGHT)
         };
         if stacked {
             properties.push(text("Line width").size(14).into());

@@ -9,6 +9,7 @@ use fastfill_rust::project::{load_archive, save_archive};
 use iced::widget::image::Handle;
 use std::io::Cursor;
 
+mod appearance;
 mod auto_frame;
 mod corner_snap;
 

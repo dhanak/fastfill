@@ -19,6 +19,16 @@ Project/history shortcuts show Ctrl or Cmd for the compiled platform;
 geometry always uses literal Ctrl. The table lists the exact shortcuts,
 without a separate modifier legend.
 
+Main-editor actions use neutral outlined buttons, accented Save/Camera
+entries and red destructive actions. Formatting toggles retain their accent
+when selected. Action labels are centered in consistent 40-pixel-high targets;
+disabled actions stay visible and dimmed. Camera and page-correction actions
+use the same styles, with Capture, Use photo and Accept accented.
+
+Colors follow the system appearance. On Linux, removing a dark preference
+restores the default light theme; the `ICED_THEME` override still takes
+precedence. Appearance changes do not accept or cancel pending edits.
+
 ## Windows testing without a compiler
 
 1. [Download the Windows x64 testing ZIP][rust-dev].
@@ -255,6 +265,10 @@ Checkpoint 6C2 adds **Edit page** to the page rail for image pages:
 - **Accept** applies a completed preview matching the current settings.
   **Cancel** or Escape discards the pending page edits. Resizing the window
   or switching focus keeps the draft; document commands stay blocked.
+- Corrections and the corrected preview share a scrollable panel. On narrow
+  windows it moves below the original instead of squeezing the crop canvas.
+  Cancel stays immediately before Accept at the upper right. Selected color
+  modes are accented; framing, rotation and tone actions use neutral buttons.
 - Annotation centers follow their original image locations. Shapes scale
   width/height independently using local image magnification; stroke width
   and object rotation stay fixed. No annotation perspective warp or skew.
@@ -516,6 +530,26 @@ normally, then choose **Camera** in the page rail (Linux/Windows):
 4. After a camera error, choose another **Camera** or supported mode,
    press **Start preview**, or **Refresh cameras** to discover devices again.
 
+The full camera image fits the window without cropping. A compact dock uses
+existing side/bottom letterbox space, or floats over the image when there is
+none. It contains Cancel, Rotate, Mirror preview, Capture, Pause/Resume and
+Settings. Capture is circular, with its countdown ring inside the same
+40-pixel target as other buttons. After capture, its slot becomes Use photo;
+Pause/Resume becomes Retake (back/retry arrow). Hover for labels and rotation.
+
+The upper-right image button switches to the next camera. Settings opens a
+small, scrollable popover with camera-by-name, resolution and Refresh cameras.
+Click/tap outside or press Escape to close settings; Escape again cancels the
+camera draft. Settings and camera/orientation changes lock during photo review.
+**Mirror preview** highlights when enabled; its icon shows solid/dashed
+reflected triangles with tall edges facing the vertical axis. Saved photos
+remain unmirrored.
+
+Capture/status messages always appear over the image in a translucent rounded
+lozenge at bottom center, above the dock when it floats there. Long driver
+errors remain scrollable. Resizing changes dock placement, not camera framing;
+detected paper motion never changes the layout.
+
 Camera reads run in a child process; a bounded frame queue prevents rendering
 backlogs. A 20-second no-frame watchdog stops stalled workers. Capture,
 cancellation and app closure terminate the stream; PNG preparation happens
@@ -563,12 +597,13 @@ Checkpoint 6G3b adds **camera selection and higher-resolution capture**:
   camera stops the old preview, clears tracking and lists its supported modes.
   **Refresh cameras** retries discovery after connecting a device or fixing
   permissions. Linux metadata-only nodes may appear but cannot capture.
-- **Preview and photo resolution** lists dimensions, FPS and encoding.
-  FastFill initially prefers the largest mode up to full HD (1920×1080),
-  at up to 30 FPS, preferring MJPG at that size. Higher advertised resolutions
-  remain selectable within the image limits. If full HD is unavailable, the
-  displayed selection shows the chosen supported mode; capture failures never
-  silently switch to a different resolution or encoding.
+- **Preview and photo resolution** lists each resolution once, as dimensions
+  only. FastFill chooses its highest reported FPS, preferring MJPG when rates
+  tie. The initial choice is the largest resolution up to full HD (1920×1080),
+  or the largest available if all exceed it. Higher advertised resolutions
+  remain selectable within the image limits. Full FPS/encoding details stay
+  available through the diagnostic probe. Capture failures never silently
+  switch to a different resolution or encoding.
 - Preview and captured source use the **same selected resolution**. Only
   on-screen display is scaled; the source photo keeps all pixels. This avoids
   camera reopening, exposure delay and crop mismatch for a separate still.
@@ -592,7 +627,8 @@ Checkpoint 6G3b adds **camera selection and higher-resolution capture**:
   source-reader release. The OS reclaims the device when the helper exits
   or is canceled. No camera objects are retained in the main GUI. Discovery
   errors include open/enumeration stages to localize any remaining crash.
-  This is a targeted cleanup workaround; hardware retesting is still needed.
+  User confirms working Windows camera discovery/preview after this fix.
+  Front/rear SP6, sleep and touch calibration still need hardware checks.
 - Discrete Linux modes are listed directly. Continuous size ranges offer
   their valid endpoints and common sizes, including full HD, rather than
   expanding an enormous grid. Only exact integer rates from 1–120 FPS are

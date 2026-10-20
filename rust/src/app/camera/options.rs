@@ -35,6 +35,10 @@ pub(super) fn update(
     event: &Event,
 ) -> Option<Task<Message>> {
     let draft = state.camera.draft.as_mut().unwrap();
+    if let Event::Settings(open) = event {
+        draft.settings_open = *open && !draft.captured && !draft.saving;
+        return Some(Task::none());
+    }
     if draft.saving || draft.captured {
         return None;
     }
@@ -93,14 +97,15 @@ pub(super) fn update(
             draft.sources.query = None;
             match result {
                 Ok(modes) => {
-                    draft.sources.modes.clone_from(modes);
-                    draft.sources.mode = catalog::preferred(modes);
+                    draft.sources.modes = catalog::resolutions(modes.clone());
+                    draft.sources.mode =
+                        catalog::preferred(&draft.sources.modes);
                     if draft.sources.mode.is_some() && draft.paused.is_none() {
                         return Some(Task::done(Message::Camera(
                             Event::Start(draft.id),
                         )));
                     }
-                    if modes.is_empty() {
+                    if draft.sources.modes.is_empty() {
                         draft.error = Some(
                             "This device has no supported capture \
                             modes. Choose another camera."

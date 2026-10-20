@@ -414,3 +414,74 @@ fn option_visibility_and_snap_state_survive_placing_a_mark() {
     state.confirm_delete_all = true;
     assert!(!enabled(&state));
 }
+
+#[test]
+fn action_surfaces_render_themed_states_and_round_corners_at_both_dpi_scales() {
+    use iced::Background;
+    for theme in [Theme::Light, Theme::Dark] {
+        for (scale, dpi) in [(1, 1.0), (2, 2.0)] {
+            for style in [
+                appearance::secondary_action,
+                appearance::primary_action,
+                appearance::destructive_action,
+            ] {
+                for (enabled, hovered) in
+                    [(true, false), (true, true), (false, false)]
+                {
+                    let cursor = if hovered {
+                        mouse::Cursor::Available(Point::new(50.0, 20.0))
+                    } else {
+                        mouse::Cursor::Unavailable
+                    };
+                    let pixels = render_themed_element(
+                        action_button(
+                            "Action",
+                            enabled.then_some(Message::Fit),
+                        )
+                        .style(style)
+                        .width(100)
+                        .into(),
+                        iced::Size::new(100, 40),
+                        scale,
+                        dpi,
+                        &theme,
+                        cursor,
+                    );
+                    let scale = usize::try_from(scale).unwrap();
+                    let status = if !enabled {
+                        button::Status::Disabled
+                    } else if hovered {
+                        button::Status::Hovered
+                    } else {
+                        button::Status::Active
+                    };
+                    let Some(Background::Color(background)) =
+                        style(&theme, status).background
+                    else {
+                        panic!("solid action surface");
+                    };
+                    if enabled {
+                        assert!(
+                            delta(
+                                pixel(
+                                    &pixels,
+                                    100 * scale,
+                                    10 * scale,
+                                    10 * scale
+                                ),
+                                &background.into_rgba8(),
+                            ) < 4
+                        );
+                    }
+                    assert!(
+                        delta(
+                            pixel(&pixels, 100 * scale, 0, 0),
+                            &theme.palette().background.into_rgba8(),
+                        ) < 4,
+                        "square action corner"
+                    );
+                }
+            }
+        }
+    }
+}

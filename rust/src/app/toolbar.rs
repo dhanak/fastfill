@@ -1,6 +1,7 @@
 //! Editor controls and options; annotation behavior stays in the controller.
 
 use super::{FastFill, ImagePicker, Message};
+use crate::appearance::action_button;
 use crate::appearance::{self, CONTROL_GAP, CONTROL_HEIGHT, TOOLBAR_HEIGHT};
 use crate::appearance::{TOOLBAR_PADDING, TOOLBAR_ROW_HEIGHT};
 use crate::icons::{self, Glyph};
@@ -83,46 +84,31 @@ fn controls(state: &FastFill, viewport: Rect) -> Element<'_, Message> {
         viewport,
     };
     horizontal(row![
-        button("Shortcuts")
-            .on_press_maybe(
-                super::help::can_open(state).then_some(Message::ShowShortcuts),
-            )
-            .height(CONTROL_HEIGHT)
-            .style(button::secondary),
-        button("Undo")
-            .on_press_maybe(
-                (enabled && state.annotations().can_undo())
-                    .then_some(Message::Undo)
-            )
-            .height(CONTROL_HEIGHT),
-        button("Redo")
-            .on_press_maybe(
-                (enabled && state.annotations().can_redo())
-                    .then_some(Message::Redo)
-            )
-            .height(CONTROL_HEIGHT),
-        button("Reset angle")
-            .on_press_maybe(
-                (enabled && state.annotations().can_reset_rotation())
-                    .then_some(Message::ResetRotation)
-            )
-            .height(CONTROL_HEIGHT),
-        button("−")
-            .on_press_maybe(enabled.then_some(zoom(0.8)))
-            .width(CONTROL_HEIGHT)
-            .height(CONTROL_HEIGHT),
-        button("+")
-            .on_press_maybe(enabled.then_some(zoom(1.25)))
-            .width(CONTROL_HEIGHT)
-            .height(CONTROL_HEIGHT),
-        button("1:1")
-            .on_press_maybe(enabled.then_some(Message::OneToOne(viewport)))
-            .width(CONTROL_HEIGHT)
-            .height(CONTROL_HEIGHT),
-        button("Fit")
-            .on_press_maybe(enabled.then_some(Message::Fit))
-            .width(CONTROL_HEIGHT)
-            .height(CONTROL_HEIGHT),
+        action_button(
+            "Shortcuts",
+            super::help::can_open(state).then_some(Message::ShowShortcuts)
+        ),
+        action_button(
+            "Undo",
+            (enabled && state.annotations().can_undo())
+                .then_some(Message::Undo)
+        ),
+        action_button(
+            "Redo",
+            (enabled && state.annotations().can_redo())
+                .then_some(Message::Redo)
+        ),
+        action_button(
+            "Reset angle",
+            (enabled && state.annotations().can_reset_rotation())
+                .then_some(Message::ResetRotation)
+        ),
+        action_button("−", enabled.then_some(zoom(0.8))).width(CONTROL_HEIGHT),
+        action_button("+", enabled.then_some(zoom(1.25))).width(CONTROL_HEIGHT),
+        action_button("1:1", enabled.then_some(Message::OneToOne(viewport)))
+            .width(CONTROL_HEIGHT),
+        action_button("Fit", enabled.then_some(Message::Fit))
+            .width(CONTROL_HEIGHT),
     ])
 }
 
@@ -147,23 +133,26 @@ fn actions(
         && !state.annotations().has_text_edit()
         && state.annotations().active_pointer().is_none();
     [
-        ("To back", Message::SendToBack, selection),
-        ("To front", Message::BringToFront, selection),
-        ("Delete", Message::DeleteSelected, selection),
+        ("To back", Message::SendToBack, selection, false),
+        ("To front", Message::BringToFront, selection, false),
+        ("Delete", Message::DeleteSelected, selection, true),
         (
             "Delete all",
             Message::AskDeleteAll,
             enabled(state)
                 && !state.annotations().is_empty()
                 && state.annotations().active_pointer().is_none(),
+            true,
         ),
     ]
-    .map(|(label, message, available)| {
-        button(text(label).size(14))
-            .on_press_maybe(available.then_some(message))
-            .height(CONTROL_HEIGHT)
+    .map(|(label, message, available, destructive)| {
+        action_button(label, available.then_some(message))
             .width(width)
-            .style(button::secondary)
+            .style(if destructive {
+                appearance::destructive_action
+            } else {
+                appearance::secondary_action
+            })
             .into()
     })
 }

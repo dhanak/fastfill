@@ -4,8 +4,8 @@ use super::WIDTH;
 use super::layout::{number_position, page_size, paper_bounds};
 use super::{FastFill, ImagePicker, Message, Rail, SCROLLBAR_WIDTH};
 use crate::app::pages::EditorPage;
-use crate::appearance::{CONTROL_HEIGHT, accent};
-use iced::widget::{button, canvas, column, container, pick_list, row, text};
+use crate::appearance::{self, accent, action_button};
+use iced::widget::{canvas, column, container, pick_list, row, text};
 use iced::{Color, Element, Fill, Point, Rectangle, Renderer, Size, Theme};
 use iced::{Vector, mouse};
 
@@ -16,10 +16,8 @@ pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
         && !state.confirm_delete_page
         && state.dragged_page.is_none();
     let control = |label, message, available| {
-        button(text(label))
-            .on_press_maybe((enabled && available).then_some(message))
+        action_button(label, (enabled && available).then_some(message))
             .width(Fill)
-            .height(CONTROL_HEIGHT)
     };
     let controls = column![
             row![
@@ -52,7 +50,8 @@ pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
                 Message::PageEdit(crate::app::page_edit::Event::Begin),
                 state.image().is_some()
             ),
-            control("Delete page", Message::AskDeletePage, true),
+            control("Delete page", Message::AskDeletePage, true)
+                .style(appearance::destructive_action),
             row![
                 control(
                     "↑",
@@ -71,11 +70,14 @@ pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
         feature = "native-camera",
         any(target_os = "linux", target_os = "windows")
     ))]
-    let controls = controls.push(control(
-        "Camera",
-        Message::Camera(crate::app::camera::Event::Begin),
-        crate::app::camera::can_open(state),
-    ));
+    let controls = controls.push(
+        control(
+            "Camera",
+            Message::Camera(crate::app::camera::Event::Begin),
+            crate::app::camera::can_open(state),
+        )
+        .style(appearance::primary_action),
+    );
     container(
         controls
             .push(

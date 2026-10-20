@@ -6,7 +6,7 @@ use fastfill_rust::annotations::{AnnotationColor, Pointer, TextFormat, Tool};
 use fastfill_rust::geometry::Point as PagePoint;
 use iced::advanced::renderer::Headless;
 use iced::advanced::{Layout, Shell, layout, widget};
-use iced::widget::text_editor;
+use iced::widget::{button, text_editor};
 use iced::{Event, Point, Renderer, Theme, keyboard, mouse, touch};
 
 #[test]

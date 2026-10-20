@@ -1,202 +1,291 @@
-use super::{Draft, Event, FastFill, Message, lifecycle, overlay};
-use crate::appearance::CONTROL_HEIGHT;
-use iced::widget::{button, checkbox, column, container, pick_list, row, text};
-use iced::{Element, Fill};
+//! Fit the full camera image first; controls use spare space or float over it.
+
+mod controls;
+mod icons;
+
+use super::{Draft, Event, FastFill, Message, overlay};
+use iced::widget::{
+    Space, container, mouse_area, opaque, pin, responsive, stack,
+};
+use iced::widget::{scrollable, text};
+use iced::{Color, Element, Fill, Rectangle, Size};
 use std::time::Instant;
 
+const BUTTON: f32 = 40.0;
+const GAP: f32 = 8.0;
+const PADDING: f32 = 8.0;
+const MARGIN: f32 = 12.0;
+const DOCK_LENGTH: f32 = BUTTON * 6.0 + GAP * 5.0 + PADDING * 2.0;
+const DOCK_WIDTH: f32 = BUTTON + PADDING * 2.0;
+
 pub(crate) fn view(state: &FastFill) -> Element<'_, Message> {
+    responsive(move |available| screen(state, available)).into()
+}
+
+fn screen(state: &FastFill, available: Size) -> Element<'_, Message> {
     let draft = state.camera.draft.as_ref().unwrap();
     let now = Instant::now();
+    let placement = Placement::new(draft, available);
     let crop = if draft.captured {
         draft.crop
     } else {
         draft.tracking.outline(now)
     };
-    let progress = if draft.captured {
-        if draft.crop.is_some() { 1.0 } else { 0.0 }
-    } else {
-        draft.tracking.progress(now)
-    };
-    let mut heading = column![
-        row![
-            control("Cancel", Event::Cancel, true),
-            text("Camera").size(24).width(Fill),
-            control(
-                "Refresh cameras",
-                Event::Refresh,
-                !draft.captured && !draft.saving && !draft.sources.loading
-            ),
-            playback_control(draft),
-        ]
-        .spacing(12)
-        .align_y(iced::Alignment::Center),
-        choices(draft),
-        orientation_controls(draft),
-        text(if draft.saving {
-            "Preparing photo…"
-        } else if draft.sources.loading {
-            "Finding cameras and supported capture modes…"
-        } else if draft.captured {
-            "Use photo adds the page; canceling corrections keeps the photo."
-        } else if let Some(reason) = draft.paused {
-            reason
-        } else if draft.running.is_some() && draft.last.is_none() {
-            "Starting camera…"
-        } else {
-            draft.tracking.status(now)
-        }),
-    ]
-    .spacing(12);
-    if let Some(error) = &draft.error {
-        let mut details = column![text(error)].spacing(8);
-        if !draft.captured && !draft.saving {
-            details = details.push(text(lifecycle::permission_help()).size(14));
-        }
-        heading = heading.push(
-            container(details)
-                .padding(12)
-                .width(Fill)
-                .style(container::danger),
-        );
-    }
     let preview: Element<'_, Message> = match &draft.last {
         Some(frame) => {
             overlay::preview(frame, crop, draft.orientation.mirrored)
         }
         None => container(text("Camera preview")).center(Fill).into(),
     };
-    column![
-        container(heading).padding(16),
-        preview,
-        container(
-            row![
-                capture_button(draft.can_capture(), progress),
-                control(
-                    "Use photo",
-                    Event::UsePhoto,
-                    draft.captured && !draft.saving
-                ),
-            ]
-            .spacing(16)
-            .align_y(iced::Alignment::Center)
-        )
-        .center_x(Fill)
-        .padding(16),
+    let mut layers = stack![
+        container(Space::new())
+            .width(Fill)
+            .height(Fill)
+            .style(container::dark),
+        at(preview, placement.image),
+        at(
+            notice(draft, now, placement.notice.size()),
+            placement.notice,
+        ),
+        at(
+            controls::dock(draft, placement.vertical, placement.compact, now),
+            placement.dock
+        ),
+        at(controls::switch(draft), placement.switch),
     ]
+    .width(Fill)
     .height(Fill)
-    .into()
-}
-
-fn control(
-    label: &'static str,
-    event: Event,
-    enabled: bool,
-) -> iced::widget::Button<'static, Message> {
-    button(text(label))
-        .height(CONTROL_HEIGHT)
-        .on_press_maybe(enabled.then_some(Message::Camera(event)))
-}
-
-fn orientation_controls(draft: &Draft) -> Element<'static, Message> {
-    let enabled = draft.sources.mode.is_some()
-        && !draft.sources.loading
-        && !draft.captured
-        && !draft.saving;
-    row![
-        control("Rotate 90°", Event::Rotate, enabled),
-        text(format!("{}°", draft.orientation.degrees())),
-        checkbox(draft.orientation.mirrored)
-            .label("Mirror preview")
-            .on_toggle_maybe(
-                enabled.then_some(|_| Message::Camera(Event::Mirror))
-            ),
-    ]
-    .spacing(12)
-    .align_y(iced::Alignment::Center)
-    .into()
-}
-
-fn playback_control(draft: &Draft) -> iced::widget::Button<'static, Message> {
-    let (label, event) = if draft.captured {
-        ("Retake", Event::Start(draft.id))
-    } else if draft.running.is_some() {
-        ("Pause", Event::Pause)
-    } else if draft.paused.is_some() {
-        ("Resume preview", Event::Start(draft.id))
-    } else {
-        ("Start preview", Event::Start(draft.id))
-    };
-    control(
-        label,
-        event,
-        !draft.saving && !draft.sources.loading && draft.sources.mode.is_some(),
-    )
-}
-
-fn choices(draft: &Draft) -> Element<'_, Message> {
-    let sources = &draft.sources;
-    if draft.captured || draft.saving {
-        let frame = draft.last.as_ref().unwrap();
-        return text(format!(
-            "Photo {}×{}; sensor mode {}",
-            frame.pixels.width(),
-            frame.pixels.height(),
-            sources
-                .mode
-                .map_or_else(|| "unknown".into(), |m| m.to_string())
-        ))
-        .into();
+    .clip(true);
+    if draft.settings_open && !draft.captured {
+        // The native stack/backdrop blocks the dock, not ongoing preview.
+        layers = layers.push(opaque(
+            mouse_area(Space::new().width(Fill).height(Fill))
+                .on_press(Message::Camera(Event::Settings(false))),
+        ));
+        let width = (available.width - MARGIN * 2.0).clamp(1.0, 320.0);
+        layers = layers.push(
+            pin(opaque(controls::settings(
+                draft,
+                width,
+                (available.height - MARGIN * 2.0).max(1.0),
+            )))
+            .x((available.width - width - MARGIN).max(0.0))
+            .y(MARGIN),
+        );
     }
-    row![
-        column![
-            text("Camera"),
-            pick_list(
-                sources.devices.as_slice(),
-                sources.device.as_ref(),
-                |device| Message::Camera(Event::Device(device)),
-            )
-            .placeholder("Select camera")
-            .width(Fill)
-            .padding(10),
-        ]
-        .spacing(4)
-        .width(Fill),
-        column![
-            text("Preview and photo resolution"),
-            pick_list(sources.modes.as_slice(), sources.mode, |mode| {
-                Message::Camera(Event::Mode(mode))
-            },)
-            .placeholder("Select supported mode")
-            .width(Fill)
-            .padding(10),
-        ]
-        .spacing(4)
-        .width(Fill),
-    ]
-    .spacing(12)
-    .into()
+    layers.into()
 }
 
-fn capture_button(enabled: bool, progress: f64) -> Element<'static, Message> {
-    iced::widget::stack![
-        overlay::countdown(progress),
-        container(
-            button(text("Capture").size(14))
-                .on_press_maybe(
-                    enabled.then_some(Message::Camera(Event::Capture))
-                )
-                .width(80)
-                .height(80)
-                .style(|theme, status| {
-                    let mut style = button::primary(theme, status);
-                    style.border.radius = 40.into();
-                    style
+fn at<'a>(
+    content: impl Into<Element<'a, Message>>,
+    bounds: Rectangle,
+) -> Element<'a, Message> {
+    pin(container(content).width(bounds.width).height(bounds.height))
+        .position(bounds.position())
+        .into()
+}
+
+fn notice(
+    draft: &Draft,
+    now: Instant,
+    available: Size,
+) -> Element<'_, Message> {
+    let label = if let Some(error) = &draft.error {
+        error.as_str()
+    } else if draft.saving {
+        "Preparing photo…"
+    } else if draft.sources.loading {
+        "Finding cameras and supported resolutions…"
+    } else if draft.captured {
+        "Photo ready — use photo or retake."
+    } else if let Some(reason) = draft.paused {
+        reason
+    } else if draft.running.is_some() && draft.last.is_none() {
+        "Starting camera…"
+    } else {
+        draft.tracking.status(now)
+    };
+    let bubble = container(
+        scrollable(text(label).size(14).align_x(iced::Center))
+            .height(iced::Shrink),
+    )
+    .padding([8, 14])
+    .max_width(available.width.min(520.0))
+    .max_height(available.height)
+    .style(move |_| iced::widget::container::Style {
+        background: Some(Color::from_rgba8(20, 23, 28, 0.82).into()),
+        text_color: Some(Color::WHITE),
+        border: iced::Border {
+            color: if draft.error.is_some() {
+                Color::from_rgb8(240, 110, 100)
+            } else {
+                Color::TRANSPARENT
+            },
+            width: 1.0,
+            radius: 20.0.into(),
+        },
+        ..Default::default()
+    });
+    container(bubble)
+        .width(Fill)
+        .height(Fill)
+        .align_x(iced::Center)
+        .align_y(iced::Bottom)
+        .into()
+}
+
+#[derive(Debug)]
+struct Placement {
+    image: Rectangle,
+    dock: Rectangle,
+    notice: Rectangle,
+    switch: Rectangle,
+    vertical: bool,
+    compact: bool,
+}
+
+impl Placement {
+    #[allow(clippy::cast_precision_loss)]
+    fn new(draft: &Draft, available: Size) -> Self {
+        let source = draft.last.as_ref().map_or_else(
+            || {
+                draft.sources.mode.map_or(available, |mode| {
+                    let size = Size::new(mode.width as f32, mode.height as f32);
+                    if draft.orientation.degrees().is_multiple_of(180) {
+                        size
+                    } else {
+                        Size::new(size.height, size.width)
+                    }
                 })
-        )
-        .width(96)
-        .height(96)
-        .center_x(Fill)
-        .center_y(Fill),
-    ]
-    .into()
+            },
+            |frame| {
+                Size::new(
+                    frame.pixels.width() as f32,
+                    frame.pixels.height() as f32,
+                )
+            },
+        );
+        let scale = (available.width / source.width.max(1.0))
+            .min(available.height / source.height.max(1.0));
+        let image = Rectangle::new(
+            iced::Point::new(
+                (available.width - source.width * scale) / 2.0,
+                (available.height - source.height * scale) / 2.0,
+            ),
+            Size::new(source.width * scale, source.height * scale),
+        );
+        let right = available.width - (image.x + image.width);
+        let bottom = available.height - (image.y + image.height);
+        let vertical = right >= DOCK_WIDTH + MARGIN * 2.0
+            && available.height >= DOCK_LENGTH + MARGIN * 2.0;
+        let below = !vertical
+            && bottom >= DOCK_WIDTH + MARGIN * 2.0
+            && available.width >= DOCK_LENGTH + MARGIN * 2.0;
+        let compact =
+            !vertical && !below && image.width < DOCK_LENGTH + MARGIN * 2.0;
+        let size = if vertical {
+            Size::new(DOCK_WIDTH, DOCK_LENGTH)
+        } else if compact {
+            Size::new(
+                BUTTON * 3.0 + GAP * 2.0 + PADDING * 2.0,
+                BUTTON * 2.0 + GAP + PADDING * 2.0,
+            )
+        } else {
+            Size::new(DOCK_LENGTH, DOCK_WIDTH)
+        };
+        let dock = Rectangle::new(
+            iced::Point::new(
+                if vertical {
+                    image.x + image.width + MARGIN
+                } else {
+                    ((available.width - size.width) / 2.0).max(0.0)
+                },
+                if vertical {
+                    (available.height - size.height) / 2.0
+                } else if below {
+                    image.y + image.height + MARGIN
+                } else {
+                    (image.y + image.height - MARGIN - size.height).max(0.0)
+                },
+            ),
+            size,
+        );
+        let notice_bottom = if vertical || below {
+            image.y + image.height - MARGIN
+        } else {
+            dock.y - GAP
+        };
+        Self {
+            image,
+            dock,
+            notice: Rectangle {
+                x: image.x + MARGIN,
+                y: image.y + MARGIN,
+                width: (image.width - MARGIN * 2.0).max(1.0),
+                height: (notice_bottom - image.y - MARGIN).max(1.0),
+            },
+            switch: Rectangle {
+                x: (image.x + image.width - MARGIN - BUTTON).max(image.x),
+                y: image.y + MARGIN,
+                width: BUTTON,
+                height: BUTTON,
+            },
+            vertical,
+            compact,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::camera::tests::ready;
+    use fastfill_rust::camera::Spec;
+
+    #[test]
+    fn dock_uses_existing_margins_without_shrinking_the_image() {
+        let mut state = ready();
+        let draft = state.camera.draft.as_mut().unwrap();
+        draft.sources.mode = Some(Spec {
+            width: 1600,
+            height: 900,
+            ..Spec::default()
+        });
+        for (size, vertical, below) in [
+            (Size::new(1600.0, 900.0), false, false),
+            (Size::new(1800.0, 700.0), true, false),
+            (Size::new(1000.0, 1000.0), false, true),
+            (Size::new(480.0, 270.0), false, false),
+            (Size::new(320.0, 180.0), false, false),
+        ] {
+            let p = Placement::new(draft, size);
+            assert_eq!(p.vertical, vertical);
+            assert_eq!(p.dock.y >= p.image.y + p.image.height, below);
+            assert!(
+                (p.image.width / p.image.height - 16.0 / 9.0).abs() < 0.001
+            );
+            assert!(
+                (p.image.width - size.width).abs() < 0.001
+                    || (p.image.height - size.height).abs() < 0.001
+            );
+            assert!(p.image.contains(p.notice.position()));
+            assert!(p.image.contains(iced::Point::new(
+                p.notice.x + p.notice.width,
+                p.notice.y + p.notice.height
+            )));
+            assert!(p.dock.x >= 0.0 && p.dock.y >= 0.0);
+            assert!(p.dock.x + p.dock.width <= size.width);
+            assert!(p.dock.y + p.dock.height <= size.height);
+            if !vertical && !below {
+                assert!(p.notice.y + p.notice.height < p.dock.y);
+            }
+        }
+        draft.orientation.rotate();
+        let rotated = Placement::new(draft, Size::new(1200.0, 800.0));
+        assert!(rotated.vertical);
+        assert!(
+            (rotated.image.width / rotated.image.height - 9.0 / 16.0).abs()
+                < 0.001
+        );
+    }
 }

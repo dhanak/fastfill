@@ -1,9 +1,11 @@
 use super::*;
 use crate::app::controller::update;
+use crate::appearance::CONTROL_HEIGHT;
 use fastfill_rust::annotations::{Pointer, Tool};
 use fastfill_rust::geometry::{Point as PagePoint, Rect};
 use iced::advanced::renderer::Headless;
 use iced::advanced::{Layout, Shell, layout, widget};
+use iced::widget::button;
 use iced::{Event, Point, Renderer, mouse, touch};
 
 fn pending(kind: u8) -> FastFill {

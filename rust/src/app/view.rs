@@ -1,5 +1,5 @@
 use super::{FastFill, ImagePicker, Message, TEXT_EDITOR_ID, page_size};
-use crate::appearance::{CONTROL_HEIGHT, annotation_color, text_font};
+use crate::appearance::{action_button, annotation_color, text_font};
 use crate::page_canvas::{CanvasLayer, PageCanvas, page_viewport};
 use fastfill_rust::annotations::{
     AnnotationColor, TEXT_EDITOR_HORIZONTAL_PADDING,
@@ -7,8 +7,7 @@ use fastfill_rust::annotations::{
 };
 use fastfill_rust::geometry::Point as PagePoint;
 use iced::widget::{
-    button, canvas, column, container, progress_bar, responsive, row, text,
-    text_editor,
+    canvas, column, container, progress_bar, responsive, row, text, text_editor,
 };
 use iced::{Background, Border, Color, Element, Fill, Padding, keyboard};
 
@@ -55,7 +54,7 @@ fn heading(state: &FastFill) -> Element<'_, Message> {
         heading = heading.push(
             row![
                 progress_bar(0.0..=1.0, progress).girth(8).length(Fill),
-                button(label).on_press_maybe(message).height(CONTROL_HEIGHT),
+                action_button(label, message),
             ]
             .spacing(12)
             .align_y(iced::Alignment::Center),

@@ -193,6 +193,14 @@ impl FastFill {
 }
 
 pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
+    if let Message::SystemThemeChanged(mode) = &message {
+        // Iced 0.14 leaves Linux's previous theme when the portal resets it.
+        // Override only that case; native theme following owns every other.
+        state.theme_override = (cfg!(target_os = "linux")
+            && *mode == iced::theme::Mode::None)
+            .then(|| <iced::Theme as iced::theme::Base>::default(*mode));
+        return Task::none();
+    }
     if let Some(task) = super::help::update(state, &message) {
         return task;
     }

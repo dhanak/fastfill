@@ -3,6 +3,11 @@ use iced::font::{Family, Style, Weight};
 use iced::{Color, Font};
 use std::sync::{Once, OnceLock};
 
+mod buttons;
+pub(crate) use buttons::{
+    action_button, destructive_action, primary_action, secondary_action,
+};
+
 pub(crate) const TOOLBAR_HEIGHT: f32 = 168.0;
 pub(crate) const TOOLBAR_ROW_HEIGHT: f32 = TOOLBAR_HEIGHT / 3.0;
 pub(crate) const CONTROL_HEIGHT: f32 = 40.0;

@@ -64,6 +64,7 @@ struct FastFill {
     pages: Pages,
     project: ProjectSession,
     navigation: Navigation,
+    theme_override: Option<iced::Theme>,
     modifiers: DragModifiers,
     input_epoch: u64,
     image_picker: ImagePicker,
@@ -118,6 +119,7 @@ enum ImagePicker {
 
 #[derive(Clone, Debug)]
 pub(crate) enum Message {
+    SystemThemeChanged(iced::theme::Mode),
     #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
     Camera(camera::Event),
     PageEdit(page_edit::Event),
@@ -223,32 +225,36 @@ pub(crate) fn run() -> iced::Result {
         })
         .window_size((1_200.0, 800.0))
         .antialiasing(true)
+        .theme(|state: &FastFill| state.theme_override.clone())
         .exit_on_close_request(false)
         .subscription(|_| {
-            iced::event::listen_with(|event, status, id| match event {
-                iced::Event::Window(iced::window::Event::CloseRequested) => {
-                    Some(Message::CloseRequested(id))
-                }
-                iced::Event::Window(iced::window::Event::Unfocused) => {
-                    Some(Message::FocusLost)
-                }
-                iced::Event::Keyboard(keyboard::Event::ModifiersChanged(m)) => {
-                    Some(Message::ModifiersChanged(DragModifiers {
+            iced::Subscription::batch([
+                iced::system::theme_changes().map(Message::SystemThemeChanged),
+                iced::event::listen_with(|event, status, id| match event {
+                    iced::Event::Window(
+                        iced::window::Event::CloseRequested,
+                    ) => Some(Message::CloseRequested(id)),
+                    iced::Event::Window(iced::window::Event::Unfocused) => {
+                        Some(Message::FocusLost)
+                    }
+                    iced::Event::Keyboard(
+                        keyboard::Event::ModifiersChanged(m),
+                    ) => Some(Message::ModifiersChanged(DragModifiers {
                         square: m.control(),
                         force_move: m.shift(),
                         force_resize: m.alt(),
-                    }))
-                }
-                iced::Event::Keyboard(keyboard::Event::KeyPressed {
-                    key,
-                    modifiers,
-                    ..
-                }) => shortcut_message(key, modifiers, status),
-                iced::Event::Window(iced::window::Event::Resized(_)) => {
-                    Some(Message::ViewportResized)
-                }
-                _ => None,
-            })
+                    })),
+                    iced::Event::Keyboard(keyboard::Event::KeyPressed {
+                        key,
+                        modifiers,
+                        ..
+                    }) => shortcut_message(key, modifiers, status),
+                    iced::Event::Window(iced::window::Event::Resized(_)) => {
+                        Some(Message::ViewportResized)
+                    }
+                    _ => None,
+                }),
+            ])
         })
         .run()
 }

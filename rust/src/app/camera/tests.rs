@@ -3,6 +3,8 @@ use super::*;
 use fastfill_rust::annotations::{Pointer, Tool};
 use fastfill_rust::geometry::{Point, Size};
 
+mod appearance;
+
 pub(super) fn ready() -> FastFill {
     let mut state = FastFill::default();
     state.project.operation = super::super::project::Operation::Idle;

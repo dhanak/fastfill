@@ -1,10 +1,10 @@
 //! Read-only shortcut reference; never owns document edits or history.
 
 use super::{FastFill, ImagePicker, Message, TEXT_EDITOR_ID};
-use crate::appearance::{self, CONTROL_HEIGHT};
+use crate::appearance::{self, action_button};
 use fastfill_rust::annotations::DragModifiers;
 use iced::widget::{
-    button, column, container, mouse_area, opaque, row, scrollable, table, text,
+    column, container, mouse_area, opaque, row, scrollable, table, text,
 };
 use iced::{Element, Fill, FillPortion, Font, Task, font};
 
@@ -119,10 +119,7 @@ pub(super) fn view(state: &FastFill) -> Option<Element<'static, Message>> {
         column![
             row![
                 text("Shortcuts").size(24).width(Fill),
-                button("Close")
-                    .height(CONTROL_HEIGHT)
-                    .on_press(Message::HideShortcuts)
-                    .style(button::secondary),
+                action_button("Close", Some(Message::HideShortcuts)),
             ]
             .align_y(iced::Alignment::Center),
             scrollable(container(table).padding(iced::Padding {
@@ -301,7 +298,7 @@ const ENTRIES: &[Entry] = &[
     (
         "Camera",
         "Escape",
-        "Cancel capture; do not add the pending photo.",
+        "Close camera settings first; otherwise cancel the pending photo.",
     ),
 ];
 

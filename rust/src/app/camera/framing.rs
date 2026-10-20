@@ -219,6 +219,7 @@ pub(super) fn ready(
                     draft.last = Some(job.frame);
                     draft.running = None;
                     draft.captured = true;
+                    draft.settings_open = false;
                 }
             }
             Err(error) => {

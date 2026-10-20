@@ -40,6 +40,7 @@ struct Draft {
     tracking: framing::Tracking,
     captured: bool,
     saving: bool,
+    settings_open: bool,
     error: Option<String>,
     pending: Arc<AtomicBool>,
 }
@@ -82,6 +83,7 @@ pub(crate) enum Event {
     Mode(Spec),
     Rotate,
     Mirror,
+    Settings(bool),
     Pause,
     Frame(u64, Result<Arc<RgbaImage>, String>),
     Uploaded(u64, Result<Frame, String>),
@@ -139,15 +141,16 @@ pub(super) fn update(
     }
     let draft = state.camera.draft.as_mut().unwrap();
     match message {
+        Message::CancelInteraction if draft.settings_open => {
+            draft.settings_open = false;
+        }
         Message::Camera(Event::Cancel) | Message::CancelInteraction => {
             state.camera.draft = None;
             state.status = "Capture canceled; project unchanged.".into();
             state.status_is_error = false;
         }
-        Message::FocusLost => {
-            // Moving a window can lose focus; it must not stop the camera.
-            state.modifiers = super::DragModifiers::default();
-        }
+        // Moving a window can lose focus; it must not stop the camera.
+        Message::FocusLost => state.modifiers = super::DragModifiers::default(),
         Message::Camera(Event::Start(id))
             if *id == draft.id && !draft.saving && !draft.sources.loading =>
         {
@@ -197,6 +200,7 @@ pub(super) fn update(
         Message::Camera(Event::Capture) if draft.can_capture() => {
             draft.running = None;
             draft.captured = true;
+            draft.settings_open = false;
             // Manual capture freezes the displayed image, never an old crop.
             draft.crop = None;
             draft.tracking = framing::Tracking::default();
@@ -265,6 +269,7 @@ fn begin(state: &mut FastFill) -> Task<Message> {
         tracking: framing::Tracking::default(),
         captured: false,
         saving: false,
+        settings_open: false,
         error: None,
         pending: Arc::default(),
     });

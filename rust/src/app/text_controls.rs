@@ -1,10 +1,10 @@
 //! Text options and the uncommitted font-size field; no document ownership.
 
 use super::{FastFill, Message, TEXT_EDITOR_ID, controller};
-use crate::appearance::{CONTROL_GAP, CONTROL_HEIGHT};
+use crate::appearance::{self, CONTROL_GAP, CONTROL_HEIGHT, action_button};
 use fastfill_rust::annotations::{TextFormat, TextTypeface};
 use iced::widget::text_input;
-use iced::widget::{Row, button, column, mouse_area, pick_list, row, text};
+use iced::widget::{Row, column, mouse_area, pick_list, row, text};
 use iced::{Element, Fill, Task, mouse};
 
 const INVALID_SIZE: &str = "Font size must be a number from 6 to 144 pt.";
@@ -198,14 +198,12 @@ fn controls(
         state.font_size_input.is_some() && parse_size(&value).is_none();
     let current = input_size(state, format);
     let step = |label, direction| {
-        button(label)
-            .on_press_maybe(
-                ((step_size(current, direction) - current).abs()
-                    >= f32::EPSILON)
-                    .then_some(Message::FontSize(Event::Step(direction))),
-            )
-            .width(CONTROL_HEIGHT)
-            .height(CONTROL_HEIGHT)
+        action_button(
+            label,
+            ((step_size(current, direction) - current).abs() >= f32::EPSILON)
+                .then_some(Message::FontSize(Event::Step(direction))),
+        )
+        .width(CONTROL_HEIGHT)
     };
     let size = text_input(
         if editing || common_size {
@@ -230,15 +228,13 @@ fn controls(
         style
     });
     let toggle = |label, enabled, message| {
-        button(label)
-            .on_press(message)
+        action_button(label, Some(message))
             .style(if enabled {
-                button::primary
+                appearance::primary_action
             } else {
-                button::secondary
+                appearance::secondary_action
             })
             .width(CONTROL_HEIGHT)
-            .height(CONTROL_HEIGHT)
     };
     [
         pick_list(

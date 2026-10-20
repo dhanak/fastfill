@@ -1,6 +1,6 @@
 use super::{FastFill, ImagePicker, Message};
-use crate::appearance::CONTROL_HEIGHT;
-use iced::widget::{button, row, text};
+use crate::appearance::{action_button, primary_action};
+use iced::widget::{row, text};
 use iced::{Element, Fill};
 
 pub(super) fn controls(state: &FastFill) -> Element<'_, Message> {
@@ -10,9 +10,7 @@ pub(super) fn controls(state: &FastFill) -> Element<'_, Message> {
         && !state.confirm_delete_page
         && state.dragged_page.is_none();
     let control = |label: &'static str, message| {
-        button(label)
-            .on_press_maybe(enabled.then_some(message))
-            .height(CONTROL_HEIGHT)
+        action_button(label, enabled.then_some(message))
     };
     row![
         text(format!(
@@ -28,7 +26,7 @@ pub(super) fn controls(state: &FastFill) -> Element<'_, Message> {
         .width(Fill),
         control("New", Message::NewProject),
         control("Open", Message::OpenProject),
-        control("Save", Message::SaveProject),
+        control("Save", Message::SaveProject).style(primary_action),
     ]
     .extend(
         cfg!(not(target_arch = "wasm32"))

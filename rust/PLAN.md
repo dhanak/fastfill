@@ -750,10 +750,10 @@ SP6 hardware calibration remain deferred, separate from laptop acceptance.
 - [x] Obtain the CI build and launch the Windows EXE. User reports green CI
       and a brief Windows test; console/camera follow-up fixes are recorded
       below, not assumed verified from this initial test.
-- [ ] Retest GUI-only startup and camera modes on Windows after the fix.
-      User reports good Windows UI/system light theme on 2026-10-20, but
-      mode discovery crashes with 0xc0000005. Retest the cleanup workaround
-      and stage diagnostics below; do not count the camera as accepted.
+- [x] Retest camera discovery/preview on Windows after the cleanup fix.
+      User confirms working camera on 2026-10-20, with a populated resolution
+      picker and live preview. Keep SP6 front/rear, sleep and touch checks
+      separate; do not infer those from this result.
 - [ ] User checkpoint: download/extract on Windows without Rust installed;
       launch, open/save/export a project and try the SP6 cameras when available.
       Keep prior physical sleep/touch/DPI calibration deferrals explicit.
@@ -934,6 +934,84 @@ SP6 hardware calibration remain deferred, separate from laptop acceptance.
       show platform-correct shortcuts in the table; remove the redundant
       modifier legend entirely, as requested.
 
+#### 7H1. Main-editor action buttons — manually accepted
+
+- [x] Use shared native button sizing/type/padding/corners and themed styles.
+      Prefer neutral outlined secondary actions; keep Save and Camera entry
+      accented and destructive actions red. Preserve action labels and order.
+- [x] Apply to header, rail, navigation/selection actions, property steppers
+      and formatting toggles, plus the main-editor help/confirmation actions.
+      Keep tool icons and color swatches unchanged. No new icon catalog.
+- [x] Preserve availability, confirmations, pending text, command routing,
+      workspace heights/rail width, narrow-window scrolling and touch targets.
+- [x] Test roles/states/contrast, label alignment, actual mouse/touch routing,
+      disabled controls and light/dark software rendering at 1x/2x.
+- [x] Run native tests, strict lint, WASM and formatting checks. Stop for a
+      manual main-editor appearance/functionality check; do not commit yet.
+- [x] User checkpoint: inspect both themes, hover/disabled/selected states,
+      use header/rail/navigation actions and text/shape options, then inspect
+      a narrow/short window. Physical touch/Windows calibration stays separate.
+      User accepts appearance on 2026-10-20. Follow up the reported Linux
+      dark-to-light transition separately; camera/page-edit styling is 7H2.
+
+7H2 covers camera/page-correction controls separately. The Ctrl+. palette
+remains a later behavior slice, not part of this visual pass.
+
+##### Camera resolution picker — manually accepted
+
+- [x] Show one dimensions-only entry per resolution. Automatically choose
+      the highest advertised FPS, preferring MJPG when rates tie. Preserve
+      full diagnostic catalogs and exact capture requests; no driver changes.
+- [x] Keep the initial resolution preference up to full HD; do not demote it
+      merely because its fastest mode exceeds the former 30 FPS preference.
+      Preserve device/session guards, restart and frozen-photo behavior.
+- [x] Test shuffled catalogs, ties, invalid/empty modes, selected native specs
+      and resolution labels. Remove FPS/encoding from frozen-photo text too.
+- [x] User checkpoint: inspect the simplified resolution list. User confirms
+      it looks good on 2026-10-20. No further capture or hardware calibration
+      is implied beyond the earlier working-camera report.
+
+##### Linux theme reset — manually accepted
+
+- [x] Handle system "no preference" as the default light appearance instead
+      of retaining a previous dark theme. Work around iced's Linux reset
+      omission via its existing theme subscription; preserve ICED_THEME.
+- [x] Leave Windows/macOS/WASM native theme following unchanged. Keep theme
+      messages independent of modal/edit guards and document/history state.
+- [x] Test repeated light/dark/no-preference transitions, pending text and
+      font-size entry, help, page edit and camera; run the automated checks.
+- [x] User checkpoint: user confirms Linux theme switching works on
+      2026-10-20. H1 accepted, including this follow-up. Continue with H2.
+
+#### 7H2. Camera and page-correction controls — awaiting manual check
+
+- [x] Reuse H1 action styles and touch-sized, centered targets. Accent
+      Capture/Use photo/Accept and selected toggles; keep other actions quiet.
+- [x] Fit the full camera image first. Put a six-button dock in existing
+      side/bottom margins, otherwise float it over the image. Keep compact
+      circular Capture/countdown and same-slot Use photo/Retake actions.
+- [x] Keep quick camera switching at the image's upper right, separate from
+      the scrollable settings popover (camera, resolution, Refresh). Escape
+      closes settings before canceling capture; outside click/tap closes it.
+- [x] Keep status/error notices in a translucent rounded lozenge over the
+      image, bottom center or above the overlay dock. Replace Mirror with
+      solid/dashed reflected triangles separated by a vertical axis.
+- [x] Organize page corrections in a scrollable panel. Keep Cancel immediately
+      before Accept. On narrow windows put corrections below the source image
+      instead of squeezing it beside a fixed-width panel. Preserve preview,
+      corner dragging/Ctrl snap, filters, tone controls and warning handling.
+- [x] Test actual layout, centered/disabled actions and mouse/touch routing;
+      render both screens in light/dark, wide/narrow and 1x/2x. Keep drivers
+      closed and hardware calibration separate from software rendering.
+- [x] Run native tests, strict lint, WASM, formatting and whitespace checks.
+- [ ] User checkpoint: inspect both screens/themes, small-window scrolling,
+      adaptive dock/status placement, settings/quick camera switching,
+      preview/capture/review/retake and pending correction Accept/Cancel.
+      This is today's last slice. Stop here; do not commit unless requested.
+
+Camera layout and refined glyphs accepted on 2026-10-20. Retain the remaining
+functional/hardware checkpoint above; user requests a commit and pause.
+
 #### Remaining UI polish and replacement gate — not started
 
 - Polish the UI for regular use: cohesive visual styling and touch layout.
@@ -941,10 +1019,8 @@ SP6 hardware calibration remain deferred, separate from laptop acceptance.
 - Profile the browser harness if full-release builds remain sluggish;
   debug builds now lightly optimize FastFill as well as its dependencies.
 - Page-card appearance, drag feedback and animation are accepted at 7F1–7F3.
-- Restyle remaining header, page, navigation, camera and correction buttons
-  as a separate checkpoint: consistent sizing, spacing, corners and states;
-  reserve accent color for primary actions/toggles, use quieter secondary
-  actions and clear destructive styling. Do not copy the C# layout blindly.
+- Finish the camera/page-correction manual checkpoint at 7H2 above before
+  proceeding to another UI slice. H1 action styling is accepted.
 - Add a searchable command palette on Ctrl+. to find and run commands.
   Reuse existing command handlers and availability guards; keep this as a
   future polish item, not a shortcut implemented by the current help slice.
@@ -3960,6 +4036,160 @@ Windows retest after the next CI ZIP:
 - Stop after committing. Resume at 7H1: main-editor header/page/navigation
   button styling. Keep 7H2 camera/correction styling and the Ctrl+. command
   palette separate; do not start those changes in this turn.
+
+### 2026-10-20 — Restyle main-editor actions and simplify camera resolution
+
+- Continue 7H with a small main-editor styling checkpoint. Share native iced
+  action sizing, centered labels, 40-pixel height and six-pixel corners.
+  Use outlined neutral actions, accented Save/Camera and selected formatting
+  toggles, and red destructive actions. Preserve labels, guards and routing.
+- Apply this to header/rail/navigation/footer/property controls, help and
+  confirmations. Leave tool icons, swatches, camera/correction styling and
+  the command palette alone. No C#, dependency or document-format changes.
+- TDD red: native defaults fail equal-corner, centered-label and contrast
+  checks. Reuse iced's palette mixing and Color contrast calculation;
+  retain disabled dimming and readable enabled labels in both themes.
+- User confirms Windows camera works after the prior cleanup workaround.
+  Do not infer SP6 front/rear, sleep, touch or full capture/export acceptance.
+- Collapse camera choices to unique dimensions at the highest advertised
+  rate, preferring MJPG on ties. Keep initial up-to-full-HD resolution and
+  diagnostic format details. Preview and photo-review labels hide FPS and
+  encoding. Keep decoder validation and exact driver requests unchanged.
+- TDD red: the catalog check first fails because resolution selection is
+  missing. Add ranking/order/invalid-input coverage, lossless label checks
+  and a session regression for full HD with multiple rates and mode changes.
+- Inspect software-rendered wide/narrow workspace snapshots in both themes.
+  Catch a dark-theme destructive-label grayscale fallback; correct its palette
+  contrast with native color mixing and require a red hue in the regression.
+  Test actual button surfaces/corners at 1x/2x alongside existing footer/help
+  mouse/touch routing, transaction guards and stable workspace layouts.
+- Validation: all 615 native/all-target tests, strict Clippy, WASM,
+  formatting and whitespace checks pass. Exhaustive camera replay stays
+  opt-in. No driver is opened in these tests; physical checks stay separate.
+- Keep main-editor appearance and simplified camera choices awaiting the
+  user's manual check. Leave changes uncommitted; do not start 7H2 yet.
+
+### 2026-10-20 — Accept 7H1 and fix Linux dark-to-light reset
+
+- User accepts the main-editor button styling and camera resolution list.
+  Keep camera/page-edit layout and control styling for 7H2; standard widgets
+  already inherit the system colors. Do not infer additional hardware tests.
+- Trace the Linux symptom to iced_winit 0.14.1: a portal reset to no preference
+  broadcasts a theme event but returns before updating the default window
+  theme. Explicit Light and Dark work; Dark -> None retains the dark default.
+- Subscribe through iced's existing system-theme API. Override only Linux's
+  no-preference case with iced's default theme, honoring ICED_THEME; clear
+  the override on other modes. Leave other platforms' native following alone.
+  Add no dependencies, platform polling or custom theme/settings machinery.
+- Process theme notifications before modal/edit guards, without touching
+  document history, pending text, numeric drafts, focus or input epochs.
+  TDD red: both new regressions receive None instead of the expected Light
+  override. Green: repeated mode changes and help/page/camera guards pass.
+- Validation: all 617 native/all-target tests, strict Clippy, WASM,
+  formatting and whitespace checks pass. Both regressions also pass in a
+  separate process with ICED_THEME=Dracula. Exhaustive replay stays opt-in.
+- Await one Linux desktop check: switch light -> dark -> light repeatedly,
+  including with help, camera or page edit open. Keep changes uncommitted;
+  do not start 7H2 before this small follow-up is verified.
+
+### 2026-10-20 — Accept H1 theme switching; finish with H2
+
+- User confirms Linux theme switching works. Mark that follow-up accepted
+  alongside H1 and the simplified camera resolution picker. User requests H2
+  as today's last slice; do not proceed to the command palette or packaging.
+- Reuse H1's centered, 40-pixel action targets and roles for camera/page-edit
+  actions and warning dismissal. Keep the 80-pixel circular Capture button
+  and 96-pixel countdown ring; center Capture independently of Use photo.
+  Change Mirror preview to a touch-sized, accented selected toggle.
+- Group camera settings/errors in a bounded scrollable panel, stacking the
+  device/resolution fields in narrow windows. Keep preview separate, Cancel
+  at the upper right and Capture/Use photo reachable below the preview.
+- Group framing, color and tone options plus corrected preview in a themed,
+  scrollable panel. Below 760 px move it beneath the source image; leave
+  Cancel immediately before Accept. Reserve scrollbar space outside labels.
+- Keep correction/camera controllers, crop geometry, decoders, tracking,
+  preview upload, mirroring, exposure and save/history behavior unchanged.
+  Extract only the original canvas/settings view sections to keep functions
+  small. Add no dependencies, icon catalog or custom widgets.
+- TDD red: camera lacks the touch-sized mirror toggle; narrow page editing
+  squeezes the source beside a fixed-width sidebar. Green: layout and
+  centered-target checks pass across wide/narrow/short viewports.
+- Exercise actual mouse/touch button routing for live/review/saving camera
+  states and ready/pending corrections. Check disabled guards, header roles,
+  always-reachable capture actions and preview pixel clipping. Render both
+  screens in light/dark at 1x/2x; inspect software snapshots. Open no drivers.
+- Validation: all 623 native/all-target tests pass; repeat all 309 GUI tests
+  after the final view cleanup. Strict Clippy, WASM, formatting and whitespace
+  checks pass. Exhaustive camera replay remains opt-in. Hardware capture,
+  touch and DPI checks are not inferred from software event/render tests.
+- Await the focused H2 manual check, then stop for today. Keep all changes
+  uncommitted and preserve the user's already-staged H1 work.
+
+### 2026-10-20 — Implement the approved adaptive camera layout
+
+- User approves the refined mockups, with status always over the image and
+  a conventional solid/dashed reflected-triangle Mirror icon. Do not
+  regenerate mockups or proceed beyond H2 today.
+- Replace the first H2 camera layout: fit the full rotated preview first;
+  use existing side/bottom letterbox space for a narrow six-action dock,
+  otherwise overlay it at bottom center. Use two rows in small windows.
+  Never reduce image size to create room or follow detected-paper motion.
+- Give every action a 40-pixel target. Keep Capture circular with its
+  countdown inside that footprint; swap to Use photo and Retake in the same
+  slots for review. Retain preview/review mirroring until Use photo.
+- Keep quick camera cycling at the image's upper right. Put named camera,
+  resolution and Refresh in a bounded scrollable popover. Block underlying
+  actions while open; outside click/tap and Escape close settings first.
+  Preserve the frozen/saving guards and close settings on capture.
+- Put status/error text in a translucent rounded lozenge over the image,
+  bottom center or just above the floating dock. Long errors scroll; keep
+  platform permission guidance available in settings. Update camera docs
+  and the shortcut reference for the settings-first Escape behavior.
+- Keep layout, controls and camera-only vector paths together under the
+  camera view. Reuse native iced widgets/shared action styles; add no
+  dependency, custom widget framework, image asset or camera/backend change.
+- TDD red: old Capture fails the equal-size regression. Test adaptive image,
+  dock and notice bounds, rotation, non-overlapping targets, disabled states,
+  quick switching, popover/backdrop and mouse/touch routing. A held Pause
+  press during auto capture initially triggers Retake; give the review action
+  a distinct native subtree and keep a press-transition regression for both
+  mouse and touch. Test the Mirror glyph's filled/hollow interiors and axis.
+- Render light/dark, overlay/side/bottom layouts at 1x/2x with software only.
+  Inspect the snapshots; assert translucent notice pixels remain over the
+  image. No physical camera, sleep, touchscreen or Windows check is inferred.
+- Validation: all 629 native/all-target tests, strict Clippy, WASM,
+  formatting and whitespace checks pass. Full recorded replay stays opt-in.
+- Await the focused H2 manual check: resize the camera screen, inspect
+  notices/countdown, settings dismissal/quick switching, capture/review/
+  retake and mirroring; retain the pending page-correction check above.
+  Stop for today. Leave everything uncommitted and the staged H1 work intact.
+
+### 2026-10-20 — Accept camera layout; refine three glyphs
+
+- User likes the layout. Keep every control position, target size, capture
+  behavior and adaptive rule unchanged; limit this follow-up to glyphs.
+- Replace the spoke-like Settings symbol with a connected eight-tooth gear
+  and center hole. Give Retake a back/retry arrow, distinct from Rotate.
+- Flip Mirror triangles so their tall vertical edges face the center axis.
+  Enlarge them within the same glyph/button frame; retain solid/dashed
+  treatments and selected/disabled theme colors.
+- TDD red: new inward-edge/height and gear-tooth checks fail; Rotate and
+  Retake render identically. All three regressions pass after the changes.
+- Validation: all 631 native/all-target tests, strict Clippy, WASM,
+  formatting and whitespace checks pass. Inspect actual software-rendered
+  controls in the existing light/dark, 1x/2x camera snapshots. Open no camera.
+- Record layout acceptance separately from remaining H2 functional/hardware
+  checks. Leave pending work uncommitted and staged changes intact; stop.
+
+### 2026-10-20 — Commit accepted action and camera UI polish
+
+- User accepts the final glyph refinements and requests a commit. Include
+  the staged H1 action styles, resolution picker and Linux theme follow-up,
+  plus H2 camera/page-correction layouts, icons, tests and documentation.
+- Retain the 631-test, strict Clippy, WASM, formatting and whitespace results.
+  Do not infer unreported physical touch, SP6, sleep or high-DPI checks.
+- Commit unsigned for the owner's later signing. Exclude ignored mockups,
+  screenshots, logs and generated output. Stop without starting another slice.
 
 ## References
 

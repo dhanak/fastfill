@@ -54,7 +54,7 @@ fn translucent_outline_stays_on_the_letterboxed_image_at_both_dpi_scales() {
 #[test]
 fn circular_countdown_draws_more_accent_as_it_fills() {
     let count = |progress| {
-        render_element(countdown(progress), iced::Size::new(96, 96), 1, 1.0)
+        render_element(countdown(progress), iced::Size::new(40, 40), 1, 1.0)
             .as_chunks::<4>()
             .0
             .iter()
@@ -63,7 +63,7 @@ fn circular_countdown_draws_more_accent_as_it_fills() {
     };
     assert_eq!(count(0.0), 0);
     let quarter = count(0.25);
-    assert!(quarter > 100);
+    assert!(quarter > 25);
     assert!(count(1.0) > quarter * 2);
 }
 

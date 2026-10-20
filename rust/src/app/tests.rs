@@ -1,6 +1,73 @@
 use super::*;
 
 #[test]
+fn linux_theme_reset_preserves_pending_edits_even_with_help_open() {
+    use iced::theme::{Base, Mode};
+    let mut state = FastFill::default();
+    let _ = update(&mut state, Message::SetTool(Tool::Text));
+    let _ = update(
+        &mut state,
+        Message::DrawPressed(Pointer::Mouse, PagePoint::new(100.0, 200.0), 1.0),
+    );
+    paste_text(&mut state, "Pending text");
+    let _ = update(
+        &mut state,
+        Message::FontSize(text_controls::Event::Input("23.".into())),
+    );
+    let before = state.pages.identity();
+    let epoch = state.input_epoch;
+    for help_open in [false, true] {
+        state.show_shortcuts = help_open;
+        for mode in [
+            Mode::Light,
+            Mode::Dark,
+            Mode::None,
+            Mode::Dark,
+            Mode::Light,
+            Mode::None,
+        ] {
+            let _ = update(&mut state, Message::SystemThemeChanged(mode));
+            let expected = (cfg!(target_os = "linux") && mode == Mode::None)
+                .then(|| <Theme as Base>::default(Mode::None));
+            assert_eq!(state.theme_override, expected);
+            assert!(state.annotations().has_text_edit());
+            assert_eq!(state.text_content.text(), "Pending text");
+            assert_eq!(state.font_size_input.as_deref(), Some("23."));
+            assert_eq!(state.pages.identity(), before);
+            assert_eq!(state.input_epoch, epoch);
+            assert_eq!(state.show_shortcuts, help_open);
+        }
+    }
+}
+
+#[test]
+fn linux_theme_reset_bypasses_page_and_camera_modal_guards() {
+    use iced::theme::{Base, Mode};
+    let mut state = rendered_page();
+    let before = state.pages.identity();
+    let _ = update(&mut state, Message::PageEdit(page_edit::Event::Begin));
+    assert!(state.page_editor.is_open());
+    let expected =
+        cfg!(target_os = "linux").then(|| <Theme as Base>::default(Mode::None));
+    let _ = update(&mut state, Message::SystemThemeChanged(Mode::None));
+    assert_eq!(state.theme_override, expected);
+    assert!(state.page_editor.is_open());
+    assert_eq!(state.pages.identity(), before);
+    #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+    {
+        let _ = update(&mut state, Message::PageEdit(page_edit::Event::Cancel));
+        let _ = update(&mut state, Message::Camera(camera::Event::Begin));
+        assert!(state.camera.is_open());
+        let _ = update(&mut state, Message::SystemThemeChanged(Mode::Dark));
+        assert!(state.theme_override.is_none());
+        let _ = update(&mut state, Message::SystemThemeChanged(Mode::None));
+        assert_eq!(state.theme_override, expected);
+        assert!(state.camera.is_open());
+        assert_eq!(state.pages.identity(), before);
+    }
+}
+
+#[test]
 fn group_font_changes_preserve_other_properties_and_shape_controls() {
     let mut state = annotated_page();
     let _ = update(&mut state, Message::SetTool(Tool::Text));
@@ -1282,6 +1349,51 @@ pub(super) fn render_element(
         &Theme::Light,
         mouse::Cursor::Unavailable,
     )
+}
+
+pub(super) fn click_element(
+    element: &mut iced::Element<'_, Message>,
+    tree: &mut iced::advanced::widget::Tree,
+    node: &iced::advanced::layout::Node,
+    renderer: &Renderer,
+    position: Point,
+    use_touch: bool,
+) -> Vec<Message> {
+    let events = if use_touch {
+        [
+            iced::Event::Touch(touch::Event::FingerPressed {
+                id: touch::Finger(1),
+                position,
+            }),
+            iced::Event::Touch(touch::Event::FingerLifted {
+                id: touch::Finger(1),
+                position,
+            }),
+        ]
+    } else {
+        [
+            iced::Event::Mouse(mouse::Event::ButtonPressed(
+                mouse::Button::Left,
+            )),
+            iced::Event::Mouse(mouse::Event::ButtonReleased(
+                mouse::Button::Left,
+            )),
+        ]
+    };
+    let mut messages = Vec::new();
+    for event in events {
+        element.as_widget_mut().update(
+            tree,
+            &event,
+            iced::advanced::Layout::new(node),
+            mouse::Cursor::Available(position),
+            renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut iced::advanced::Shell::new(&mut messages),
+            &node.bounds(),
+        );
+    }
+    messages
 }
 
 #[allow(clippy::cast_precision_loss)]

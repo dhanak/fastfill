@@ -74,24 +74,29 @@ pub(super) fn normalize(mut modes: Vec<Spec>) -> Vec<Spec> {
         (
             Reverse(u64::from(m.width) * u64::from(m.height)),
             m.width,
+            Reverse(m.fps),
             m.fourcc != *b"MJPG",
             m.fourcc,
-            Reverse(m.fps),
         )
     });
     modes.dedup();
     modes
 }
 
-/// Prefer up to full HD at <=30 FPS; show the actual choice in the picker.
+/// Offer each resolution once, at its highest FPS; prefer MJPEG on ties.
+#[must_use]
+pub fn resolutions(modes: Vec<Spec>) -> Vec<Spec> {
+    let mut modes = normalize(modes);
+    modes.dedup_by_key(|m| (m.width, m.height));
+    modes
+}
+
+/// Prefer the largest resolution up to full HD, or the largest available.
 #[must_use]
 pub fn preferred(modes: &[Spec]) -> Option<Spec> {
     modes
         .iter()
-        .find(|m| {
-            u64::from(m.width) * u64::from(m.height) <= 1920 * 1080
-                && m.fps <= 30
-        })
+        .find(|m| u64::from(m.width) * u64::from(m.height) <= 1920 * 1080)
         .or_else(|| modes.first())
         .copied()
 }

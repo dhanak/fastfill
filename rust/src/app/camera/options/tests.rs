@@ -172,3 +172,27 @@ fn front_camera_defaults_mirror_but_refresh_keeps_user_override() {
     send(&mut state, Event::Device(front));
     assert!(state.camera.draft.as_ref().unwrap().orientation.mirrored);
 }
+
+#[test]
+fn resolution_choices_hide_duplicates_and_keep_full_hd_at_its_fastest_rate() {
+    let mut state = discovered();
+    let hd = Spec {
+        width: 1920,
+        height: 1080,
+        fps: 60,
+        ..Spec::default()
+    };
+    let slower = Spec { fps: 30, ..hd };
+    let low = Spec::default();
+    let id = state.camera.draft.as_ref().unwrap().id;
+    send(&mut state, Event::Modes(id, Ok(vec![hd, slower, low])));
+    let sources = &state.camera.draft.as_ref().unwrap().sources;
+    assert_eq!(sources.modes, vec![hd, low]);
+    assert_eq!(sources.mode, Some(hd));
+    send(&mut state, Event::Mode(slower));
+    assert_eq!(state.camera.draft.as_ref().unwrap().id, id);
+    send(&mut state, Event::Mode(low));
+    let draft = state.camera.draft.as_ref().unwrap();
+    assert_ne!(draft.id, id);
+    assert_eq!(draft.sources.mode, Some(low));
+}
