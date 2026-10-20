@@ -141,13 +141,18 @@ fn catalog_worker_fixture() {
             eprintln!("virtual camera is offline");
             std::process::exit(7);
         }
+        Ok("modes-crash") => {
+            eprintln!("Camera: Media Foundation device opened.");
+            eprintln!("Camera: reading native capture modes.");
+            std::process::exit(5);
+        }
         _ => (),
     }
 }
 
 #[test]
 fn catalog_reader_bounds_output_and_kills_stalled_workers() {
-    for mode in ["ok", "noisy", "failed", "large", "wait"] {
+    for mode in ["ok", "noisy", "failed", "modes-crash", "large", "wait"] {
         let mut command = Command::new(std::env::current_exe().unwrap());
         command
             .args([
@@ -182,6 +187,15 @@ fn catalog_reader_bounds_output_and_kills_stalled_workers() {
                 let error = result.unwrap_err();
                 assert!(error.contains('7'), "{error}");
                 assert!(error.contains("virtual camera is offline"), "{error}");
+            }
+            "modes-crash" => {
+                let error = result.unwrap_err();
+                assert!(error.contains("helper exited"), "{error}");
+                assert!(error.contains("device opened"), "{error}");
+                assert!(
+                    error.contains("reading native capture modes"),
+                    "{error}"
+                );
             }
             _ => assert!(result.unwrap_err().contains("timed out")),
         }

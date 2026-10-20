@@ -83,6 +83,12 @@ fn controls(state: &FastFill, viewport: Rect) -> Element<'_, Message> {
         viewport,
     };
     horizontal(row![
+        button("Shortcuts")
+            .on_press_maybe(
+                super::help::can_open(state).then_some(Message::ShowShortcuts),
+            )
+            .height(CONTROL_HEIGHT)
+            .style(button::secondary),
         button("Undo")
             .on_press_maybe(
                 (enabled && state.annotations().can_undo())

@@ -3,6 +3,22 @@
 Experimental cross-platform rewrite. The production C#/WinUI application is
 unchanged. See [PLAN.md](PLAN.md) for scope, progress, and checkpoint gates.
 
+## In-app shortcuts
+
+Choose **Shortcuts** before Undo, or press **F1** in the main editor. The
+scrollable reference keeps Context, Shortcut and Action columns, including
+mouse/touch gestures and Ctrl/Shift/Alt editing modifiers. Close or Escape
+returns to the editor without accepting/canceling pending text or font-size
+entry. Background controls stay blocked while help is open; window close
+still uses the normal unsaved-project prompt.
+
+Help opens only while the main editor is idle, not over a confirmation,
+file operation, page correction, camera screen or annotation/page drag.
+Browser/OS shortcuts can take priority over F1; use the button instead.
+Project/history shortcuts show Ctrl or Cmd for the compiled platform;
+geometry always uses literal Ctrl. The table lists the exact shortcuts,
+without a separate modifier legend.
+
 ## Windows testing without a compiler
 
 1. [Download the Windows x64 testing ZIP][rust-dev].
@@ -57,6 +73,10 @@ mise exec -- cargo check --target wasm32-unknown-unknown
 Routine tests and CI skip the expensive 224-frame camera replay. The three
 real-frame smoke checks, temporal unit tests, and small replay checks still
 run normally. Run the full recording explicitly as documented below.
+
+macOS may report future incompatibility in upstream `block 0.1.6`, pulled in
+by iced's wgpu/Metal renderer. It does not fail the pinned compiler's build;
+fixing it needs an upstream renderer dependency update, not a warning filter.
 
 The small browser download adapter also has a dependency-free check
 (Node.js 18+; run in CI):
@@ -567,6 +587,12 @@ Checkpoint 6G3b adds **camera selection and higher-resolution capture**:
   A disconnected virtual camera can have no modes; choose another camera.
   Unexpected helper exits report their exit status and bounded driver
   diagnostics, separately from empty replies or oversized catalogs.
+- Windows camera objects live until their isolated helper process exits.
+  This avoids `nokhwa-bindings-windows` 0.4.6 shutting down COM before its
+  source-reader release. The OS reclaims the device when the helper exits
+  or is canceled. No camera objects are retained in the main GUI. Discovery
+  errors include open/enumeration stages to localize any remaining crash.
+  This is a targeted cleanup workaround; hardware retesting is still needed.
 - Discrete Linux modes are listed directly. Continuous size ranges offer
   their valid endpoints and common sizes, including full HD, rather than
   expanding an enormous grid. Only exact integer rates from 1–120 FPS are

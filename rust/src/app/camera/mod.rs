@@ -68,6 +68,10 @@ impl Draft {
 
 #[derive(Clone, Debug)]
 pub(crate) enum Event {
+    #[cfg_attr(
+        not(any(target_os = "linux", target_os = "windows", test)),
+        expect(dead_code, reason = "Camera entry is hidden on this platform.")
+    )]
     Begin,
     Start(u64),
     Refresh,

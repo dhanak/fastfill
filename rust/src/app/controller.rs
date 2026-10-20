@@ -17,6 +17,9 @@ pub(super) fn shortcut_message(
         return None;
     }
     match key {
+        keyboard::Key::Named(keyboard::key::Named::F1) => {
+            Some(Message::ShowShortcuts)
+        }
         keyboard::Key::Character(value)
             if modifiers.command() && value.eq_ignore_ascii_case("n") =>
         {
@@ -190,6 +193,9 @@ impl FastFill {
 }
 
 pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
+    if let Some(task) = super::help::update(state, &message) {
+        return task;
+    }
     #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
     if let Some(task) = super::camera::update(state, &message) {
         return task;

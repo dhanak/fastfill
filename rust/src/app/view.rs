@@ -85,6 +85,7 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
     ]
     .extend(super::rail::overlay(state))
     .extend(super::confirmation::view(state))
+    .extend(super::help::view(state))
     .width(Fill)
     .height(Fill)
     .clip(true)
@@ -104,6 +105,7 @@ pub(super) fn document(state: &FastFill) -> Element<'_, Message> {
                 && state.project.is_idle()
                 && !state.confirm_delete_all
                 && !state.confirm_delete_page
+                && !state.show_shortcuts
                 && state.dragged_page.is_none(),
             modifiers: state.modifiers,
             layer: CanvasLayer::Overlay,

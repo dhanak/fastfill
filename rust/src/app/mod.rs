@@ -4,6 +4,7 @@ mod confirmation;
 mod controller;
 mod export;
 mod export_io;
+mod help;
 #[cfg(test)]
 mod interaction_tests;
 mod page_edit;
@@ -57,6 +58,8 @@ const DEFAULT_PAGE: PageSize = PageSize::new(612.0, 612.0 * 1_123.0 / 794.0);
 const TEXT_EDITOR_ID: &str = "inline-text-editor";
 
 #[derive(Default)]
+// Independent UI flags; document/workflow state stays with its owners.
+#[allow(clippy::struct_excessive_bools)]
 struct FastFill {
     pages: Pages,
     project: ProjectSession,
@@ -68,6 +71,7 @@ struct FastFill {
     status_is_error: bool,
     confirm_delete_all: bool,
     confirm_delete_page: bool,
+    show_shortcuts: bool,
     dragged_page: Option<PageDrag>,
     // Shared by the clipped rail and its floating layer; not document state.
     rail_motion: std::cell::RefCell<rail::Motion>,
@@ -169,6 +173,8 @@ pub(crate) enum Message {
     ConfirmDeleteAll,
     KeepAll,
     ModalBackdrop,
+    ShowShortcuts,
+    HideShortcuts,
     SendToBack,
     BringToFront,
     SetColor(AnnotationColor),

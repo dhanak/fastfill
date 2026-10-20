@@ -1,11 +1,15 @@
 //! Shared native camera adapter and standalone probe; no document/UI state.
 
-use crate::image_input::{
-    ImageFormatKind, MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS, decode_image,
-};
+#[cfg(any(target_os = "linux", target_os = "windows", test))]
+use crate::image_input::{ImageFormatKind, decode_image};
+use crate::image_input::{MAX_IMAGE_BYTES, MAX_IMAGE_PIXELS};
 use atomicwrites::{AtomicFile, DisallowOverwrite};
-use image::{DynamicImage, ImageFormat, RgbaImage};
-use nokhwa::utils::{FrameFormat, Resolution};
+#[cfg(any(target_os = "linux", target_os = "windows", test))]
+use image::DynamicImage;
+use image::{ImageFormat, RgbaImage};
+use nokhwa::utils::FrameFormat;
+#[cfg(any(target_os = "linux", target_os = "windows", test))]
+use nokhwa::utils::Resolution;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::ffi::OsString;
@@ -22,6 +26,7 @@ const USAGE: &str = "Usage: camera_probe list | formats INDEX | \
     capture INDEX OUTPUT.png [WIDTH HEIGHT FPS FOURCC]\n\
     Defaults: 640 480 30 MJPG. FOURCC: MJPG YUYV NV12 RGB3 BGR3 GREY.";
 type ProbeResult<T> = Result<T, Box<dyn Error>>;
+#[cfg(any(target_os = "linux", target_os = "windows", test))]
 const EXPOSURE_WARMUP: Duration = Duration::from_secs(2);
 
 #[derive(Debug)]
@@ -218,6 +223,7 @@ pub fn run() -> ProbeResult<()> {
     }
 }
 
+#[cfg(any(target_os = "linux", target_os = "windows", test))]
 fn first_frame<T>(
     wait_for_exposure: bool,
     mut read: impl FnMut() -> ProbeResult<T>,
@@ -267,6 +273,7 @@ fn supervise(
     }
 }
 
+#[cfg(any(target_os = "linux", target_os = "windows", test))]
 fn decode(spec: &Spec, bytes: &[u8]) -> ProbeResult<RgbaImage> {
     spec.validate()?;
     if bytes.is_empty() || bytes.len() > MAX_IMAGE_BYTES {

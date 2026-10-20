@@ -131,12 +131,19 @@ pub(super) fn stream(
 #[cfg(target_os = "windows")]
 fn open(
     index: u32,
-    request: nokhwa::utils::RequestedFormat<'_>,
-) -> ProbeResult<nokhwa::Camera> {
-    Ok(nokhwa::Camera::new(
-        nokhwa::utils::CameraIndex::Index(index),
-        request,
-    )?)
+) -> ProbeResult<
+    std::mem::ManuallyDrop<nokhwa_bindings_windows::wmf::MediaFoundationDevice>,
+> {
+    eprintln!("Camera: opening Media Foundation device {index}.");
+    // Upstream Drop shuts down COM before its source_reader field releases.
+    // One device per isolated helper: let process exit reclaim it instead.
+    let camera = std::mem::ManuallyDrop::new(
+        nokhwa_bindings_windows::wmf::MediaFoundationDevice::new(
+            nokhwa::utils::CameraIndex::Index(index),
+        )?,
+    );
+    eprintln!("Camera: Media Foundation device opened.");
+    Ok(camera)
 }
 
 #[cfg(target_os = "windows")]
@@ -154,14 +161,13 @@ pub(super) fn devices() -> ProbeResult<Vec<Device>> {
 
 #[cfg(target_os = "windows")]
 pub(super) fn modes(index: u32) -> ProbeResult<Vec<Spec>> {
-    // Camera::new also selects/sets a format, so it cannot list an offline
-    // virtual camera's empty modes and needlessly configures working cameras.
-    let mut camera = nokhwa_bindings_windows::wmf::MediaFoundationDevice::new(
-        nokhwa::utils::CameraIndex::Index(index),
-    )?;
+    // Query without choosing/setting a format, including offline virtual cams.
+    let mut camera = open(index)?;
     use nokhwa::utils::FrameFormat;
-    Ok(camera
-        .compatible_format_list()?
+    eprintln!("Camera: reading native capture modes.");
+    let formats = camera.compatible_format_list()?;
+    eprintln!("Camera: read {} native capture modes.", formats.len());
+    Ok(formats
         .into_iter()
         .take(4096)
         .map(|format| {
@@ -190,46 +196,39 @@ pub(super) fn stream(
     wait_for_exposure: bool,
     mut receive: impl FnMut(RgbaImage) -> ProbeResult<bool>,
 ) -> ProbeResult<()> {
-    use nokhwa::utils::{CameraFormat, RequestedFormat, RequestedFormatType};
+    use nokhwa::utils::CameraFormat;
     let format = CameraFormat::new_from(
         spec.width,
         spec.height,
         spec.format()?,
         spec.fps,
     );
-    let accepted = [spec.format()?];
-    let mut camera = open(
-        index,
-        RequestedFormat::with_formats(
-            RequestedFormatType::Exact(format),
-            &accepted,
-        ),
-    )?;
-    camera.open_stream()?;
+    let mut camera = open(index)?;
+    camera.set_format(format)?;
+    camera.start_stream()?;
     let started = Instant::now();
     let result: ProbeResult<()> = (|| {
-        let mut frame = first_frame(
-            wait_for_exposure,
-            || Ok(camera.frame()?),
-            || started.elapsed(),
-        )?;
-        loop {
-            if frame.resolution().width() != spec.width
-                || frame.resolution().height() != spec.height
-                || frame.source_frame_format() != spec.format()?
+        let mut read = || -> ProbeResult<Vec<u8>> {
+            let actual = camera.format_refreshed()?;
+            if actual.resolution().width() != spec.width
+                || actual.resolution().height() != spec.height
+                || actual.format() != spec.format()?
             {
                 return Err("Driver changed the requested format.".into());
             }
-            if !receive(decode(spec, frame.buffer())?)? {
+            Ok(camera.raw_bytes()?.0.into_owned())
+        };
+        let mut frame =
+            first_frame(wait_for_exposure, &mut read, || started.elapsed())?;
+        loop {
+            if !receive(decode(spec, &frame)?)? {
                 return Ok(());
             }
-            frame = camera.frame()?;
+            frame = read()?;
         }
     })();
-    let stopped = camera.stop_stream();
-    result?;
-    stopped?;
-    Ok(())
+    camera.stop_stream();
+    result
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]

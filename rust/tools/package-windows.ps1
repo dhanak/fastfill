@@ -64,10 +64,14 @@ $startInfo.UseShellExecute = $false
 $startInfo.CreateNoWindow = $true
 $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
-foreach ($query in @("invalid", "list")) {
+foreach ($query in @("invalid", "list", "modes")) {
     $startInfo.ArgumentList.Clear()
     $startInfo.ArgumentList.Add("--fastfill-camera-query")
     $startInfo.ArgumentList.Add($query)
+    if ($query -eq "modes") {
+        # Exercise native open errors without activating a camera.
+        $startInfo.ArgumentList.Add("4294967295")
+    }
     $process = [Diagnostics.Process]::Start($startInfo)
     try {
         $outputTask = $process.StandardOutput.ReadToEndAsync()
@@ -92,6 +96,9 @@ foreach ($query in @("invalid", "list")) {
                 $reply -isnot [System.Collections.IDictionary] -or
                 -not ($reply.ContainsKey("Ok") -or $reply.ContainsKey("Err"))) {
                 throw "Camera query pipe check failed: $stdout $stderr"
+            }
+            if ($query -eq "modes" -and -not $reply.ContainsKey("Err")) {
+                throw "Invalid camera index must return an error catalog."
             }
         }
     }

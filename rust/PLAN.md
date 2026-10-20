@@ -731,7 +731,7 @@ SP6 hardware calibration remain deferred, separate from laptop acceptance.
 
 ### 7. Packaging and replacement decision — in progress
 
-#### 7A. Prebuilt Windows test ZIP — Windows retest deferred
+#### 7A. Prebuilt Windows test ZIP — Windows camera follow-up
 
 - [x] Build an optimized Windows x64 EXE in a dedicated CI job, with a static
       C runtime and release dependency cache; do not require a local compiler.
@@ -751,7 +751,9 @@ SP6 hardware calibration remain deferred, separate from laptop acceptance.
       and a brief Windows test; console/camera follow-up fixes are recorded
       below, not assumed verified from this initial test.
 - [ ] Retest GUI-only startup and camera modes on Windows after the fix.
-      User has no Windows access now; defer this check, not UI development.
+      User reports good Windows UI/system light theme on 2026-10-20, but
+      mode discovery crashes with 0xc0000005. Retest the cleanup workaround
+      and stage diagnostics below; do not count the camera as accepted.
 - [ ] User checkpoint: download/extract on Windows without Rust installed;
       launch, open/save/export a project and try the SP6 cameras when available.
       Keep prior physical sleep/touch/DPI calibration deferrals explicit.
@@ -911,6 +913,27 @@ SP6 hardware calibration remain deferred, separate from laptop acceptance.
       User accepts the follow-up on 2026-10-20. Windows testing follows the
       user's push; keep that validation separate from Linux acceptance.
 
+#### 7G. In-app shortcuts reference — manually accepted
+
+- [x] Add Shortcuts before Undo and F1 in the main editor. Show a themed,
+      scrollable Context / Shortcut / Action table with bold shortcuts.
+- [x] Document implemented project, history, selection, geometry, inline text,
+      navigation, page-reordering and page-correction controls. Distinguish
+      platform command shortcuts from literal Ctrl geometry modifiers.
+- [x] Preserve pending text, numeric drafts, selection and history when
+      opening/closing help. Block background input and late edit messages;
+      keep recovery/analysis completions and normal close guards working.
+- [x] Fit narrow/short windows without cutting off descriptions. Reuse iced
+      table, scrolling, modal styles and existing dependencies.
+- [x] Automate lifecycle, input isolation, command routing, layout and themed
+      rendering checks; validate native, WASM, lint and formatting.
+- [x] User checkpoint: open with button/F1, scroll the table, close with
+      Close/Escape, resume pending text, and inspect a small window.
+      User passes Close/Escape, pending text/format and narrow-window checks
+      on 2026-10-20 and finds the button. Keep it before Undo. Follow-up:
+      show platform-correct shortcuts in the table; remove the redundant
+      modifier legend entirely, as requested.
+
 #### Remaining UI polish and replacement gate — not started
 
 - Polish the UI for regular use: cohesive visual styling and touch layout.
@@ -918,6 +941,13 @@ SP6 hardware calibration remain deferred, separate from laptop acceptance.
 - Profile the browser harness if full-release builds remain sluggish;
   debug builds now lightly optimize FastFill as well as its dependencies.
 - Page-card appearance, drag feedback and animation are accepted at 7F1–7F3.
+- Restyle remaining header, page, navigation, camera and correction buttons
+  as a separate checkpoint: consistent sizing, spacing, corners and states;
+  reserve accent color for primary actions/toggles, use quieter secondary
+  actions and clear destructive styling. Do not copy the C# layout blindly.
+- Add a searchable command palette on Ctrl+. to find and run commands.
+  Reuse existing command handlers and availability guards; keep this as a
+  future polish item, not a shortcut implemented by the current help slice.
 - Separate prototype artifacts from existing C# release names/assets.
 - Portable Windows build, documented Linux dependencies/package, icons,
   diagnostics, file opening, help, and user documentation.
@@ -3822,6 +3852,115 @@ unsigned on master; no feature branch needs merging. Pause after committing
 while the user rebases, signs, pushes and tests on Windows. Do not start the
 next UI slice until asked to continue.
 
+### 2026-10-20 — Resume after signing; shortcuts reference in 7G
+
+- Resume from the owner's rebased/signed master with a clean worktree.
+  Leave Windows testing separate; no new hardware result has been reported.
+- TDD red: the F1 route, opening the reference and blocking queued edits all
+  fail before implementation. Add ten checks using existing native widgets
+  and Rust's test harness; no new test framework or dependencies.
+- Add Shortcuts before Undo and F1 in the main editor. Use iced's table in
+  a scrollable themed modal with Context / Shortcut / Action columns and bold
+  shortcut styling. Keep descriptions wrapped, with a pinned title/Close row.
+  Document actual commands/gestures, not nonexistent letter-key tool bindings.
+- Keep help local to its own module. Preserve pending text, formatting,
+  numeric entry, selection and history; unfocus fields while open and restore
+  their focus on Close/Escape. Block pointer input and late edit messages.
+  Keep recovery and analysis completions flowing and preserve close guards.
+  Do not open over another workflow or an annotation/page drag.
+- Verify real button routing, backdrop mouse/touch/wheel isolation, scrolling
+  and horizontal bounds at 320x480, 640x360 and 1200x800. Inspect light/dark
+  software previews at 1x/2x. All 608 native/all-target tests, strict Clippy,
+  WASM compilation, formatting and whitespace checks pass; replay stays opt-in.
+- Record the user's request to restyle all remaining buttons as a separate
+  checkpoint, including header/page/navigation/camera/correction actions.
+  No C#, format, camera-calibration, dependency or workflow changes. Leave
+  edits uncommitted and host build outputs untouched.
+
+Manual checkpoint 7G — accepted 2026-10-20:
+
+1. Open Shortcuts with its button and F1. Scroll to the bottom; inspect bold
+   shortcut labels and the Context column. Close with Close and Escape.
+2. During inline text editing, change formatting, open/close help, then keep
+   typing. Help must not accept/cancel the draft. Test a pending font-size
+   entry too; Escape closes help before it discards the numeric/text draft.
+3. Try a narrow/short window. Descriptions must wrap, Close stay accessible,
+   background controls stay blocked and the editor stay in place. Browser F1
+   may be reserved; use the button there. Real touch/Windows checks deferred.
+
+User passes the checks and locates the Shortcuts button. Keep its placement.
+Replace the all-platform explanatory note with the compiled Ctrl/Cmd value;
+cover note and labels together, including unchanged literal Ctrl geometry.
+
+### 2026-10-20 — Windows camera cleanup and CI warning follow-up
+
+- Inspect logs_106864594790.zip and the Windows screenshot. User reports
+  cached Linux/Windows checks below three minutes, WASM 24 seconds and macOS
+  just under nine minutes. Windows UI/theme looks good; the selected camera
+  cannot enumerate modes because its helper exits with 0xc0000005.
+- Trace a concrete lifetime hazard in nokhwa-bindings-windows 0.4.6: its
+  device Drop calls MFShutdown/CoUninitialize before the source-reader field
+  releases. This is a plausible cause, not a confirmed Windows crash stack.
+  Microsoft documents COM uninitialization as the final COM call.
+- Use the existing low-level adapter with ManuallyDrop for one camera per
+  isolated helper. Defer native object cleanup to process exit, including
+  error paths; keep this intentional workaround out of the long-lived GUI.
+  Preserve exact mode selection, per-frame format/dimension/stride checks,
+  preview exposure behavior, cancellation and parent kill/reap timeouts.
+- Add native open/enumeration stage messages on the bounded diagnostic pipe.
+  Extend the simulated failed-helper check to retain both stage messages.
+  Extend extracted Windows ZIP checks with a nonexistent camera index,
+  requiring a controlled error catalog without activating a real camera.
+- Gate decoder/warm-up helpers and imports to Linux/Windows or unit tests.
+  Mark the intentionally unreachable macOS camera-entry variant explicitly.
+  This addresses all four own-code warnings. Leave the third-party
+  block 0.1.6 future-compatibility warning visible and documented: cargo tree
+  traces it through wgpu-hal/metal, not our camera code. Do not fork/upgrade
+  the graphics stack merely to hide it.
+- TDD red: the new widget check rejects the old all-platform help note.
+  Share a compiled Ctrl/Cmd constant between note and shortcut labels;
+  preserve literal Ctrl geometry and accepted help/button behavior.
+- Validation: all 608 native/all-target tests, strict Clippy, WASM,
+  formatting and whitespace checks pass. Rerun the extended failed-helper
+  regression separately; both stage messages survive the simulated crash.
+  Windows/macOS targets and PowerShell are unavailable locally; do not
+  install tools. Existing CI must compile those platforms/check packaging.
+  Keep C#, dependency versions, cache keys and workflow files unchanged;
+  leave changes uncommitted and preserve the user's screenshot/log archive.
+
+Windows retest after the next CI ZIP:
+
+1. Open Camera, select the real webcam and Refresh cameras. Check modes now
+   populate, preview starts and manual capture/Use photo works. Try the
+   disconnected virtual camera too; empty modes must remain recoverable.
+2. If it still fails, send the complete error, including the last Camera
+   stage line. That distinguishes device-open, enumeration and later failure
+   instead of attributing every 0xc0000005 to permissions or UI code.
+
+### 2026-10-20 — Remove the redundant help modifier legend
+
+- Remove the Project/history/Geometry explanatory line. The table already
+  shows platform-correct Ctrl/Cmd shortcuts and literal Ctrl geometry keys.
+- TDD red: assert the rendered legend is absent while actual table cells
+  still contain the current platform's Save shortcut and Ctrl+drag. Keep
+  the same check across narrow/short/wide layouts and retain help lifecycle,
+  scrolling, backdrop isolation and rendering coverage.
+- Keep all other pending help/camera changes untouched and uncommitted.
+- Validation: all ten help tests, strict Clippy, WASM, formatting and
+  whitespace checks pass. Record Ctrl+. command-palette discovery as a
+  future polish item; do not add the binding yet.
+
+### 2026-10-20 — Commit accepted help and camera follow-ups; pause
+
+- User requests a commit and pause. Include 7G's accepted help overlay and
+  platform-correct table without the redundant modifier legend, plus the
+  Windows camera lifetime/diagnostic workaround and CI warning follow-ups.
+- Commit unsigned; exclude the user's camera screenshot and CI log archive.
+  Keep Windows hardware verification open and upstream block warning visible.
+- Stop after committing. Resume at 7H1: main-editor header/page/navigation
+  button styling. Keep 7H2 camera/correction styling and the Ctrl+. command
+  palette separate; do not start those changes in this turn.
+
 ## References
 
 - [iced 0.14 documentation](https://docs.rs/iced/0.14.0/iced/)
@@ -3830,3 +3969,6 @@ next UI slice until asked to continue.
 - [Hayro PDF renderer](https://github.com/LaurenzV/hayro)
 - Existing behavior: [user guide](../docs/USER_GUIDE.md).
 - Existing checks and fixtures: `../src/FastFill.Checks/`, `../tests/`.
+- Windows camera lifetime investigation:
+  [nokhwa bindings source](https://github.com/l1npengtul/nokhwa/blob/senpai/nokhwa-bindings-windows/src/lib.rs),
+  [COM shutdown order](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-couninitialize).
