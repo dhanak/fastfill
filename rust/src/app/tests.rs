@@ -1331,7 +1331,9 @@ pub(super) fn render_themed_element(
         &tree,
         &mut renderer,
         theme,
-        &Style::default(),
+        &Style {
+            text_color: theme.palette().text,
+        },
         Layout::new(&node),
         cursor,
         &Rectangle::new(Point::ORIGIN, logical),
@@ -1341,6 +1343,19 @@ pub(super) fn render_themed_element(
         dpi,
         theme.palette().background,
     )
+}
+
+#[test]
+fn wide_workspace_recovers_page_height_and_separates_the_tools_panel() {
+    let state = rendered_page();
+    let pixels =
+        render_element(view(&state), iced::Size::new(1_200, 800), 1, 1.0);
+    let pixel = |x: usize, y: usize| {
+        let offset = (y * 1_200 + x) * 4;
+        &pixels[offset..offset + 4]
+    };
+    assert_eq!(pixel(680, 200), [240, 230, 210, 255]);
+    assert_ne!(pixel(1_180, 780), [67, 72, 78, 255]);
 }
 
 #[test]
@@ -1371,6 +1386,20 @@ fn main_window_keeps_the_page_rail_separate_from_the_canvas() {
 #[test]
 fn zoomed_panned_page_cannot_paint_over_toolbars_or_the_rail() {
     let mut state = rendered_page();
+    let baseline =
+        render_element(view(&state), iced::Size::new(1_200, 800), 1, 1.0);
+    // Find the actual canvas top, not a hard-coded prototype toolbar height.
+    let toolbar_bottom = baseline
+        .as_chunks::<{ 1_200 * 4 }>()
+        .0
+        .iter()
+        .position(|row| row[180 * 4..181 * 4] == [67, 72, 78, 255])
+        .expect("canvas background beside the fitted page");
+    let panel_left = baseline.as_chunks::<4>().0[780 * 1_200..781 * 1_200]
+        .iter()
+        .rposition(|pixel| *pixel == [67, 72, 78, 255])
+        .expect("canvas background before the sidebar")
+        + 1;
     let viewport = PageRect::new(0.0, 0.0, 1_036.0, 568.0);
     state.navigation.zoom_at(
         4.0,
@@ -1391,7 +1420,7 @@ fn zoomed_panned_page_cannot_paint_over_toolbars_or_the_rail() {
         let scale = usize::try_from(scale).unwrap();
         let page_color = [240, 230, 210, 255];
         assert!(
-            pixels[..200 * scale * width]
+            pixels[..toolbar_bottom * scale * width]
                 .iter()
                 .all(|pixel| *pixel != page_color),
             "page image must not cover the toolbar at {dpi} DPI scale"
@@ -1402,6 +1431,13 @@ fn zoomed_panned_page_cannot_paint_over_toolbars_or_the_rail() {
                     pixels[y * width + x],
                     page_color,
                     "page image must not cover the rail border"
+                );
+            }
+            for x in panel_left * scale..1_200 * scale {
+                assert_ne!(
+                    pixels[y * width + x],
+                    page_color,
+                    "page image must not cover the tools panel"
                 );
             }
         }

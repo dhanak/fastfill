@@ -300,6 +300,35 @@ fn captured_delete_edits_the_field_but_escape_still_cancels_its_draft() {
 }
 
 #[test]
+fn stacked_text_controls_fit_without_horizontal_scroll_or_small_targets() {
+    use iced::advanced::renderer::Headless;
+    use iced::advanced::{layout, widget};
+
+    let renderer =
+        iced::futures::executor::block_on(<iced::Renderer as Headless>::new(
+            iced::Font::with_name("Fira Sans"),
+            iced::Pixels(16.0),
+            Some("tiny-skia"),
+        ))
+        .unwrap();
+    let state = with_text();
+    let format = state.annotations().current_text_format().unwrap();
+    let mut element = panel(&state, format);
+    let mut tree = widget::Tree::new(element.as_widget());
+    let node = element.as_widget_mut().layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(iced::Size::ZERO, iced::Size::new(184.0, 200.0)),
+    );
+    assert_eq!(node.size(), iced::Size::new(184.0, 136.0));
+    assert_eq!(node.children()[0].size(), iced::Size::new(184.0, 40.0));
+    for child in node.children() {
+        assert_eq!(child.bounds().height, CONTROL_HEIGHT);
+        assert!(child.bounds().x + child.bounds().width <= 184.0);
+    }
+}
+
+#[test]
 fn spinner_buttons_and_entry_do_not_grow_with_annotation_font_size() {
     use crate::app::Renderer;
     use iced::advanced::renderer::Headless;

@@ -278,7 +278,7 @@ fn prepared(
             state.camera.draft = None;
             state.navigation.fit();
             state.page_scroll =
-                super::rail::slot_top(state.pages.active_index());
+                super::rail::page_top(state, state.pages.active_index());
             state.input_epoch = state.input_epoch.wrapping_add(1);
             state.status = "Photo added. Adjust framing if needed.".into();
             state.status_is_error = false;

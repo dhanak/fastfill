@@ -17,6 +17,8 @@
   Until conversion and atomic-save tests pass, do not overwrite projects.
 - Reuse existing images, forms, camera sequences, and behavioral checks as
   acceptance fixtures. Do not blindly port the old controller or its bugs.
+- Treat C# as a behavior reference, not a layout specification. Aim for a
+  familiar but more intuitive UI; redesign awkward workflows and grouping.
 - Add dependencies only when their checkpoint needs them. Defer OpenCV,
   camera backends, PDF import/output, and platform integration decisions.
 
@@ -815,30 +817,107 @@ SP6 hardware calibration remain deferred, separate from laptop acceptance.
       replace it with Aa using the existing bundled font. Verify that small
       follow-up headlessly; user explicitly defers scrollbar overlap.
 
+#### 7E. Organized editor workspace — manually accepted
+
+- [x] Use C# as a behavior reference, not a layout constraint. Group tools,
+      contextual properties and selection actions for clearer navigation.
+- [x] On wider windows, replace three toolbar rows with a compact command
+      strip and a fixed-width tools/properties panel. Give the page more
+      vertical space; keep selection actions visible at the panel bottom.
+      Derive panel width from four 40-pixel buttons, three 8-pixel gaps and
+      two 12-pixel padding edges: 208 pixels, with tracks inside padding.
+- [x] Retain a compact horizontal fallback for narrow windows. Reserve
+      scrollbar space rather than drawing tracks over button targets.
+- [x] Keep tools/actions stable when selection or properties change. Stack
+      text controls in the panel, preserve all existing edit transactions,
+      and hide only inapplicable properties. Scroll properties on short views.
+- [x] Reuse native layout/scrolling and shared control builders; add no new
+      dependencies, document state or C# changes. Defer animated page-rail
+      redesign, startup/help screens and packaging to separate checkpoints.
+- [x] Automate layout, command routing, short/narrow views and clipping;
+      validate native tests, WASM, lint and headless previews.
+- [x] User checkpoint on Linux: compare workspace at normal/narrow sizes,
+      use text/shape/group properties and fixed selection actions, then
+      zoom/pan near the panel. Keep Windows/real-touch checks deferred.
+      User confirms functionality on 2026-10-20. After an alignment follow-up,
+      clarify the desired layout: keep a left-aligned four-column grid and
+      aligned properties; remove excess panel width, not stagger the rows.
+      User accepts the final padding and common-properties-first refinements.
+
+#### 7F1. Floating page thumbnail and insertion gap — manually accepted
+
+- [x] Keep each grabbed point attached to a translucent thumbnail above the
+      UI, including outside the rail. Retain mouse/touch pointer ownership.
+- [x] On an actual drag, remove the source card from the rail and show a
+      full-card insertion gap. Keep a simple click as page selection.
+- [x] Preserve document order until a valid drop. Release outside the rail
+      or over its scrollbar, Escape, lost touch/focus or resize must cancel.
+- [x] Retain wheel/scrollbar navigation, release-position drop targeting and
+      empty-space drops below the last card. Remove drag instruction labels.
+- [x] Keep rail input, display and drag geometry local; reuse native canvas
+      layering and opacity without a widget or animation dependency.
+- [x] Automate grab offsets, gap slots, pointer ownership, cancellation,
+      clipping, overlay layering and unchanged document order while dragging.
+- [x] User checkpoint: drag from different thumbnail locations; cross the
+      canvas/toolbar, drop between pages or below the last one, and cancel
+      outside/by Escape. Check scrolling and ordinary click selection.
+      User confirms smooth behavior on 2026-10-20. Continue to 7F2.
+
+#### 7F2. Animated rail shifts and settling — manually accepted
+
+- [x] Ease neighboring cards around the insertion gap, then slide the floating
+      card into its destination or back to its source on cancellation.
+- [x] Keep ordering commits separate from visual settling; handle interrupted
+      animations and scrolling. Preserve the visible gap's scroll position on
+      valid drops; keep arrow-button auto-scroll unchanged.
+- [x] Request native redraws only while animating, without application tick
+      messages, background timers or animation dependencies. Keep presentation
+      state shared by the clipped rail and floating canvas in the rail module.
+- [x] Use 180 ms eased transitions. Support instant motion with desktop
+      FASTFILL_REDUCED_MOTION=1 and browser prefers-reduced-motion. Defer native
+      OS preference lookup until a shared platform settings API is needed.
+- [x] Validate timing, reversals, grabbing moving cards, reduced motion,
+      cancellation, scrolling, stale geometry, redraw shutdown and layering;
+      run full native, WASM, lint and formatting checks.
+- [x] User checkpoint on Linux: inspect gap shifts and drop/cancel slides;
+      reverse direction quickly, grab again during settling and scroll while
+      dragging. Check simple clicks and instant-motion opt-out. Touch deferred.
+      User accepts the animations on 2026-10-20. Clean up rail cards next.
+
+#### 7F3. Image-first page cards — manually accepted
+
+- [x] Remove filename/UID and annotation-count labels. Put the page number in
+      a narrow column to the left of the preview, not in its own row.
+- [x] Enlarge previews within the existing rail width; fit card heights to
+      image aspect ratios, with shorter landscape cards and a touch-size floor.
+      Preserve aspect ratio, selection feedback and accepted drag animations.
+- [x] Keep controls, page operations and thumbnail contents unchanged; do not
+      expand this appearance slice into annotated-preview caching or a broader
+      page-control redesign.
+- [x] Check portrait/landscape/blank cards, metadata-independent rendering,
+      both themes/DPI scales, selection, clipping and drag regressions.
+- [x] User checkpoint: inspect larger previews, left-side page numbers and
+      selected cards; verify click/reorder/cancel still feel right.
+      User accepts the base appearance on 2026-10-20, requesting the follow-up
+      below before proceeding.
+- [x] Top-align numbers and vary card heights. Share layout across rendering,
+      scrolling, insertion gaps, hit-testing and animation. Resolve queued
+      pointer input against current geometry rather than stale widget targets.
+- [x] Update the floating card's number during drag, consistently with its
+      proposed insertion slot. Preserve original numbering on cancellation.
+- [x] Follow-up checkpoint: inspect mixed portrait/landscape/square cards and
+      drag them past each other; check top alignment, unique preview numbers,
+      settling, cancellation and scrolling. Real touch remains deferred.
+      User accepts the follow-up on 2026-10-20. Windows testing follows the
+      user's push; keep that validation separate from Linux acceptance.
+
 #### Remaining UI polish and replacement gate — not started
 
 - Polish the UI for regular use: cohesive visual styling and touch layout.
   Stable confirmations and compact tools have their own checkpoints above.
-- During the toolbar/panel redesign, reserve scrollbar space so horizontal
-  tracks do not cover button bottoms. User defers this temporary overlap.
 - Profile the browser harness if full-release builds remain sluggish;
   debug builds now lightly optimize FastFill as well as its dependencies.
-- Redesign the page rail with animated reorder feedback:
-  - Draw a semi-transparent thumbnail above the UI, keeping the original grab
-    offset so it follows the mouse/touch pointer even outside the rail.
-  - Remove the dragged page from the displayed sequence; show a larger gap at
-    its prospective insertion point. Animate neighboring pages as it moves.
-  - On Escape or release outside the rail, animate the thumbnail back to its
-    original place and close the gap. On a valid drop, animate it into the
-    new position. Commit page order only on a valid drop; settling is visual.
-  - Remove the temporary "Drag page to reorder" captions during the redesign.
-  - Reuse iced opacity, overlays, and redraw scheduling with a small eased
-    transition (initially 150–200 ms). Request frames only while animating.
-    Keep a reduced-motion/instant-settle path and test interrupted animations,
-    pointer offsets, scrolling, cancellation, and final ordering.
-  - Feasible, moderate scope: estimate a few hundred production lines plus
-    tests, localized to rail layout, drag state, and the floating overlay.
-    No animation dependency or document-model rewrite should be needed.
+- Page-card appearance, drag feedback and animation are accepted at 7F1–7F3.
 - Separate prototype artifacts from existing C# release names/assets.
 - Portable Windows build, documented Linux dependencies/package, icons,
   diagnostics, file opening, help, and user documentation.
@@ -3501,6 +3580,247 @@ sleep and Surface calibration remain deferred, not inferred from laptop tests.
 - Validate the Aa follow-up: all 563 native/all-target tests, strict Clippy,
   WASM compilation, formatting and whitespace pass. Inspect light/dark
   previews, including selected/disabled states. Leave changes uncommitted.
+
+### 2026-10-20 — Organized editor workspace, checkpoint 7E
+
+- Commit accepted 7B–7D as unsigned 49f27bc. Record that C# is a behavior
+  reference, not a visual template; keep polish in reviewable UI slices.
+- TDD red: the old three-row layout paints toolbar chrome, not the page, at
+  the new expected page position. Retain the headless regression.
+- Give wider editor areas a 248-pixel tools/properties panel and one command
+  strip, recovering 112 vertical pixels for the document. Keep the existing
+  horizontal layout below an 840-pixel workspace width, excluding the rail.
+- Keep layer/delete actions in two equal-width rows at the panel bottom;
+  retain Reset angle in the command strip. Dim unavailable actions, hide
+  only inapplicable properties and scroll content independently on short views.
+- Share tool, property, color and selection-action builders across layouts.
+  Stack font/size/format controls in the panel, with a full-width 40-pixel
+  typeface picker. Keep command handlers, text transactions and model state
+  unchanged. Leave page-rail redesign and header/startup/help work separate.
+- Reserve scrollbar space below horizontal targets without moving buttons
+  as tracks appear. Keep style dimensions local to appearance.rs, and remove
+  the old annotation-count width branch unused by the compact fallback.
+- Add seven checks for page height, all-tool/breakpoint layout stability,
+  footer geometry, real mouse/touch command routing, scrollbar clearance,
+  stacked text targets and headless light/dark workspace previews. Extend
+  zoomed-image clipping coverage to the panel; derive the toolbar boundary
+  from the fitted viewport rather than the previous fixed prototype height.
+- Use the theme foreground in the headless renderer, matching the app rather
+  than painting dark-theme test labels black. Preview Navigate/Rectangle/Text
+  in both layouts; keep generated images/builds under /tmp only.
+- Validation: all 570 native/all-target tests pass; exhaustive replay remains
+  opt-in. Strict Clippy, WASM compilation, formatting and whitespace checks
+  pass. Keep C# code, release workflows and file formats unchanged.
+- Stop for the Linux checkpoint above. New workspace changes remain
+  uncommitted; Windows camera, real touch and Surface calibration stay deferred.
+- User confirms the Linux checkpoint with an alignment follow-up: center
+  each sidebar tool row, including its final three tools. Use native row and
+  container alignment; keep icons, target sizes, spacing and options unchanged.
+  Reproduce the offset in a layout regression covering Line/Text at tall and
+  scrollable heights. Keep input-routing checks independent of the wrapper.
+- Validate the alignment follow-up: all 571 native/all-target tests, strict
+  Clippy, WASM compilation, formatting and whitespace checks pass. Inspect
+  the updated dark-theme preview. Leave changes uncommitted.
+- User clarifies that per-row centering breaks the grid. Restore aligned
+  columns, derive a 208-pixel panel from its controls/gaps/padding, and align
+  options to the same content edges. Place the scrollbar in existing right
+  padding so its appearance never squeezes the grid to three columns.
+- Let the stacked font-size entry flex within the panel instead of imposing
+  a fixed field width. Keep target sizes, font-size semantics and bottom
+  actions unchanged. Replace the superseded centering check with compact
+  grid/option alignment checks at tall and scrollable heights; verify text
+  controls at 184-pixel content width. Derive the image-clipping test's panel
+  boundary from the actual rendered viewport rather than the old width.
+- Validate the compact-panel revision: all 571 native/all-target tests,
+  strict Clippy, WASM compilation, formatting and whitespace checks pass.
+  Inspect the updated 208-pixel dark-theme panel; keep changes uncommitted.
+- Put Color first in both sidebar and compact options, then applicable line
+  width, then tool-specific text/snap/fill controls. Reproduce the old swatch
+  jump (240 to 288 pixels on switching Rectangle to Checkmark) and retain a
+  rendering regression across all nine drawing tools.
+- Apply symmetric 12-pixel padding directly to content and footer instead of
+  splitting it between the outer container and inner sections. Retain the
+  208-pixel panel, four columns and scrollbar within padding. Explicitly
+  verify equal left/right insets at tall and scrollable heights.
+- Measure the supplied screenshot: the panel spans x=5..212 and the first
+  tool row x=17..200, confirming equal 12-pixel insets. The crop includes
+  five pixels outside the left edge and seven outside the right edge; avoid
+  compensating for that crop difference in the application layout.
+- Validate stable properties: all 572 native/all-target tests, strict Clippy,
+  WASM compilation, formatting and whitespace pass. Inspect the updated
+  dark-theme panel; leave changes uncommitted.
+
+### 2026-10-20 — Accept 7E; floating page-reorder checkpoint 7F1
+
+- User accepts the compact sidebar, symmetric padding and stable property
+  ordering. Close 7E without committing; keep the staged work intact.
+- Split the requested animated rail into two manual checkpoints: floating
+  thumbnail/gap behavior now, then neighboring-card and drop/cancel animation.
+- TDD red: dragging a page beyond the rail leaves no floating paper above
+  the tools panel. Keep the regression and verify both themes at 1x/2x DPI.
+  Use a page-sized fixture, avoiding software-renderer rounding of a 1px
+  image enlarged hundreds of times.
+- Move drag geometry and event handling into the rail module; separate its
+  controls/card rendering from input. Replace six global message variants
+  with one rail event. Reuse existing page selection/reorder workflows and
+  native canvas layering; add no dependency or document-format changes.
+- Keep the grabbed point attached to an 82%-opaque floating card. Once the
+  pointer travels four logical pixels, hide its source and shift neighbors
+  around a full-card highlighted gap. Remove redundant drag instructions.
+- Preserve document order until a valid release. Use the release position,
+  accept empty space below the last card, and reject the scrollbar/outside
+  rail. Escape, lost touch/focus and resize restore the original order.
+- Retain wheel and scrollbar navigation. Wheel scrolling updates the gap,
+  not the floating card's position. Keep the original mouse/touch owner and
+  tolerate native press/move/release batches before a view rebuild; clear
+  stale captures after explicit cancellation so the next grab works.
+- Add eight regression checks for ghost layering, full-card gap rendering,
+  threshold/jitter, grab offsets, scrolling, pointer ownership, native event
+  batching, interruption and event pass-through. Preserve prior rail tests.
+- Validation: all 580 native/all-target tests, strict Clippy, WASM compilation,
+  formatting and whitespace checks pass. Exhaustive camera replay remains
+  opt-in. No C# changes; no commit. Keep Windows/real-touch checks deferred.
+- Stop for the Linux checkpoint below. Movement is intentionally immediate
+  in 7F1; animation remains separate in 7F2.
+
+Manual checkpoint 7F1 — accepted 2026-10-20:
+
+1. Open at least three distinct pages. Click to switch, then drag from
+   different parts of a thumbnail. Confirm the grabbed point stays attached
+   across the document, toolbar and tools panel without duplicate source cards.
+2. Move up/down the rail; confirm a full-card gap previews insertion. Drop
+   between pages and below the last one. Check the resulting page order.
+3. Cancel outside the rail, over the scrollbar or with Escape. Confirm order
+   stays unchanged and another drag works immediately. In a short window,
+   check wheel scrolling while dragging and scrollbar dragging when idle.
+
+User confirms all behavior works smoothly. Continue with animation in 7F2.
+
+### 2026-10-20 — Accept 7F1; animate page reordering in 7F2
+
+- Mark the floating-thumbnail/gap checkpoint manually accepted. Keep all
+  changes uncommitted and preserve the user's staged sidebar changes.
+- TDD red: presentation has no timed intermediate positions or settling
+  state. Add deterministic-clock checks before the animation implementation;
+  retain the earlier ownership, batching, cancellation and layering checks.
+- Add rail-local presentation state shared by the rail and floating canvas.
+  Use native redraw requests, not application tick messages or a background
+  timer. Keep all animation out of page metadata, history and recovery.
+- Ease neighboring cards toward their new positions over 180 ms. Retarget
+  from each visible position on rapid reversals, without a positional jump.
+  Follow the pointer immediately; animate only neighbors and released cards.
+- Commit valid drops once, then slide the floating card into the destination.
+  Slide canceled cards back; hide their stationary source until they land.
+  Preserve the rail scroll offset on drag/drop so the destination does not
+  jump away. Keep arrow-button auto-scroll and existing data safety unchanged.
+- Hit-test visible animated positions, not eventual slots. Allow a new grab
+  to supersede settling, and retarget the settling card if the rail scrolls.
+  Discard obsolete geometry on resize/modal entry or project replacement.
+- Stop native redraw requests when transitions finish, including while a
+  held thumbnail is stationary. Support instant transitions via desktop
+  FASTFILL_REDUCED_MOTION=1 and browser prefers-reduced-motion; explicitly
+  document that native OS motion preferences are not queried automatically.
+- Add eight checks for intermediate/reversed motion, commit-before-settle,
+  zero-duration transitions and re-enabling motion, interruption/hit-testing,
+  scroll retargeting, stale geometry, idle redraw shutdown and floating-layer
+  rendering. Cover the latter in both themes at 1x/2x scale with a distinctive
+  source-paper color; no GPU, sleeps or video fixtures are needed.
+- Validation: all 588 native/all-target tests pass; exhaustive replay remains
+  opt-in. Strict Clippy, WASM, formatting and whitespace checks pass. No C#,
+  dependency, file-format, release-workflow or host target-directory changes.
+
+Manual checkpoint 7F2 — accepted 2026-10-20:
+
+1. Drag up/down through several pages, including rapid direction reversals.
+   Neighbors should slide around the gap; the grabbed thumbnail must stay
+   attached to the cursor without lag.
+2. Drop into the gap, then cancel another drag outside the rail or with Esc.
+   Check the slide to the destination/source, no duplicate card, correct page
+   order and no rail jump on a valid drop. Grab again during settling.
+3. In a short window, scroll while dragging and immediately after release.
+   Check that settling adapts to scrolling and normal clicks still select.
+   Optionally launch with FASTFILL_REDUCED_MOTION=1 for instant transitions.
+
+User accepts the animations. Continue with larger, less cluttered rail cards;
+user explicitly chooses numbers to the left, not overlaid or below the image.
+
+### 2026-10-20 — Accept 7F2; image-first rail cards in 7F3
+
+- Mark the animated reordering checkpoint accepted. Address the user's rail
+  appearance feedback now, as a small follow-up rather than a broader layout
+  redesign. User chooses page numbers in a left gutter, not in a separate
+  caption row or overlaid on the image.
+- TDD red: changing the image filename to its asset UUID and adding an
+  annotation changes card pixels. Keep this regression; metadata must not
+  displace the page preview or appear as a card label.
+- Remove filename/UID and annotation-count captions. Reserve a narrow number
+  gutter; fit images into the rest of the card with their aspect ratio intact.
+  Portrait previews grow from 72 to about 128–138 logical pixels high. Blank
+  paper uses the page's own aspect ratio. Keep rail width and card slots fixed.
+- Use rounded card/gap outlines and subtle paper shadows. Preserve theme
+  contrast, active-card selection and the same appearance while dragging.
+  Leave page controls, annotations, data formats and accepted input/animation
+  logic unchanged; annotated-preview generation is outside this slice.
+- Add three checks for portrait/landscape/blank preview geometry, rendering
+  independent of asset names and annotation counts, and one-/two-digit page
+  numbers fitting beside selected previews. Render both themes at 1x/2x.
+- Validation: all 591 native/all-target tests, strict Clippy, WASM compilation,
+  formatting and whitespace checks pass. Exhaustive replay remains opt-in.
+  Inspect light/dark page 1/20 snapshots under /tmp; preserve staged changes,
+  keep new edits uncommitted and leave host build outputs untouched.
+
+Manual checkpoint 7F3 — base appearance accepted 2026-10-20:
+
+1. Inspect portrait/landscape and blank-page cards: larger portrait previews,
+   left-side numbers, no filename/UUID/count clutter and clear active selection.
+2. Click, drag, drop and cancel a page once. The accepted reordering behavior
+   and cursor-attached card should remain unchanged apart from appearance.
+
+User accepts the base appearance. Follow up with top-aligned numbers, shorter
+landscape cards and consistent numbering of the dragged page.
+
+### 2026-10-20 — Variable-height cards and consistent drag numbering
+
+- Top-align page numbers in the left gutter. Fit each preview to its image
+  aspect ratio, capped at 138 logical pixels of paper height; retain a
+  40-pixel minimum card target for very wide pages. Keep rail width unchanged.
+- TDD red: portrait and landscape cards still have equal heights, and the
+  floating number retains its original index. Load fonts and assert visible
+  glyph pixels in the rendering check so missing fonts cannot mask failures.
+- Share one rail-local layout for painting, hit-testing, scroll extent,
+  scrollbar, insertion gaps and animation offsets. Size the gap to the actual
+  dragged card. Compare dragged and neighboring card centers to avoid target
+  oscillation when a short card moves past a tall one.
+- Resolve raw native pointer events against the current application layout,
+  not stale precomputed targets from a queued event batch. Use measured page
+  offsets for import, camera, PDF, deletion and arrow-reordering scroll targets.
+- Number all cards by their proposed insertion slots during dragging,
+  including the floating card. Use committed order after drop and original
+  order after cancellation; preserve existing settling animations.
+- Add seven checks covering mixed-height geometry, all 16 source/target
+  permutations over four differently shaped pages, minimum target size,
+  source-sized gaps, unique labels, stable short/tall dragging, queued input,
+  animation landing, scroll offsets and rendered floating numbers. Update
+  appearance checks to verify the number gutter is top-aligned.
+- Validation: all 598 native/all-target tests pass; exhaustive replay remains
+  opt-in. Strict Clippy, WASM compilation, formatting and whitespace checks
+  pass. Inspect mixed-page and page-20 snapshots in both themes at 1x/2x.
+  No C#, format, dependency or workflow changes. Preserve staged work, leave
+  these edits uncommitted and keep host build outputs untouched.
+
+Manual checkpoint 7F3 — follow-up accepted 2026-10-20:
+
+1. Mix portrait, landscape and square pages. Check top-aligned numbers,
+   shorter landscape cards and unchanged preview aspect ratios.
+2. Drag mixed-size pages up/down. Check gap size, neighboring motion and the
+   floating page's proposed number, with no duplicate labels. Drop and cancel.
+3. In a short window, scroll normally and while dragging. Check click targets
+   and settling after release. Real touchscreen validation remains deferred.
+
+User accepts the result. Commit the accepted workspace/sidebar and rail slices
+unsigned on master; no feature branch needs merging. Pause after committing
+while the user rebases, signs, pushes and tests on Windows. Do not start the
+next UI slice until asked to continue.
 
 ## References
 

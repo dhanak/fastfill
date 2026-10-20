@@ -10,6 +10,8 @@ use iced::widget::{Row, Space, button, column, container, row, scrollable};
 use iced::widget::{text, tooltip};
 use iced::{Element, Fill};
 
+mod panel;
+
 const COLORS: [(&str, AnnotationColor); 6] = [
     ("Black", AnnotationColor::Black),
     ("White", AnnotationColor::White),
@@ -19,19 +21,50 @@ const COLORS: [(&str, AnnotationColor); 6] = [
     ("Yellow", AnnotationColor::Yellow),
 ];
 
-pub(super) fn view(
+pub(super) fn workspace(
     state: &FastFill,
-    viewport: Rect,
-    width: f32,
+    available: iced::Size,
 ) -> Element<'_, Message> {
-    column![
-        controls(state, viewport),
-        tools(state, width),
-        options(state)
-    ]
-    .width(Fill)
-    .height(TOOLBAR_HEIGHT)
-    .into()
+    let wide = available.width >= appearance::PANEL_MIN_WORKSPACE_WIDTH;
+    let canvas_size = iced::Size::new(
+        available.width
+            - if wide {
+                appearance::TOOLS_PANEL_WIDTH
+            } else {
+                0.0
+            },
+        (available.height
+            - if wide {
+                TOOLBAR_ROW_HEIGHT
+            } else {
+                TOOLBAR_HEIGHT
+            })
+        .max(1.0),
+    );
+    let viewport = crate::page_canvas::page_viewport(canvas_size);
+    if wide {
+        row![
+            column![controls(state, viewport), super::view::document(state)]
+                .width(Fill)
+                .height(Fill),
+            panel::view(state),
+        ]
+        .width(Fill)
+        .height(Fill)
+        .into()
+    } else {
+        column![view(state, viewport), super::view::document(state),]
+            .width(Fill)
+            .height(Fill)
+            .into()
+    }
+}
+
+fn view(state: &FastFill, viewport: Rect) -> Element<'_, Message> {
+    column![controls(state, viewport), tools(state), options(state)]
+        .width(Fill)
+        .height(TOOLBAR_HEIGHT)
+        .into()
 }
 
 fn enabled(state: &FastFill) -> bool {
@@ -42,14 +75,14 @@ fn enabled(state: &FastFill) -> bool {
         && state.dragged_page.is_none()
 }
 
-fn controls(state: &FastFill, viewport: Rect) -> Row<'_, Message> {
+fn controls(state: &FastFill, viewport: Rect) -> Element<'_, Message> {
     let enabled = enabled(state);
     let zoom = |factor| Message::ZoomAt {
         factor,
         anchor: viewport.center(),
         viewport,
     };
-    toolbar_row(row![
+    horizontal(row![
         button("Undo")
             .on_press_maybe(
                 (enabled && state.annotations().can_undo())
@@ -62,7 +95,7 @@ fn controls(state: &FastFill, viewport: Rect) -> Row<'_, Message> {
                     .then_some(Message::Redo)
             )
             .height(CONTROL_HEIGHT),
-        button("Rotation 0°")
+        button("Reset angle")
             .on_press_maybe(
                 (enabled && state.annotations().can_reset_rotation())
                     .then_some(Message::ResetRotation)
@@ -87,7 +120,7 @@ fn controls(state: &FastFill, viewport: Rect) -> Row<'_, Message> {
     ])
 }
 
-fn tools(state: &FastFill, width: f32) -> Element<'_, Message> {
+fn tools(state: &FastFill) -> Element<'_, Message> {
     let selected = state.annotations().tool();
     let enabled = enabled(state);
     let mut tools = Row::new();
@@ -95,110 +128,61 @@ fn tools(state: &FastFill, width: f32) -> Element<'_, Message> {
         tools = tools.push(tool_button(tool, selected, enabled));
     }
     tools = tools.push(text(selected.label()).size(14));
-    let selection = enabled
-        && state.annotations().has_selection()
-        && !state.annotations().has_text_edit()
-        && state.annotations().active_pointer().is_none();
-    let action = |label: &'static str, message, available: bool| {
-        button(text(label))
-            .on_press_maybe(available.then_some(message))
-            .height(CONTROL_HEIGHT)
-    };
-    tools = tools
-        .push(action("Delete", Message::DeleteSelected, selection))
-        .push(action(
-            "Delete all",
-            Message::AskDeleteAll,
-            enabled
-                && !state.annotations().is_empty()
-                && state.annotations().active_pointer().is_none(),
-        ))
-        .push(action("To back", Message::SendToBack, selection))
-        .push(action("To front", Message::BringToFront, selection));
-    if width >= 1_200.0 {
-        tools = tools.push(
-            text(format!("{} annotations", state.annotations().len())).size(14),
-        );
-    }
+    tools = tools.extend(actions(state, iced::Shrink));
     horizontal(tools)
 }
 
-fn options(state: &FastFill) -> Element<'_, Message> {
-    let format = state.annotations().current_text_format();
-    let style = state.annotations().current_style();
-    let Some(color) =
-        format.map(|f| f.color).or_else(|| style.map(|s| s.color))
-    else {
-        return Space::new().height(TOOLBAR_ROW_HEIGHT).into();
-    };
-    let enabled = enabled(state);
-    let mut options = Row::new();
-    if super::snap::supports(state.annotations().tool()) {
-        let status = super::snap::status(state);
-        options = options.push(icon_button(
-            Glyph::SmartSnap,
-            format!("Smart snap: {status}. Snap marks to boxes and text to lines."),
-            state.smart_snap.enabled,
-            super::snap::can_toggle(state)
-                .then_some(Message::SmartSnap(super::snap::Event::Toggle)),
-        )).push(text(status).size(14));
-    }
-    if let Some(format) = format {
-        options = options.push(super::text_controls::view(state, format));
-    }
-    for (label, value) in COLORS {
-        options = options.push(color_button(label, value, color, enabled));
-    }
-    if let Some(style) = style
-        && state.annotations().stroke_available()
-    {
-        options = options
-            .push(
-                button("−")
-                    .on_press_maybe(
-                        (enabled && style.stroke_width > 1.0)
-                            .then_some(Message::AdjustThickness(-1.0)),
-                    )
-                    .width(CONTROL_HEIGHT)
-                    .height(CONTROL_HEIGHT),
-            )
-            .push(text(format!("{:.0} pt", style.stroke_width)).size(14))
-            .push(
-                button("+")
-                    .on_press_maybe(
-                        (enabled && style.stroke_width < 20.0)
-                            .then_some(Message::AdjustThickness(1.0)),
-                    )
-                    .width(CONTROL_HEIGHT)
-                    .height(CONTROL_HEIGHT),
-            );
-    }
-    if state.annotations().fill_available() {
-        options = options.push(icon_button(
-            Glyph::Fill,
-            "Fill closed shapes",
-            state.annotations().current_fill() == Some(true),
-            enabled.then_some(Message::ToggleFill),
-        ));
-    }
-    horizontal(options)
+fn actions(
+    state: &FastFill,
+    width: iced::Length,
+) -> [Element<'static, Message>; 4] {
+    let selection = enabled(state)
+        && state.annotations().has_selection()
+        && !state.annotations().has_text_edit()
+        && state.annotations().active_pointer().is_none();
+    [
+        ("To back", Message::SendToBack, selection),
+        ("To front", Message::BringToFront, selection),
+        ("Delete", Message::DeleteSelected, selection),
+        (
+            "Delete all",
+            Message::AskDeleteAll,
+            enabled(state)
+                && !state.annotations().is_empty()
+                && state.annotations().active_pointer().is_none(),
+        ),
+    ]
+    .map(|(label, message, available)| {
+        button(text(label).size(14))
+            .on_press_maybe(available.then_some(message))
+            .height(CONTROL_HEIGHT)
+            .width(width)
+            .style(button::secondary)
+            .into()
+    })
 }
 
-fn toolbar_row(content: Row<'_, Message>) -> Row<'_, Message> {
-    content
-        .align_y(iced::Alignment::Center)
-        .height(TOOLBAR_ROW_HEIGHT)
-        .padding(TOOLBAR_PADDING)
-        .spacing(CONTROL_GAP)
+fn options(state: &FastFill) -> Element<'_, Message> {
+    horizontal(Row::with_children(panel::properties(state, false)))
 }
 
 fn horizontal(content: Row<'_, Message>) -> Element<'_, Message> {
-    scrollable(toolbar_row(content))
-        .direction(scrollable::Direction::Horizontal(
-            scrollable::Scrollbar::new(),
-        ))
-        .height(TOOLBAR_ROW_HEIGHT)
-        .into()
+    // Always leave eight pixels for a track, avoiding layout/target shifts.
+    scrollable(
+        content
+            .align_y(iced::Alignment::Center)
+            .height(TOOLBAR_ROW_HEIGHT - 8.0)
+            .padding(TOOLBAR_PADDING)
+            .spacing(CONTROL_GAP),
+    )
+    .direction(scrollable::Direction::Horizontal(
+        scrollable::Scrollbar::new()
+            .width(6)
+            .scroller_width(6)
+            .spacing(2),
+    ))
+    .height(TOOLBAR_ROW_HEIGHT)
+    .into()
 }
 
 fn tool_button(

@@ -247,7 +247,9 @@ fn pending_confirmations_reject_late_background_commands_and_escape_keeps_data()
                 1.0,
             ),
             Message::Pan(PagePoint::new(12.0, 12.0)),
-            Message::ScrollPages(100.0),
+            Message::PageRail(crate::app::rail::Event::Scroll {
+                offset: 100.0,
+            }),
             Message::NewProject,
         ] {
             let _ = update(&mut state, message);

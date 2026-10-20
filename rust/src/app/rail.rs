@@ -1,106 +1,131 @@
 use super::{FastFill, ImagePicker, Message};
-use crate::appearance::{CONTROL_HEIGHT, accent};
 use fastfill_rust::annotations::Pointer;
-use iced::widget::{button, canvas, column, container, pick_list, row, text};
-use iced::{Color, Element, Fill, Point, Rectangle, Renderer, Size, Theme};
-use iced::{mouse, touch};
+#[cfg(test)]
+use iced::Size;
+use iced::widget::canvas;
+use iced::{Point, Rectangle, Renderer, Theme, Vector, mouse, touch};
+
+mod layout;
+mod motion;
+mod view;
+pub(super) use layout::page_top;
+pub(super) use motion::Motion;
+pub(super) use view::{overlay, view};
 
 const WIDTH: f32 = 164.0;
-const SLOT_HEIGHT: f32 = 164.0;
 const SCROLLBAR_WIDTH: f32 = 16.0;
+const DRAG_THRESHOLD: f32 = 4.0;
 
-#[allow(clippy::cast_precision_loss)]
-pub(super) fn slot_top(index: usize) -> f32 {
-    // Page count is limited to 20, so this conversion is exact.
-    index as f32 * SLOT_HEIGHT
+#[derive(Clone, Copy, Debug)]
+pub(super) struct PageDrag {
+    pub(super) source: usize,
+    pub(super) target: usize,
+    origin: Rectangle,
+    bounds: Rectangle,
+    position: Point,
+    grab: Vector,
+    moving: bool,
 }
 
-pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
-    let enabled = state.image_picker == ImagePicker::Idle
-        && state.project.is_idle()
-        && !state.confirm_delete_all
-        && !state.confirm_delete_page
-        && state.dragged_page.is_none();
-    let control = |label, message, available| {
-        button(text(label))
-            .on_press_maybe((enabled && available).then_some(message))
-            .width(Fill)
-            .height(CONTROL_HEIGHT)
-    };
-    let controls = column![
-            row![
-                text("Page"),
-                pick_list(
-                    (1..=state.pages.len()).collect::<Vec<_>>(),
-                    Some(
-                        state
-                            .dragged_page
-                            .map_or(state.pages.active_index(), |drag| drag
-                                .target,)
-                            + 1
-                    ),
-                    |number| Message::SelectPage(number - 1),
-                )
-                .width(56),
-                text(format!("/ {}", state.pages.len())),
-            ]
-            .align_y(iced::Alignment::Center)
-            .spacing(4),
-            control("Add image", Message::AddPage, state.pages.can_add()),
-            control(
-                "Import PDF",
-                Message::ImportPdf,
-                state.pages.pdf_capacity() > 0,
-            ),
-            control("Replace image", Message::AskReplacePage, true),
-            control(
-                "Edit page",
-                Message::PageEdit(super::page_edit::Event::Begin),
-                state.image().is_some()
-            ),
-            control("Delete page", Message::AskDeletePage, true),
-            row![
-                control(
-                    "↑",
-                    Message::MovePageLeft,
-                    state.pages.active_index() > 0,
-                ),
-                control(
-                    "↓",
-                    Message::MovePageRight,
-                    state.pages.active_index() + 1 < state.pages.len(),
-                ),
-            ]
-            .spacing(4),
-        ];
-    #[cfg(all(
-        feature = "native-camera",
-        any(target_os = "linux", target_os = "windows")
-    ))]
-    let controls = controls.push(control(
-        "Camera",
-        Message::Camera(super::camera::Event::Begin),
-        super::camera::can_open(state),
-    ));
-    container(
-        controls
-            .push(
-                // Give the canvas an explicit layer/clip, like the document.
-                iced::widget::stack![
-                    iced::widget::Space::new().width(Fill).height(Fill),
-                    canvas(Rail { app: state }).width(Fill).height(Fill),
-                ]
-                .width(Fill)
-                .height(Fill)
-                .clip(true),
-            )
-            .spacing(6),
-    )
-    .width(WIDTH)
-    .height(Fill)
-    .padding(8)
-    .style(container::bordered_box)
-    .into()
+impl PageDrag {
+    fn has_moved(self, pointer: Point) -> bool {
+        let start = self.origin.position() + self.grab;
+        self.moving
+            || (pointer.x - start.x).hypot(pointer.y - start.y)
+                >= DRAG_THRESHOLD
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum Event {
+    Start {
+        index: usize,
+        origin: Rectangle,
+        pointer: Point,
+        bounds: Rectangle,
+    },
+    Move {
+        pointer: Point,
+    },
+    Finish {
+        pointer: Option<Point>,
+    },
+    Scroll {
+        offset: f32,
+    },
+}
+
+pub(super) fn update(app: &mut FastFill, event: &Event) {
+    match *event {
+        Event::Start {
+            index,
+            origin,
+            pointer,
+            bounds,
+        } if index < app.pages.len() && app.dragged_page.is_none() => {
+            app.select_page(index);
+            app.accept_text();
+            app.cancel_interaction();
+            app.dragged_page = Some(PageDrag {
+                source: index,
+                target: index,
+                origin,
+                bounds,
+                position: origin.position(),
+                grab: pointer - origin.position(),
+                moving: false,
+            });
+        }
+        Event::Move { pointer } => {
+            let target = app.dragged_page.and_then(|drag| {
+                (Rail { app }).drop_index_at(pointer, drag.bounds)
+            });
+            if let Some(drag) = &mut app.dragged_page {
+                drag.moving = drag.has_moved(pointer);
+                drag.position = pointer - drag.grab;
+                if drag.moving
+                    && let Some(target) =
+                        target.filter(|i| *i < app.pages.len())
+                {
+                    drag.target = target;
+                }
+            }
+        }
+        Event::Finish { pointer } => {
+            let target = app.dragged_page.and_then(|drag| {
+                pointer.and_then(|point| {
+                    (Rail { app }).drop_index_at(point, drag.bounds)
+                })
+            });
+            if let Some(drag) = app.dragged_page.take()
+                && let Some(target) = target
+                && let Some(pointer) = pointer
+            {
+                // The valid gap is already visible; do not scroll it away.
+                let offset = app.page_scroll;
+                app.move_page(if drag.has_moved(pointer) {
+                    target
+                } else {
+                    drag.source
+                });
+                app.page_scroll = offset;
+            }
+        }
+        Event::Scroll { offset } if offset.is_finite() => {
+            app.page_scroll = offset.max(0.0);
+            let target = app.dragged_page.and_then(|drag| {
+                (Rail { app })
+                    .drop_index_at(drag.position + drag.grab, drag.bounds)
+            });
+            if let Some(drag) = &mut app.dragged_page
+                && drag.moving
+                && let Some(target) = target.filter(|i| *i < app.pages.len())
+            {
+                drag.target = target;
+            }
+        }
+        _ => {}
+    }
 }
 
 struct Rail<'a> {
@@ -110,55 +135,13 @@ struct Rail<'a> {
 #[derive(Default)]
 struct RailState {
     pointer: Option<(Pointer, f32, bool)>,
+    epoch: u64,
 }
 
 impl Rail<'_> {
-    fn scroll_thumb_height(&self, bounds: Rectangle) -> f32 {
-        (bounds.height * bounds.height / slot_top(self.app.pages.len()))
-            .max(32.0)
-            .min(bounds.height)
-    }
-
-    fn offset(&self, bounds: Rectangle) -> f32 {
-        self.app.page_scroll.clamp(
-            0.0,
-            (slot_top(self.app.pages.len()) - bounds.height).max(0.0),
-        )
-    }
-
-    fn index_at(&self, point: Point, bounds: Rectangle) -> Option<usize> {
-        if !bounds.contains(point) {
-            return None;
-        }
-        let y = point.y - bounds.y + self.offset(bounds);
-        (0..self.app.pages.len())
-            .find(|index| (slot_top(*index)..slot_top(*index + 1)).contains(&y))
-    }
-
-    fn drop_index_at(&self, point: Point, bounds: Rectangle) -> Option<usize> {
-        if !bounds.contains(point) {
-            return None;
-        }
-        self.index_at(point, bounds).or_else(|| {
-            let y = point.y - bounds.y + self.offset(bounds);
-            (y >= slot_top(self.app.pages.len()))
-                .then_some(self.app.pages.len() - 1)
-        })
-    }
-
-    fn display_slot(&self, index: usize) -> usize {
-        let Some(drag) = self.app.dragged_page else {
-            return index;
-        };
-        if index == drag.source {
-            drag.target
-        } else if drag.source < index && index <= drag.target {
-            index - 1
-        } else if drag.target <= index && index < drag.source {
-            index + 1
-        } else {
-            index
-        }
+    fn scroll(&self, offset: f32, bounds: Rectangle) -> Event {
+        let offset = offset.clamp(0.0, self.max_offset(bounds));
+        Event::Scroll { offset }
     }
 
     fn pointer_input(
@@ -169,11 +152,21 @@ impl Rail<'_> {
         position: Option<Point>,
         bounds: Rectangle,
     ) -> Option<canvas::Action<Message>> {
+        let position = position.filter(|p| p.x.is_finite() && p.y.is_finite());
+        // An unacknowledged press can share a native event batch with moves.
+        // Only a new epoch with no drag proves the capture was canceled.
+        if state.pointer.is_some()
+            && state.epoch != self.app.input_epoch
+            && self.app.dragged_page.is_none()
+        {
+            state.pointer = None;
+        }
         if matches!(phase, Phase::Press) {
             if state.pointer.is_some() {
                 return Some(canvas::Action::capture());
             }
             let point = position?;
+            state.epoch = self.app.input_epoch;
             if bounds.contains(point)
                 && point.x >= bounds.x + bounds.width - SCROLLBAR_WIDTH
             {
@@ -183,8 +176,13 @@ impl Rail<'_> {
             let index = self.index_at(point, bounds)?;
             state.pointer = Some((pointer, point.y, true));
             return Some(
-                canvas::Action::publish(Message::PageDragStarted(index))
-                    .and_capture(),
+                canvas::Action::publish(Message::PageRail(Event::Start {
+                    index,
+                    origin: self.shown_card_bounds(index, bounds),
+                    pointer: point,
+                    bounds,
+                }))
+                .and_capture(),
             );
         }
         let (owner, last_y, drag) = state.pointer?;
@@ -192,40 +190,34 @@ impl Rail<'_> {
             return Some(canvas::Action::capture());
         }
         if matches!(phase, Phase::Move) {
-            if drag && self.app.dragged_page.is_none() {
-                state.pointer = None;
-                return None;
-            }
             let point = position?;
             state.pointer = Some((owner, point.y, drag));
-            let message = if drag {
-                self.drop_index_at(point, bounds)
-                    .map(Message::PageDragEntered)
+            let event = if drag {
+                Event::Move { pointer: point }
             } else {
-                let scale = (slot_top(self.app.pages.len()) - bounds.height)
-                    .max(0.0)
+                let scale = self.max_offset(bounds)
                     / (bounds.height - self.scroll_thumb_height(bounds))
                         .max(1.0);
-                Some(Message::ScrollPages(
+                self.scroll(
                     self.offset(bounds) + (point.y - last_y) * scale,
-                ))
+                    bounds,
+                )
             };
-            return Some(message.map_or_else(canvas::Action::capture, |m| {
-                canvas::Action::publish(m).and_capture()
-            }));
+            return Some(
+                canvas::Action::publish(Message::PageRail(event)).and_capture(),
+            );
         }
         state.pointer = None;
         if drag {
-            let target = if matches!(phase, Phase::Release) {
-                position.and_then(|point| self.drop_index_at(point, bounds))
+            let pointer = if matches!(phase, Phase::Release) {
+                position
             } else {
                 None
             };
             Some(
-                canvas::Action::publish(target.map_or(
-                    Message::PageDragCanceled,
-                    Message::PageDragFinished,
-                ))
+                canvas::Action::publish(Message::PageRail(Event::Finish {
+                    pointer,
+                }))
                 .and_capture(),
             )
         } else {
@@ -252,6 +244,16 @@ impl canvas::Program<Message> for Rail<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
+        if let canvas::Event::Window(iced::window::Event::RedrawRequested(at)) =
+            event
+        {
+            return self
+                .app
+                .rail_motion
+                .borrow_mut()
+                .sync(self.app, bounds, *at, motion::duration())
+                .then(canvas::Action::request_redraw);
+        }
         if self.app.image_picker != ImagePicker::Idle
             || !self.app.project.is_idle()
             || self.app.confirm_delete_all
@@ -281,8 +283,8 @@ impl canvas::Program<Message> for Rail<'_> {
                         mouse::ScrollDelta::Pixels { y, .. } => *y,
                     };
                     return Some(
-                        canvas::Action::publish(Message::ScrollPages(
-                            self.offset(bounds) - y,
+                        canvas::Action::publish(Message::PageRail(
+                            self.scroll(self.offset(bounds) - y, bounds),
                         ))
                         .and_capture(),
                     );
@@ -313,108 +315,18 @@ impl canvas::Program<Message> for Rail<'_> {
 
     fn draw(
         &self,
-        _state: &RailState,
+        _: &RailState,
         renderer: &Renderer,
-        _theme: &Theme,
+        theme: &Theme,
         bounds: Rectangle,
-        _cursor: mouse::Cursor,
+        _: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
-        let width = (bounds.width - SCROLLBAR_WIDTH).max(1.0);
-        for (index, page) in self.app.pages.iter().enumerate() {
-            let slot = self.display_slot(index);
-            let y = slot_top(slot) - self.offset(bounds);
-            if y + SLOT_HEIGHT < 0.0 || y > bounds.height {
-                continue;
-            }
-            let selected = index == self.app.pages.active_index();
-            let color = if selected { accent() } else { Color::BLACK };
-            frame.fill_rectangle(
-                Point::new(1.0, y + 6.0),
-                Size::new(width - 2.0, SLOT_HEIGHT - 14.0),
-                if selected {
-                    Color::from_rgb8(219, 235, 255)
-                } else {
-                    Color::from_rgb8(238, 238, 238)
-                },
-            );
-            if let Some(image) = &page.image {
-                let scale = ((width - 16.0) / image.size.width)
-                    .min(72.0 / image.size.height);
-                let size = Size::new(
-                    image.size.width * scale,
-                    image.size.height * scale,
-                );
-                frame.draw_image(
-                    Rectangle::new(
-                        Point::new((width - size.width) / 2.0, y + 10.0),
-                        size,
-                    ),
-                    image.display_handle(),
-                );
-            } else {
-                frame.fill_rectangle(
-                    Point::new((width - 50.0) / 2.0, y + 10.0),
-                    Size::new(50.0, 72.0),
-                    Color::WHITE,
-                );
-            }
-            let name = page.image.as_ref().map_or("Blank", |p| &p.name);
-            let label: String = name.chars().take(17).collect();
-            for (content, top) in [
-                (format!("{}. {label}", slot + 1), 84.0),
-                (format!("{} annotations", page.annotations.len()), 102.0),
-                ("↕ Drag page to reorder".into(), SLOT_HEIGHT - 28.0),
-            ] {
-                frame.fill_text(canvas::Text {
-                    content,
-                    position: Point::new(7.0, y + top),
-                    size: 12.0.into(),
-                    color,
-                    ..canvas::Text::default()
-                });
-            }
-            if self
-                .app
-                .dragged_page
-                .is_some_and(|drag| drag.source == index)
-            {
-                frame.stroke_rectangle(
-                    Point::new(3.0, y + 8.0),
-                    Size::new(width - 6.0, SLOT_HEIGHT - 18.0),
-                    canvas::Stroke::default()
-                        .with_color(accent())
-                        .with_width(3.0),
-                );
-                frame.fill_rectangle(
-                    Point::new(0.0, y + SLOT_HEIGHT - 6.0),
-                    Size::new(width, 4.0),
-                    accent(),
-                );
-            }
-        }
-        let total = slot_top(self.app.pages.len());
-        if total > bounds.height && bounds.height > 0.0 {
-            let height = self.scroll_thumb_height(bounds);
-            let top = self.offset(bounds) / (total - bounds.height)
-                * (bounds.height - height);
-            frame.fill_rectangle(
-                Point::new(width + 4.0, 0.0),
-                Size::new(8.0, bounds.height),
-                Color::from_rgb8(230, 230, 230),
-            );
-            frame.fill_rectangle(
-                Point::new(width + 4.0, top),
-                Size::new(8.0, height),
-                Color::from_rgb8(120, 120, 120),
-            );
-        }
-        vec![frame.into_geometry()]
+        view::draw(self, renderer, theme, bounds)
     }
 
     fn mouse_interaction(
         &self,
-        _state: &RailState,
+        _: &RailState,
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {

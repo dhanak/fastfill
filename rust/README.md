@@ -638,11 +638,25 @@ Checkpoint 5C adds multiple image pages:
   accepted, unfinished shape edits are canceled, and the new page fits the
   view. Each page keeps its annotations, selection, and undo/redo history.
   The active tool and its default settings carry across pages.
+- **Page previews:** image-first cards use a top-aligned number on the left,
+  without filename/asset IDs, annotation counts or a caption row. Portrait
+  previews use the available height; landscape cards are shorter. Images keep
+  their aspect ratio; the active card has a blue outline. Very short cards
+  retain a minimum touch target size.
 - **Reorder:** use ↑/↓ or drag any part of a thumbnail. Thumbnails rearrange
-  to preview the new order, with a blue frame and separated drop marker.
-  Release commits; dropping in empty space below the last page moves it to
-  the end. Escape, lost touch, or dropping outside the rail cancels. Scroll
-  with the mouse wheel or drag the scrollbar at the rail's right edge.
+  around a full-card insertion gap. A translucent copy follows your grabbed
+  point, even outside the rail; document order changes only on a valid drop.
+  All page numbers, including the floating card, preview the proposed order.
+  Dropping in empty space below the last page moves it to the end. Escape,
+  lost touch/focus, resizing, or dropping outside/over the scrollbar cancels.
+  A click still selects a page. Scroll with the mouse wheel, including while
+  dragging, or drag the scrollbar at the rail's right edge. Neighboring cards
+  slide around the gap; the floating card slides into place on drop or back
+  on cancellation. A valid drop keeps the rail's current scroll position.
+  Transitions last 180 ms and stop requesting frames when settled. Set
+  `FASTFILL_REDUCED_MOTION=1` for instant transitions on desktop; the browser
+  harness follows its `prefers-reduced-motion` setting. Native OS motion
+  preferences are not read automatically yet.
 - **Replace image:** replace the current page image. Annotated pages require
   confirmation. Canceling the picker or choosing an invalid image preserves
   the current page and its history.
@@ -815,6 +829,15 @@ tools, the magnet (Smart snap), and bucket (Fill) share the same highlight.
 Options appear only when applicable. The tool/options rows scroll horizontally
 in narrower windows; the page view keeps its size when switching tools.
 
+Wider windows group tools and contextual properties in a right-hand panel
+sized to four tool columns, leaving a single command strip above the page.
+Color stays above tool-specific properties, keeping its position stable when
+switching drawing tools. Applicable line width follows, then font, snap or fill.
+Text font/size/format controls stack vertically; properties scroll when space
+is tight. Layer and deletion actions stay at the bottom, dimmed when
+unavailable. Narrow windows retain horizontal tool/options rows, with
+scrollbars below the button targets.
+
 - **Rectangle:** drag with the left mouse button or one finger. The preview
   uses the chosen style immediately. Hold Ctrl to draw a square.
 - **Oval:** drag like a rectangle. Hold Ctrl to draw a circle.
@@ -894,7 +917,7 @@ in narrower windows; the page view keeps its size when switching tools.
 - **Rotate:** drag the round handle above selected text, rectangle, oval, mark,
   or ink path. Hold Ctrl to snap to 45° increments. A rotated text editor stays
   horizontal and uses the object's unrotated measured size. Lines and arrows
-  remain endpoint-edited. Rotation 0° resets the selected object and supports
+  remain endpoint-edited. Reset angle resets the selected object and supports
   undo.
 - Drawing modes can edit the selected object from its body or handles.
   Starting elsewhere draws a new object of the active type.

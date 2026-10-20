@@ -1,7 +1,5 @@
 use super::{FastFill, ImagePicker, Message, TEXT_EDITOR_ID, page_size};
-use crate::appearance::{
-    CONTROL_HEIGHT, TOOLBAR_HEIGHT, annotation_color, text_font,
-};
+use crate::appearance::{CONTROL_HEIGHT, annotation_color, text_font};
 use crate::page_canvas::{CanvasLayer, PageCanvas, page_viewport};
 use fastfill_rust::annotations::{
     AnnotationColor, TEXT_EDITOR_HORIZONTAL_PADDING,
@@ -75,18 +73,7 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
         return super::page_edit::view(state);
     }
     let body = responsive(move |available| {
-        let canvas_size = iced::Size::new(
-            available.width,
-            (available.height - TOOLBAR_HEIGHT).max(1.0),
-        );
-        let viewport = page_viewport(canvas_size);
-        column![
-            super::toolbar::view(state, viewport, available.width),
-            document(state),
-        ]
-        .width(Fill)
-        .height(Fill)
-        .into()
+        super::toolbar::workspace(state, available)
     });
 
     // Separate renderer layers keep page images below the modal and its scrim.
@@ -96,6 +83,7 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
             .width(Fill)
             .height(Fill),
     ]
+    .extend(super::rail::overlay(state))
     .extend(super::confirmation::view(state))
     .width(Fill)
     .height(Fill)

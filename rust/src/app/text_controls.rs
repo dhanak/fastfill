@@ -3,8 +3,9 @@
 use super::{FastFill, Message, TEXT_EDITOR_ID, controller};
 use crate::appearance::{CONTROL_GAP, CONTROL_HEIGHT};
 use fastfill_rust::annotations::{TextFormat, TextTypeface};
-use iced::widget::{Row, button, mouse_area, pick_list, row, text, text_input};
-use iced::{Task, mouse};
+use iced::widget::text_input;
+use iced::widget::{Row, button, column, mouse_area, pick_list, row, text};
+use iced::{Element, Fill, Task, mouse};
 
 const INVALID_SIZE: &str = "Font size must be a number from 6 to 144 pt.";
 
@@ -152,6 +153,31 @@ pub(super) fn view(
     state: &FastFill,
     format: TextFormat,
 ) -> Row<'static, Message> {
+    Row::with_children(controls(state, format, false))
+        .spacing(CONTROL_GAP)
+        .align_y(iced::Alignment::Center)
+}
+
+pub(super) fn panel(
+    state: &FastFill,
+    format: TextFormat,
+) -> Element<'static, Message> {
+    let [typeface, size, bold, italic, underline] =
+        controls(state, format, true);
+    column![
+        typeface,
+        size,
+        row![bold, italic, underline].spacing(CONTROL_GAP),
+    ]
+    .spacing(CONTROL_GAP)
+    .into()
+}
+
+fn controls(
+    state: &FastFill,
+    format: TextFormat,
+    stacked: bool,
+) -> [Element<'static, Message>; 5] {
     let annotations = state.annotations();
     let selected = annotations.selected_text_indices();
     let texts = || selected.iter().filter_map(|index| annotations.text(*index));
@@ -192,7 +218,7 @@ pub(super) fn view(
     .id("font-size-input")
     .on_input(|value| Message::FontSize(Event::Input(value)))
     .on_submit(Message::FontSize(Event::Apply))
-    .width(76)
+    .width(if stacked { Fill } else { 76.into() })
     .size(16)
     .line_height(iced::widget::text::LineHeight::Absolute(20.0.into()))
     .padding([(CONTROL_HEIGHT - 20.0) / 2.0, 8.0])
@@ -214,26 +240,30 @@ pub(super) fn view(
             .width(CONTROL_HEIGHT)
             .height(CONTROL_HEIGHT)
     };
-    row![
+    [
         pick_list(
             TextTypeface::ALL,
             (editing || common_typeface).then_some(format.typeface),
             Message::SetTextTypeface,
         )
-        .width(130)
-        .placeholder("Mixed fonts"),
+        .width(if stacked { Fill } else { 130.into() })
+        .text_size(16)
+        .text_line_height(iced::widget::text::LineHeight::Absolute(20.0.into()))
+        .padding([(CONTROL_HEIGHT - 20.0) / 2.0, 8.0])
+        .placeholder("Mixed fonts")
+        .into(),
         mouse_area(
             row![step("−", -1), size, step("+", 1), text("pt")]
+                .width(if stacked { Fill } else { iced::Shrink })
                 .spacing(4)
-                .align_y(iced::Alignment::Center)
+                .align_y(iced::Alignment::Center),
         )
-        .on_scroll(|delta| Message::FontSize(Event::Scroll(delta))),
-        toggle("B", format.bold, Message::ToggleTextBold),
-        toggle("I", format.italic, Message::ToggleTextItalic),
-        toggle("U", format.underline, Message::ToggleTextUnderline),
+        .on_scroll(|delta| Message::FontSize(Event::Scroll(delta)))
+        .into(),
+        toggle("B", format.bold, Message::ToggleTextBold).into(),
+        toggle("I", format.italic, Message::ToggleTextItalic).into(),
+        toggle("U", format.underline, Message::ToggleTextUnderline).into(),
     ]
-    .spacing(CONTROL_GAP)
-    .align_y(iced::Alignment::Center)
 }
 
 #[cfg(test)]

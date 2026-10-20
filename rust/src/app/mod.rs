@@ -46,8 +46,9 @@ use iced::widget::text_editor;
 use iced::{Point, Rectangle, Renderer, Theme};
 #[cfg(test)]
 use iced::{mouse, touch};
-use pages::{PageDrag, Pages};
+use pages::Pages;
 use project::ProjectSession;
+use rail::PageDrag;
 #[cfg(test)]
 use view::document;
 use view::view;
@@ -68,6 +69,8 @@ struct FastFill {
     confirm_delete_all: bool,
     confirm_delete_page: bool,
     dragged_page: Option<PageDrag>,
+    // Shared by the clipped rail and its floating layer; not document state.
+    rail_motion: std::cell::RefCell<rail::Motion>,
     page_scroll: f32,
     image_directory: Option<std::path::PathBuf>,
     export_directory: Option<std::path::PathBuf>,
@@ -154,11 +157,7 @@ pub(crate) enum Message {
     SelectPage(usize),
     MovePageLeft,
     MovePageRight,
-    PageDragStarted(usize),
-    PageDragEntered(usize),
-    PageDragFinished(usize),
-    PageDragCanceled,
-    ScrollPages(f32),
+    PageRail(rail::Event),
     AskDeletePage,
     ConfirmDeletePage,
     SetTool(Tool),

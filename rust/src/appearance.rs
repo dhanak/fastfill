@@ -9,7 +9,11 @@ pub(crate) const CONTROL_HEIGHT: f32 = 40.0;
 pub(crate) const TOOL_ICON_SIZE: f32 = 24.0;
 pub(crate) const COLOR_SWATCH_SIZE: f32 = 32.0;
 pub(crate) const CONTROL_GAP: f32 = 8.0;
-pub(crate) const TOOLBAR_PADDING: [u16; 2] = [8, 12];
+pub(crate) const TOOLBAR_PADDING: [u16; 2] = [4, 12];
+pub(crate) const TOOLS_PANEL_PADDING: f32 = 12.0;
+pub(crate) const TOOLS_PANEL_WIDTH: f32 =
+    4.0 * CONTROL_HEIGHT + 3.0 * CONTROL_GAP + 2.0 * TOOLS_PANEL_PADDING;
+pub(crate) const PANEL_MIN_WORKSPACE_WIDTH: f32 = 840.0;
 pub(crate) const PAGE_MARGIN: f32 = 36.0;
 pub(crate) const PAGE_SHADOW_X: f32 = 5.0;
 pub(crate) const PAGE_SHADOW_Y: f32 = 7.0;

@@ -19,12 +19,6 @@ pub(super) const MAXIMUM_PAGES: usize = 20;
 #[cfg(test)]
 mod tests;
 
-#[derive(Clone, Copy, Debug)]
-pub(super) struct PageDrag {
-    pub(super) source: usize,
-    pub(super) target: usize,
-}
-
 #[derive(Debug)]
 pub(super) struct EditorPage {
     pub(super) image: Option<ImportedImage>,
@@ -309,7 +303,7 @@ impl FastFill {
                 if changed {
                     self.navigation.fit();
                     self.page_scroll =
-                        super::rail::slot_top(self.pages.active_index());
+                        super::rail::page_top(self, self.pages.active_index());
                     self.input_epoch = self.input_epoch.wrapping_add(1);
                     self.status_is_error = false;
                 } else {
@@ -332,7 +326,7 @@ impl FastFill {
         self.status_is_error = true;
     }
 
-    fn select_page(&mut self, index: usize) {
+    pub(super) fn select_page(&mut self, index: usize) {
         if index < self.pages.len() && index != self.pages.active_index() {
             self.accept_text();
             self.cancel_interaction();
@@ -343,12 +337,12 @@ impl FastFill {
         }
     }
 
-    fn move_page(&mut self, target: usize) {
+    pub(super) fn move_page(&mut self, target: usize) {
         if target < self.pages.len() && target != self.pages.active_index() {
             self.accept_text();
             self.cancel_interaction();
             self.pages.move_active_to(target);
-            self.page_scroll = super::rail::slot_top(target);
+            self.page_scroll = super::rail::page_top(self, target);
             self.status = format!("Page moved to position {}.", target + 1);
             self.status_is_error = false;
         }
@@ -375,7 +369,7 @@ pub(super) fn update(
                 state.confirm_delete_page = false;
                 state.navigation.fit();
                 state.page_scroll =
-                    super::rail::slot_top(state.pages.active_index());
+                    super::rail::page_top(state, state.pages.active_index());
                 state.cancel_interaction();
                 state.status = "Page deleted.".into();
                 state.status_is_error = false;
@@ -417,31 +411,7 @@ pub(super) fn update(
         Message::MovePageRight => {
             state.move_page(state.pages.active_index() + 1);
         }
-        Message::PageDragStarted(index) if *index < state.pages.len() => {
-            state.select_page(*index);
-            state.accept_text();
-            state.cancel_interaction();
-            state.dragged_page = Some(PageDrag {
-                source: *index,
-                target: *index,
-            });
-        }
-        Message::PageDragEntered(index) if *index < state.pages.len() => {
-            if let Some(drag) = &mut state.dragged_page {
-                drag.target = *index;
-            }
-        }
-        Message::PageDragFinished(target) => {
-            if state.dragged_page.take().is_some() {
-                state.move_page(*target);
-            }
-        }
-        Message::PageDragCanceled => state.dragged_page = None,
-        Message::ScrollPages(offset) => {
-            if offset.is_finite() {
-                state.page_scroll = offset.max(0.0);
-            }
-        }
+        Message::PageRail(event) => super::rail::update(state, event),
         Message::AskDeletePage => {
             state.accept_text();
             state.cancel_interaction();

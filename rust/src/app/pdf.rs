@@ -134,7 +134,7 @@ fn finish(
             }
             state.navigation.fit();
             state.page_scroll =
-                super::rail::slot_top(state.pages.active_index());
+                super::rail::page_top(state, state.pages.active_index());
             state.cancel_interaction();
             state.status =
                 format!("Imported {} PDF pages.", batch.images.len());
