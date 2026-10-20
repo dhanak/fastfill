@@ -247,12 +247,26 @@ fn start_query(
     let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| error.to_string())?;
     let input = child.stdout.take().expect("piped stdout");
+    let mut errors = child.stderr.take().expect("piped stderr");
     let child = Arc::new(Mutex::new(Some(child)));
     let process = Process(child.clone());
+    let diagnostics = std::thread::Builder::new()
+        .name("fastfill-camera-diagnostics".into())
+        .spawn(move || {
+            let mut bytes = Vec::new();
+            let _ = errors
+                .by_ref()
+                .take(u64::from(ERROR_LIMIT))
+                .read_to_end(&mut bytes);
+            // Bound retained diagnostics, but drain the pipe to avoid stalls.
+            let _ = std::io::copy(&mut errors, &mut std::io::sink());
+            String::from_utf8_lossy(&bytes).trim().to_owned()
+        })
+        .map_err(|error| error.to_string())?;
     let canceled = Arc::new(AtomicBool::new(false));
     let failure = Arc::new(Mutex::new(None));
     let (stop, error) = (canceled.clone(), failure.clone());
@@ -279,20 +293,34 @@ fn start_query(
                 .take(super::catalog::LIMIT + 1)
                 .read_to_end(&mut bytes)
                 .map_err(|error| error.to_string());
-            let canceled = stop.swap(true, Ordering::Relaxed);
+            let canceled = stop.load(Ordering::Relaxed);
+            if result.is_err() || bytes.len() as u64 > super::catalog::LIMIT {
+                stop.store(true, Ordering::Relaxed);
+            }
+            // On EOF let the watchdog observe exit status before it reaps.
             let result = result.and(
                 watchdog
                     .join()
                     .map_err(|_| "Camera query worker failed.".to_string()),
             );
+            let diagnostic = diagnostics.join().unwrap_or_default();
             if !canceled {
                 receive(result.and_then(|()| {
-                    if let Some(error) = failure.lock().unwrap().take() {
-                        Err(error)
-                    } else if bytes.is_empty()
-                        || bytes.len() as u64 > super::catalog::LIMIT
-                    {
-                        Err("Empty or oversized camera catalog.".into())
+                    let error = failure.lock().unwrap().take().or_else(|| {
+                        bytes.is_empty().then(|| {
+                            "Camera discovery returned no data. \
+                             Retry or check the camera driver."
+                                .into()
+                        })
+                    });
+                    if let Some(error) = error {
+                        Err(if diagnostic.is_empty() {
+                            error
+                        } else {
+                            format!("{error}\n{diagnostic}")
+                        })
+                    } else if bytes.len() as u64 > super::catalog::LIMIT {
+                        Err("Camera returned an oversized catalog.".into())
                     } else {
                         Ok(bytes)
                     }
@@ -329,12 +357,25 @@ fn supervise(
                 Some("Camera timed out. Retry or check device access.".into());
             break;
         }
-        let exited = child
-            .0
-            .lock()
-            .unwrap()
-            .as_mut()
-            .is_none_or(|child| !matches!(child.try_wait(), Ok(None)));
+        let exited = child.0.lock().unwrap().as_mut().is_none_or(|child| {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    if !status.success() {
+                        *failure.lock().unwrap() = Some(format!(
+                            "Camera helper exited ({status}). \
+                             Check the camera driver."
+                        ));
+                    }
+                    true
+                }
+                Ok(None) => false,
+                Err(error) => {
+                    *failure.lock().unwrap() =
+                        Some(format!("Could not check camera helper: {error}"));
+                    true
+                }
+            }
+        });
         if exited {
             break;
         }

@@ -120,9 +120,9 @@ fn reply<T: Serialize>(result: ProbeResult<Vec<T>>) -> Result<(), String> {
     if bytes.len() as u64 > LIMIT {
         return Err("Camera catalog exceeds 1 MiB.".into());
     }
-    std::io::stdout()
-        .write_all(&bytes)
-        .map_err(|e| e.to_string())
+    let mut output = std::io::stdout().lock();
+    output.write_all(&bytes).map_err(|e| e.to_string())?;
+    output.flush().map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

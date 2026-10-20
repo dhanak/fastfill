@@ -923,6 +923,7 @@ dependencies = [
  "image",
  "krilla",
  "nokhwa",
+ "nokhwa-bindings-windows",
  "rfd",
  "rscam",
  "serde",

@@ -729,7 +729,7 @@ SP6 hardware calibration remain deferred, separate from laptop acceptance.
 
 ### 7. Packaging and replacement decision — in progress
 
-#### 7A. Prebuilt Windows test ZIP — publication check pending
+#### 7A. Prebuilt Windows test ZIP — Windows retest deferred
 
 - [x] Build an optimized Windows x64 EXE in a dedicated CI job, with a static
       C runtime and release dependency cache; do not require a local compiler.
@@ -745,8 +745,11 @@ SP6 hardware calibration remain deferred, separate from laptop acceptance.
 - [x] Run the Windows package job in GitHub, including extracted startup
       checks. User reports success in just under ten minutes; Windows native
       build/tests also pass. These platforms remain unavailable locally.
-- [ ] Inspect the artifact/prerelease after the publication gate changes.
-      The first publication was blocked by macOS runner acquisition failure.
+- [x] Obtain the CI build and launch the Windows EXE. User reports green CI
+      and a brief Windows test; console/camera follow-up fixes are recorded
+      below, not assumed verified from this initial test.
+- [ ] Retest GUI-only startup and camera modes on Windows after the fix.
+      User has no Windows access now; defer this check, not UI development.
 - [ ] User checkpoint: download/extract on Windows without Rust installed;
       launch, open/save/export a project and try the SP6 cameras when available.
       Keep prior physical sleep/touch/DPI calibration deferrals explicit.
@@ -3299,6 +3302,44 @@ sleep and Surface calibration remain deferred, not inferred from laptop tests.
 - Confirm release dependency caching from the same log: restore succeeded
   and only FastFill recompiled, finishing the release build in 24.34 seconds.
   Leave the supplied log ZIP untouched and untracked.
+
+### 2026-10-20 — Windows console and camera-mode discovery feedback
+
+- User reports the CI build succeeds and the Windows EXE starts, but a
+  terminal remains open beside the GUI. Both a regular webcam and an offline
+  Android-camera driver are listed; mode discovery fails for both after a
+  few seconds with the same empty/oversized-catalog error. Refresh repeats it.
+- Mark Windows release binaries as GUI-subsystem applications; keep debug
+  consoles and the separate command-line camera probe unchanged.
+- An empty supported-mode list has a nonempty JSON reply. The reported error
+  instead means the helper returned no payload; the actual Windows driver
+  failure cannot be established in this Linux container.
+- Query Windows formats through the already-transitive Media Foundation
+  bindings instead of Camera::new, which selects/sets a format before it
+  can list modes. Keep capture negotiation and device choices unchanged;
+  do not let an offline camera remove the usable camera from the picker.
+- Flush catalog replies explicitly. Retain only 4 KiB of stderr while
+  draining the rest to avoid pipe stalls. Observe worker exit status before
+  reaping, and distinguish empty replies from oversized catalogs. Preserve
+  timeout, sleep interruption, cancellation and process cleanup behavior.
+- Reproduce the previously hidden nonzero exit and misleading empty-reply
+  errors first. Add empty-mode/error serialization and offline-to-working
+  camera selection checks. Exercise noisy stderr and helper exit diagnostics
+  without hardware; keep physical Windows/SP6 verification deferred.
+- Extend extracted Windows package checks to inspect the GUI subsystem and
+  verify stdout/stderr pipes from the actual release EXE. Device-name listing
+  opens no capture stream and accepts a well-formed driver error on the CI
+  host, so no camera is required. Actual PowerShell/MSVC checks remain in CI.
+- Validation: all 539 native/all-target tests and twelve Node automation
+  entries pass; exhaustive replay remains ignored/opt-in. Strict Clippy,
+  all-feature WASM compilation, formatting and whitespace checks pass.
+  Compilation stays under /tmp, not host target/dist.
+- Next Windows check: confirm Explorer starts only the GUI, regular-webcam
+  modes/preview work, and switching to the offline driver and back recovers.
+  If mode listing still fails, capture the new complete helper error;
+  do not claim the physical driver failure fixed from Linux-only tests.
+- User requests committing the fix and continuing without Windows access.
+  Defer physical retesting explicitly; do not mark camera behavior accepted.
 
 ## References
 

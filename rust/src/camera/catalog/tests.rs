@@ -1,6 +1,17 @@
 use super::*;
 
 #[test]
+fn empty_modes_and_driver_errors_are_valid_nonempty_protocol_replies() {
+    assert_eq!(decode::<Spec>(Ok(br#"{"Ok":[]}"#.to_vec())).unwrap(), []);
+    assert_eq!(
+        decode::<Spec>(Ok(br#"{"Err":"Camera is offline"}"#.to_vec()))
+            .unwrap_err(),
+        "Camera is offline",
+    );
+    assert!(decode::<Spec>(Ok(vec![])).is_err());
+}
+
+#[test]
 fn modes_are_validated_deduplicated_and_prefer_bounded_high_resolution() {
     let mode = |width, height, fps, fourcc| Spec {
         width,

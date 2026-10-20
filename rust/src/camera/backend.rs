@@ -154,17 +154,14 @@ pub(super) fn devices() -> ProbeResult<Vec<Device>> {
 
 #[cfg(target_os = "windows")]
 pub(super) fn modes(index: u32) -> ProbeResult<Vec<Spec>> {
-    use nokhwa::utils::{RequestedFormat, RequestedFormatType};
-    let mut camera = open(
-        index,
-        RequestedFormat::with_formats(
-            RequestedFormatType::None,
-            nokhwa::utils::frame_formats(),
-        ),
+    // Camera::new also selects/sets a format, so it cannot list an offline
+    // virtual camera's empty modes and needlessly configures working cameras.
+    let mut camera = nokhwa_bindings_windows::wmf::MediaFoundationDevice::new(
+        nokhwa::utils::CameraIndex::Index(index),
     )?;
     use nokhwa::utils::FrameFormat;
     Ok(camera
-        .compatible_camera_formats()?
+        .compatible_format_list()?
         .into_iter()
         .take(4096)
         .map(|format| {

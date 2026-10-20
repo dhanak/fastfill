@@ -50,27 +50,53 @@ $imports | Write-Output
 if ($imports -match '(?i)\b(vcruntime|msvcp|concrt|vccorlib)\d.*\.dll\b') {
     throw "Portable executable still requires a Visual C++ runtime DLL."
 }
+$headers = & $dumpbin /nologo /headers $executable
+if ($LASTEXITCODE -ne 0 -or
+    -not ($headers -match '\bsubsystem \(Windows GUI\)')) {
+    throw "Portable executable must use the Windows GUI subsystem."
+}
 
-# A real executable launch, but invalid arguments prevent any camera access.
+# Check GUI-subsystem helpers still receive redirected stdout and stderr.
+# Listing device names needs no connected camera and opens no capture stream.
 $startInfo = [Diagnostics.ProcessStartInfo]::new($executable)
 $startInfo.WorkingDirectory = $extracted
 $startInfo.UseShellExecute = $false
+$startInfo.CreateNoWindow = $true
+$startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
-$startInfo.ArgumentList.Add("--fastfill-camera-query")
-$startInfo.ArgumentList.Add("invalid")
-$process = [Diagnostics.Process]::Start($startInfo)
-try {
-    if (-not $process.WaitForExit(10000)) {
-        $process.Kill($true)
-        throw "Extracted portable executable did not exit."
+foreach ($query in @("invalid", "list")) {
+    $startInfo.ArgumentList.Clear()
+    $startInfo.ArgumentList.Add("--fastfill-camera-query")
+    $startInfo.ArgumentList.Add($query)
+    $process = [Diagnostics.Process]::Start($startInfo)
+    try {
+        $outputTask = $process.StandardOutput.ReadToEndAsync()
+        $errorTask = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(10000)) {
+            $process.Kill($true)
+            throw "Extracted portable executable did not exit."
+        }
+        $stdout = $outputTask.GetAwaiter().GetResult()
+        $stderr = $errorTask.GetAwaiter().GetResult()
+        if ($query -eq "invalid") {
+            $expected = 'Camera worker: Expected list or modes INDEX'
+            if ($process.ExitCode -ne 1 -or
+                $stderr -notmatch $expected) {
+                throw "Portable launch failed ($($process.ExitCode)): $stderr"
+            }
+        }
+        else {
+            $reply = ConvertFrom-Json -InputObject $stdout -AsHashtable
+            # A driver error is valid IPC; camera availability is not a gate.
+            if ($process.ExitCode -ne 0 -or
+                $reply -isnot [System.Collections.IDictionary] -or
+                -not ($reply.ContainsKey("Ok") -or $reply.ContainsKey("Err"))) {
+                throw "Camera query pipe check failed: $stdout $stderr"
+            }
+        }
     }
-    $stderr = $process.StandardError.ReadToEnd()
-    if ($process.ExitCode -ne 1 -or
-        $stderr -notmatch 'Camera worker: Expected list or modes INDEX') {
-        throw "Portable launch failed ($($process.ExitCode)): $stderr"
+    finally {
+        $process.Dispose()
     }
 }
-finally {
-    $process.Dispose()
-}
-Write-Output "Portable extraction, dependency and launch checks passed."
+Write-Output "Portable extraction, GUI subsystem and camera pipe checks passed."

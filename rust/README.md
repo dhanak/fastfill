@@ -21,8 +21,11 @@ Only run downloads you trust; do not disable Windows protection globally.
 The `Rust prototype` workflow builds an optimized release EXE, packages it
 with instructions, the license, sample PDF and `BUILD.txt` revision/run
 details, then extracts it elsewhere and checks dependency/loader startup.
-The startup check deliberately uses invalid helper arguments, not a camera
-or GUI on the hosted runner. Device/touch checks still need real hardware.
+CI also checks the Windows GUI subsystem (no extra terminal) and camera
+helper stdout/stderr pipes. It uses invalid helper arguments and device-name
+enumeration; no connected camera, capture stream or GUI interaction is
+required. Windows debug builds retain their console for diagnostics.
+Device/touch checks still need real hardware.
 
 On `master`, Windows/Linux tests, WASM checks and packaging must succeed
 before the public [`rust-dev` prerelease][rust-dev] is updated. macOS runs
@@ -560,6 +563,10 @@ Checkpoint 6G3b adds **camera selection and higher-resolution capture**:
   overwrite the current selection. Switching or closing the camera screen
   terminates pending discovery as well as preview. Existing auto-framing and
   manual capture stay available, with no forced exposure wait.
+- Windows queries supported formats without choosing/configuring one first.
+  A disconnected virtual camera can have no modes; choose another camera.
+  Unexpected helper exits report their exit status and bounded driver
+  diagnostics, separately from empty replies or oversized catalogs.
 - Discrete Linux modes are listed directly. Continuous size ranges offer
   their valid endpoints and common sizes, including full HD, rather than
   expanding an enormous grid. Only exact integer rates from 1–120 FPS are

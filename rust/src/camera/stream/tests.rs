@@ -131,13 +131,23 @@ fn catalog_worker_fixture() {
             let _ = std::io::stdout().write_all(&bytes);
         }
         Ok("ok") => println!("synthetic camera catalog"),
+        Ok("noisy") => {
+            std::io::stderr()
+                .write_all(&vec![b'x'; ERROR_LIMIT as usize * 2])
+                .unwrap();
+            println!("synthetic camera catalog");
+        }
+        Ok("failed") => {
+            eprintln!("virtual camera is offline");
+            std::process::exit(7);
+        }
         _ => (),
     }
 }
 
 #[test]
 fn catalog_reader_bounds_output_and_kills_stalled_workers() {
-    for mode in ["ok", "large", "wait"] {
+    for mode in ["ok", "noisy", "failed", "large", "wait"] {
         let mut command = Command::new(std::env::current_exe().unwrap());
         command
             .args([
@@ -163,15 +173,43 @@ fn catalog_reader_bounds_output_and_kills_stalled_workers() {
         let result = receiver.recv_timeout(Duration::from_secs(6)).unwrap();
         drop(query);
         match mode {
-            "ok" => assert!(
+            "ok" | "noisy" => assert!(
                 String::from_utf8_lossy(&result.unwrap())
                     .contains("synthetic camera catalog")
             ),
             "large" => assert!(result.unwrap_err().contains("oversized")),
+            "failed" => {
+                let error = result.unwrap_err();
+                assert!(error.contains('7'), "{error}");
+                assert!(error.contains("virtual camera is offline"), "{error}");
+            }
             _ => assert!(result.unwrap_err().contains("timed out")),
         }
         assert!(start.elapsed() < Duration::from_secs(5));
     }
+}
+
+#[test]
+fn empty_discovery_reply_is_not_reported_as_an_oversized_catalog() {
+    #[cfg(target_os = "windows")]
+    let mut command = Command::new("cmd.exe");
+    #[cfg(target_os = "windows")]
+    command.args(["/D", "/C", "exit /B 0"]);
+    #[cfg(not(target_os = "windows"))]
+    let mut command = Command::new("/bin/sh");
+    #[cfg(not(target_os = "windows"))]
+    command.args(["-c", "exit 0"]);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let _query = start_query(command, Duration::from_secs(5), move |result| {
+        sender.send(result).unwrap();
+    })
+    .unwrap();
+    let error = receiver
+        .recv_timeout(Duration::from_secs(6))
+        .unwrap()
+        .unwrap_err();
+    assert!(error.contains("no data"), "{error}");
+    assert!(!error.contains("oversized"), "{error}");
 }
 
 #[test]

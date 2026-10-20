@@ -89,6 +89,28 @@ fn empty_catalogs_errors_and_unadvertised_choices_never_start_drivers() {
 }
 
 #[test]
+fn offline_camera_modes_do_not_prevent_selecting_the_working_camera() {
+    for result in [Ok(vec![]), Err("Virtual camera is offline".into())] {
+        let mut state = discovered();
+        let id = state.camera.draft.as_ref().unwrap().id;
+        send(&mut state, Event::Modes(id, result));
+        assert_eq!(
+            state.camera.draft.as_ref().unwrap().sources.devices.len(),
+            2
+        );
+        send(&mut state, Event::Device(device(2)));
+        let draft = state.camera.draft.as_ref().unwrap();
+        let id = draft.id;
+        assert!(draft.error.is_none());
+        send(&mut state, Event::Modes(id, Ok(vec![Spec::default()])));
+        let draft = state.camera.draft.as_ref().unwrap();
+        assert_eq!(draft.sources.mode, Some(Spec::default()));
+        assert_eq!(draft.sources.device, Some(device(2)));
+        assert!(draft.error.is_none());
+    }
+}
+
+#[test]
 fn late_discovery_cannot_reopen_canceled_or_replaced_sessions() {
     let mut state = ready();
     let old = state.camera.draft.as_ref().unwrap().id;
