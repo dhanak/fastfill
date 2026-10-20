@@ -270,7 +270,13 @@ fn command_key_release_during_save_does_not_leave_constraints_stuck() {
 
 #[test]
 fn project_shortcuts_use_the_platform_command_modifier() {
-    let shortcut = super::super::controller::shortcut_message;
+    let shortcut = |key, modifiers| {
+        super::super::controller::shortcut_message(
+            key,
+            modifiers,
+            iced::event::Status::Ignored,
+        )
+    };
     let command = iced::keyboard::Modifiers::COMMAND;
     let key = |value: &str| iced::keyboard::Key::Character(value.into());
     assert!(matches!(

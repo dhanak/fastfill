@@ -1,7 +1,6 @@
-use super::project::{LeaveAction, Operation};
 use super::{FastFill, ImagePicker, Message};
 use crate::appearance::CONTROL_HEIGHT;
-use iced::widget::{button, container, row, text};
+use iced::widget::{button, row, text};
 use iced::{Element, Fill};
 
 pub(super) fn controls(state: &FastFill) -> Element<'_, Message> {
@@ -39,38 +38,6 @@ pub(super) fn controls(state: &FastFill) -> Element<'_, Message> {
     .spacing(8)
     .align_y(iced::Alignment::Center)
     .into()
-}
-
-pub(super) fn confirmation(state: &FastFill) -> Option<Element<'_, Message>> {
-    let Operation::Confirm(action) = state.project.operation else {
-        return None;
-    };
-    let description = match action {
-        LeaveAction::New => "Save changes before starting a new project?",
-        LeaveAction::Open => "Save changes before opening another project?",
-        LeaveAction::Close(_) => "Save changes before closing FastFill?",
-    };
-    Some(
-        container(
-            row![
-                text(description).width(Fill),
-                button("Save")
-                    .on_press(Message::SaveBeforeLeave)
-                    .height(CONTROL_HEIGHT),
-                button("Discard")
-                    .on_press(Message::DiscardProject)
-                    .height(CONTROL_HEIGHT),
-                button("Cancel")
-                    .on_press(Message::KeepProject)
-                    .height(CONTROL_HEIGHT),
-            ]
-            .align_y(iced::Alignment::Center)
-            .spacing(8),
-        )
-        .padding(8)
-        .style(container::warning)
-        .into(),
-    )
 }
 
 #[cfg(test)]

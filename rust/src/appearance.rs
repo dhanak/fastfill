@@ -6,6 +6,8 @@ use std::sync::{Once, OnceLock};
 pub(crate) const TOOLBAR_HEIGHT: f32 = 168.0;
 pub(crate) const TOOLBAR_ROW_HEIGHT: f32 = TOOLBAR_HEIGHT / 3.0;
 pub(crate) const CONTROL_HEIGHT: f32 = 40.0;
+pub(crate) const TOOL_ICON_SIZE: f32 = 24.0;
+pub(crate) const COLOR_SWATCH_SIZE: f32 = 32.0;
 pub(crate) const CONTROL_GAP: f32 = 8.0;
 pub(crate) const TOOLBAR_PADDING: [u16; 2] = [8, 12];
 pub(crate) const PAGE_MARGIN: f32 = 36.0;
@@ -25,6 +27,113 @@ pub(crate) fn canvas_background() -> Color {
 
 pub(crate) fn page_shadow() -> Color {
     Color::from_rgba8(0, 0, 0, 0.22)
+}
+
+pub(crate) fn tool_button(
+    theme: &iced::Theme,
+    status: iced::widget::button::Status,
+    selected: bool,
+) -> iced::widget::button::Style {
+    use iced::widget::button;
+
+    let mut style = if selected {
+        button::primary(theme, status)
+    } else {
+        button::background(theme, status)
+    };
+    style.border.radius = 6.0.into();
+    if !selected {
+        style.border.width = 1.0;
+        style.border.color = theme.extended_palette().background.strong.color;
+    }
+    style
+}
+
+pub(crate) fn color_button(
+    theme: &iced::Theme,
+    status: iced::widget::button::Status,
+    selected: bool,
+) -> iced::widget::button::Style {
+    use iced::widget::button::Status;
+
+    let color = if selected {
+        accent()
+    } else {
+        match status {
+            Status::Hovered | Status::Pressed => theme
+                .extended_palette()
+                .background
+                .base
+                .text
+                .scale_alpha(0.5),
+            _ => Color::TRANSPARENT,
+        }
+    };
+    iced::widget::button::Style {
+        border: iced::Border {
+            color: color.scale_alpha(if status == Status::Disabled {
+                0.4
+            } else {
+                1.0
+            }),
+            width: if selected { 2.0 } else { 1.0 },
+            radius: (CONTROL_HEIGHT / 2.0).into(),
+        },
+        ..Default::default()
+    }
+}
+
+pub(crate) fn color_patch(
+    theme: &iced::Theme,
+    color: AnnotationColor,
+    enabled: bool,
+) -> iced::widget::container::Style {
+    iced::widget::container::Style {
+        background: Some(
+            annotation_color(color)
+                .scale_alpha(if enabled { 1.0 } else { 0.4 })
+                .into(),
+        ),
+        border: iced::Border {
+            color: theme
+                .extended_palette()
+                .background
+                .base
+                .text
+                .scale_alpha(0.25),
+            width: 1.0,
+            radius: (COLOR_SWATCH_SIZE / 2.0).into(),
+        },
+        ..Default::default()
+    }
+}
+
+pub(crate) fn modal_scrim(_: &iced::Theme) -> iced::widget::container::Style {
+    iced::widget::container::Style {
+        background: Some(Color::from_rgba8(0, 0, 0, 0.45).into()),
+        ..Default::default()
+    }
+}
+
+pub(crate) fn confirmation_card(
+    theme: &iced::Theme,
+) -> iced::widget::container::Style {
+    let palette = theme.extended_palette();
+    iced::widget::container::Style {
+        background: Some(palette.background.base.color.into()),
+        text_color: Some(palette.background.base.text),
+        border: iced::Border {
+            color: palette.background.strong.color,
+            width: 1.0,
+            radius: 12.0.into(),
+        },
+        shadow: iced::Shadow {
+            color: Color::from_rgba8(0, 0, 0, 0.25),
+            offset: iced::Vector::new(0.0, 8.0),
+            blur_radius: 24.0,
+        },
+        ..Default::default()
+    }
 }
 
 pub(crate) fn annotation_color(color: AnnotationColor) -> Color {

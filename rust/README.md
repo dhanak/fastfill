@@ -649,6 +649,11 @@ Checkpoint 5C adds multiple image pages:
 - **Delete page:** confirm removal of the current page and its annotations.
   Deleting the last page leaves one blank editable page. Undo/Redo currently
   applies to active-page annotations; page operations cannot yet be undone.
+- **Confirmations:** replacing/deleting a page, deleting all annotations and
+  leaving an unsaved project use a centered dialog over a dimmed editor. The
+  page, rail and toolbars stay in place. Background clicks/touches/scrolling
+  do nothing; use Keep/Cancel or Escape to return. Destructive actions require
+  their explicit button; plain Enter does not confirm them.
 
 Checkpoint 5D2 connects project files:
 
@@ -804,7 +809,11 @@ dimensions are not promised to match C# pixelwise. Test projects with copies.
 
 Available annotation tools:
 
-The tool row scrolls horizontally in narrower windows.
+Tools use monochrome vector icons in equal 40-pixel touch targets. The active
+tool's name stays beside the buttons; Text uses Aa. Hover for labels. Selected
+tools, the magnet (Smart snap), and bucket (Fill) share the same highlight.
+Options appear only when applicable. The tool/options rows scroll horizontally
+in narrower windows; the page view keeps its size when switching tools.
 
 - **Rectangle:** drag with the left mouse button or one finger. The preview
   uses the chosen style immediately. Hold Ctrl to draw a square.
@@ -828,10 +837,20 @@ The tool row scrolls horizontally in narrower windows.
   text without opening the editor; drag to move it or use its rotation handle.
   Choose Sans, Serif, or Monospace; size; bold; italic; underline; and color.
   Editor changes remain pending until acceptance; changes to inactive selected
-  text apply immediately and support undo. Scroll over the size selector to
-  step through sizes.
+  text apply immediately and support undo. The size spinner's −/+ buttons
+  and mouse wheel step by 1 pt within 6–144 pt. Type a size such as 22 or 22.5
+  (decimal comma also works), then Enter or another editing action to apply.
+  Numeric entry commits once, not once per character. Escape/Undo first
+  discard an unapplied numeric draft without canceling the inline text edit
+  or changing selection. Invalid values stay out of the document; Enter
+  shows an error, while clicking away restores the previous valid size.
+  Imported/scaled fractional sizes retain their precision until edited.
+  Mixed-size text selections show **Mixed**; entering a size applies it to
+  every selected text, leaves shapes untouched, and supports a single Undo.
 - **Styles:** choose black, white, red, blue, green, or yellow. Use −/+ for
   stroke widths from 1–20 points. Rectangle, Oval, and Pen offer Fill.
+  Round swatches retain their color on hover; a separated outer ring marks
+  the chosen color. Disabled controls dim without substituting white patches.
   Each tool remembers its own settings; Select changes the chosen object
   with undo.
 - **Select:** click/tap an unselected object to select it on release. Drag

@@ -754,14 +754,73 @@ SP6 hardware calibration remain deferred, separate from laptop acceptance.
       launch, open/save/export a project and try the SP6 cameras when available.
       Keep prior physical sleep/touch/DPI calibration deferrals explicit.
 
+#### 7B. Font-size spinner — manually accepted
+
+- [x] Replace the preset list with equal-sized minus/plus touch buttons and
+      a numeric field. Step by 1 pt, including mouse wheel; clamp to 6–144 pt.
+- [x] Accept valid numeric entry with Enter or an existing click-away accept
+      path; reject invalid values without changing annotations. Escape first
+      discards the numeric draft, not the page's pending text edit.
+- [x] Preserve imported/scaled fractional sizes until the user changes them.
+      Show mixed selections correctly; apply a chosen size to selected text
+      only, in one undoable change, and keep shape geometry untouched.
+- [x] Keep font changes to inline text pending until text acceptance; Escape
+      must still restore the original text and format. Add regressions first.
+- [x] Keep the control local to text options and existing appearance tokens;
+      do not introduce a generic widget framework or redesign every panel.
+- [x] Validate native tests, WASM compilation and lint. Hand off a Linux check;
+      physical touch and the Windows camera retest remain deferred.
+- [x] User checkpoint on Linux: enter 22 pt, step with buttons/wheel, reject
+      200 pt, and verify Escape/Undo on inline text and mixed selections.
+      User confirms these checks on 2026-10-20; touch remains deferred.
+
+#### 7C. Stable confirmation overlays — manually accepted
+
+- [x] Move replace-page, delete-page, delete-all and unsaved-project prompts
+      out of the header into a centered modal layer. Never resize/reposition
+      the editor, page rail or toolbars when a confirmation appears.
+- [x] Use readable themed cards, a dimmed backdrop and equal-height/width
+      touch actions. Fit small windows; keep styling in appearance.rs.
+- [x] Block background pointer/wheel input; preserve existing workflow guards,
+      Keep/Cancel, Escape, saving and undo behavior. Do not dismiss on a
+      backdrop click or accept destructive actions implicitly with Enter.
+- [x] Test layout stability, actual button routing, mouse/touch/wheel input
+      isolation, and rendering above a zoomed page at both DPI scales.
+- [x] Pass all 556 native/all-target tests, strict lint, WASM compilation and
+      formatting. Exhaustive replay remains ignored/opt-in; physical touch,
+      Windows camera and Surface DPI/sleep checks remain deferred.
+- [x] User checkpoint on Linux: open/cancel each prompt; confirm delete-all
+      then Undo; verify the page stays put and backdrop clicks do nothing.
+      User confirms dialogs work well on 2026-10-20; touch remains deferred.
+
+#### 7D. Compact vector tools and color swatches — accepted
+
+- [x] Replace the eleven text tool buttons with centered vector icons in
+      equal 40-pixel square targets. Keep native tooltips and an active-tool
+      label; use consistent stroke weights and selected-theme foregrounds.
+- [x] Replace Smart snap and Fill labels with monochrome magnet/bucket
+      buttons using the same sizes, selected styles and applicability rules.
+- [x] Show six round color swatches with a separated selection ring; retain
+      pigment on hover and dim rather than whiten disabled colors.
+- [x] Keep toolbar layout/styles local. Reuse iced canvas/native controls;
+      add no new font, image, dependency or generic icon/widget framework.
+- [x] Automate size/centering, theme/selected/disabled rendering, color/hover
+      behavior and existing command routing; pass native/WASM/lint checks.
+      All 563 native/all-target tests, strict Clippy, WASM and formatting pass;
+      exhaustive replay remains opt-in. Preview both themes headlessly.
+- [x] User checkpoint on Linux: inspect icons, hover labels, selection and
+      color rings; use every tool, Fill and Smart snap, including after
+      placement and in a narrower window. Keep Windows/touch checks deferred.
+      User accepts the icons on 2026-10-20 except the ambiguous Text glyph;
+      replace it with Aa using the existing bundled font. Verify that small
+      follow-up headlessly; user explicitly defers scrollbar overlap.
+
 #### Remaining UI polish and replacement gate — not started
 
-- Polish the UI for regular use: cohesive visual styling, tool icons, touch
-  layout, and confirmations that overlay the canvas without resizing it.
-- Replace the font-size dropdown with a touch-friendly numeric spinner:
-  1 pt increments instead of the current 4 pt choices. Show and preserve any
-  valid imported size, including the fixtures' 22 pt. Retain size validation,
-  wheel adjustment, and pending-text Accept/Escape semantics.
+- Polish the UI for regular use: cohesive visual styling and touch layout.
+  Stable confirmations and compact tools have their own checkpoints above.
+- During the toolbar/panel redesign, reserve scrollbar space so horizontal
+  tracks do not cover button bottoms. User defers this temporary overlap.
 - Profile the browser harness if full-release builds remain sluggish;
   debug builds now lightly optimize FastFill as well as its dependencies.
 - Redesign the page rail with animated reorder feedback:
@@ -3340,6 +3399,108 @@ sleep and Surface calibration remain deferred, not inferred from laptop tests.
   do not claim the physical driver failure fixed from Linux-only tests.
 - User requests committing the fix and continuing without Windows access.
   Defer physical retesting explicitly; do not mark camera behavior accepted.
+
+### 2026-10-20 — Start UI polish with checkpoint 7B
+
+- Commit the Windows console/camera-query fix unsigned as requested, with
+  physical Windows retesting explicitly deferred while hardware is absent.
+  Start one small UI checkpoint, not the entire visual redesign at once.
+- TDD red: the old wheel handler changes 24 pt to 32, not the required 25.
+  Replace preset sizes with a numeric field and 40-pixel minus/plus buttons;
+  wheel and buttons change sizes by one point within the model's 6–144 range.
+- Keep numeric input uncommitted until Enter or an existing editing action
+  accepts it. Partial/invalid values never alter annotations or history.
+  Escape/Undo discard a numeric draft first; inline text remains pending.
+  Invalid Enter retains the field for correction and shows an explicit error.
+- Reuse the existing text-format handler for measurement, selected-text
+  transactions, and pending-text Accept/Escape behavior. Use existing accept
+  paths for page/tool/navigation/save changes rather than duplicate dispatch
+  lists. Keep modal/project-operation guards ahead of numeric editing.
+- Display imported/scaled sizes compactly without changing stored precision.
+  Support decimal dot/comma, preserve mixed-font selections, apply a chosen
+  size to selected text only, and undo a group size change in one operation.
+- Move text-option rendering and numeric-field handling into text_controls,
+  with separate colocated tests. Shrink view.rs; use existing spacing/theme
+  tokens and native iced controls, not a new dependency or widget framework.
+- Thirteen focused tests cover numeric drafts, validation, limits, fractional
+  values, wheel steps, inline Escape, grouped Undo, and project guards. A
+  headless layout check verifies button/entry sizes stay fixed for 6–144 pt.
+- Respect captured Delete events so editing the numeric field cannot also
+  delete an annotation; keep Escape available to discard its pending value.
+- Validation: all 550 native/all-target tests pass; exhaustive replay stays
+  opt-in. Strict Clippy, all-feature WASM compilation, formatting and whitespace
+  checks pass. Keep compilation under /tmp and the C# app unchanged.
+- User confirms the Linux checkpoint on 2026-10-20. Mark 7B accepted and
+  continue to the stable-confirmation overlay checkpoint. Keep physical
+  touch and the Windows camera retest deferred.
+
+### 2026-10-20 — Stable confirmation overlays, checkpoint 7C
+
+- Record the user's Linux acceptance of 7B, then start the next small UI
+  checkpoint. Keep hardware-only calibration and camera checks deferred.
+- TDD red: opening Replace page increases the header height and moves/shrinks
+  the editor. Reproduce this with the actual headless iced layout before
+  connecting the overlay. Keep a regression for all six prompt paths at two
+  window sizes, including each editor/toolbar/rail descendant's bounds.
+- Replace the three page/annotation header prompts and project-leave banner
+  with one local confirmation module. Keep project, page and annotation
+  workflow ownership unchanged; no document/history/schema changes.
+- Use native stack, opaque and mouse-area widgets instead of a modal widget
+  framework or dependency. Keep an explicit renderer layer under the dialog
+  so zoomed page images cannot cover its card or translucent backdrop.
+- Centralize themed card/backdrop styling in appearance.rs. Center readable
+  cards and equal-width 40-pixel actions, fitting down to a 320-pixel window.
+  Use red destructive actions and explicit Keep/Cancel options. Backdrop
+  input does not dismiss the dialog; Enter never confirms destruction.
+- Six colocated tests check unchanged editor layout, actual button routing,
+  backdrop mouse/touch/wheel isolation, late command guards, Escape without
+  data loss, Delete all/Undo, and image/modal layering at 100%/200% scale.
+- Validation: all 556 native/all-target tests pass; exhaustive camera replay
+  remains opt-in. Strict Clippy, all-feature WASM compilation, formatting and
+  whitespace checks pass. Rebuild cold container caches under /tmp only;
+  leave host target/dist, C# code and release workflows unchanged.
+- User confirms dialogs work well on 2026-10-20. Mark 7C manually accepted
+  and continue with compact vector tools. Keep Windows/real-touch deferrals.
+
+### 2026-10-20 — Compact vector tools and swatches, checkpoint 7D
+
+- Accept the user's 7C dialog check and start one toolbar-only polish step.
+  Keep larger panel/rail animation, startup/help and packaging work separate.
+- TDD red: Navigate measures 83.536 by 40 pixels, not the required equal
+  40-pixel square target. Retain the check across all tools, options and colors.
+- Draw eleven tools plus magnet/bucket as monochrome native canvas paths.
+  Use one themed button/foreground policy for selected and disabled glyphs;
+  center rectangle/oval with equal bounds and stroke weight. Add no platform
+  font, emoji, bitmap, dependency or generic icon framework.
+- Preserve active-tool labels and native half-second hover hints. Suppress
+  hints when disabled so they cannot remain above modal/busy workflows.
+  Keep smart-snap readiness visible, global snap state, per-tool defaults and
+  existing annotation command routing, including after temporary selection.
+- Replace named color buttons with six round 32-pixel patches in 40-pixel
+  targets. Add a two-pixel selection ring with a two-pixel pigment gap; keep
+  colors unchanged on hover and retain their RGB pigment when dimmed.
+- Move toolbar rendering to its own module with colocated tests; reduce
+  view.rs to window composition/document editing. Keep touched style/size
+  tokens in appearance.rs, with padding derived from icon/swatch size.
+  Maintain three fixed-height rows so tools/options never resize the page.
+- Six new checks cover full-target mouse/touch routing and disabled controls,
+  geometry/centering, all thirteen glyphs at 100%/200% in light/dark themes,
+  selected/disabled rendering, swatch hover/ring gaps, and post-placement snap.
+  Reuse headless rendering with optional theme/cursor parameters; inspect
+  temporary icon grids and editor preview without adding generated assets.
+- Validation: all 562 native/all-target tests pass; exhaustive camera replay
+  remains ignored/opt-in. Strict Clippy, all-feature WASM, formatting and
+  whitespace checks pass. Keep builds/previews under /tmp, not host target
+  or dist; leave C# code, serialization and release workflows unchanged.
+- User accepts the icons on Linux except the ambiguous Text glyph. Replace
+  that glyph with Aa using existing bundled Fira Sans, preserving selected
+  and disabled foregrounds. Add a headless letter-region regression at both
+  DPI scales and themes. Keep other icons unchanged.
+- Record scrollbar/button overlap for the later toolbar layout redesign,
+  as requested. Mark 7D accepted; do not infer Windows/real-touch checks.
+- Validate the Aa follow-up: all 563 native/all-target tests, strict Clippy,
+  WASM compilation, formatting and whitespace pass. Inspect light/dark
+  previews, including selected/disabled states. Leave changes uncommitted.
 
 ## References
 

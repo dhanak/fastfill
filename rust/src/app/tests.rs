@@ -182,6 +182,9 @@ fn undo_redo_messages_apply_only_to_committed_edits() {
 
 #[test]
 fn keyboard_shortcuts_map_to_history_and_edit_commands() {
+    let shortcut_message = |key, modifiers| {
+        super::shortcut_message(key, modifiers, iced::event::Status::Ignored)
+    };
     let command = keyboard::Modifiers::COMMAND;
     let command_shift = command | keyboard::Modifiers::SHIFT;
     assert!(matches!(
@@ -1238,7 +1241,7 @@ fn pixel_indices_for_page_rect(
         .collect()
 }
 
-fn rendered_page() -> FastFill {
+pub(super) fn rendered_page() -> FastFill {
     let mut state = FastFill::default();
     // Renderer fixtures use one page unit per viewport pixel for exact checks.
     state.pages.current_mut().size = PageSize::new(600.0, 600.0);
@@ -1265,12 +1268,30 @@ fn render_document(state: &FastFill, scale: u32, dpi: f32) -> Vec<u8> {
     render_element(document(state), iced::Size::new(600, 600), scale, dpi)
 }
 
-#[allow(clippy::cast_precision_loss)]
 pub(super) fn render_element(
+    element: iced::Element<'_, Message>,
+    size: iced::Size<u32>,
+    scale: u32,
+    dpi: f32,
+) -> Vec<u8> {
+    render_themed_element(
+        element,
+        size,
+        scale,
+        dpi,
+        &Theme::Light,
+        mouse::Cursor::Unavailable,
+    )
+}
+
+#[allow(clippy::cast_precision_loss)]
+pub(super) fn render_themed_element(
     mut element: iced::Element<'_, Message>,
     size: iced::Size<u32>,
     scale: u32,
     dpi: f32,
+    theme: &Theme,
+    cursor: mouse::Cursor,
 ) -> Vec<u8> {
     use iced::advanced::Renderer as _;
     use iced::advanced::renderer::{Headless, Style};
@@ -1300,7 +1321,7 @@ pub(super) fn render_element(
             iced::time::Instant::now(),
         )),
         Layout::new(&node),
-        mouse::Cursor::Unavailable,
+        cursor,
         &renderer,
         &mut iced::advanced::clipboard::Null,
         &mut iced::advanced::Shell::new(&mut Vec::new()),
@@ -1309,16 +1330,16 @@ pub(super) fn render_element(
     element.as_widget().draw(
         &tree,
         &mut renderer,
-        &Theme::Light,
+        theme,
         &Style::default(),
         Layout::new(&node),
-        mouse::Cursor::Unavailable,
+        cursor,
         &Rectangle::new(Point::ORIGIN, logical),
     );
     renderer.screenshot(
         iced::Size::new(size.width * scale, size.height * scale),
         dpi,
-        Color::WHITE,
+        theme.palette().background,
     )
 }
 

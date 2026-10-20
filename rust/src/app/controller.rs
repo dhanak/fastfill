@@ -8,7 +8,14 @@ use iced::{Task, keyboard};
 pub(super) fn shortcut_message(
     key: keyboard::Key,
     modifiers: keyboard::Modifiers,
+    status: iced::event::Status,
 ) -> Option<Message> {
+    // Focused text fields own Delete; Escape still cancels their numeric draft.
+    if status == iced::event::Status::Captured
+        && key == keyboard::Key::Named(keyboard::key::Named::Delete)
+    {
+        return None;
+    }
     match key {
         keyboard::Key::Character(value)
             if modifiers.command() && value.eq_ignore_ascii_case("n") =>
@@ -58,12 +65,14 @@ pub(super) fn shortcut_message(
 
 impl FastFill {
     pub(super) fn cancel_interaction(&mut self) {
+        self.clear_font_size_input();
         self.annotations_mut().cancel();
         self.dragged_page = None;
         self.input_epoch = self.input_epoch.wrapping_add(1);
     }
 
     pub(super) fn accept_text(&mut self) {
+        self.finish_font_size_input();
         self.sync_text();
         if self.annotations_mut().accept_text() {
             self.input_epoch = self.input_epoch.wrapping_add(1);
@@ -104,6 +113,7 @@ impl FastFill {
     }
 
     fn edit_text(&mut self, action: text_editor::Action) {
+        self.finish_font_size_input();
         self.text_content.perform(action);
         self.sync_text();
     }
@@ -117,6 +127,7 @@ impl FastFill {
     }
 
     fn change_history(&mut self, redo: bool) {
+        self.clear_font_size_input();
         if self.image_picker == ImagePicker::Idle {
             let old_size = self.pages.current().size;
             match self.pages.current_mut().history(redo) {
@@ -213,9 +224,13 @@ fn update_editor(state: &mut FastFill, message: Message) -> Task<Message> {
     if let Some(task) = super::pages::update(state, &message) {
         return task;
     }
-    if handle_delete_confirmation(state, &message)
-        || handle_navigation(state, &message)
-        || handle_text_format(state, &message)
+    if handle_delete_confirmation(state, &message) {
+        return Task::none();
+    }
+    if let Some(task) = super::text_controls::update(state, &message) {
+        return task;
+    }
+    if handle_navigation(state, &message) || handle_text_format(state, &message)
     {
         return Task::none();
     }
@@ -293,7 +308,19 @@ fn update_editor(state: &mut FastFill, message: Message) -> Task<Message> {
     Task::none()
 }
 
-fn handle_text_format(state: &mut FastFill, message: &Message) -> bool {
+pub(super) fn handle_text_format(
+    state: &mut FastFill,
+    message: &Message,
+) -> bool {
+    match message {
+        Message::SetTextSize(_) => state.clear_font_size_input(),
+        Message::SetTextTypeface(_)
+        | Message::SetColor(_)
+        | Message::ToggleTextBold
+        | Message::ToggleTextItalic
+        | Message::ToggleTextUnderline => state.finish_font_size_input(),
+        _ => return false,
+    }
     let Some(current) = state.annotations().current_text_format() else {
         return false;
     };

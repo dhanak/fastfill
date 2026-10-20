@@ -1,22 +1,18 @@
 use super::{FastFill, ImagePicker, Message, TEXT_EDITOR_ID, page_size};
 use crate::appearance::{
-    CONTROL_GAP, CONTROL_HEIGHT, TOOLBAR_HEIGHT, TOOLBAR_PADDING,
-    TOOLBAR_ROW_HEIGHT, annotation_color, text_font,
+    CONTROL_HEIGHT, TOOLBAR_HEIGHT, annotation_color, text_font,
 };
 use crate::page_canvas::{CanvasLayer, PageCanvas, page_viewport};
 use fastfill_rust::annotations::{
     AnnotationColor, TEXT_EDITOR_HORIZONTAL_PADDING,
-    TEXT_EDITOR_VERTICAL_PADDING, TEXT_LINE_HEIGHT, TextFormat, TextTypeface,
-    Tool,
+    TEXT_EDITOR_VERTICAL_PADDING, TEXT_LINE_HEIGHT,
 };
-use fastfill_rust::geometry::{Point as PagePoint, Rect as PageRect};
+use fastfill_rust::geometry::Point as PagePoint;
 use iced::widget::{
-    Row, button, canvas, column, container, mouse_area, pick_list,
-    progress_bar, responsive, row, scrollable, text, text_editor,
+    button, canvas, column, container, progress_bar, responsive, row, text,
+    text_editor,
 };
-use iced::{
-    Background, Border, Color, Element, Fill, Padding, keyboard, mouse,
-};
+use iced::{Background, Border, Color, Element, Fill, Padding, keyboard};
 
 fn heading(state: &FastFill) -> Element<'_, Message> {
     let status = if state.status.is_empty() {
@@ -36,9 +32,6 @@ fn heading(state: &FastFill) -> Element<'_, Message> {
         column![super::project_view::controls(state), status_line].spacing(4);
     if let Some(warning) = super::page_edit::warning(state) {
         heading = heading.push(warning);
-    }
-    if let Some(confirmation) = super::project_view::confirmation(state) {
-        heading = heading.push(confirmation);
     }
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(banner) = super::recovery::banner(state) {
@@ -70,52 +63,6 @@ fn heading(state: &FastFill) -> Element<'_, Message> {
             .align_y(iced::Alignment::Center),
         );
     }
-    if state.image_picker == ImagePicker::ConfirmReplace {
-        heading = heading.push(
-            container(
-                row![
-                    text("Replace page and discard its annotations?")
-                        .width(Fill),
-                    button("Keep page").on_press(Message::KeepPage),
-                    button("Replace").on_press(Message::ConfirmReplacePage),
-                ]
-                .align_y(iced::Alignment::Center)
-                .spacing(8),
-            )
-            .padding(8)
-            .style(container::warning),
-        );
-    }
-    if state.confirm_delete_page {
-        heading = heading.push(
-            container(
-                row![
-                    text("Delete this page and its annotations?").width(Fill),
-                    button("Keep page").on_press(Message::KeepPage),
-                    button("Delete page").on_press(Message::ConfirmDeletePage),
-                ]
-                .align_y(iced::Alignment::Center)
-                .spacing(8),
-            )
-            .padding(8)
-            .style(container::warning),
-        );
-    }
-    if state.confirm_delete_all {
-        heading = heading.push(
-            container(
-                row![
-                    text("Delete every annotation on this page?").width(Fill),
-                    button("Keep all").on_press(Message::KeepAll),
-                    button("Delete all").on_press(Message::ConfirmDeleteAll),
-                ]
-                .align_y(iced::Alignment::Center)
-                .spacing(8),
-            )
-            .padding(8)
-            .style(container::warning),
-        );
-    }
     container(heading).padding([10, 20]).into()
 }
 
@@ -134,9 +81,7 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
         );
         let viewport = page_viewport(canvas_size);
         column![
-            control_row(state, viewport),
-            tool_row(state, available.width),
-            style_row(state),
+            super::toolbar::view(state, viewport, available.width),
             document(state),
         ]
         .width(Fill)
@@ -144,314 +89,18 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
         .into()
     });
 
-    column![heading(state), row![super::rail::view(state), body]]
-        .width(Fill)
-        .height(Fill)
-        .into()
-}
-
-fn control_row(state: &FastFill, viewport: PageRect) -> Element<'_, Message> {
-    let zoom = |factor| Message::ZoomAt {
-        factor,
-        anchor: viewport.center(),
-        viewport,
-    };
-    toolbar_row(row![
-        button("Undo")
-            .on_press_maybe(
-                (state.image_picker == ImagePicker::Idle
-                    && state.annotations().can_undo())
-                .then_some(Message::Undo),
-            )
-            .height(CONTROL_HEIGHT),
-        button("Redo")
-            .on_press_maybe(
-                (state.image_picker == ImagePicker::Idle
-                    && state.annotations().can_redo())
-                .then_some(Message::Redo),
-            )
-            .height(CONTROL_HEIGHT),
-        button("Rotation 0°")
-            .on_press_maybe(
-                (state.image_picker == ImagePicker::Idle
-                    && state.annotations().can_reset_rotation())
-                .then_some(Message::ResetRotation),
-            )
-            .height(CONTROL_HEIGHT),
-        button("−").on_press(zoom(0.8)).height(CONTROL_HEIGHT),
-        button("+").on_press(zoom(1.25)).height(CONTROL_HEIGHT),
-        button("1:1")
-            .on_press(Message::OneToOne(viewport))
-            .height(CONTROL_HEIGHT),
-        button("Fit").on_press(Message::Fit).height(CONTROL_HEIGHT),
-    ])
-    .into()
-}
-
-fn tool_row(state: &FastFill, available_width: f32) -> Element<'_, Message> {
-    let selected = state.annotations().tool();
-    let mut tools = Row::new();
-    for tool in Tool::ALL {
-        tools = tools.push(tool_button(tool, selected));
-    }
-    tools = tools
-        .push(
-            button("Delete")
-                .on_press_maybe(
-                    (state.image_picker == ImagePicker::Idle
-                        && state.annotations().has_selection()
-                        && !state.annotations().has_text_edit()
-                        && state.annotations().active_pointer().is_none())
-                    .then_some(Message::DeleteSelected),
-                )
-                .height(CONTROL_HEIGHT),
-        )
-        .push(
-            button("Delete all")
-                .on_press_maybe(
-                    (state.image_picker == ImagePicker::Idle
-                        && !state.annotations().is_empty()
-                        && state.annotations().active_pointer().is_none())
-                    .then_some(Message::AskDeleteAll),
-                )
-                .height(CONTROL_HEIGHT),
-        )
-        .push(
-            button("To back")
-                .on_press_maybe(
-                    (state.image_picker == ImagePicker::Idle
-                        && state.annotations().has_selection()
-                        && !state.annotations().has_text_edit()
-                        && state.annotations().active_pointer().is_none())
-                    .then_some(Message::SendToBack),
-                )
-                .height(CONTROL_HEIGHT),
-        )
-        .push(
-            button("To front")
-                .on_press_maybe(
-                    (state.image_picker == ImagePicker::Idle
-                        && state.annotations().has_selection()
-                        && !state.annotations().has_text_edit()
-                        && state.annotations().active_pointer().is_none())
-                    .then_some(Message::BringToFront),
-                )
-                .height(CONTROL_HEIGHT),
-        );
-    if available_width >= 520.0 {
-        tools = tools.push(
-            text(format!("{} annotations", state.annotations().len())).size(14),
-        );
-    }
-    scrollable(toolbar_row(tools))
-        .direction(scrollable::Direction::Horizontal(
-            scrollable::Scrollbar::new(),
-        ))
-        .height(TOOLBAR_ROW_HEIGHT)
-        .into()
-}
-
-fn style_row(state: &FastFill) -> Element<'_, Message> {
-    let format = state.annotations().current_text_format();
-    let style = state.annotations().current_style();
-    let Some(color) = format
-        .map(|format| format.color)
-        .or_else(|| style.map(|style| style.color))
-    else {
-        return container(iced::widget::Space::new())
-            .height(TOOLBAR_ROW_HEIGHT)
-            .into();
-    };
-    let mut styles = Row::new();
-    if super::snap::supports(state.annotations().tool()) {
-        styles =
-            styles
-                .push(
-                    button(if state.smart_snap.enabled {
-                        "Smart snap ✓"
-                    } else {
-                        "Smart snap"
-                    })
-                    .on_press_maybe(super::snap::can_toggle(state).then_some(
-                        Message::SmartSnap(super::snap::Event::Toggle),
-                    ))
-                    .style(if state.smart_snap.enabled {
-                        button::primary
-                    } else {
-                        button::secondary
-                    })
-                    .height(CONTROL_HEIGHT),
-                )
-                .push(text(super::snap::status(state)).size(14));
-    }
-    if let Some(format) = format {
-        styles = styles.push(text_style_controls(state, format));
-    }
-    for (label, value) in [
-        ("Black", AnnotationColor::Black),
-        ("White", AnnotationColor::White),
-        ("Red", AnnotationColor::Red),
-        ("Blue", AnnotationColor::Blue),
-        ("Green", AnnotationColor::Green),
-        ("Yellow", AnnotationColor::Yellow),
-    ] {
-        styles = styles.push(color_button(label, value, color));
-    }
-    if let Some(style) = style
-        && state.annotations().stroke_available()
-    {
-        styles = styles
-            .push(
-                button("−")
-                    .on_press_maybe(
-                        (style.stroke_width > 1.0)
-                            .then_some(Message::AdjustThickness(-1.0)),
-                    )
-                    .height(CONTROL_HEIGHT),
-            )
-            .push(text(format!("{:.0} pt", style.stroke_width)).size(14))
-            .push(
-                button("+")
-                    .on_press_maybe(
-                        (style.stroke_width < 20.0)
-                            .then_some(Message::AdjustThickness(1.0)),
-                    )
-                    .height(CONTROL_HEIGHT),
-            );
-    }
-    if state.annotations().fill_available() {
-        styles = styles.push(
-            button(if state.annotations().current_fill() == Some(true) {
-                "Fill ✓"
-            } else {
-                "Fill"
-            })
-            .on_press(Message::ToggleFill)
-            .style(if state.annotations().current_fill() == Some(true) {
-                button::primary
-            } else {
-                button::secondary
-            })
-            .height(CONTROL_HEIGHT),
-        );
-    }
-    scrollable(toolbar_row(styles))
-        .direction(scrollable::Direction::Horizontal(
-            scrollable::Scrollbar::new(),
-        ))
-        .height(TOOLBAR_ROW_HEIGHT)
-        .into()
-}
-
-const TEXT_SIZES: [f32; 10] =
-    [8.0, 10.0, 12.0, 16.0, 20.0, 24.0, 32.0, 40.0, 48.0, 64.0];
-
-#[derive(Clone, Copy, PartialEq)]
-struct FontSize(f32);
-
-impl std::fmt::Display for FontSize {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Round only the label; preserve exact scaled/imported geometry.
-        write!(formatter, "{}", (self.0 * 10.0).round() / 10.0)
-    }
-}
-
-fn text_style_controls(
-    state: &FastFill,
-    format: TextFormat,
-) -> Row<'static, Message> {
-    let annotations = state.annotations();
-    let selected = annotations.selected_text_indices();
-    let texts = || selected.iter().filter_map(|index| annotations.text(*index));
-    let common_typeface =
-        texts().all(|text| text.format.typeface == format.typeface);
-    let common_size = texts().all(|text| {
-        (text.format.font_size - format.font_size).abs() < f32::EPSILON
-    });
-    let editing = state.annotations().has_text_edit();
-    let toggle = |label, enabled, message| {
-        button(label)
-            .on_press(message)
-            .style(if enabled {
-                button::primary
-            } else {
-                button::secondary
-            })
-            .height(CONTROL_HEIGHT)
-    };
-    row![
-        pick_list(
-            TextTypeface::ALL,
-            (editing || common_typeface).then_some(format.typeface),
-            Message::SetTextTypeface,
-        )
-        .width(130)
-        .placeholder("Mixed fonts"),
-        mouse_area(
-            pick_list(
-                TEXT_SIZES.map(FontSize),
-                (editing || common_size).then_some(FontSize(format.font_size)),
-                |size| Message::SetTextSize(size.0),
-            )
-            .width(75)
-            .placeholder("Mixed"),
-        )
-        .on_scroll(move |delta| {
-            Message::SetTextSize(text_size_after_scroll(
-                format.font_size,
-                delta,
-            ))
-        }),
-        toggle("B", format.bold, Message::ToggleTextBold),
-        toggle("I", format.italic, Message::ToggleTextItalic),
-        toggle("U", format.underline, Message::ToggleTextUnderline),
+    // Separate renderer layers keep page images below the modal and its scrim.
+    iced::widget::stack![
+        iced::widget::Space::new().width(Fill).height(Fill),
+        column![heading(state), row![super::rail::view(state), body]]
+            .width(Fill)
+            .height(Fill),
     ]
-}
-
-fn text_size_after_scroll(current: f32, delta: mouse::ScrollDelta) -> f32 {
-    let y = match delta {
-        mouse::ScrollDelta::Lines { y, .. }
-        | mouse::ScrollDelta::Pixels { y, .. } => y,
-    };
-    if y > 0.0 {
-        TEXT_SIZES
-            .iter()
-            .copied()
-            .find(|size| *size > current)
-            .unwrap_or(current)
-    } else if y < 0.0 {
-        TEXT_SIZES
-            .iter()
-            .copied()
-            .rev()
-            .find(|size| *size < current)
-            .unwrap_or(current)
-    } else {
-        current
-    }
-}
-
-fn toolbar_row(content: Row<'_, Message>) -> Row<'_, Message> {
-    content
-        .align_y(iced::Alignment::Center)
-        .height(TOOLBAR_ROW_HEIGHT)
-        .padding(TOOLBAR_PADDING)
-        .spacing(CONTROL_GAP)
-}
-
-fn color_button(
-    label: &str,
-    color: AnnotationColor,
-    selected: AnnotationColor,
-) -> iced::widget::Button<'_, Message> {
-    button(label)
-        .on_press(Message::SetColor(color))
-        .style(if color == selected {
-            button::primary
-        } else {
-            button::secondary
-        })
-        .height(CONTROL_HEIGHT)
+    .extend(super::confirmation::view(state))
+    .width(Fill)
+    .height(Fill)
+    .clip(true)
+    .into()
 }
 
 pub(super) fn document(state: &FastFill) -> Element<'_, Message> {
@@ -573,24 +222,10 @@ fn accepts_text(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> bool {
     ) && !modifiers.shift()
 }
 
-fn tool_button(
-    tool: Tool,
-    selected: Tool,
-) -> iced::widget::Button<'static, Message> {
-    button(text(tool.label()))
-        .on_press(Message::SetTool(tool))
-        .style(if tool == selected {
-            button::primary
-        } else {
-            button::secondary
-        })
-        .height(CONTROL_HEIGHT)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{FontSize, accepts_text, text_size_after_scroll};
-    use iced::{keyboard, mouse};
+    use super::accepts_text;
+    use iced::keyboard;
 
     #[test]
     fn plain_enter_accepts_but_shift_enter_does_not() {
@@ -598,31 +233,5 @@ mod tests {
 
         assert!(accepts_text(&enter, keyboard::Modifiers::empty()));
         assert!(!accepts_text(&enter, keyboard::Modifiers::SHIFT));
-    }
-
-    #[test]
-    fn font_size_wheel_steps_and_stops_at_limits() {
-        let up = mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 };
-        let down = mouse::ScrollDelta::Pixels { x: 0.0, y: -1.0 };
-
-        assert_eq!(text_size_after_scroll(24.0, up), 32.0);
-        assert_eq!(text_size_after_scroll(24.0, down), 20.0);
-        assert_eq!(text_size_after_scroll(64.0, up), 64.0);
-        assert_eq!(text_size_after_scroll(8.0, down), 8.0);
-    }
-
-    #[test]
-    fn scaled_font_sizes_have_compact_labels_without_rounding_the_value() {
-        for (value, label) in [
-            (24.0, "24"),
-            (22.000_002, "22"),
-            (14.666_667, "14.7"),
-            (143.999_98, "144"),
-            (6.000_001, "6"),
-        ] {
-            let size = FontSize(value);
-            assert_eq!(size.to_string(), label);
-            assert_eq!(size.0.to_bits(), value.to_bits());
-        }
     }
 }

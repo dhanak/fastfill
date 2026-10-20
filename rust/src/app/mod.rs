@@ -1,5 +1,6 @@
 #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
 mod camera;
+mod confirmation;
 mod controller;
 mod export;
 mod export_io;
@@ -16,6 +17,8 @@ mod rail;
 mod recovery;
 mod snap;
 mod text;
+mod text_controls;
+mod toolbar;
 mod view;
 
 #[cfg(test)]
@@ -40,7 +43,7 @@ use iced::widget::canvas;
 use iced::widget::image::Handle;
 use iced::widget::text_editor;
 #[cfg(test)]
-use iced::{Color, Point, Rectangle, Renderer, Theme};
+use iced::{Point, Rectangle, Renderer, Theme};
 #[cfg(test)]
 use iced::{mouse, touch};
 use pages::{PageDrag, Pages};
@@ -69,6 +72,7 @@ struct FastFill {
     image_directory: Option<std::path::PathBuf>,
     export_directory: Option<std::path::PathBuf>,
     text_content: text_editor::Content,
+    font_size_input: Option<String>,
     page_editor: page_edit::PageEditor,
     smart_snap: snap::SmartSnap,
     #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
@@ -165,11 +169,13 @@ pub(crate) enum Message {
     AskDeleteAll,
     ConfirmDeleteAll,
     KeepAll,
+    ModalBackdrop,
     SendToBack,
     BringToFront,
     SetColor(AnnotationColor),
     SetTextTypeface(TextTypeface),
     SetTextSize(f32),
+    FontSize(text_controls::Event),
     ToggleTextBold,
     ToggleTextItalic,
     ToggleTextUnderline,
@@ -214,7 +220,7 @@ pub(crate) fn run() -> iced::Result {
         .antialiasing(true)
         .exit_on_close_request(false)
         .subscription(|_| {
-            iced::event::listen_with(|event, _, id| match event {
+            iced::event::listen_with(|event, status, id| match event {
                 iced::Event::Window(iced::window::Event::CloseRequested) => {
                     Some(Message::CloseRequested(id))
                 }
@@ -232,7 +238,7 @@ pub(crate) fn run() -> iced::Result {
                     key,
                     modifiers,
                     ..
-                }) => shortcut_message(key, modifiers),
+                }) => shortcut_message(key, modifiers, status),
                 iced::Event::Window(iced::window::Event::Resized(_)) => {
                     Some(Message::ViewportResized)
                 }
