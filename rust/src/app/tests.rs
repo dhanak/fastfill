@@ -154,7 +154,10 @@ fn group_font_changes_preserve_other_properties_and_shape_controls() {
         state.annotations().shapes().next().unwrap().color,
         AnnotationColor::Green
     );
-    let _ = update(&mut state, Message::AdjustThickness(1.0));
+    let _ = update(
+        &mut state,
+        Message::StrokeWidth(super::stroke_controls::Event::Step(1)),
+    );
     assert!(
         state.annotations().shapes().next().unwrap().stroke_width
             > shapes[0].stroke_width
@@ -273,6 +276,37 @@ fn keyboard_shortcuts_map_to_history_and_edit_commands() {
         )
         .is_none()
     );
+    assert!(matches!(
+        shortcut_message(keyboard::Key::Character("a".into()), command),
+        Some(Message::SelectAll),
+    ));
+    assert!(
+        super::shortcut_message(
+            keyboard::Key::Character("a".into()),
+            command,
+            iced::event::Status::Captured,
+        )
+        .is_none()
+    );
+}
+
+#[test]
+fn select_all_includes_shapes_and_text_without_changing_history() {
+    let mut state = annotated_page();
+    let _ = update(&mut state, Message::SetTool(Tool::Text));
+    let _ = update(
+        &mut state,
+        Message::DrawPressed(Pointer::Mouse, PagePoint::new(90.0, 90.0), 1.0),
+    );
+    paste_text(&mut state, "Sample");
+    let _ = update(&mut state, Message::AcceptText);
+    let _ = update(&mut state, Message::SetTool(Tool::Rectangle));
+    let identity = state.pages.identity();
+    let _ = update(&mut state, Message::SelectAll);
+    assert_eq!(state.annotations().selected_count(), 2);
+    assert_eq!(state.annotations().selected_text_indices().len(), 1);
+    assert_eq!(state.annotations().tool(), Tool::Select);
+    assert_eq!(state.pages.identity(), identity);
 }
 
 #[test]
@@ -1510,10 +1544,11 @@ fn compact_header_routes_zoom_save_and_export_commands() {
         .unwrap();
     let size = iced::Size::new(1_200.0, 800.0);
     for (x, command) in [
-        (701.0, "zoom out"),
-        (749.0, "zoom in"),
-        (964.0, "save"),
-        (1_078.0, "export"),
+        (653.0, "zoom out"),
+        (701.0, "zoom in"),
+        (916.0, "save"),
+        (1_030.0, "export"),
+        (1_126.0, "commands"),
     ] {
         for touch in [false, true] {
             let mut element = view(&state);
@@ -1558,7 +1593,11 @@ fn compact_header_routes_zoom_save_and_export_commands() {
                         && *anchor == viewport.center()
                 }
                 ("save", Message::SaveProject)
-                | ("export", Message::ExportPdf) => true,
+                | ("export", Message::ExportPdf)
+                | (
+                    "commands",
+                    Message::Palette(super::palette::Event::Toggle),
+                ) => true,
                 _ => false,
             };
             assert!(correct, "{command}: {:?}", messages[0]);

@@ -10,6 +10,7 @@ mod interaction_tests;
 mod menu;
 mod page_edit;
 mod pages;
+mod palette;
 mod pdf;
 mod project;
 mod project_io;
@@ -18,6 +19,8 @@ mod rail;
 #[cfg(not(target_arch = "wasm32"))]
 mod recovery;
 mod snap;
+mod spinner;
+mod stroke_controls;
 mod text;
 mod text_controls;
 mod toolbar;
@@ -74,6 +77,7 @@ struct FastFill {
     confirm_delete_all: bool,
     confirm_delete_page: bool,
     show_shortcuts: bool,
+    palette: palette::Palette,
     open_menu: Option<menu::Kind>,
     dragged_page: Option<PageDrag>,
     // Shared by the clipped rail and its floating layer; not document state.
@@ -83,6 +87,7 @@ struct FastFill {
     export_directory: Option<std::path::PathBuf>,
     text_content: text_editor::Content,
     font_size_input: Option<String>,
+    stroke_width_input: Option<String>,
     page_editor: page_edit::PageEditor,
     smart_snap: snap::SmartSnap,
     #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
@@ -170,6 +175,7 @@ pub(crate) enum Message {
     AskDeletePage,
     ConfirmDeletePage,
     SetTool(Tool),
+    SelectAll,
     Undo,
     Redo,
     ResetRotation,
@@ -183,16 +189,17 @@ pub(crate) enum Message {
     MenuAction(Box<Message>),
     ShowShortcuts,
     HideShortcuts,
+    Palette(palette::Event),
     SendToBack,
     BringToFront,
     SetColor(AnnotationColor),
     SetTextTypeface(TextTypeface),
     SetTextSize(f32),
     FontSize(text_controls::Event),
+    StrokeWidth(stroke_controls::Event),
     ToggleTextBold,
     ToggleTextItalic,
     ToggleTextUnderline,
-    AdjustThickness(f32),
     ToggleFill,
     TextAction(text_editor::Action),
     AcceptText,
@@ -236,30 +243,11 @@ pub(crate) fn run() -> iced::Result {
         .subscription(|state| {
             let mut subscriptions = vec![
                 iced::system::theme_changes().map(Message::SystemThemeChanged),
-                iced::event::listen_with(|event, status, id| match event {
-                    iced::Event::Window(
-                        iced::window::Event::CloseRequested,
-                    ) => Some(Message::CloseRequested(id)),
-                    iced::Event::Window(iced::window::Event::Unfocused) => {
-                        Some(Message::FocusLost)
-                    }
-                    iced::Event::Keyboard(
-                        keyboard::Event::ModifiersChanged(m),
-                    ) => Some(Message::ModifiersChanged(DragModifiers {
-                        square: m.control(),
-                        force_move: m.shift(),
-                        force_resize: m.alt(),
-                    })),
-                    iced::Event::Keyboard(keyboard::Event::KeyPressed {
-                        key,
-                        modifiers,
-                        ..
-                    }) => shortcut_message(key, modifiers, status),
-                    iced::Event::Window(iced::window::Event::Resized(_)) => {
-                        Some(Message::ViewportResized)
-                    }
-                    _ => None,
-                }),
+                if state.palette.open {
+                    iced::event::listen_with(palette_event)
+                } else {
+                    iced::event::listen_with(normal_event)
+                },
             ];
             if state.page_editor.is_open() {
                 subscriptions.push(iced::event::listen_with(|event, _, _| {
@@ -282,6 +270,60 @@ pub(crate) fn run() -> iced::Result {
             iced::Subscription::batch(subscriptions)
         })
         .run()
+}
+
+fn normal_event(
+    event: iced::Event,
+    status: iced::event::Status,
+    id: iced::window::Id,
+) -> Option<Message> {
+    app_event(event, status, id, false)
+}
+
+fn palette_event(
+    event: iced::Event,
+    status: iced::event::Status,
+    id: iced::window::Id,
+) -> Option<Message> {
+    app_event(event, status, id, true)
+}
+
+fn app_event(
+    event: iced::Event,
+    status: iced::event::Status,
+    id: iced::window::Id,
+    palette_open: bool,
+) -> Option<Message> {
+    match event {
+        iced::Event::Window(iced::window::Event::CloseRequested) => {
+            Some(Message::CloseRequested(id))
+        }
+        iced::Event::Window(iced::window::Event::Unfocused) => {
+            Some(Message::FocusLost)
+        }
+        iced::Event::Keyboard(keyboard::Event::ModifiersChanged(m)) => {
+            Some(Message::ModifiersChanged(DragModifiers {
+                square: m.control(),
+                force_move: m.shift(),
+                force_resize: m.alt(),
+            }))
+        }
+        iced::Event::Keyboard(keyboard::Event::KeyPressed {
+            key,
+            modifiers,
+            ..
+        }) => {
+            if palette_open {
+                palette::shortcut(key, modifiers)
+            } else {
+                shortcut_message(key, modifiers, status)
+            }
+        }
+        iced::Event::Window(iced::window::Event::Resized(_)) => {
+            Some(Message::ViewportResized)
+        }
+        _ => None,
+    }
 }
 
 fn boot() -> (FastFill, iced::Task<Message>) {

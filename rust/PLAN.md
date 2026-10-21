@@ -1032,7 +1032,7 @@ checks remain separate hardware checks, not part of this UI checkpoint.
 
 User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 
-#### 7H3. Compact main-window chrome — 2026-10-21
+#### 7H3. Compact main-window chrome — manually accepted
 
 - [x] Replace split header/toolbar rows with one 56-pixel header on wide
       windows. Keep the project menu, Undo/Redo, zoom, Save, Export PDF,
@@ -1054,31 +1054,48 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
       for Delete all and menu glyphs for overflow triggers.
 - [x] Preserve menus across incidental updates, center footer action groups,
       fill page cards across the rail, and remove the static Fill label. Test
-      menu persistence and rail-edge dragging; host popup check remains open.
+      menu persistence and rail-edge dragging.
 - [x] User visually accepts the main chrome on 2026-10-21 and requests the
       wide Reset angle "To 0°" label. Do not infer touch or DPI checks.
-- [ ] Confirm project, page and More menus stay open on the host after the
-      explicit-only dismissal fix; the automated checks cannot prove this.
+- [x] Confirm project, page and More menus stay open on the host after the
+      explicit-only dismissal fix. User accepts 7H3 on 2026-10-21; physical
+      touch and high-DPI checks remain separate.
 
-#### Remaining UI polish and replacement gate — not started
+#### 7I. Searchable command palette — manually accepted
 
-- Polish the UI for regular use: cohesive visual styling and touch layout.
-  Stable confirmations and compact tools have their own checkpoints above.
-- Profile the browser harness if full-release builds remain sluggish;
-  debug builds now lightly optimize FastFill as well as its dependencies.
-- Page-card appearance, drag feedback and animation are accepted at 7F1–7F3.
-- 7H2 camera/page-correction UI and full-size correction follow-up are
-  manually accepted. Physical hardware checks stay separate.
-- Add a searchable command palette on Ctrl+. to find and run commands.
-  Reuse existing command handlers and availability guards; keep this as a
-  future polish item, not a shortcut implemented by the current help slice.
-- Separate prototype artifacts from existing C# release names/assets.
-- Portable Windows build, documented Linux dependencies/package, icons,
-  diagnostics, file opening, help, and user documentation.
-- Automated integration/regression checks; focused fresh review.
-- User release gate: 20-page project, repeated scans, save/reopen/export,
-  Surface touch at 150%/200% scaling, memory and latency.
-- Decide whether to replace the C# app; no automatic migration/removal.
+- [x] Keep F1 as the read-only shortcut/gesture reference. Open a separate
+      action palette with Ctrl+. (also Cmd+. on macOS) or a visible command
+      button; let search find project, page, view, tool and edit commands.
+- [x] Show unavailable commands without executing them. Support mouse/touch,
+      arrow keys, Enter and Escape; run commands through existing handlers.
+- [x] Test filtering, availability, keyboard routing, pointer dispatch,
+      wide/narrow layout, themes, formatting, strict lint and WASM.
+- [x] Add Mod+A to select every annotation on the current page without
+      changing history; keep text and palette input selection native.
+- [x] User checkpoint: verify search focus and run commands on the host,
+      including while text is pending. Recheck F1 handoff and Mod+A. User
+      accepts 7I on 2026-10-21.
+
+#### Remaining delivery work and replacement gate — pending
+
+- [x] Accept desktop UI polish through 7I: confirmations, tools, rail,
+      camera/page correction, main chrome, shortcuts and command palette.
+      Keep physical touch, high-DPI and sleep checks separate.
+- [x] Keep the Rust testing ZIP, prerelease and assets separate from C#
+      release names and workflows. Do not replace the C# app yet.
+- [ ] Complete 7A's end-to-end portable Windows check: extract and run
+      without Rust, then open/save/export a real project and test available
+      cameras. Repeat on SP6 when available.
+- [ ] Document Linux runtime dependencies and a distributable package;
+      verify file opening, diagnostics, help and user documentation in the
+      shipped builds. Keep macOS compatibility and WASM compilation checked.
+- [ ] Profile the browser harness if full-release builds remain sluggish;
+      debug builds already lightly optimize FastFill and its dependencies.
+- [ ] Run automated integration/regression checks and a focused fresh review
+      after delivery work, without treating software checks as hardware tests.
+- [ ] User release gate: a 20-page project, repeated scans, save/reopen/export,
+      Surface touch at 150%/200% scaling, plus memory and latency checks.
+- [ ] Decide whether to replace the C# app; no automatic migration/removal.
 
 ## Progress log
 
@@ -4252,6 +4269,34 @@ Windows retest after the next CI ZIP:
 - Check 400/640/1200-pixel software previews in both themes and route new
   mouse/touch controls. All native tests, strict Clippy, WASM, formatting and
   whitespace checks pass. Leave 7H3 manual checkpoint open; no commit asked.
+
+### 2026-10-21 — Commit UI checkpoint; implement command palette
+
+- Add the wide-screen "To 0°" label and align its control with To front.
+  Test the alignment and inspect the rendered sidebar. Commit the accepted
+  UI work as `c173f5f`; leave the user's screenshot untracked and do not push.
+- Keep F1 as read-only help. Add a separate searchable command palette to
+  the main editor, available from a header icon, compact More menu and
+  Ctrl+. or Cmd+.. Route commands through existing messages and guards.
+- Keep disabled actions visible but inert. Support pointer/touch selection,
+  arrow navigation, Enter and Escape. Preserve pending text when closing.
+- Let F1 switch directly from the palette to shortcut help, matching the
+  palette footer hint; test the route and modal transition.
+- Test filtering, keyboard routing, mouse/touch dispatch and both theme/window
+  layouts. All regular tests, strict Clippy, WASM, formatting and whitespace
+  checks pass. Keep manual host verification open; do not infer it from renders.
+
+### 2026-10-21 — Accept compact chrome and command palette
+
+- User confirms 7H3 and 7I on the host, including stable menus and palette
+  behavior. Keep real touch, high-DPI, sleep and SP6 checks deferred.
+- Share the font-size and line-width spinner layout and stepping. Tighten its
+  compact entry, show B/I/U with their own styling, and flip the project-name
+  chevron while its menu is open.
+- Validate all native/all-target tests, strict Clippy, WASM compilation,
+  formatting and whitespace checks before committing the accepted work.
+- Shift the next implementation checkpoint to Linux delivery and docs;
+  complete the Windows portable and hardware gate with the user's device.
 
 ## References
 

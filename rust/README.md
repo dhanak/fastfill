@@ -20,6 +20,17 @@ Project/history shortcuts show Ctrl or Cmd for the compiled platform;
 geometry always uses literal Ctrl. The table lists the exact shortcuts,
 without a separate modifier legend.
 
+Use **Commands** (magnifying-glass icon), or press **Ctrl+.** on Windows/Linux
+or **Cmd+.** on macOS, to search and run actions. The compact **More** menu
+also opens it. Arrow keys choose an available result; Enter runs it; Escape
+closes it. Unavailable actions remain listed but cannot run. The **F1**
+reference stays separate for shortcuts and gestures; F1 opens it from the
+palette too.
+
+In the main editor, **Ctrl+A** (or **Cmd+A** on macOS) selects all
+annotations on the current page. Focused text and search fields keep their
+normal Select All behavior.
+
 Main-editor actions use neutral outlined buttons, accented Save/Camera
 entries and red destructive actions. Formatting toggles retain their accent
 when selected. Action labels are centered in consistent 40-pixel-high targets;
@@ -28,8 +39,8 @@ use the same styles, with Capture, Use photo and Accept accented.
 
 The main editor uses one compact header. The project-name menu contains New,
 Open and (on desktop) Save as. Undo, Redo, zoom out/in, 1:1, Fit, Save,
-Export PDF and Shortcuts follow it; narrow windows move less-used commands
-into the menu button. Status appears in the header; errors and progress
+Export PDF, Commands and Shortcuts follow it; narrow windows move less-used
+commands into the menu button. Status appears in the header; errors and progress
 appear over the editor without shifting the page. The page rail has icon
 buttons for Add image, Import PDF, Camera (supported native builds), Replace
 image, Edit page and Delete page; hover for labels. Replace image uses an
@@ -919,8 +930,11 @@ Wider windows group tools and contextual properties in a right-hand panel
 sized to four tool columns, leaving a single command strip above the page.
 Color stays above tool-specific properties, keeping its position stable when
 switching drawing tools. Applicable line width follows, then font, snap or fill.
-Text font/size/format controls stack vertically; properties scroll when space
-is tight. Layer and deletion actions stay at the bottom, dimmed when
+Line width (1–20 px) and font size (6–144 pt) share an editable spinner:
+type a value and press Enter, or use ± or the mouse wheel. Esc discards a
+pending entry. B, I, and U buttons show their respective formatting. Text
+font/size/format controls stack vertically; properties scroll when space is
+tight. Layer and deletion actions stay at the bottom, dimmed when
 unavailable. Delete all uses a shredder icon. Narrow windows retain horizontal
 tool/options rows with icon-only actions and no redundant tool-name label;
 scrollbars below the button targets.

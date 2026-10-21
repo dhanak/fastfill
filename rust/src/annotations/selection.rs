@@ -80,6 +80,15 @@ impl Annotations {
         self.selected.clear();
     }
 
+    /// Select committed objects on this page; selection is not history.
+    pub fn select_all(&mut self) {
+        if self.has_pending_edit() || self.content.is_empty() {
+            return;
+        }
+        self.tool = Tool::Select;
+        self.selected = self.content.iter().map(OwnedAnnotation::id).collect();
+    }
+
     #[must_use]
     pub fn can_reset_rotation(&self) -> bool {
         !self.has_pending_edit()

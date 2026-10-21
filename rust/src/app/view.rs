@@ -111,14 +111,25 @@ fn heading(
             enabled.then_some(Message::ToggleMenu(super::menu::Kind::More)),
         ));
     } else {
-        bar = bar.push(super::project_view::export(state)).push(
-            super::toolbar::icon_button(
+        bar = bar
+            .push(super::project_view::export(state))
+            .push(super::toolbar::icon_button(
+                Glyph::Search,
+                if cfg!(target_os = "macos") {
+                    "Commands (Cmd+.)"
+                } else {
+                    "Commands (Ctrl+.)"
+                },
+                false,
+                super::palette::can_open(state)
+                    .then_some(Message::Palette(super::palette::Event::Toggle)),
+            ))
+            .push(super::toolbar::icon_button(
                 Glyph::Help,
                 "Shortcuts",
                 false,
                 super::help::can_open(state).then_some(Message::ShowShortcuts),
-            ),
-        );
+            ));
     }
     container(bar.spacing(8).align_y(iced::Alignment::Center))
         .padding([8, 12])
@@ -261,6 +272,7 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
     .extend(notifications(state))
     .extend(super::rail::overlay(state))
     .extend(super::menu::overlay(state))
+    .extend(super::palette::view(state))
     .extend(super::confirmation::view(state))
     .extend(super::help::view(state))
     .width(Fill)
@@ -283,6 +295,7 @@ pub(super) fn document(state: &FastFill) -> Element<'_, Message> {
                 && !state.confirm_delete_all
                 && !state.confirm_delete_page
                 && !state.show_shortcuts
+                && !state.palette.open
                 && state.dragged_page.is_none(),
             modifiers: state.modifiers,
             layer: CanvasLayer::Overlay,

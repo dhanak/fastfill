@@ -40,7 +40,15 @@ pub(super) fn menu(state: &FastFill, width: f32) -> Element<'static, Message> {
                 .size(14)
                 .width(iced::Fill)
                 .wrapping(iced::advanced::text::Wrapping::None),
-            icons::view::<Message>(Glyph::ChevronDown, false, available),
+            icons::view::<Message>(
+                if state.open_menu == Some(super::menu::Kind::Project) {
+                    Glyph::ChevronUp
+                } else {
+                    Glyph::ChevronDown
+                },
+                false,
+                available,
+            ),
         ]
         .spacing(4)
         .align_y(iced::Alignment::Center),
@@ -129,10 +137,10 @@ pub(super) fn view_action(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::click_element;
+    use crate::app::tests::{click_element, render_themed_element};
     use iced::advanced::renderer::Headless;
     use iced::advanced::{Layout, layout, widget};
-    use iced::{Point, Renderer};
+    use iced::{Point, Renderer, Theme, mouse};
 
     #[test]
     fn labeled_file_actions_center_icons_in_forty_pixel_buttons() {
@@ -193,5 +201,25 @@ mod tests {
                 [Message::ToggleMenu(super::super::menu::Kind::Project)]
             ));
         }
+    }
+
+    #[test]
+    fn project_chevron_points_up_only_while_menu_is_open() {
+        let mut state = FastFill::default();
+        let render = |state: &FastFill| {
+            render_themed_element(
+                menu(state, 240.0),
+                iced::Size::new(240, 40),
+                1,
+                1.0,
+                &Theme::Dark,
+                mouse::Cursor::Unavailable,
+            )
+        };
+        let closed = render(&state);
+        state.open_menu = Some(super::super::menu::Kind::Project);
+        assert_ne!(render(&state), closed);
+        state.open_menu = None;
+        assert_eq!(render(&state), closed);
     }
 }

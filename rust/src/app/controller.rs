@@ -17,8 +17,19 @@ pub(super) fn shortcut_message(
         return None;
     }
     match key {
+        keyboard::Key::Character(value)
+            if (modifiers.command() || modifiers.control()) && value == "." =>
+        {
+            Some(Message::Palette(super::palette::Event::Toggle))
+        }
         keyboard::Key::Named(keyboard::key::Named::F1) => {
             Some(Message::ShowShortcuts)
+        }
+        keyboard::Key::Character(value)
+            if modifiers.command() && value.eq_ignore_ascii_case("a") =>
+        {
+            (status == iced::event::Status::Ignored)
+                .then_some(Message::SelectAll)
         }
         keyboard::Key::Character(value)
             if modifiers.command() && value.eq_ignore_ascii_case("n") =>
@@ -69,6 +80,7 @@ pub(super) fn shortcut_message(
 impl FastFill {
     pub(super) fn cancel_interaction(&mut self) {
         self.clear_font_size_input();
+        self.clear_stroke_width_input();
         self.annotations_mut().cancel();
         self.dragged_page = None;
         self.input_epoch = self.input_epoch.wrapping_add(1);
@@ -76,6 +88,7 @@ impl FastFill {
 
     pub(super) fn accept_text(&mut self) {
         self.finish_font_size_input();
+        self.finish_stroke_width_input();
         self.sync_text();
         if self.annotations_mut().accept_text() {
             self.input_epoch = self.input_epoch.wrapping_add(1);
@@ -155,11 +168,15 @@ impl FastFill {
         }
     }
 
-    fn adjust_thickness(&mut self, delta: f32) {
-        if let Some(style) = self.annotations().current_style() {
-            self.annotations_mut().set_stroke_width(
-                (style.stroke_width + delta).clamp(1.0, 20.0),
-            );
+    fn select_all(&mut self) {
+        if super::project_view::enabled(self)
+            && !self.page_editor.is_open()
+            && self.annotations().active_pointer().is_none()
+        {
+            self.open_menu = None;
+            self.accept_text();
+            self.cancel_interaction();
+            self.annotations_mut().select_all();
         }
     }
 
@@ -200,6 +217,9 @@ pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
             && *mode == iced::theme::Mode::None)
             .then(|| <iced::Theme as iced::theme::Base>::default(*mode));
         return Task::none();
+    }
+    if let Some(task) = super::palette::update(state, &message) {
+        return task;
     }
     let message = match message {
         Message::ToggleMenu(kind) => {
@@ -263,6 +283,9 @@ fn update_editor(state: &mut FastFill, message: Message) -> Task<Message> {
     if let Some(task) = super::text_controls::update(state, &message) {
         return task;
     }
+    if let Some(task) = super::stroke_controls::update(state, &message) {
+        return task;
+    }
     if handle_navigation(state, &message) || handle_text_format(state, &message)
     {
         return Task::none();
@@ -273,6 +296,7 @@ fn update_editor(state: &mut FastFill, message: Message) -> Task<Message> {
             state.cancel_interaction();
             state.annotations_mut().set_tool(tool);
         }
+        Message::SelectAll => state.select_all(),
         Message::Undo => state.undo(),
         Message::Redo => state.redo(),
         Message::ResetRotation => state.reset_rotation(),
@@ -295,7 +319,6 @@ fn update_editor(state: &mut FastFill, message: Message) -> Task<Message> {
         Message::SetColor(color) => {
             state.annotations_mut().set_color(color);
         }
-        Message::AdjustThickness(delta) => state.adjust_thickness(delta),
         Message::ToggleFill => {
             if let Some(filled) = state.annotations().current_fill() {
                 state.annotations_mut().set_filled(!filled);

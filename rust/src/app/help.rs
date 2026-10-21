@@ -20,6 +20,7 @@ pub(super) fn can_open(state: &FastFill) -> bool {
         return false;
     }
     !state.show_shortcuts
+        && !state.palette.open
         && state.project.is_idle()
         && state.image_picker == ImagePicker::Idle
         && !state.page_editor.is_open()
@@ -54,6 +55,8 @@ pub(super) fn update(
             state.input_epoch = state.input_epoch.wrapping_add(1);
             return Some(if state.font_size_input.is_some() {
                 iced::widget::operation::focus("font-size-input")
+            } else if state.stroke_width_input.is_some() {
+                iced::widget::operation::focus("stroke-width-input")
             } else if state.annotations().has_text_edit() {
                 iced::widget::operation::focus(TEXT_EDITOR_ID)
             } else {
@@ -158,6 +161,7 @@ type Entry = (&'static str, &'static str, &'static str);
 // Describe implemented input only; tool names are not letter-key shortcuts.
 const ENTRIES: &[Entry] = &[
     ("Help", "F1 / Escape", "Open help / close help."),
+    ("Commands", "Mod+.", "Search and run available commands."),
     (
         "Project",
         "Mod+N",
@@ -190,6 +194,11 @@ const ENTRIES: &[Entry] = &[
         "Selection",
         "Ctrl+click",
         "Add/remove one object from the selection.",
+    ),
+    (
+        "Selection",
+        "Mod+A",
+        "Select all annotations on the current page.",
     ),
     (
         "Selection",

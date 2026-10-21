@@ -1,21 +1,17 @@
 //! Text options and the uncommitted font-size field; no document ownership.
 
-use super::{FastFill, Message, TEXT_EDITOR_ID, controller};
-use crate::appearance::{self, CONTROL_GAP, CONTROL_HEIGHT, action_button};
+use super::{FastFill, Message, TEXT_EDITOR_ID, controller, spinner};
+use crate::appearance::{self, CONTROL_GAP, CONTROL_HEIGHT};
 use fastfill_rust::annotations::{TextFormat, TextTypeface};
-use iced::widget::text_input;
-use iced::widget::{Row, column, mouse_area, pick_list, row, text};
-use iced::{Element, Fill, Task, mouse};
+use iced::widget::{
+    Row, button, column, container, pick_list, row, rule, text,
+};
+use iced::{Element, Fill, Font, Task, font, mouse};
 
 const INVALID_SIZE: &str = "Font size must be a number from 6 to 144 pt.";
 
-#[derive(Clone, Debug)]
-pub(crate) enum Event {
-    Input(String),
-    Apply,
-    Step(i8),
-    Scroll(mouse::ScrollDelta),
-}
+pub(crate) use super::spinner::Event;
+use spinner::DisplayValue as FontSize;
 
 pub(super) fn update(
     state: &mut FastFill,
@@ -39,6 +35,7 @@ pub(super) fn update(
     match event {
         Event::Input(value) => {
             if value.len() <= 32 {
+                state.finish_stroke_width_input();
                 state.font_size_input = Some(value.clone());
                 state.clear_font_size_error();
             }
@@ -118,35 +115,15 @@ fn input_size(state: &FastFill, format: TextFormat) -> f32 {
 }
 
 fn parse_size(value: &str) -> Option<f32> {
-    let size = value.trim().replace(',', ".").parse::<f32>().ok()?;
-    (size.is_finite() && (6.0..=144.0).contains(&size)).then_some(size)
+    spinner::parse(value, 6.0, 144.0)
 }
 
 fn step_size(current: f32, direction: i8) -> f32 {
-    (current + f32::from(direction.signum())).clamp(6.0, 144.0)
+    spinner::step(current, direction, 6.0, 144.0)
 }
 
 fn text_size_after_scroll(current: f32, delta: mouse::ScrollDelta) -> f32 {
-    let y = match delta {
-        mouse::ScrollDelta::Lines { y, .. }
-        | mouse::ScrollDelta::Pixels { y, .. } => y,
-    };
-    if y > 0.0 {
-        step_size(current, 1)
-    } else if y < 0.0 {
-        step_size(current, -1)
-    } else {
-        current
-    }
-}
-
-struct FontSize(f32);
-
-impl std::fmt::Display for FontSize {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Round only the label; preserve exact scaled/imported geometry.
-        write!(formatter, "{}", (self.0 * 10.0).round() / 10.0)
-    }
+    spinner::scroll(current, delta, 6.0, 144.0)
 }
 
 pub(super) fn view(
@@ -196,46 +173,25 @@ fn controls(
     });
     let invalid =
         state.font_size_input.is_some() && parse_size(&value).is_none();
-    let current = input_size(state, format);
-    let step = |label, direction| {
-        action_button(
-            label,
-            ((step_size(current, direction) - current).abs() >= f32::EPSILON)
-                .then_some(Message::FontSize(Event::Step(direction))),
-        )
-        .width(CONTROL_HEIGHT)
-    };
-    let size = text_input(
-        if editing || common_size {
-            "6–144"
-        } else {
-            "Mixed"
-        },
-        &value,
-    )
-    .id("font-size-input")
-    .on_input(|value| Message::FontSize(Event::Input(value)))
-    .on_submit(Message::FontSize(Event::Apply))
-    .width(if stacked { Fill } else { 76.into() })
-    .size(16)
-    .line_height(iced::widget::text::LineHeight::Absolute(20.0.into()))
-    .padding([(CONTROL_HEIGHT - 20.0) / 2.0, 8.0])
-    .style(move |theme, status| {
-        let mut style = text_input::default(theme, status);
-        if invalid {
-            style.border.color = theme.extended_palette().danger.strong.color;
-        }
-        style
-    });
-    let toggle = |label, enabled, message| {
-        action_button(label, Some(message))
-            .style(if enabled {
-                appearance::primary_action
+    let size = spinner::view(
+        &spinner::Config {
+            id: "font-size-input",
+            value,
+            placeholder: if editing || common_size {
+                "6–144"
             } else {
-                appearance::secondary_action
-            })
-            .width(CONTROL_HEIGHT)
-    };
+                "Mixed"
+            },
+            unit: "pt",
+            current: input_size(state, format),
+            min: 6.0,
+            max: 144.0,
+            stacked,
+            invalid,
+            enabled: true,
+        },
+        Message::FontSize,
+    );
     [
         pick_list(
             TextTypeface::ALL,
@@ -248,18 +204,92 @@ fn controls(
         .padding([(CONTROL_HEIGHT - 20.0) / 2.0, 8.0])
         .placeholder("Mixed fonts")
         .into(),
-        mouse_area(
-            row![step("−", -1), size, step("+", 1), text("pt")]
-                .width(if stacked { Fill } else { iced::Shrink })
-                .spacing(4)
-                .align_y(iced::Alignment::Center),
-        )
-        .on_scroll(|delta| Message::FontSize(Event::Scroll(delta)))
-        .into(),
-        toggle("B", format.bold, Message::ToggleTextBold).into(),
-        toggle("I", format.italic, Message::ToggleTextItalic).into(),
-        toggle("U", format.underline, Message::ToggleTextUnderline).into(),
+        size,
+        modifier_button(
+            "B",
+            Font {
+                weight: font::Weight::Bold,
+                ..Font::DEFAULT
+            },
+            false,
+            format.bold,
+            Message::ToggleTextBold,
+        ),
+        modifier_button(
+            "I",
+            Font {
+                style: font::Style::Italic,
+                ..Font::DEFAULT
+            },
+            false,
+            format.italic,
+            Message::ToggleTextItalic,
+        ),
+        modifier_button(
+            "U",
+            Font::DEFAULT,
+            true,
+            format.underline,
+            Message::ToggleTextUnderline,
+        ),
     ]
+}
+
+fn modifier_button(
+    label: &'static str,
+    font: Font,
+    underline: bool,
+    selected: bool,
+    message: Message,
+) -> Element<'static, Message> {
+    let glyph: Element<'static, Message> = if underline {
+        // Iced rich-text underline renders beside a one-letter glyph.
+        container(
+            column![
+                text(label).font(font).size(16),
+                container(rule::horizontal(1).style(move |theme| {
+                    let style = if selected {
+                        appearance::primary_action(
+                            theme,
+                            button::Status::Active,
+                        )
+                    } else {
+                        appearance::secondary_action(
+                            theme,
+                            button::Status::Active,
+                        )
+                    };
+                    rule::Style {
+                        color: style.text_color,
+                        ..rule::default(theme)
+                    }
+                }))
+                .width(12),
+            ]
+            .align_x(iced::Alignment::Center),
+        )
+        .center(Fill)
+        .into()
+    } else {
+        text(label)
+            .font(font)
+            .size(16)
+            .width(Fill)
+            .height(Fill)
+            .center()
+            .into()
+    };
+    button(glyph)
+        .width(CONTROL_HEIGHT)
+        .height(CONTROL_HEIGHT)
+        .padding(0)
+        .on_press(message)
+        .style(if selected {
+            appearance::primary_action
+        } else {
+            appearance::secondary_action
+        })
+        .into()
 }
 
 #[cfg(test)]

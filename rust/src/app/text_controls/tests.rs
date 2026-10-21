@@ -361,7 +361,7 @@ fn spinner_buttons_and_entry_do_not_grow_with_annotation_font_size() {
             assert_eq!(button.height, CONTROL_HEIGHT);
         }
         let entry = spinner.children()[1].bounds();
-        assert_eq!(entry.width, 76.0);
+        assert_eq!(entry.width, 60.0);
         assert_eq!(entry.height, CONTROL_HEIGHT);
     }
 }

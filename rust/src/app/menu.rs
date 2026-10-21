@@ -22,7 +22,7 @@ pub(super) fn overlay(state: &FastFill) -> Option<Element<'_, Message>> {
     Some(responsive(move |size| popover(state, kind, size)).into())
 }
 
-#[allow(clippy::cast_precision_loss)] // Menus have at most six items.
+#[allow(clippy::cast_precision_loss)] // Menus have fewer than ten items.
 fn popover(state: &FastFill, kind: Kind, size: Size) -> Element<'_, Message> {
     let items = items(state, kind, size);
     let width = if kind == Kind::Project { 220.0 } else { 200.0 };
@@ -119,6 +119,13 @@ fn items(
                 ("Fit page", Glyph::Fit, Message::Fit),
                 ("Export PDF", Glyph::ExportPdf, Message::ExportPdf),
             ]);
+            if super::palette::can_open(state) {
+                items.push((
+                    "Commands",
+                    Glyph::Search,
+                    Message::Palette(super::palette::Event::Toggle),
+                ));
+            }
             if super::help::can_open(state) {
                 items.push(("Shortcuts", Glyph::Help, Message::ShowShortcuts));
             }

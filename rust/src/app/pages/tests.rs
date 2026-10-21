@@ -337,7 +337,16 @@ fn tool_defaults_follow_page_switches_without_mutating_old_objects() {
         &mut state,
         Message::SetColor(crate::app::AnnotationColor::Red),
     );
-    let _ = update(&mut state, Message::AdjustThickness(3.0));
+    let _ = update(
+        &mut state,
+        Message::StrokeWidth(crate::app::stroke_controls::Event::Input(
+            "6".into(),
+        )),
+    );
+    let _ = update(
+        &mut state,
+        Message::StrokeWidth(crate::app::stroke_controls::Event::Apply),
+    );
     let _ = update(&mut state, Message::AddPage);
     let _ = update(
         &mut state,

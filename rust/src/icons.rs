@@ -17,6 +17,7 @@ pub(crate) enum Glyph {
     Save,
     ExportPdf,
     Help,
+    Search,
     AddImage,
     ImportPdf,
     #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
@@ -42,6 +43,7 @@ pub(crate) enum Glyph {
     ToFront,
     More,
     ChevronDown,
+    ChevronUp,
     NewProject,
     OpenProject,
     SaveAs,
@@ -133,6 +135,9 @@ fn source(glyph: Glyph) -> &'static [u8] {
         Glyph::Help => {
             include_bytes!("../assets/icons/lucide/circle-question-mark.svg")
         }
+        Glyph::Search => {
+            include_bytes!("../assets/icons/lucide/search.svg")
+        }
         Glyph::AddImage => {
             include_bytes!("../assets/icons/lucide/image-plus.svg")
         }
@@ -187,6 +192,9 @@ fn source(glyph: Glyph) -> &'static [u8] {
         Glyph::More => include_bytes!("../assets/icons/lucide/menu.svg"),
         Glyph::ChevronDown => {
             include_bytes!("../assets/icons/lucide/chevron-down.svg")
+        }
+        Glyph::ChevronUp => {
+            include_bytes!("../assets/icons/lucide/chevron-up.svg")
         }
         Glyph::NewProject => {
             include_bytes!("../assets/icons/lucide/file-plus.svg")

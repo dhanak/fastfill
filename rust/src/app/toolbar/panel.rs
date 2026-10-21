@@ -1,9 +1,9 @@
 //! Wide-window layout; reuse toolbar controls and existing command guards.
 
 use super::{COLORS, actions, color_button, enabled, icon_button, tool_button};
-use crate::app::{FastFill, Message, snap, text_controls};
+use crate::app::{FastFill, Message, snap, stroke_controls, text_controls};
 use crate::appearance::{
-    self, CONTROL_GAP, CONTROL_HEIGHT, TOOLS_PANEL_PADDING, action_button,
+    self, CONTROL_GAP, CONTROL_HEIGHT, TOOLS_PANEL_PADDING,
 };
 use crate::icons::{self, Glyph};
 use fastfill_rust::annotations::Tool;
@@ -130,29 +130,15 @@ pub(super) fn properties(
     if let Some(style) = style
         && state.annotations().stroke_available()
     {
-        let step = |label, amount, available: bool| {
-            action_button(
-                label,
-                (enabled && available)
-                    .then_some(Message::AdjustThickness(amount)),
-            )
-            .width(CONTROL_HEIGHT)
-        };
         if stacked {
             properties.push(text("Line width").size(14).into());
         }
-        properties.push(
-            row![
-                step("−", -1.0, style.stroke_width > 1.0),
-                text(format!("{:.0} pt", style.stroke_width))
-                    .width(if stacked { Fill } else { iced::Shrink })
-                    .align_x(iced::alignment::Horizontal::Center),
-                step("+", 1.0, style.stroke_width < 20.0),
-            ]
-            .align_y(iced::Alignment::Center)
-            .spacing(CONTROL_GAP)
-            .into(),
-        );
+        properties.push(stroke_controls::view(
+            state,
+            style.stroke_width,
+            stacked,
+            enabled,
+        ));
     }
     if let Some(format) = format {
         if stacked {
