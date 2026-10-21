@@ -1,12 +1,10 @@
 //! Editor controls and options; annotation behavior stays in the controller.
 
 use super::{FastFill, ImagePicker, Message};
-use crate::appearance::action_button;
-use crate::appearance::{self, CONTROL_GAP, CONTROL_HEIGHT, TOOLBAR_HEIGHT};
+use crate::appearance::{self, CONTROL_GAP, CONTROL_HEIGHT};
 use crate::appearance::{TOOLBAR_PADDING, TOOLBAR_ROW_HEIGHT};
 use crate::icons::{self, Glyph};
 use fastfill_rust::annotations::{AnnotationColor, Tool};
-use fastfill_rust::geometry::Rect;
 use iced::widget::{Row, Space, button, column, container, row, scrollable};
 use iced::widget::{text, tooltip};
 use iced::{Element, Fill};
@@ -27,45 +25,17 @@ pub(super) fn workspace(
     available: iced::Size,
 ) -> Element<'_, Message> {
     let wide = available.width >= appearance::PANEL_MIN_WORKSPACE_WIDTH;
-    let canvas_size = iced::Size::new(
-        available.width
-            - if wide {
-                appearance::TOOLS_PANEL_WIDTH
-            } else {
-                0.0
-            },
-        (available.height
-            - if wide {
-                TOOLBAR_ROW_HEIGHT
-            } else {
-                TOOLBAR_HEIGHT
-            })
-        .max(1.0),
-    );
-    let viewport = crate::page_canvas::page_viewport(canvas_size);
     if wide {
-        row![
-            column![controls(state, viewport), super::view::document(state)]
-                .width(Fill)
-                .height(Fill),
-            panel::view(state),
-        ]
-        .width(Fill)
-        .height(Fill)
-        .into()
+        row![super::view::document(state), panel::view(state)]
+            .width(Fill)
+            .height(Fill)
+            .into()
     } else {
-        column![view(state, viewport), super::view::document(state),]
+        column![tools(state), options(state), super::view::document(state)]
             .width(Fill)
             .height(Fill)
             .into()
     }
-}
-
-fn view(state: &FastFill, viewport: Rect) -> Element<'_, Message> {
-    column![controls(state, viewport), tools(state), options(state)]
-        .width(Fill)
-        .height(TOOLBAR_HEIGHT)
-        .into()
 }
 
 fn enabled(state: &FastFill) -> bool {
@@ -76,42 +46,6 @@ fn enabled(state: &FastFill) -> bool {
         && state.dragged_page.is_none()
 }
 
-fn controls(state: &FastFill, viewport: Rect) -> Element<'_, Message> {
-    let enabled = enabled(state);
-    let zoom = |factor| Message::ZoomAt {
-        factor,
-        anchor: viewport.center(),
-        viewport,
-    };
-    horizontal(row![
-        action_button(
-            "Shortcuts",
-            super::help::can_open(state).then_some(Message::ShowShortcuts)
-        ),
-        action_button(
-            "Undo",
-            (enabled && state.annotations().can_undo())
-                .then_some(Message::Undo)
-        ),
-        action_button(
-            "Redo",
-            (enabled && state.annotations().can_redo())
-                .then_some(Message::Redo)
-        ),
-        action_button(
-            "Reset angle",
-            (enabled && state.annotations().can_reset_rotation())
-                .then_some(Message::ResetRotation)
-        ),
-        action_button("−", enabled.then_some(zoom(0.8))).width(CONTROL_HEIGHT),
-        action_button("+", enabled.then_some(zoom(1.25))).width(CONTROL_HEIGHT),
-        action_button("1:1", enabled.then_some(Message::OneToOne(viewport)))
-            .width(CONTROL_HEIGHT),
-        action_button("Fit", enabled.then_some(Message::Fit))
-            .width(CONTROL_HEIGHT),
-    ])
-}
-
 fn tools(state: &FastFill) -> Element<'_, Message> {
     let selected = state.annotations().tool();
     let enabled = enabled(state);
@@ -119,25 +53,51 @@ fn tools(state: &FastFill) -> Element<'_, Message> {
     for tool in Tool::ALL {
         tools = tools.push(tool_button(tool, selected, enabled));
     }
-    tools = tools.push(text(selected.label()).size(14));
-    tools = tools.extend(actions(state, iced::Shrink));
+    tools = tools.push(icon_button(
+        Glyph::ResetAngle,
+        "Reset angle of selected annotations",
+        false,
+        (enabled && state.annotations().can_reset_rotation())
+            .then_some(Message::ResetRotation),
+    ));
+    tools = tools.extend(actions(state, iced::Shrink, true));
     horizontal(tools)
 }
 
 fn actions(
     state: &FastFill,
     width: iced::Length,
+    icon_only: bool,
 ) -> [Element<'static, Message>; 4] {
     let selection = enabled(state)
         && state.annotations().has_selection()
         && !state.annotations().has_text_edit()
         && state.annotations().active_pointer().is_none();
     [
-        ("To back", Message::SendToBack, selection, false),
-        ("To front", Message::BringToFront, selection, false),
-        ("Delete", Message::DeleteSelected, selection, true),
+        (
+            "To back",
+            Glyph::ToBack,
+            Message::SendToBack,
+            selection,
+            false,
+        ),
+        (
+            "To front",
+            Glyph::ToFront,
+            Message::BringToFront,
+            selection,
+            false,
+        ),
+        (
+            "Delete",
+            Glyph::Delete,
+            Message::DeleteSelected,
+            selection,
+            true,
+        ),
         (
             "Delete all",
+            Glyph::DeleteAll,
             Message::AskDeleteAll,
             enabled(state)
                 && !state.annotations().is_empty()
@@ -145,15 +105,43 @@ fn actions(
             true,
         ),
     ]
-    .map(|(label, message, available, destructive)| {
-        action_button(label, available.then_some(message))
-            .width(width)
+    .map(|(label, glyph, message, available, destructive)| {
+        let content: Element<'static, Message> = if icon_only {
+            icons::view(glyph, false, available)
+        } else {
+            container(
+                row![
+                    icons::view::<Message>(glyph, false, available),
+                    text(label)
+                        .size(11)
+                        .wrapping(iced::advanced::text::Wrapping::None),
+                ]
+                .spacing(3)
+                .align_y(iced::Alignment::Center),
+            )
+            .width(Fill)
+            .align_x(iced::alignment::Horizontal::Center)
+            .into()
+        };
+        let control = button(content)
+            .width(if icon_only {
+                CONTROL_HEIGHT.into()
+            } else {
+                width
+            })
+            .height(CONTROL_HEIGHT)
+            .padding(if icon_only { [8, 8] } else { [8, 2] })
+            .on_press_maybe(available.then_some(message))
             .style(if destructive {
                 appearance::destructive_action
             } else {
                 appearance::secondary_action
-            })
-            .into()
+            });
+        if icon_only {
+            hint(control, label, available)
+        } else {
+            control.into()
+        }
     })
 }
 
@@ -193,7 +181,7 @@ fn tool_button(
     )
 }
 
-fn icon_button(
+pub(super) fn icon_button(
     glyph: Glyph,
     label: impl Into<String>,
     selected: bool,
@@ -241,7 +229,7 @@ fn color_button(
     )
 }
 
-fn hint(
+pub(super) fn hint(
     content: impl Into<Element<'static, Message>>,
     label: impl Into<String>,
     enabled: bool,

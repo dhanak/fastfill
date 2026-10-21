@@ -12,8 +12,9 @@ pub(super) use layout::page_top;
 pub(super) use motion::Motion;
 pub(super) use view::{overlay, view};
 
-const WIDTH: f32 = 164.0;
-const SCROLLBAR_WIDTH: f32 = 16.0;
+// Three 40px actions, two 8px gaps and 8px padding on both sides.
+pub(super) const WIDTH: f32 = 152.0;
+const SCROLLBAR_WIDTH: f32 = 8.0;
 const DRAG_THRESHOLD: f32 = 4.0;
 
 #[derive(Clone, Copy, Debug)]
@@ -167,7 +168,8 @@ impl Rail<'_> {
             }
             let point = position?;
             state.epoch = self.app.input_epoch;
-            if bounds.contains(point)
+            if self.max_offset(bounds) > 0.0
+                && bounds.contains(point)
                 && point.x >= bounds.x + bounds.width - SCROLLBAR_WIDTH
             {
                 state.pointer = Some((pointer, point.y, false));

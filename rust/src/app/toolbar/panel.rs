@@ -5,9 +5,9 @@ use crate::app::{FastFill, Message, snap, text_controls};
 use crate::appearance::{
     self, CONTROL_GAP, CONTROL_HEIGHT, TOOLS_PANEL_PADDING, action_button,
 };
-use crate::icons::Glyph;
+use crate::icons::{self, Glyph};
 use fastfill_rust::annotations::Tool;
-use iced::widget::{Column, Row, column, container, row, rule};
+use iced::widget::{Column, Row, button, column, container, row, rule};
 use iced::widget::{scrollable, text};
 use iced::{Element, Fill};
 
@@ -42,15 +42,43 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
     ]
     .spacing(12)
     .padding(TOOLS_PANEL_PADDING);
-    let [back, front, delete, clear] = actions(state, Fill);
+    let [back, front, delete, clear] = actions(state, Fill, false);
+    let reset_available =
+        enabled(state) && state.annotations().can_reset_rotation();
+    let reset_width = (appearance::TOOLS_PANEL_WIDTH
+        - 2.0 * TOOLS_PANEL_PADDING
+        - CONTROL_GAP)
+        / 2.0;
+    let reset = button(
+        container(
+            row![
+                icons::view::<Message>(
+                    Glyph::ResetAngle,
+                    false,
+                    reset_available,
+                ),
+                text("To 0°").size(11),
+            ]
+            .spacing(3)
+            .align_y(iced::Alignment::Center),
+        )
+        .width(Fill)
+        .align_x(iced::alignment::Horizontal::Center),
+    )
+    .width(reset_width)
+    .height(CONTROL_HEIGHT)
+    .padding([8, 2])
+    .on_press_maybe(reset_available.then_some(Message::ResetRotation))
+    .style(appearance::secondary_action);
     let footer = column![
         rule::horizontal(1),
-        text(format!(
-            "{} selected · {} annotations",
-            state.annotations().selected_count(),
-            state.annotations().len(),
-        ))
-        .size(12),
+        row![
+            text(format!("{} selected", state.annotations().selected_count()))
+                .size(12)
+                .width(Fill),
+            reset,
+        ]
+        .align_y(iced::Alignment::Center),
         row![back, front].spacing(CONTROL_GAP),
         row![delete, clear].spacing(CONTROL_GAP),
     ]
@@ -155,20 +183,12 @@ pub(super) fn properties(
         );
     }
     if state.annotations().fill_available() {
-        properties.push(
-            row![
-                icon_button(
-                    Glyph::Fill,
-                    "Fill closed shapes",
-                    state.annotations().current_fill() == Some(true),
-                    enabled.then_some(Message::ToggleFill),
-                ),
-                text("Fill").size(14),
-            ]
-            .align_y(iced::Alignment::Center)
-            .spacing(CONTROL_GAP)
-            .into(),
-        );
+        properties.push(icon_button(
+            Glyph::Fill,
+            "Fill closed shapes",
+            state.annotations().current_fill() == Some(true),
+            enabled.then_some(Message::ToggleFill),
+        ));
     }
     properties
 }

@@ -3,6 +3,7 @@
 mod canvas;
 mod preview;
 mod view;
+pub(crate) mod viewer;
 
 pub(super) use view::{view, warning};
 
@@ -29,6 +30,7 @@ struct Draft {
     error: Option<String>,
     notice: Option<String>,
     revision: u64,
+    viewer: viewer::Viewer,
 }
 
 struct Job {
@@ -51,6 +53,7 @@ pub(crate) enum Event {
     Brightness(i32),
     Contrast(i32),
     Corner(usize, NormalizedPoint),
+    View(viewer::Event),
     Ready(u64, Result<Arc<Preview>, String>),
     DismissWarning,
 }
@@ -104,6 +107,9 @@ pub(super) fn update(
         Message::FocusLost | Message::ViewportResized => {
             state.input_epoch = state.input_epoch.wrapping_add(1);
             state.modifiers = super::DragModifiers::default();
+            if let Some(draft) = &mut state.page_editor.draft {
+                draft.viewer.comparing = false;
+            }
         }
         Message::ModifiersChanged(modifiers) => state.modifiers = *modifiers,
         Message::CloseRequested(_) => {
@@ -148,6 +154,7 @@ pub(super) fn begin(
         error: None,
         notice: None,
         revision: 0,
+        viewer: viewer::Viewer::default(),
     });
     schedule(state)
 }
@@ -169,9 +176,20 @@ fn edit(state: &mut FastFill, event: &Event) -> Task<Message> {
         return Task::none();
     }
     if matches!(event, Event::AutoFrame) {
+        state
+            .page_editor
+            .draft
+            .as_mut()
+            .unwrap()
+            .viewer
+            .select(viewer::Mode::Frame);
         return auto_frame(state);
     }
     let draft = state.page_editor.draft.as_mut().expect("active page edit");
+    if let Event::View(event) = event {
+        draft.viewer.update(event);
+        return Task::none();
+    }
     let mut settings = draft.settings;
     match event {
         Event::FullFrame => settings.crop = CropQuad::default(),
@@ -210,6 +228,25 @@ fn edit(state: &mut FastFill, event: &Event) -> Task<Message> {
     }
     draft.error = None;
     draft.notice = None;
+    let geometry_changed = settings.crop != draft.settings.crop
+        || settings.rotation_quarter_turns
+            != draft.settings.rotation_quarter_turns;
+    match event {
+        Event::FullFrame | Event::Rotate(_) | Event::Corner(_, _) => {
+            draft.viewer.select(viewer::Mode::Frame);
+        }
+        Event::Mode(_) | Event::Brightness(_) | Event::Contrast(_) => {
+            draft.viewer.select(viewer::Mode::Preview);
+        }
+        _ => {}
+    }
+    if geometry_changed {
+        if matches!(event, Event::Corner(_, _)) {
+            draft.viewer.crop_dragged();
+        } else {
+            draft.viewer.geometry_changed();
+        }
+    }
     draft.settings = settings;
     // Even a no-op Full frame or an edit reverted to its prior value wins
     // over a framing request that started before the manual action.
@@ -254,14 +291,13 @@ fn schedule(state: &mut FastFill) -> Task<Message> {
     {
         return Task::none();
     }
-    let input = draft.original.as_ref().map_or_else(
-        || {
-            Input::Image(
-                state.image().expect("page has an image").handle.clone(),
-            )
-        },
-        |original| Input::Decoded(original.clone()),
-    );
+    let input = if let Some(ready) = &draft.ready {
+        Input::Cached(ready.clone())
+    } else if let Some(original) = &draft.original {
+        Input::Decoded(original.clone())
+    } else {
+        Input::Image(state.image().expect("page has an image").handle.clone())
+    };
     let job = Job {
         id: state.project.request_id(),
         session: draft.id,
@@ -309,6 +345,9 @@ fn ready(
                 draft.original = Some(preview.original.clone());
                 if current {
                     if job.auto_frame {
+                        if preview.settings.crop != draft.settings.crop {
+                            draft.viewer.geometry_changed();
+                        }
                         draft.settings = preview.settings;
                         draft.notice.clone_from(&preview.notice);
                     }

@@ -1,6 +1,22 @@
 use super::*;
 use crate::app::tests::render_themed_element;
 
+#[test]
+fn card_fills_rail_and_its_right_edge_drags_without_a_scrollbar() {
+    let mut app = FastFill::default();
+    let card = (Rail { app: &app }).layout(BOUNDS).cards[0];
+    assert_eq!(card.width, BOUNDS.width - 2.0);
+    let mut input = RailState::default();
+    let point = Point::new(BOUNDS.x + BOUNDS.width - 4.0, BOUNDS.y + 24.0);
+    event(
+        &mut app,
+        &mut input,
+        &canvas::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        point,
+    );
+    assert!(app.dragged_page.is_some());
+}
+
 fn start(
     app: &mut FastFill,
     input: &mut RailState,

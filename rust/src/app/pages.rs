@@ -402,6 +402,7 @@ pub(super) fn update(
             }
             state.image_picker = ImagePicker::ConfirmReplace;
         }
+        #[cfg(test)]
         Message::SelectPage(index) => state.select_page(*index),
         Message::MovePageLeft => {
             if let Some(index) = state.pages.active_index().checked_sub(1) {

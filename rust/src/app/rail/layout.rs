@@ -50,7 +50,8 @@ pub(super) fn number_position(card: Rectangle) -> Point {
 
 impl Layout {
     pub(super) fn new(app: &FastFill, width: f32) -> Self {
-        let width = (width - SCROLLBAR_WIDTH - 2.0).max(1.0);
+        // The thin scrollbar overlays cards only when scrolling is needed.
+        let width = (width - 2.0).max(1.0);
         let mut cards = app
             .pages
             .iter()
@@ -202,7 +203,8 @@ impl Rail<'_> {
         bounds: Rectangle,
     ) -> Option<usize> {
         if !bounds.contains(point)
-            || point.x >= bounds.x + bounds.width - SCROLLBAR_WIDTH
+            || (self.max_offset(bounds) > 0.0
+                && point.x >= bounds.x + bounds.width - SCROLLBAR_WIDTH)
         {
             return None;
         }

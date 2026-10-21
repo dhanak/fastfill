@@ -1004,13 +1004,61 @@ remains a later behavior slice, not part of this visual pass.
       render both screens in light/dark, wide/narrow and 1x/2x. Keep drivers
       closed and hardware calibration separate from software rendering.
 - [x] Run native tests, strict lint, WASM, formatting and whitespace checks.
-- [ ] User checkpoint: inspect both screens/themes, small-window scrolling,
+- [x] User checkpoint: inspect both screens/themes, small-window scrolling,
       adaptive dock/status placement, settings/quick camera switching,
       preview/capture/review/retake and pending correction Accept/Cancel.
       This is today's last slice. Stop here; do not commit unless requested.
 
-Camera layout and refined glyphs accepted on 2026-10-20. Retain the remaining
-functional/hardware checkpoint above; user requests a commit and pause.
+Camera layout and refined glyphs accepted on 2026-10-20. User confirms the
+remaining 7H2 manual checkpoint on 2026-10-21. Physical sleep, SP6 and touch
+checks remain separate hardware checks, not part of this UI checkpoint.
+
+#### 7H2 follow-up. Full-size page correction views — 2026-10-21
+
+- [x] Replace the small sidebar preview with Frame and Preview canvas views.
+      Keep both correction groups visible; framing actions select Frame,
+      color and tone actions select Preview.
+- [x] Add zoom, pan, Fit and 1:1 to both views. Compare the corrected preview
+      with the unadjusted image at the same crop and rotation.
+- [x] Use the native scrollbar gutter only while the sidebar overflows, and
+      retain pending corrections when changing the view.
+- [x] Check mouse/touch routing, rotation, worker staleness, history safety,
+      wide/narrow layout, both themes, native tests, lint and WASM.
+- [x] Keep a corner drag active through crop previews, and show the original
+      only while Compare is held, including release outside the control.
+- [x] User checkpoint: inspect framing, full-size corrections, comparison,
+      continuous corner dragging, zoom/pan and sidebar padding before
+      marking this follow-up accepted.
+
+User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
+
+#### 7H3. Compact main-window chrome — 2026-10-21
+
+- [x] Replace split header/toolbar rows with one 56-pixel header on wide
+      windows. Keep the project menu, Undo/Redo, zoom, Save, Export PDF,
+      Shortcuts and status reachable; use a compact overflow on narrow ones.
+- [x] Remove the redundant page-number selector. Use thumbnails to switch
+      pages, compact rail action icons and a page menu for move earlier/later.
+- [x] Use magnifier +/- zoom glyphs and icon-plus-text primary actions. Keep
+      Reset angle with annotation controls, not beside page navigation.
+- [x] Keep errors, recovery notices and PDF progress above the editor without
+      resizing or shifting the canvas. Preserve mouse/touch action routing.
+- [x] Run native tests, strict lint, WASM, formatting and whitespace checks.
+- [x] Replace improvised action icons with pinned Lucide SVGs and retain its
+      license in source and portable packages. Center Save/Export contents;
+      make project, page and overflow menus wide enough for their labels.
+- [x] Follow-up: use Lucide throughout the camera dock; scope the
+      compare-release listener to page edit, align the page rail, distinguish
+      Delete all, make narrow actions icon-only, keep hover text/icon colors
+      matched, and add 1:1/Fit icons. Use image-up for Replace image, shredder
+      for Delete all and menu glyphs for overflow triggers.
+- [x] Preserve menus across incidental updates, center footer action groups,
+      fill page cards across the rail, and remove the static Fill label. Test
+      menu persistence and rail-edge dragging; host popup check remains open.
+- [x] User visually accepts the main chrome on 2026-10-21 and requests the
+      wide Reset angle "To 0°" label. Do not infer touch or DPI checks.
+- [ ] Confirm project, page and More menus stay open on the host after the
+      explicit-only dismissal fix; the automated checks cannot prove this.
 
 #### Remaining UI polish and replacement gate — not started
 
@@ -1019,8 +1067,8 @@ functional/hardware checkpoint above; user requests a commit and pause.
 - Profile the browser harness if full-release builds remain sluggish;
   debug builds now lightly optimize FastFill as well as its dependencies.
 - Page-card appearance, drag feedback and animation are accepted at 7F1–7F3.
-- Finish the camera/page-correction manual checkpoint at 7H2 above before
-  proceeding to another UI slice. H1 action styling is accepted.
+- 7H2 camera/page-correction UI and full-size correction follow-up are
+  manually accepted. Physical hardware checks stay separate.
 - Add a searchable command palette on Ctrl+. to find and run commands.
   Reuse existing command handlers and availability guards; keep this as a
   future polish item, not a shortcut implemented by the current help slice.
@@ -4190,6 +4238,20 @@ Windows retest after the next CI ZIP:
   Do not infer unreported physical touch, SP6, sleep or high-DPI checks.
 - Commit unsigned for the owner's later signing. Exclude ignored mockups,
   screenshots, logs and generated output. Stop without starting another slice.
+
+### 2026-10-21 — Compact main-window chrome
+
+- User accepts the redesigned mockup. Replace wide-screen split bars with one
+  56-pixel header; keep the narrow two-row tool/options strip stable.
+- Remove the page-number picker. Put page actions in compact icon rows and
+  move earlier/later in the page menu; keep New/Open/Save as in the project
+  menu. Show status in the header and warnings above the editor.
+- Add vector action icons, compact overflow and zoom magnifiers. Keep Reset
+  angle with annotation controls. Prevent the page menu from changing rail
+  height during a drag; retain the floating-card return animation.
+- Check 400/640/1200-pixel software previews in both themes and route new
+  mouse/touch controls. All native tests, strict Clippy, WASM, formatting and
+  whitespace checks pass. Leave 7H3 manual checkpoint open; no commit asked.
 
 ## References
 

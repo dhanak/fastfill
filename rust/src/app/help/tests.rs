@@ -286,17 +286,16 @@ fn probe(
 }
 
 #[test]
-fn shortcuts_button_precedes_undo_and_routes_to_the_help_overlay() {
+fn help_icon_in_single_header_routes_to_the_help_overlay() {
     let mut state = annotated_page();
     let renderer = renderer();
-    let mut element =
-        crate::app::toolbar::workspace(&state, iced::Size::new(1_036.0, 700.0));
+    let mut element = crate::app::view::view(&state);
     let (mut tree, node) =
-        lay_out(&mut element, &renderer, iced::Size::new(1_036.0, 700.0));
+        lay_out(&mut element, &renderer, iced::Size::new(1_200.0, 800.0));
     let texts = probe(&mut element, &mut tree, &node, &renderer).texts;
-    let bounds = |label| texts.iter().find(|t| t.0 == label).unwrap().1;
-    assert!(bounds("Shortcuts").x < bounds("Undo").x);
-    let position = bounds("Shortcuts").center();
+    let export = texts.iter().find(|t| t.0 == "Export PDF").unwrap().1;
+    let position = iced::Point::new(1_168.0, 28.0);
+    assert!(export.x < position.x);
     let _ = dispatch(
         &mut element,
         &mut tree,

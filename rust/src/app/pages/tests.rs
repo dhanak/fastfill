@@ -74,7 +74,10 @@ fn page_buttons_and_drag_reorder_the_active_page() {
     assert_eq!(state.pages.active_index(), 1);
 
     state.page_scroll = 0.0;
-    let bounds = iced::Rectangle::with_size(iced::Size::new(148.0, 600.0));
+    let bounds = iced::Rectangle::with_size(iced::Size::new(
+        super::super::rail::WIDTH - 16.0,
+        600.0,
+    ));
     let top = super::super::rail::page_top(&state, 1);
     let next = super::super::rail::page_top(&state, 2);
     let origin = iced::Rectangle::new(

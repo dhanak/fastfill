@@ -1,38 +1,178 @@
 use super::{FastFill, ImagePicker, Message, TEXT_EDITOR_ID, page_size};
-use crate::appearance::{action_button, annotation_color, text_font};
+use crate::appearance::{self, action_button, annotation_color, text_font};
+use crate::icons::Glyph;
 use crate::page_canvas::{CanvasLayer, PageCanvas, page_viewport};
 use fastfill_rust::annotations::{
     AnnotationColor, TEXT_EDITOR_HORIZONTAL_PADDING,
     TEXT_EDITOR_VERTICAL_PADDING, TEXT_LINE_HEIGHT,
 };
 use fastfill_rust::geometry::Point as PagePoint;
+use fastfill_rust::geometry::Rect as PageRect;
 use iced::widget::{
-    canvas, column, container, progress_bar, responsive, row, text, text_editor,
+    Column, Space, canvas, column, container, progress_bar, responsive, row,
+    text, text_editor, tooltip,
 };
-use iced::{Background, Border, Color, Element, Fill, Padding, keyboard};
+use iced::{Background, Border, Color, Element, Fill, Padding, Size, keyboard};
 
-fn heading(state: &FastFill) -> Element<'_, Message> {
+pub(super) fn canvas_viewport(window: Size) -> PageRect {
+    let workspace_width = (window.width - super::rail::WIDTH).max(1.0);
+    let workspace_height = (window.height - appearance::HEADER_HEIGHT).max(1.0);
+    let wide = workspace_width >= appearance::PANEL_MIN_WORKSPACE_WIDTH;
+    let canvas = Size::new(
+        workspace_width
+            - if wide {
+                appearance::TOOLS_PANEL_WIDTH
+            } else {
+                0.0
+            },
+        workspace_height
+            - if wide {
+                0.0
+            } else {
+                appearance::TOOLBAR_HEIGHT
+            },
+    );
+    page_viewport(canvas)
+}
+
+fn heading(
+    state: &FastFill,
+    viewport: PageRect,
+    width: f32,
+) -> Element<'_, Message> {
+    let compact = width < 1_020.0;
+    let tiny = width < 560.0;
+    let project_width = if width < 440.0 {
+        96.0
+    } else if width < 650.0 {
+        126.0
+    } else if compact {
+        190.0
+    } else {
+        240.0
+    };
+    let enabled = super::project_view::enabled(state);
+    let zoom = |factor| Message::ZoomAt {
+        factor,
+        anchor: viewport.center(),
+        viewport,
+    };
+    let mut bar = row![super::project_view::menu(state, project_width)];
+    if !tiny {
+        bar = bar
+            .push(super::toolbar::icon_button(
+                Glyph::Undo,
+                "Undo",
+                false,
+                (enabled && state.annotations().can_undo())
+                    .then_some(Message::Undo),
+            ))
+            .push(super::toolbar::icon_button(
+                Glyph::Redo,
+                "Redo",
+                false,
+                (enabled && state.annotations().can_redo())
+                    .then_some(Message::Redo),
+            ));
+    }
+    bar = bar.push(status_slot(state, width));
+    bar = bar
+        .push(super::toolbar::icon_button(
+            Glyph::ZoomOut,
+            "Zoom out",
+            false,
+            enabled.then_some(zoom(0.8)),
+        ))
+        .push(super::toolbar::icon_button(
+            Glyph::ZoomIn,
+            "Zoom in",
+            false,
+            enabled.then_some(zoom(1.25)),
+        ));
+    if !compact {
+        bar = bar
+            .push(super::project_view::view_action(
+                Glyph::ActualSize,
+                "1:1",
+                enabled.then_some(Message::OneToOne(viewport)),
+            ))
+            .push(super::project_view::view_action(
+                Glyph::Fit,
+                "Fit",
+                enabled.then_some(Message::Fit),
+            ));
+    }
+    bar = bar.push(super::project_view::save(state, tiny));
+    if compact {
+        bar = bar.push(super::toolbar::icon_button(
+            Glyph::More,
+            "More commands",
+            state.open_menu == Some(super::menu::Kind::More),
+            enabled.then_some(Message::ToggleMenu(super::menu::Kind::More)),
+        ));
+    } else {
+        bar = bar.push(super::project_view::export(state)).push(
+            super::toolbar::icon_button(
+                Glyph::Help,
+                "Shortcuts",
+                false,
+                super::help::can_open(state).then_some(Message::ShowShortcuts),
+            ),
+        );
+    }
+    container(bar.spacing(8).align_y(iced::Alignment::Center))
+        .padding([8, 12])
+        .height(appearance::HEADER_HEIGHT)
+        .width(Fill)
+        .style(container::bordered_box)
+        .into()
+}
+
+fn status_slot(state: &FastFill, width: f32) -> Element<'static, Message> {
+    if width < 400.0 {
+        return Space::new().width(Fill).into();
+    }
     let status = if state.status.is_empty() {
-        "Add an image, import a PDF, or draw on the blank page."
+        if state.image().is_some() {
+            "Ready".to_owned()
+        } else {
+            "Add an image, import a PDF, or draw on the blank page.".to_owned()
+        }
     } else {
-        &state.status
+        state.status.clone()
     };
-    let status_line: Element<'_, Message> = if state.status_is_error {
-        container(text(format!("⚠ {status}")).size(14))
-            .style(container::danger)
+    let status_text: Element<'static, Message> =
+        container(text(status.clone()).size(13))
+            .width(Fill)
+            .clip(true)
+            .into();
+    tooltip(
+        status_text,
+        container(text(status).size(13))
             .padding([6, 10])
-            .into()
-    } else {
-        text(status).size(14).into()
-    };
-    let mut heading =
-        column![super::project_view::controls(state), status_line].spacing(4);
+            .style(container::rounded_box),
+        tooltip::Position::Bottom,
+    )
+    .delay(std::time::Duration::from_millis(500))
+    .into()
+}
+
+fn notifications(state: &FastFill) -> Option<Element<'_, Message>> {
+    let mut notices: Vec<Element<'_, Message>> = Vec::new();
+    if state.status_is_error && !state.status.is_empty() {
+        notices.push(
+            container(text(format!("⚠ {}", state.status)).size(14))
+                .style(container::danger)
+                .padding([6, 10])
+                .into(),
+        );
+    }
     if let Some(warning) = super::page_edit::warning(state) {
-        heading = heading.push(warning);
+        notices.push(warning);
     }
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(banner) = super::recovery::banner(state) {
-        heading = heading.push(banner);
+        notices.push(banner);
     }
     let pdf_progress = match &state.project.operation {
         super::project::Operation::ImportingPdf { progress, .. } => Some((
@@ -51,16 +191,40 @@ fn heading(state: &FastFill) -> Element<'_, Message> {
         _ => None,
     };
     if let Some((progress, label, message)) = pdf_progress {
-        heading = heading.push(
-            row![
-                progress_bar(0.0..=1.0, progress).girth(8).length(Fill),
-                action_button(label, message),
-            ]
-            .spacing(12)
-            .align_y(iced::Alignment::Center),
+        notices.push(
+            container(
+                row![
+                    progress_bar(0.0..=1.0, progress).girth(8).length(Fill),
+                    action_button(label, message),
+                ]
+                .spacing(12)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding(8)
+            .style(container::bordered_box)
+            .into(),
         );
     }
-    container(heading).padding([10, 20]).into()
+    if notices.is_empty() {
+        return None;
+    }
+    Some(
+        container(
+            container(Column::with_children(notices).spacing(4))
+                .width(Fill)
+                .max_width(900),
+        )
+        .width(Fill)
+        .height(Fill)
+        .align_x(iced::Alignment::Center)
+        .padding(Padding {
+            top: appearance::HEADER_HEIGHT + 8.0,
+            left: 16.0,
+            right: 16.0,
+            ..Padding::ZERO
+        })
+        .into(),
+    )
 }
 
 pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
@@ -71,18 +235,32 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
     if state.page_editor.is_open() {
         return super::page_edit::view(state);
     }
-    let body = responsive(move |available| {
-        super::toolbar::workspace(state, available)
+    let layout = responsive(move |available| {
+        let viewport = canvas_viewport(available);
+        column![
+            heading(state, viewport, available.width),
+            row![
+                super::rail::view(state),
+                responsive(move |available| {
+                    super::toolbar::workspace(state, available)
+                }),
+            ]
+            .width(Fill)
+            .height(Fill),
+        ]
+        .width(Fill)
+        .height(Fill)
+        .into()
     });
 
     // Separate renderer layers keep page images below the modal and its scrim.
     iced::widget::stack![
         iced::widget::Space::new().width(Fill).height(Fill),
-        column![heading(state), row![super::rail::view(state), body]]
-            .width(Fill)
-            .height(Fill),
+        layout,
     ]
+    .extend(notifications(state))
     .extend(super::rail::overlay(state))
+    .extend(super::menu::overlay(state))
     .extend(super::confirmation::view(state))
     .extend(super::help::view(state))
     .width(Fill)

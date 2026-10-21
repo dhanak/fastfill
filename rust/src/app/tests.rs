@@ -1480,6 +1480,7 @@ fn main_window_keeps_the_page_rail_separate_from_the_canvas() {
         &pixels[offset..offset + 4]
     };
     assert_eq!(pixel(180, 780), [67, 72, 78, 255]);
+    assert_eq!(pixel(180, 80), [67, 72, 78, 255]);
     assert_eq!(pixel(680, 500), [240, 230, 210, 255]);
     assert_ne!(pixel(80, 500), [67, 72, 78, 255]);
 
@@ -1492,6 +1493,76 @@ fn main_window_keeps_the_page_rail_separate_from_the_canvas() {
             image::ColorType::Rgba8,
         )
         .expect("UI snapshot");
+    }
+}
+
+#[test]
+fn compact_header_routes_zoom_save_and_export_commands() {
+    use iced::advanced::renderer::Headless;
+    use iced::advanced::{layout, widget};
+    let state = rendered_page();
+    let renderer =
+        iced::futures::executor::block_on(<Renderer as Headless>::new(
+            iced::Font::with_name("Fira Sans"),
+            iced::Pixels(16.0),
+            Some("tiny-skia"),
+        ))
+        .unwrap();
+    let size = iced::Size::new(1_200.0, 800.0);
+    for (x, command) in [
+        (701.0, "zoom out"),
+        (749.0, "zoom in"),
+        (964.0, "save"),
+        (1_078.0, "export"),
+    ] {
+        for touch in [false, true] {
+            let mut element = view(&state);
+            let mut tree = widget::Tree::new(element.as_widget());
+            let node = element.as_widget_mut().layout(
+                &mut tree,
+                &renderer,
+                &layout::Limits::new(size, size),
+            );
+            let messages = click_element(
+                &mut element,
+                &mut tree,
+                &node,
+                &renderer,
+                iced::Point::new(x, 28.0),
+                touch,
+            );
+            assert_eq!(messages.len(), 1, "{command}, touch={touch}");
+            let correct = match (command, &messages[0]) {
+                (
+                    "zoom out",
+                    Message::ZoomAt {
+                        factor,
+                        anchor,
+                        viewport,
+                    },
+                ) => {
+                    (*factor - 0.8).abs() < f32::EPSILON
+                        && *viewport == PageRect::new(36.0, 36.0, 768.0, 672.0)
+                        && *anchor == viewport.center()
+                }
+                (
+                    "zoom in",
+                    Message::ZoomAt {
+                        factor,
+                        anchor,
+                        viewport,
+                    },
+                ) => {
+                    (*factor - 1.25).abs() < f32::EPSILON
+                        && *viewport == PageRect::new(36.0, 36.0, 768.0, 672.0)
+                        && *anchor == viewport.center()
+                }
+                ("save", Message::SaveProject)
+                | ("export", Message::ExportPdf) => true,
+                _ => false,
+            };
+            assert!(correct, "{command}: {:?}", messages[0]);
+        }
     }
 }
 
@@ -1538,7 +1609,7 @@ fn zoomed_panned_page_cannot_paint_over_toolbars_or_the_rail() {
             "page image must not cover the toolbar at {dpi} DPI scale"
         );
         for y in 400 * scale..780 * scale {
-            for x in 160 * scale..164 * scale {
+            for x in 148 * scale..152 * scale {
                 assert_ne!(
                     pixels[y * width + x],
                     page_color,
@@ -1579,10 +1650,17 @@ fn scrolled_thumbnails_cannot_paint_over_page_controls() {
             dpi,
         );
         let scale = usize::try_from(scale).unwrap();
-        let control_bytes = 164 * 260 * scale * scale * 4;
+        // The first 145 rows contain only the rail's fixed controls.
+        let control_bytes = 164 * 145 * scale * scale * 4;
+        let first_change = before
+            .iter()
+            .zip(&after)
+            .position(|(before, after)| before != after)
+            .map(|offset| offset / (164 * scale * 4));
         assert!(
             before[..control_bytes] == after[..control_bytes],
-            "scrolling must not change the page controls at {dpi} DPI scale"
+            "scrolling must not change the page controls at {dpi} DPI scale; \
+             first changed row: {first_change:?}"
         );
     }
 }

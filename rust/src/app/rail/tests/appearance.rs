@@ -2,6 +2,100 @@ use super::*;
 use crate::app::tests::render_themed_element;
 
 #[test]
+fn compact_page_actions_route_mouse_and_touch() {
+    use crate::app::tests::click_element;
+    use iced::advanced::renderer::Headless;
+    use iced::advanced::{layout, widget};
+    let state = three_pages();
+    let renderer =
+        iced::futures::executor::block_on(<Renderer as Headless>::new(
+            iced::Font::with_name("Fira Sans"),
+            iced::Pixels(16.0),
+            Some("tiny-skia"),
+        ))
+        .unwrap();
+    let size = Size::new(164.0, 600.0);
+    for (point, command) in [
+        (Point::new(28.0, 76.0), "add"),
+        (Point::new(76.0, 76.0), "import"),
+        (Point::new(28.0, 124.0), "replace"),
+        (Point::new(76.0, 124.0), "edit"),
+        (Point::new(124.0, 124.0), "delete"),
+    ] {
+        for touch in [false, true] {
+            let mut element = super::super::view::view(&state);
+            let mut tree = widget::Tree::new(element.as_widget());
+            let node = element.as_widget_mut().layout(
+                &mut tree,
+                &renderer,
+                &layout::Limits::new(size, size),
+            );
+            let messages = click_element(
+                &mut element,
+                &mut tree,
+                &node,
+                &renderer,
+                point,
+                touch,
+            );
+            assert_eq!(messages.len(), 1, "{command}, touch={touch}");
+            let correct = matches!(
+                (command, &messages[0]),
+                ("add", Message::AddPage)
+                    | ("import", Message::ImportPdf)
+                    | ("replace", Message::AskReplacePage)
+                    | ("delete", Message::AskDeletePage)
+                    | (
+                        "edit",
+                        Message::PageEdit(crate::app::page_edit::Event::Begin),
+                    )
+            );
+            assert!(correct, "{command}: {:?}", messages[0]);
+        }
+    }
+}
+
+#[test]
+fn page_menu_keeps_both_move_directions_reachable() {
+    use crate::app::tests::click_element;
+    use iced::Renderer;
+    use iced::advanced::renderer::Headless;
+    use iced::advanced::{layout, widget};
+    assert_eq!(WIDTH, 3.0 * 40.0 + 2.0 * 8.0 + 2.0 * 8.0);
+    let mut state = three_pages();
+    state.pages.select(1);
+    let renderer =
+        iced::futures::executor::block_on(<Renderer as Headless>::new(
+            iced::Font::with_name("Fira Sans"),
+            iced::Pixels(16.0),
+            Some("tiny-skia"),
+        ))
+        .unwrap();
+    for touch in [false, true] {
+        let mut rail = super::super::view::view(&state);
+        let mut tree = widget::Tree::new(rail.as_widget());
+        let size = Size::new(164.0, 600.0);
+        let node = rail.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(size, size),
+        );
+        let messages = click_element(
+            &mut rail,
+            &mut tree,
+            &node,
+            &renderer,
+            Point::new(124.0, 28.0),
+            touch,
+        );
+        assert!(matches!(
+            messages.as_slice(),
+            [Message::ToggleMenu(crate::app::menu::Kind::Page)]
+        ));
+    }
+}
+
+#[test]
 fn portrait_landscape_and_blank_previews_fill_the_space_after_the_number() {
     let card = Rectangle::new(Point::new(20.0, 30.0), Size::new(130.0, 150.0));
     for size in [

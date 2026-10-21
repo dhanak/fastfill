@@ -52,9 +52,13 @@ fn action_styles_share_corners_and_dim_disabled_states_in_both_themes() {
             "{theme:?} {danger:?}",
         );
         assert!(danger.text_color.r > danger.text_color.b * 1.3);
-        assert_ne!(
-            danger.background,
-            destructive_action(&theme, Status::Hovered).background
+        let hovered = destructive_action(&theme, Status::Hovered);
+        assert_eq!(hovered.text_color, danger.text_color);
+        assert!(hovered.border.width > danger.border.width);
+        let primary = primary_action(&theme, Status::Active);
+        assert_eq!(
+            primary_action(&theme, Status::Hovered).text_color,
+            primary.text_color,
         );
     }
 }

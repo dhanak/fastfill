@@ -283,7 +283,10 @@ fn canceled_thumbnail_renders_above_the_ui_without_a_duplicate_source() {
             ] {
                 event_in_bounds(&mut app, &mut input, &event, point, bounds);
             }
+            assert!(app.dragged_page.is_some_and(|drag| drag.moving));
             render(&app);
+            assert_eq!(app.rail_motion.borrow().bounds, Some(bounds));
+            assert!(app.rail_motion.borrow().ghost.is_some());
             let _ = update(&mut app, Message::CancelInteraction);
             assert!(app.dragged_page.is_none());
             assert!(overlay(&app).is_some());

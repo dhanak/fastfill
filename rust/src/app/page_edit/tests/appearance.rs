@@ -34,6 +34,7 @@ fn correction_controls_stay_centered_and_leave_room_for_the_source_image() {
     for size in [
         iced::Size::new(1200.0, 800.0),
         iced::Size::new(600.0, 500.0),
+        iced::Size::new(400.0, 500.0),
         iced::Size::new(1200.0, 360.0),
     ] {
         let mut element: Element<'_, Message> = view(&state);
@@ -44,21 +45,30 @@ fn correction_controls_stay_centered_and_leave_room_for_the_source_image() {
             &layout::Limits::new(size, size),
         );
         let buttons = targets(Layout::new(&node));
-        assert_eq!(buttons.len(), 14);
-        assert!(buttons.iter().all(|b| b.width >= 40.0));
+        assert_eq!(buttons.len(), 19);
+        assert!(buttons.iter().all(|b| b.width >= 40.0), "{buttons:?}");
         for bounds in &buttons[..2] {
             assert!(bounds.x >= 16.0 && bounds.y >= 16.0);
             assert!(bounds.x + bounds.width <= size.width - 16.0);
             assert!(bounds.y + bounds.height <= 60.0);
         }
+        assert!(buttons[2..7].iter().all(|bounds| {
+            bounds.x >= 16.0 && bounds.x + bounds.width <= size.width - 16.0
+        }));
         if size.width < 760.0 {
-            fn full_width_preview(node: &layout::Node) -> bool {
+            fn full_width_preview(node: &layout::Node, width: f32) -> bool {
                 (node.children().is_empty()
                     && node.size().height > 80.0
-                    && node.size().width >= 550.0)
-                    || node.children().iter().any(full_width_preview)
+                    && node.size().width >= width - 50.0)
+                    || node
+                        .children()
+                        .iter()
+                        .any(|n| full_width_preview(n, width))
             }
-            assert!(full_width_preview(&node), "source squeezed by sidebar");
+            assert!(
+                full_width_preview(&node, size.width),
+                "source squeezed by sidebar"
+            );
         }
     }
 }
@@ -68,21 +78,26 @@ fn correction_screen_renders_both_themes_and_dpi_scales() {
     let mut state = state();
     send(&mut state, Event::Begin);
     settle(&mut state);
-    for theme in [Theme::Light, Theme::Dark] {
-        for (scale, dpi) in [(1, 1.0), (2, 2.0)] {
-            for (width, height) in [(1200, 800), (600, 500)] {
-                let pixels = render_themed_element(
-                    view(&state),
-                    iced::Size::new(width, height),
-                    scale,
-                    dpi,
-                    &theme,
-                    mouse::Cursor::Unavailable,
-                );
-                if let Some(path) = std::env::var_os("FASTFILL_H2_SNAPSHOT") {
-                    image::save_buffer(
+    send(&mut state, Event::Brightness(20));
+    settle(&mut state);
+    for mode in [viewer::Mode::Frame, viewer::Mode::Preview] {
+        send(&mut state, Event::View(viewer::Event::Mode(mode)));
+        for theme in [Theme::Light, Theme::Dark] {
+            for (scale, dpi) in [(1, 1.0), (2, 2.0)] {
+                for (width, height) in [(1200, 800), (600, 500), (400, 500)] {
+                    let pixels = render_themed_element(
+                        view(&state),
+                        iced::Size::new(width, height),
+                        scale,
+                        dpi,
+                        &theme,
+                        mouse::Cursor::Unavailable,
+                    );
+                    if let Some(path) = std::env::var_os("FASTFILL_H2_SNAPSHOT")
+                    {
+                        image::save_buffer(
                         std::path::PathBuf::from(path).join(format!(
-                            "correction-{width}-{theme:?}-{scale}.png"
+                            "correction-{mode:?}-{width}-{theme:?}-{scale}.png"
                         )),
                         &pixels,
                         width * scale,
@@ -90,27 +105,38 @@ fn correction_screen_renders_both_themes_and_dpi_scales() {
                         image::ColorType::Rgba8,
                     )
                     .unwrap();
+                    }
+                    assert_eq!(
+                        pixels.len(),
+                        usize::try_from(width * height * scale * scale * 4)
+                            .unwrap()
+                    );
+                    let pixel = |x, y| {
+                        let offset = usize::try_from(
+                            (y * scale * width * scale + x * scale) * 4,
+                        )
+                        .unwrap();
+                        &pixels[offset..offset + 4]
+                    };
+                    assert_eq!(
+                        pixel(width - 50, 48),
+                        theme
+                            .extended_palette()
+                            .primary
+                            .base
+                            .color
+                            .into_rgba8()
+                    );
+                    assert_eq!(
+                        pixel(width - 158, 48),
+                        theme
+                            .extended_palette()
+                            .background
+                            .base
+                            .color
+                            .into_rgba8()
+                    );
                 }
-                assert_eq!(
-                    pixels.len(),
-                    usize::try_from(width * height * scale * scale * 4)
-                        .unwrap()
-                );
-                let pixel = |x, y| {
-                    let offset = usize::try_from(
-                        (y * scale * width * scale + x * scale) * 4,
-                    )
-                    .unwrap();
-                    &pixels[offset..offset + 4]
-                };
-                assert_eq!(
-                    pixel(width - 50, 48),
-                    theme.extended_palette().primary.base.color.into_rgba8()
-                );
-                assert_eq!(
-                    pixel(width - 158, 48),
-                    theme.extended_palette().background.base.color.into_rgba8()
-                );
             }
         }
     }
@@ -145,6 +171,11 @@ fn correction_actions_route_mouse_and_touch_and_respect_preview_readiness() {
             let expected = [
                 Event::Cancel,
                 Event::Accept,
+                Event::View(viewer::Event::Mode(viewer::Mode::Frame)),
+                Event::View(viewer::Event::Mode(viewer::Mode::Preview)),
+                Event::View(viewer::Event::Compare(true)),
+                Event::View(viewer::Event::Fit),
+                Event::View(viewer::Event::ActualSize),
                 Event::AutoFrame,
                 Event::FullFrame,
                 Event::Rotate(-1),
@@ -169,10 +200,14 @@ fn correction_actions_route_mouse_and_touch_and_respect_preview_readiness() {
                     bounds.center(),
                     touch,
                 );
-                if !ready && [1, 2].contains(&i) {
+                if (!ready && [1, 4, 7].contains(&i)) || (ready && i == 4) {
                     assert!(messages.is_empty(), "disabled {expected:?}");
                 } else {
-                    assert_eq!(messages.len(), 1, "{expected:?}: {messages:?}");
+                    assert_eq!(
+                        messages.len(),
+                        1,
+                        "ready={ready} touch={touch} {expected:?}: {messages:?}"
+                    );
                     let Message::PageEdit(actual) = &messages[0] else {
                         panic!("page correction command");
                     };
@@ -180,5 +215,50 @@ fn correction_actions_route_mouse_and_touch_and_respect_preview_readiness() {
                 }
             }
         }
+    }
+}
+
+#[test]
+fn compare_button_is_available_on_preview_for_mouse_and_touch() {
+    use crate::app::tests::click_element;
+    let mut state = state();
+    send(&mut state, Event::Begin);
+    settle(&mut state);
+    send(
+        &mut state,
+        Event::View(viewer::Event::Mode(viewer::Mode::Preview)),
+    );
+    let renderer =
+        iced::futures::executor::block_on(<Renderer as Headless>::new(
+            iced::Font::with_name("Fira Sans"),
+            iced::Pixels(16.0),
+            Some("tiny-skia"),
+        ))
+        .unwrap();
+    for touch in [false, true] {
+        let mut element = view(&state);
+        let mut tree = widget::Tree::new(element.as_widget());
+        let size = iced::Size::new(1200.0, 800.0);
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(size, size),
+        );
+        let compare = targets(Layout::new(&node))[4];
+        let messages = click_element(
+            &mut element,
+            &mut tree,
+            &node,
+            &renderer,
+            compare.center(),
+            touch,
+        );
+        assert!(matches!(
+            messages.as_slice(),
+            [
+                Message::PageEdit(Event::View(viewer::Event::Compare(true))),
+                Message::PageEdit(Event::View(viewer::Event::Compare(false)))
+            ]
+        ));
     }
 }

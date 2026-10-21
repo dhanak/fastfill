@@ -5,7 +5,8 @@ unchanged. See [PLAN.md](PLAN.md) for scope, progress, and checkpoint gates.
 
 ## In-app shortcuts
 
-Choose **Shortcuts** before Undo, or press **F1** in the main editor. The
+Choose the **?** button in the main header, or press **F1**. On narrow
+windows, choose **Shortcuts** from **...** instead. The
 scrollable reference keeps Context, Shortcut and Action columns, including
 mouse/touch gestures and Ctrl/Shift/Alt editing modifiers. Close or Escape
 returns to the editor without accepting/canceling pending text or font-size
@@ -24,6 +25,17 @@ entries and red destructive actions. Formatting toggles retain their accent
 when selected. Action labels are centered in consistent 40-pixel-high targets;
 disabled actions stay visible and dimmed. Camera and page-correction actions
 use the same styles, with Capture, Use photo and Accept accented.
+
+The main editor uses one compact header. The project-name menu contains New,
+Open and (on desktop) Save as. Undo, Redo, zoom out/in, 1:1, Fit, Save,
+Export PDF and Shortcuts follow it; narrow windows move less-used commands
+into the menu button. Status appears in the header; errors and progress
+appear over the editor without shifting the page. The page rail has icon
+buttons for Add image, Import PDF, Camera (supported native builds), Replace
+image, Edit page and Delete page; hover for labels. Replace image uses an
+image-up glyph. Its menu button moves the
+current page earlier or later. Choose pages from thumbnails; there is no
+page-number dropdown.
 
 Colors follow the system appearance. On Linux, removing a dark preference
 restores the default light theme; the `ICED_THEME` override still takes
@@ -256,8 +268,15 @@ the entire load without replacing the current project. Test with copies.
 
 Checkpoint 6C2 adds **Edit page** to the page rail for image pages:
 
-- Drag the four handles on the original image with mouse or touch. The
-  corrected preview updates separately; invalid/crossed crops are rejected.
+- In **Frame**, drag the four corner handles on the original image with mouse
+  or touch. The image follows quarter-turn rotation; invalid/crossed crops
+  are rejected. **Preview** shows the corrected result in the main canvas.
+- Frame and Preview each keep their own zoom and pan. Scroll to zoom at the
+  pointer; drag empty canvas space to pan, or right-drag anywhere. On touch,
+  drag to pan and pinch to zoom. **Fit** and **1:1** reset the current view.
+- Hold **Compare** to see the image before color/tone adjustments, with the
+  same crop and rotation. Release to return to the corrected preview.
+  Changing any correction also returns to the corrected image.
 - **Full frame** restores the entire source image without resetting filters
   or rotation. Rotate left/right changes the corrected image by 90°.
 - Choose Original, Enhanced, Grayscale, or B&W. Adjust brightness/contrast
@@ -265,10 +284,10 @@ Checkpoint 6C2 adds **Edit page** to the page rail for image pages:
 - **Accept** applies a completed preview matching the current settings.
   **Cancel** or Escape discards the pending page edits. Resizing the window
   or switching focus keeps the draft; document commands stay blocked.
-- Corrections and the corrected preview share a scrollable panel. On narrow
-  windows it moves below the original instead of squeezing the crop canvas.
-  Cancel stays immediately before Accept at the upper right. Selected color
-  modes are accented; framing, rotation and tone actions use neutral buttons.
+- Framing actions select Frame; color and tone changes select Preview. Both
+  option groups stay visible in the scrollable panel. On narrow windows the
+  panel moves below the canvas. Cancel stays immediately before Accept at the
+  upper right. Switching views does not apply or discard pending changes.
 - Annotation centers follow their original image locations. Shapes scale
   width/height independently using local image magnification; stroke width
   and object rotation stay fixed. No annotation perspective warp or skew.
@@ -537,13 +556,13 @@ Settings. Capture is circular, with its countdown ring inside the same
 40-pixel target as other buttons. After capture, its slot becomes Use photo;
 Pause/Resume becomes Retake (back/retry arrow). Hover for labels and rotation.
 
-The upper-right image button switches to the next camera. Settings opens a
-small, scrollable popover with camera-by-name, resolution and Refresh cameras.
+The camera dock uses the same Lucide icons as the editor. The upper-right
+switch-camera button selects the next camera. Settings opens a small,
+scrollable popover with camera-by-name, resolution and Refresh cameras.
 Click/tap outside or press Escape to close settings; Escape again cancels the
 camera draft. Settings and camera/orientation changes lock during photo review.
-**Mirror preview** highlights when enabled; its icon shows solid/dashed
-reflected triangles with tall edges facing the vertical axis. Saved photos
-remain unmirrored.
+**Mirror preview** highlights when enabled; its icon shows reflected triangles
+facing a dashed vertical axis. Saved photos remain unmirrored.
 
 Capture/status messages always appear over the image in a translucent rounded
 lozenge at bottom center, above the dock when it floats there. Long driver
@@ -696,7 +715,7 @@ Checkpoint 5C adds multiple image pages:
   page and asks before replacing its annotations. Subsequent images are
   inserted after the active page. Limit: 20 pages. Native Add/Replace dialogs
   remember the last successful import folder during the current run.
-- **Switch page:** click a thumbnail or choose a page number. Pending text is
+- **Switch page:** click a thumbnail. Pending text is
   accepted, unfinished shape edits are canceled, and the new page fits the
   view. Each page keeps its annotations, selection, and undo/redo history.
   The active tool and its default settings carry across pages.
@@ -704,8 +723,10 @@ Checkpoint 5C adds multiple image pages:
   without filename/asset IDs, annotation counts or a caption row. Portrait
   previews use the available height; landscape cards are shorter. Images keep
   their aspect ratio; the active card has a blue outline. Very short cards
-  retain a minimum touch target size.
-- **Reorder:** use ↑/↓ or drag any part of a thumbnail. Thumbnails rearrange
+  retain a minimum touch target size. Cards fill the rail width; the thin
+  scrollbar overlays their right edge only when scrolling is needed.
+- **Reorder:** use the page rail's menu button or drag a thumbnail outside
+  the scrollbar. Thumbnails rearrange
   around a full-card insertion gap. A translucent copy follows your grabbed
   point, even outside the rail; document order changes only on a valid drop.
   All page numbers, including the floating card, preview the proposed order.
@@ -733,12 +754,13 @@ Checkpoint 5C adds multiple image pages:
 
 Checkpoint 5D2 connects project files:
 
-- **New / Open:** start a blank project or choose a `.docscan`. Unsaved
+- **New / Open:** use the project-name menu to start a blank project or choose
+  a `.docscan`. Unsaved
   changes prompt Save, Discard, or Cancel. Failed/canceled opens keep the
   current pages and history; successful opens start fresh annotation history.
 - **Save / Save as:** on desktop, first save chooses a destination; later Save
   writes that file atomically. Native Save as chooses another destination.
-  The button is hidden in WASM, where Save always downloads a copy. Use
+  Its menu item is hidden in WASM, where Save always downloads a copy. Use
   `.docscan` filenames. Original PNG/JPEG bytes remain intact; blank pages save
   as white PNGs. Save accepts pending text and cancels unfinished shape drags.
 - **Dirty marker:** `*` beside the filename means unsaved content. Page
@@ -888,6 +910,8 @@ Available annotation tools:
 Tools use monochrome vector icons in equal 40-pixel touch targets. The active
 tool's name stays beside the buttons; Text uses Aa. Hover for labels. Selected
 tools, the magnet (Smart snap), and bucket (Fill) share the same highlight.
+Icons come from Lucide (pinned to commit `20aef31d`); its license is kept in
+`assets/icons/lucide/LICENSE` and included with the Windows portable build.
 Options appear only when applicable. The tool/options rows scroll horizontally
 in narrower windows; the page view keeps its size when switching tools.
 
@@ -897,7 +921,8 @@ Color stays above tool-specific properties, keeping its position stable when
 switching drawing tools. Applicable line width follows, then font, snap or fill.
 Text font/size/format controls stack vertically; properties scroll when space
 is tight. Layer and deletion actions stay at the bottom, dimmed when
-unavailable. Narrow windows retain horizontal tool/options rows, with
+unavailable. Delete all uses a shredder icon. Narrow windows retain horizontal
+tool/options rows with icon-only actions and no redundant tool-name label;
 scrollbars below the button targets.
 
 - **Rectangle:** drag with the left mouse button or one finger. The preview
@@ -979,8 +1004,8 @@ scrollbars below the button targets.
 - **Rotate:** drag the round handle above selected text, rectangle, oval, mark,
   or ink path. Hold Ctrl to snap to 45° increments. A rotated text editor stays
   horizontal and uses the object's unrotated measured size. Lines and arrows
-  remain endpoint-edited. Reset angle resets the selected object and supports
-  undo.
+  remain endpoint-edited. Reset angle ("To 0°" in the wide sidebar) resets
+  all selected rotatable objects and supports undo.
 - Drawing modes can edit the selected object from its body or handles.
   Starting elsewhere draws a new object of the active type.
 - **Delete:** remove the selection with the button or Delete key. Delete all

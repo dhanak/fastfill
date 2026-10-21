@@ -24,6 +24,7 @@ pub(super) struct Original {
 pub(super) enum Input {
     Image(Handle),
     Decoded(Arc<Original>),
+    Cached(Arc<Preview>),
     Frame(Arc<Original>),
 }
 
@@ -32,6 +33,7 @@ pub(crate) struct Preview {
     pub(super) settings: PageCorrection,
     pub(super) original: Arc<Original>,
     pub(super) handle: Handle,
+    pub(super) comparison: Handle,
     pub(super) notice: Option<String>,
 }
 
@@ -40,8 +42,13 @@ pub(super) fn build(
     mut settings: PageCorrection,
 ) -> Result<Arc<Preview>, String> {
     let framing = matches!(&input, Input::Frame(_));
+    let previous = match &input {
+        Input::Cached(preview) => Some(preview.clone()),
+        _ => None,
+    };
     let original = match input {
         Input::Decoded(original) | Input::Frame(original) => original,
+        Input::Cached(preview) => preview.original.clone(),
         Input::Image(handle) => {
             let pixels = match &handle {
                 Handle::Bytes(_, bytes) => decode_image(bytes.as_ref())
@@ -93,10 +100,31 @@ pub(super) fn build(
             .map_err(|error| error.to_string())?;
         Handle::from_rgba(pixels.width(), pixels.height(), pixels.into_raw())
     };
+    let geometry = PageCorrection {
+        crop: settings.crop,
+        rotation_quarter_turns: settings.rotation_quarter_turns,
+        ..PageCorrection::default()
+    };
+    let comparison = if geometry == PageCorrection::default() {
+        original.handle.clone()
+    } else if settings == geometry {
+        handle.clone()
+    } else if let Some(cached) = previous.filter(|cached| {
+        cached.settings.crop == geometry.crop
+            && cached.settings.rotation_quarter_turns
+                == geometry.rotation_quarter_turns
+    }) {
+        cached.comparison.clone()
+    } else {
+        let pixels = correct_image(&original.pixels, geometry)
+            .map_err(|error| error.to_string())?;
+        Handle::from_rgba(pixels.width(), pixels.height(), pixels.into_raw())
+    };
     Ok(Arc::new(Preview {
         settings,
         original,
         handle,
+        comparison,
         notice,
     }))
 }

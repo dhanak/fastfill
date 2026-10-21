@@ -8,8 +8,9 @@ pub(crate) use buttons::{
     action_button, destructive_action, primary_action, secondary_action,
 };
 
-pub(crate) const TOOLBAR_HEIGHT: f32 = 168.0;
-pub(crate) const TOOLBAR_ROW_HEIGHT: f32 = TOOLBAR_HEIGHT / 3.0;
+pub(crate) const TOOLBAR_ROW_HEIGHT: f32 = 56.0;
+pub(crate) const TOOLBAR_HEIGHT: f32 = 2.0 * TOOLBAR_ROW_HEIGHT;
+pub(crate) const HEADER_HEIGHT: f32 = 56.0;
 pub(crate) const CONTROL_HEIGHT: f32 = 40.0;
 pub(crate) const TOOL_ICON_SIZE: f32 = 24.0;
 pub(crate) const COLOR_SWATCH_SIZE: f32 = 32.0;

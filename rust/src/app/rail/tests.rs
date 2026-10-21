@@ -11,11 +11,13 @@ mod appearance;
 mod feedback;
 mod layout;
 
-// Tall portrait cards in three_pages() reach the 164px maximum pitch.
+// Three-page portrait cards reach the maximum pitch at full rail width.
 const SLOT_HEIGHT: f32 = 164.0;
 
-const BOUNDS: Rectangle =
-    Rectangle::new(Point::new(10.0, 50.0), Size::new(148.0, SLOT_HEIGHT * 2.0));
+const BOUNDS: Rectangle = Rectangle::new(
+    Point::new(10.0, 50.0),
+    Size::new(WIDTH - 16.0, SLOT_HEIGHT * 2.0),
+);
 
 #[test]
 fn mouse_thumbnail_drop_uses_the_release_position_without_scrolling() {

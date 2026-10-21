@@ -13,6 +13,9 @@ Copy-Item -LiteralPath (Join-Path $rustRoot "PORTABLE.txt") `
     -Destination (Join-Path $packageDir "README.txt")
 Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSE") `
     -Destination (Join-Path $packageDir "LICENSE.txt")
+Copy-Item -LiteralPath (Join-Path $rustRoot `
+    "assets/icons/lucide/LICENSE") `
+    -Destination (Join-Path $packageDir "LUCIDE-LICENSE.txt")
 Copy-Item -LiteralPath (Join-Path $repoRoot `
     "docs/samples/fastfill-camera-sample-form.pdf") `
     -Destination (Join-Path $packageDir "sample-form.pdf")
@@ -28,7 +31,7 @@ $smokeDir = Join-Path $env:RUNNER_TEMP "FastFill-Rust-smoke"
 Expand-Archive -LiteralPath $archive -DestinationPath $smokeDir
 $extracted = Join-Path $smokeDir "FastFill-Rust"
 foreach ($file in @("FastFill-Rust.exe", "README.txt", "LICENSE.txt",
-    "sample-form.pdf", "BUILD.txt")) {
+    "LUCIDE-LICENSE.txt", "sample-form.pdf", "BUILD.txt")) {
     $path = Join-Path $extracted $file
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "Portable ZIP is missing $file."

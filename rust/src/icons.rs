@@ -1,18 +1,54 @@
-//! Small monochrome toolbar paths. No platform icon fonts or bitmap assets.
+//! Lucide SVG icons, pinned under assets/icons/lucide with upstream license.
 
 use crate::appearance;
 use fastfill_rust::annotations::Tool;
-use iced::widget::{button, canvas};
-use iced::{Color, Element, Point, Radians, Rectangle, Renderer, Size, Theme};
-use iced::{Vector, mouse};
-
-const VIEWBOX: f32 = 24.0;
+use iced::widget::{button, svg};
+use iced::{Background, Color, Element, Theme};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Glyph {
     Tool(Tool),
     Fill,
     SmartSnap,
+    Undo,
+    Redo,
+    ZoomIn,
+    ZoomOut,
+    Save,
+    ExportPdf,
+    Help,
+    AddImage,
+    ImportPdf,
+    #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+    Camera,
+    #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+    CameraSwitch,
+    #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+    CameraMirror,
+    #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+    CameraRotate,
+    #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+    CameraPause,
+    #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+    CameraPlay,
+    #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+    CameraSettings,
+    ReplaceImage,
+    EditPage,
+    Delete,
+    DeleteAll,
+    ResetAngle,
+    ToBack,
+    ToFront,
+    More,
+    ChevronDown,
+    NewProject,
+    OpenProject,
+    SaveAs,
+    Fit,
+    ActualSize,
+    MoveUp,
+    MoveDown,
 }
 
 pub(crate) fn view<Message: 'static>(
@@ -20,294 +56,152 @@ pub(crate) fn view<Message: 'static>(
     selected: bool,
     enabled: bool,
 ) -> Element<'static, Message> {
-    canvas(Icon {
-        glyph,
-        selected,
-        enabled,
-    })
-    .width(appearance::TOOL_ICON_SIZE)
-    .height(appearance::TOOL_ICON_SIZE)
-    .into()
+    svg(svg::Handle::from_memory(source(glyph)))
+        .width(appearance::TOOL_ICON_SIZE)
+        .height(appearance::TOOL_ICON_SIZE)
+        .style(move |theme: &Theme, _| {
+            let status = if enabled {
+                button::Status::Active
+            } else {
+                button::Status::Disabled
+            };
+            let style = if matches!(glyph, Glyph::Delete | Glyph::DeleteAll) {
+                appearance::destructive_action(theme, status)
+            } else {
+                appearance::tool_button(theme, status, selected)
+            };
+            // SVG color filtering ignores alpha in the software renderer.
+            let blend = |front: Color, back: Color| Color {
+                r: front.r * front.a + back.r * (1.0 - front.a),
+                g: front.g * front.a + back.g * (1.0 - front.a),
+                b: front.b * front.a + back.b * (1.0 - front.a),
+                a: 1.0,
+            };
+            let backdrop = theme.extended_palette().background.base.color;
+            let background = match style.background {
+                Some(Background::Color(background)) => {
+                    blend(background, backdrop)
+                }
+                _ => backdrop,
+            };
+            let color = blend(style.text_color, background);
+            svg::Style { color: Some(color) }
+        })
+        .into()
 }
 
-struct Icon {
-    glyph: Glyph,
-    selected: bool,
-    enabled: bool,
-}
-
-impl<Message> canvas::Program<Message> for Icon {
-    type State = ();
-
-    fn draw(
-        &self,
-        (): &(),
-        renderer: &Renderer,
-        theme: &Theme,
-        bounds: Rectangle,
-        _: mouse::Cursor,
-    ) -> Vec<canvas::Geometry> {
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
-        let status = if self.enabled {
-            button::Status::Active
-        } else {
-            button::Status::Disabled
-        };
-        let color =
-            appearance::tool_button(theme, status, self.selected).text_color;
-        frame.scale(bounds.width.min(bounds.height) / VIEWBOX);
-        let stroke = canvas::Stroke::default()
-            .with_color(color)
-            .with_width(2.0)
-            .with_line_cap(canvas::LineCap::Round)
-            .with_line_join(canvas::LineJoin::Round);
-        match self.glyph {
-            Glyph::Tool(tool) => draw_tool(&mut frame, tool, stroke, color),
-            Glyph::Fill => draw_bucket(&mut frame, stroke, color),
-            Glyph::SmartSnap => draw_magnet(&mut frame, stroke),
-        }
-        vec![frame.into_geometry()]
-    }
-}
-
-fn path(points: &[[f32; 2]], closed: bool) -> canvas::Path {
-    canvas::Path::new(|builder| {
-        builder.move_to(Point::from(points[0]));
-        for point in &points[1..] {
-            builder.line_to(Point::from(*point));
-        }
-        if closed {
-            builder.close();
-        }
-    })
-}
-
-fn draw_tool(
-    frame: &mut canvas::Frame,
-    tool: Tool,
-    stroke: canvas::Stroke<'_>,
-    color: Color,
-) {
-    match tool {
-        Tool::Navigate => frame.stroke(&hand(), stroke),
-        Tool::Select => frame.fill(
-            &path(
-                &[
-                    [5.0, 3.0],
-                    [6.0, 20.0],
-                    [10.0, 15.0],
-                    [13.0, 21.0],
-                    [16.0, 19.5],
-                    [13.0, 13.5],
-                    [20.0, 13.0],
-                ],
-                true,
-            ),
-            color,
-        ),
-        Tool::Rectangle => frame.stroke(
-            &canvas::Path::rectangle(
-                Point::new(4.0, 5.0),
-                Size::new(16.0, 14.0),
-            ),
-            stroke,
-        ),
-        Tool::Oval => frame.stroke(
-            &canvas::Path::new(|builder| {
-                builder.ellipse(canvas::path::arc::Elliptical {
-                    center: Point::new(12.0, 12.0),
-                    radii: Vector::new(8.0, 7.0),
-                    rotation: Radians(0.0),
-                    start_angle: Radians(0.0),
-                    end_angle: Radians(std::f32::consts::TAU),
-                });
-                builder.close();
-            }),
-            stroke,
-        ),
-        Tool::Line | Tool::Arrow => {
-            frame.stroke(&path(&[[4.0, 20.0], [20.0, 4.0]], false), stroke);
-            if tool == Tool::Arrow {
-                frame.stroke(
-                    &path(&[[10.0, 4.0], [20.0, 4.0], [20.0, 14.0]], false),
-                    stroke,
-                );
+#[expect(clippy::too_many_lines, reason = "one exhaustive Lucide asset table")]
+fn source(glyph: Glyph) -> &'static [u8] {
+    match glyph {
+        Glyph::Tool(tool) => match tool {
+            Tool::Navigate => include_bytes!("../assets/icons/lucide/hand.svg"),
+            Tool::Select => {
+                include_bytes!("../assets/icons/lucide/mouse-pointer-2.svg")
             }
+            Tool::Rectangle => include_bytes!(
+                "../assets/icons/lucide/rectangle-horizontal.svg"
+            ),
+            Tool::Oval => include_bytes!("../assets/icons/lucide/ellipse.svg"),
+            Tool::Line => include_bytes!("../assets/icons/lucide/slash.svg"),
+            Tool::Arrow => {
+                include_bytes!("../assets/icons/lucide/arrow-up-right.svg")
+            }
+            Tool::Checkmark => {
+                include_bytes!("../assets/icons/lucide/check.svg")
+            }
+            Tool::Cross => include_bytes!("../assets/icons/lucide/x.svg"),
+            Tool::Text => {
+                include_bytes!("../assets/icons/lucide/case-sensitive.svg")
+            }
+            Tool::Pen => include_bytes!("../assets/icons/lucide/pencil.svg"),
+            Tool::Highlighter => {
+                include_bytes!("../assets/icons/lucide/highlighter.svg")
+            }
+        },
+        Glyph::Fill => {
+            include_bytes!("../assets/icons/lucide/paint-bucket.svg")
         }
-        Tool::Checkmark => frame.stroke(
-            &path(&[[4.0, 12.0], [10.0, 18.0], [20.0, 5.0]], false),
-            stroke,
-        ),
-        Tool::Cross => {
-            frame.stroke(&path(&[[5.0, 5.0], [19.0, 19.0]], false), stroke);
-            frame.stroke(&path(&[[19.0, 5.0], [5.0, 19.0]], false), stroke);
+        Glyph::SmartSnap => include_bytes!("../assets/icons/lucide/magnet.svg"),
+        Glyph::Undo => include_bytes!("../assets/icons/lucide/undo-2.svg"),
+        Glyph::Redo => include_bytes!("../assets/icons/lucide/redo-2.svg"),
+        Glyph::ZoomIn => include_bytes!("../assets/icons/lucide/zoom-in.svg"),
+        Glyph::ZoomOut => include_bytes!("../assets/icons/lucide/zoom-out.svg"),
+        Glyph::Save => include_bytes!("../assets/icons/lucide/save.svg"),
+        Glyph::ExportPdf => {
+            include_bytes!("../assets/icons/lucide/file-down.svg")
         }
-        Tool::Text => frame.fill_text(canvas::Text {
-            content: "Aa".into(),
-            position: Point::new(12.0, 12.0),
-            color,
-            size: 20.0.into(),
-            line_height: iced::widget::text::LineHeight::Relative(1.0),
-            font: iced::Font::with_name("Fira Sans"),
-            align_x: iced::widget::text::Alignment::Center,
-            align_y: iced::alignment::Vertical::Center,
-            ..canvas::Text::default()
-        }),
-        Tool::Pen | Tool::Highlighter => {
-            draw_writing_tool(frame, tool, stroke, color);
+        Glyph::Help => {
+            include_bytes!("../assets/icons/lucide/circle-question-mark.svg")
         }
-    }
-}
-
-fn draw_writing_tool(
-    frame: &mut canvas::Frame,
-    tool: Tool,
-    stroke: canvas::Stroke<'_>,
-    color: Color,
-) {
-    match tool {
-        Tool::Pen => {
-            frame.stroke(
-                &path(
-                    &[
-                        [4.0, 20.0],
-                        [7.0, 11.0],
-                        [15.0, 3.0],
-                        [21.0, 9.0],
-                        [13.0, 17.0],
-                    ],
-                    true,
-                ),
-                stroke,
-            );
-            frame.stroke(&path(&[[7.0, 11.0], [13.0, 17.0]], false), stroke);
-            frame.stroke(&path(&[[4.0, 20.0], [10.0, 14.0]], false), stroke);
+        Glyph::AddImage => {
+            include_bytes!("../assets/icons/lucide/image-plus.svg")
         }
-        Tool::Highlighter => {
-            frame.stroke(
-                &path(
-                    &[
-                        [4.0, 15.0],
-                        [14.0, 3.0],
-                        [21.0, 10.0],
-                        [11.0, 19.0],
-                        [7.0, 19.0],
-                        [7.0, 16.0],
-                    ],
-                    true,
-                ),
-                stroke,
-            );
-            frame.stroke(&path(&[[11.0, 6.5], [18.0, 13.0]], false), stroke);
-            frame.fill(
-                &canvas::Path::rectangle(
-                    Point::new(3.0, 21.0),
-                    Size::new(18.0, 2.0),
-                ),
-                color,
-            );
+        Glyph::ImportPdf => {
+            include_bytes!("../assets/icons/lucide/file-up.svg")
         }
-        _ => unreachable!("writing tool icons only"),
-    }
-}
-
-fn hand() -> canvas::Path {
-    canvas::Path::new(|b| {
-        b.move_to(Point::new(8.0, 12.0));
-        b.line_to(Point::new(5.0, 10.0));
-        b.bezier_curve_to(
-            Point::new(2.0, 8.0),
-            Point::new(2.0, 11.0),
-            Point::new(4.0, 14.0),
-        );
-        b.line_to(Point::new(7.0, 19.0));
-        b.bezier_curve_to(
-            Point::new(10.0, 23.0),
-            Point::new(19.0, 22.0),
-            Point::new(20.0, 16.0),
-        );
-        b.line_to(Point::new(20.0, 8.0));
-        b.bezier_curve_to(
-            Point::new(20.0, 5.0),
-            Point::new(17.0, 5.0),
-            Point::new(17.0, 8.0),
-        );
-        b.line_to(Point::new(17.0, 11.0));
-        b.line_to(Point::new(17.0, 6.0));
-        b.bezier_curve_to(
-            Point::new(17.0, 3.0),
-            Point::new(14.0, 3.0),
-            Point::new(14.0, 6.0),
-        );
-        b.line_to(Point::new(14.0, 10.0));
-        b.line_to(Point::new(14.0, 5.0));
-        b.bezier_curve_to(
-            Point::new(14.0, 2.0),
-            Point::new(11.0, 2.0),
-            Point::new(11.0, 5.0),
-        );
-        b.line_to(Point::new(11.0, 10.0));
-        b.line_to(Point::new(11.0, 6.0));
-        b.bezier_curve_to(
-            Point::new(11.0, 3.0),
-            Point::new(8.0, 3.0),
-            Point::new(8.0, 6.0),
-        );
-        b.close();
-    })
-}
-
-fn draw_bucket(
-    frame: &mut canvas::Frame,
-    stroke: canvas::Stroke<'_>,
-    color: Color,
-) {
-    frame.stroke(
-        &path(
-            &[[3.0, 11.0], [11.0, 3.0], [19.0, 11.0], [11.0, 19.0]],
-            true,
-        ),
-        stroke,
-    );
-    frame.stroke(&path(&[[3.0, 11.0], [19.0, 11.0]], false), stroke);
-    frame.stroke(&path(&[[4.0, 3.0], [9.0, 8.0]], false), stroke);
-    frame.fill(
-        &canvas::Path::new(|b| {
-            b.move_to(Point::new(20.0, 14.0));
-            b.bezier_curve_to(
-                Point::new(14.0, 22.0),
-                Point::new(26.0, 22.0),
-                Point::new(20.0, 14.0),
-            );
-            b.close();
-        }),
-        color,
-    );
-}
-
-fn draw_magnet(frame: &mut canvas::Frame, stroke: canvas::Stroke<'_>) {
-    let outline = canvas::Path::new(|b| {
-        b.move_to(Point::new(4.0, 4.0));
-        for point in [[9.0, 4.0], [9.0, 13.0]] {
-            b.line_to(Point::from(point));
+        #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+        Glyph::Camera => include_bytes!("../assets/icons/lucide/camera.svg"),
+        #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+        Glyph::CameraSwitch => {
+            include_bytes!("../assets/icons/lucide/switch-camera.svg")
         }
-        b.bezier_curve_to(
-            Point::new(9.0, 18.0),
-            Point::new(15.0, 18.0),
-            Point::new(15.0, 13.0),
-        );
-        for point in [[15.0, 4.0], [20.0, 4.0], [20.0, 13.0]] {
-            b.line_to(Point::from(point));
+        #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+        Glyph::CameraMirror => {
+            include_bytes!(
+                "../assets/icons/lucide/triangles-centerline-dashed-vertical.svg"
+            )
         }
-        b.bezier_curve_to(
-            Point::new(20.0, 22.5),
-            Point::new(4.0, 22.5),
-            Point::new(4.0, 13.0),
-        );
-        b.close();
-    });
-    frame.stroke(&outline, stroke);
-    for points in [[[4.0, 8.0], [9.0, 8.0]], [[15.0, 8.0], [20.0, 8.0]]] {
-        frame.stroke(&path(&points, false), stroke);
+        #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+        Glyph::CameraRotate => {
+            include_bytes!("../assets/icons/lucide/rotate-cw.svg")
+        }
+        #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+        Glyph::CameraPause => {
+            include_bytes!("../assets/icons/lucide/pause.svg")
+        }
+        #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+        Glyph::CameraPlay => {
+            include_bytes!("../assets/icons/lucide/play.svg")
+        }
+        #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+        Glyph::CameraSettings => {
+            include_bytes!("../assets/icons/lucide/settings.svg")
+        }
+        Glyph::ReplaceImage => {
+            include_bytes!("../assets/icons/lucide/image-up.svg")
+        }
+        Glyph::EditPage => include_bytes!("../assets/icons/lucide/crop.svg"),
+        Glyph::Delete => include_bytes!("../assets/icons/lucide/trash.svg"),
+        Glyph::DeleteAll => {
+            include_bytes!("../assets/icons/lucide/shredder.svg")
+        }
+        Glyph::ResetAngle => {
+            include_bytes!("../assets/icons/lucide/rotate-ccw.svg")
+        }
+        Glyph::ToBack => {
+            include_bytes!("../assets/icons/lucide/send-to-back.svg")
+        }
+        Glyph::ToFront => {
+            include_bytes!("../assets/icons/lucide/bring-to-front.svg")
+        }
+        Glyph::More => include_bytes!("../assets/icons/lucide/menu.svg"),
+        Glyph::ChevronDown => {
+            include_bytes!("../assets/icons/lucide/chevron-down.svg")
+        }
+        Glyph::NewProject => {
+            include_bytes!("../assets/icons/lucide/file-plus.svg")
+        }
+        Glyph::OpenProject => {
+            include_bytes!("../assets/icons/lucide/folder-open.svg")
+        }
+        Glyph::SaveAs => include_bytes!("../assets/icons/lucide/save-all.svg"),
+        Glyph::Fit => {
+            include_bytes!("../assets/icons/lucide/maximize-2.svg")
+        }
+        Glyph::ActualSize => include_bytes!("../assets/icons/lucide/scan.svg"),
+        Glyph::MoveUp => include_bytes!("../assets/icons/lucide/arrow-up.svg"),
+        Glyph::MoveDown => {
+            include_bytes!("../assets/icons/lucide/arrow-down.svg")
+        }
     }
 }

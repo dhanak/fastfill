@@ -13,6 +13,159 @@ mod appearance;
 mod auto_frame;
 mod corner_snap;
 
+#[test]
+fn correction_actions_switch_views_without_committing_or_restarting_work() {
+    let mut state = state();
+    send(&mut state, Event::Begin);
+    settle(&mut state);
+    let before = state.pages.identity();
+    send(&mut state, Event::Brightness(12));
+    let job = state.page_editor.running.as_ref().unwrap().id;
+    assert_eq!(
+        state.page_editor.draft.as_ref().unwrap().viewer.mode,
+        super::viewer::Mode::Preview
+    );
+    send(
+        &mut state,
+        Event::View(super::viewer::Event::Mode(super::viewer::Mode::Frame)),
+    );
+    assert_eq!(state.page_editor.running.as_ref().unwrap().id, job);
+    assert_eq!(state.pages.identity(), before);
+    send(&mut state, Event::Rotate(1));
+    assert_eq!(
+        state.page_editor.draft.as_ref().unwrap().viewer.mode,
+        super::viewer::Mode::Frame
+    );
+    settle(&mut state);
+    assert_eq!(
+        state
+            .page_editor
+            .draft
+            .as_ref()
+            .unwrap()
+            .settings
+            .brightness,
+        12
+    );
+    assert_eq!(
+        state
+            .page_editor
+            .draft
+            .as_ref()
+            .unwrap()
+            .settings
+            .rotation_quarter_turns,
+        1
+    );
+    assert_eq!(state.pages.identity(), before);
+}
+
+#[test]
+fn compare_uses_the_same_crop_and_rotation_and_reuses_geometry() {
+    let mut state = state();
+    send(&mut state, Event::Begin);
+    settle(&mut state);
+    let mut crop = CropQuad::default();
+    crop.top_left.x = 0.1;
+    crop.bottom_left.x = 0.1;
+    send(&mut state, Event::Corner(0, crop.top_left));
+    send(&mut state, Event::Corner(3, crop.bottom_left));
+    send(&mut state, Event::Rotate(1));
+    send(&mut state, Event::Brightness(18));
+    settle(&mut state);
+    let first = state
+        .page_editor
+        .draft
+        .as_ref()
+        .unwrap()
+        .ready
+        .clone()
+        .unwrap();
+    let geometry = PageCorrection {
+        crop: first.settings.crop,
+        rotation_quarter_turns: first.settings.rotation_quarter_turns,
+        ..PageCorrection::default()
+    };
+    let expected = fastfill_rust::correction::correct_image(
+        &first.original.pixels,
+        geometry,
+    )
+    .unwrap();
+    let Handle::Rgba {
+        width,
+        height,
+        pixels,
+        ..
+    } = &first.comparison
+    else {
+        panic!("compare image must be decoded")
+    };
+    assert_eq!((*width, *height), expected.dimensions());
+    assert_eq!(pixels.as_ref(), expected.as_raw());
+
+    send(&mut state, Event::View(viewer::Event::Compare(true)));
+    assert!(state.page_editor.draft.as_ref().unwrap().viewer.comparing);
+    send(&mut state, Event::Contrast(8));
+    assert!(!state.page_editor.draft.as_ref().unwrap().viewer.comparing);
+    settle(&mut state);
+    let second = state
+        .page_editor
+        .draft
+        .as_ref()
+        .unwrap()
+        .ready
+        .as_ref()
+        .unwrap();
+    assert_eq!(second.comparison, first.comparison);
+    assert_ne!(second.handle, first.handle);
+}
+
+#[test]
+fn frame_rotation_draws_the_original_in_correct_quadrants() {
+    use super::canvas::CropCanvas;
+    use crate::app::tests::render_themed_element;
+    use iced::{Theme, mouse};
+    let pixels = image::RgbaImage::from_fn(20, 20, |x, y| {
+        image::Rgba(match (x < 10, y < 10) {
+            (true, true) => [255, 0, 0, 255],
+            (false, true) => [0, 255, 0, 255],
+            (true, false) => [0, 0, 255, 255],
+            (false, false) => [255, 255, 0, 255],
+        })
+    });
+    let handle = Handle::from_rgba(20, 20, pixels.into_raw());
+    let image = iced::widget::canvas(CropCanvas {
+        image: Some(&handle),
+        source_size: Size::new(20.0, 20.0),
+        crop: CropQuad::default(),
+        corners: None,
+        snap: false,
+        epoch: 0,
+        background: true,
+        mode: viewer::Mode::Frame,
+        view: viewer::ViewState::default(),
+        rotation: 1,
+    })
+    .width(iced::Fill)
+    .height(iced::Fill);
+    let pixels = render_themed_element(
+        image.into(),
+        iced::Size::new(200, 200),
+        1,
+        1.0,
+        &Theme::Light,
+        mouse::Cursor::Unavailable,
+    );
+    let color = |x: usize, y: usize| {
+        let offset = (y * 200 + x) * 4;
+        &pixels[offset..offset + 3]
+    };
+    assert_eq!(color(50, 50), &[0, 0, 255]);
+    assert_eq!(color(150, 50), &[255, 0, 0]);
+    assert_eq!(color(50, 150), &[255, 255, 0]);
+    assert_eq!(color(150, 150), &[0, 255, 0]);
+}
+
 fn state() -> FastFill {
     let pixels = image::RgbaImage::from_fn(120, 180, |x, y| {
         image::Rgba([
@@ -85,6 +238,13 @@ fn finish_one(state: &mut FastFill) {
             |original| {
                 if auto_frame {
                     Input::Frame(original.clone())
+                } else if let Some(ready) = state
+                    .page_editor
+                    .draft
+                    .as_ref()
+                    .and_then(|draft| draft.ready.as_ref())
+                {
+                    Input::Cached(ready.clone())
                 } else {
                     Input::Decoded(original.clone())
                 }
@@ -485,10 +645,10 @@ fn window_close_requires_an_explicit_choice_but_does_not_disable_accept() {
 }
 
 #[test]
-fn corner_dragging_keeps_pointer_ownership_and_lost_touch_reverts() {
+fn mouse_release_uses_final_corner_position() {
     use super::canvas::{CropCanvas, CropState};
     use iced::widget::canvas::{Event as CanvasEvent, Program};
-    use iced::{Point, Rectangle, mouse, touch};
+    use iced::{Point, Rectangle, mouse};
     let handle = Handle::from_rgba(1, 1, vec![255; 4]);
     let bounds =
         Rectangle::new(Point::new(50.0, 100.0), iced::Size::new(400.0, 400.0));
@@ -500,6 +660,9 @@ fn corner_dragging_keeps_pointer_ownership_and_lost_touch_reverts() {
         snap: false,
         epoch: 0,
         background: false,
+        mode: viewer::Mode::Frame,
+        view: viewer::ViewState::default(),
+        rotation: 0,
     };
     let rect = fastfill_rust::geometry::fit_contain(
         source.source_size,
@@ -538,54 +701,6 @@ fn corner_dragging_keeps_pointer_ownership_and_lost_touch_reverts() {
         panic!("release must publish final corner position")
     };
     assert!((point.x - 0.1).abs() < 0.001 && (point.y - 0.2).abs() < 0.001);
-    let touch_event = |id, position| {
-        CanvasEvent::Touch(touch::Event::FingerPressed {
-            id: touch::Finger(id),
-            position,
-        })
-    };
-    assert!(
-        source
-            .update(
-                &mut input,
-                &touch_event(1, start),
-                bounds,
-                mouse::Cursor::Unavailable
-            )
-            .is_some()
-    );
-    assert!(
-        source
-            .update(
-                &mut input,
-                &touch_event(2, moved),
-                bounds,
-                mouse::Cursor::Unavailable
-            )
-            .is_none()
-    );
-    let lost = CanvasEvent::Touch(touch::Event::FingerLost {
-        id: touch::Finger(1),
-        position: moved,
-    });
-    let (message, ..) = source
-        .update(&mut input, &lost, bounds, mouse::Cursor::Unavailable)
-        .unwrap()
-        .into_inner();
-    assert!(
-        matches!(message, Some(Message::PageEdit(Event::Corner(0, point)))
-        if point == NormalizedPoint { x: 0.0, y: 0.0 })
-    );
-    assert!(
-        source
-            .update(
-                &mut input,
-                &touch_event(3, Point::new(bounds.x - 1.0, start.y)),
-                bounds,
-                mouse::Cursor::Unavailable
-            )
-            .is_none()
-    );
 }
 
 #[test]

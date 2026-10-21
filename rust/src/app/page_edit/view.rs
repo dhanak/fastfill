@@ -1,13 +1,15 @@
 use super::canvas::CropCanvas;
+use super::viewer::{self, Mode};
 use super::{Draft, Event, FastFill, Message};
 use crate::appearance::{self, CONTROL_HEIGHT, action_button};
+use fastfill_rust::correction::corrected_dimensions;
 use fastfill_rust::geometry::Size;
 use fastfill_rust::project::PageFilterMode;
 use iced::widget::{
-    Space, canvas, column, container, image, responsive, row, rule, scrollable,
-    slider, text,
+    Space, button, canvas, column, container, mouse_area, responsive, row,
+    rule, scrollable, slider, text,
 };
-use iced::{Element, Fill};
+use iced::{Element, Fill, Shrink, mouse};
 
 pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
     responsive(move |available| screen(state, available)).into()
@@ -20,44 +22,20 @@ fn screen(state: &FastFill, available: iced::Size) -> Element<'_, Message> {
         && draft.ready.as_ref().is_some_and(|p| {
             p.settings == draft.settings && draft.error.is_none()
         });
-    let handle = draft.ready.as_ref().map(|p| &p.handle).or_else(|| {
-        state
-            .image()
-            .map(crate::picker::ImportedImage::display_handle)
-    });
-    let preview: Element<'_, Message> = handle.map_or_else(
-        || Space::new().height(180).into(),
-        |handle| {
-            image(handle.clone())
-                .width(Fill)
-                .height(180)
-                .content_fit(iced::ContentFit::Contain)
-                .into()
-        },
-    );
     let can_frame =
         state.page_editor.running.is_none() && draft.original.is_some();
     let wide = available.width >= 760.0;
     let sidebar = container(
         scrollable(
-            column![
-                text("Corrections").size(18),
-                options(draft, can_frame),
-                rule::horizontal(1),
-                text("Corrected preview").size(14),
-                container(preview).style(container::dark),
-            ]
-            .spacing(12)
-            .padding(iced::Padding {
-                right: 12.0,
-                ..iced::Padding::ZERO
-            }),
+            column![text("Corrections").size(18), options(draft, can_frame)]
+                .spacing(12),
         )
         .direction(scrollable::Direction::Vertical(
             scrollable::Scrollbar::new()
                 .width(6)
                 .scroller_width(6)
-                .margin(2),
+                .margin(2)
+                .spacing(2),
         ))
         .height(Fill),
     )
@@ -66,16 +44,19 @@ fn screen(state: &FastFill, available: iced::Size) -> Element<'_, Message> {
     .height(if wide {
         Fill
     } else {
-        (available.height * 0.35).clamp(100.0, 240.0).into()
+        (available.height * 0.30).clamp(110.0, 220.0).into()
     })
     .style(container::bordered_box);
-    let source = column![
-        text("Original — drag corners; hold Ctrl to snap").size(14),
-        original(state),
-    ]
-    .spacing(8)
-    .width(Fill)
-    .height(Fill);
+    let tool_width = if wide {
+        available.width - 356.0
+    } else {
+        available.width - 32.0
+    };
+    let source =
+        column![view_tools(draft, ready, tool_width), image_canvas(state)]
+            .spacing(8)
+            .width(Fill)
+            .height(Fill);
     let body: Element<'_, Message> = if wide {
         row![source, sidebar].spacing(12).height(Fill).into()
     } else {
@@ -107,7 +88,105 @@ fn screen(state: &FastFill, available: iced::Size) -> Element<'_, Message> {
     .into()
 }
 
-fn original(state: &FastFill) -> Element<'_, Message> {
+fn view_tools(
+    draft: &Draft,
+    ready: bool,
+    width: f32,
+) -> Element<'static, Message> {
+    let selected = |mode| {
+        if draft.viewer.mode == mode {
+            appearance::primary_action
+        } else {
+            appearance::secondary_action
+        }
+    };
+    let compare = draft.viewer.comparing;
+    let can_compare = draft.viewer.mode == Mode::Preview && ready;
+    let compare_style = move |theme: &iced::Theme| {
+        let button_style = if compare {
+            appearance::primary_action(theme, button::Status::Pressed)
+        } else {
+            appearance::secondary_action(
+                theme,
+                if can_compare {
+                    button::Status::Active
+                } else {
+                    button::Status::Disabled
+                },
+            )
+        };
+        container::Style {
+            text_color: Some(button_style.text_color),
+            background: button_style.background,
+            border: button_style.border,
+            shadow: button_style.shadow,
+            ..container::Style::default()
+        }
+    };
+    let compare_area = mouse_area(
+        container(text("Compare").size(14))
+            .width(Shrink)
+            .height(CONTROL_HEIGHT)
+            .padding([0, 12])
+            .align_y(iced::Alignment::Center)
+            .style(compare_style),
+    );
+    let compare_button: Element<'static, Message> = if can_compare {
+        compare_area
+            .on_press(Message::PageEdit(Event::View(viewer::Event::Compare(
+                true,
+            ))))
+            .on_release(Message::PageEdit(Event::View(viewer::Event::Compare(
+                false,
+            ))))
+            .interaction(mouse::Interaction::Pointer)
+            .into()
+    } else {
+        compare_area.into()
+    };
+    let modes = row![
+        action_button(
+            "Frame",
+            Some(Message::PageEdit(Event::View(viewer::Event::Mode(
+                Mode::Frame
+            ))))
+        )
+        .style(selected(Mode::Frame)),
+        action_button(
+            "Preview",
+            Some(Message::PageEdit(Event::View(viewer::Event::Mode(
+                Mode::Preview
+            ))))
+        )
+        .style(selected(Mode::Preview)),
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center);
+    let actions = row![
+        compare_button,
+        action_button(
+            "Fit",
+            Some(Message::PageEdit(Event::View(viewer::Event::Fit)))
+        )
+        .width(48),
+        action_button(
+            "1:1",
+            Some(Message::PageEdit(Event::View(viewer::Event::ActualSize)))
+        )
+        .width(48),
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center);
+    if width < 380.0 {
+        column![modes, actions].spacing(6).into()
+    } else {
+        row![modes, Space::new().width(Fill), actions]
+            .align_y(iced::Alignment::Center)
+            .into()
+    }
+}
+
+fn image_canvas(state: &FastFill) -> Element<'_, Message> {
     let draft = state.page_editor.draft.as_ref().unwrap();
     let page = state.pages.current();
     #[allow(clippy::cast_precision_loss)]
@@ -115,17 +194,44 @@ fn original(state: &FastFill) -> Element<'_, Message> {
         page.metadata.source_pixel_width as f32,
         page.metadata.source_pixel_height as f32,
     );
+    let image = match draft.viewer.mode {
+        Mode::Frame => draft.original.as_ref().map(|original| &original.handle),
+        Mode::Preview => draft.ready.as_ref().map(|preview| {
+            if draft.viewer.comparing {
+                &preview.comparison
+            } else {
+                &preview.handle
+            }
+        }),
+    };
+    let display_size = if draft.viewer.mode == Mode::Preview {
+        draft.ready.as_ref().map_or(source_size, |preview| {
+            let (width, height) = corrected_dimensions(
+                preview.original.pixels.width(),
+                preview.original.pixels.height(),
+                preview.settings,
+            )
+            .expect("ready preview has valid dimensions");
+            #[allow(clippy::cast_precision_loss)]
+            Size::new(width as f32, height as f32)
+        })
+    } else {
+        source_size
+    };
     let source = CropCanvas {
-        image: draft.original.as_ref().map(|original| &original.handle),
-        source_size,
+        image,
+        source_size: display_size,
         crop: draft.settings.crop,
         corners: draft
             .original
             .as_ref()
             .and_then(|original| original.corners.as_ref().ok()),
         snap: state.modifiers.square,
-        epoch: state.input_epoch,
+        epoch: state.input_epoch.wrapping_add(draft.viewer.epoch),
         background: false,
+        mode: draft.viewer.mode,
+        view: draft.viewer.current(),
+        rotation: draft.settings.rotation_quarter_turns,
     };
     iced::widget::stack![
         Space::new().width(Fill).height(Fill),
@@ -162,6 +268,11 @@ fn status(
     } else {
         text(if framing {
             "Detecting document frame… Manual changes take priority."
+        } else if draft.viewer.mode == Mode::Preview && draft.viewer.comparing {
+            "Before adjustments — same crop and rotation. \
+             Release Compare to return to the corrected preview."
+        } else if draft.viewer.mode == Mode::Preview && ready {
+            "Corrected preview. Scroll to zoom; drag to pan."
         } else if ready {
             if draft
                 .original

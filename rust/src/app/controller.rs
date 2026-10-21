@@ -201,6 +201,25 @@ pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
             .then(|| <iced::Theme as iced::theme::Base>::default(*mode));
         return Task::none();
     }
+    let message = match message {
+        Message::ToggleMenu(kind) => {
+            state.open_menu = (state.open_menu != Some(kind)).then_some(kind);
+            return Task::none();
+        }
+        Message::CloseMenu => {
+            state.open_menu = None;
+            return Task::none();
+        }
+        Message::MenuAction(action) => {
+            state.open_menu = None;
+            return update(state, *action);
+        }
+        Message::CancelInteraction if state.open_menu.is_some() => {
+            state.open_menu = None;
+            return Task::none();
+        }
+        other => other,
+    };
     if let Some(task) = super::help::update(state, &message) {
         return task;
     }

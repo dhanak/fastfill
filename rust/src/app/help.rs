@@ -292,6 +292,21 @@ const ENTRIES: &[Entry] = &[
     ),
     (
         "Edit page",
+        "Scroll / touch pinch",
+        "Zoom the active Frame or Preview view.",
+    ),
+    (
+        "Edit page",
+        "Drag empty space / right-drag",
+        "Pan the active view without changing the crop.",
+    ),
+    (
+        "Edit page",
+        "Frame / Preview buttons",
+        "Switch views; pending corrections stay intact.",
+    ),
+    (
+        "Edit page",
         "Escape",
         "Cancel pending corrections; keep the page.",
     ),

@@ -7,6 +7,7 @@ mod export_io;
 mod help;
 #[cfg(test)]
 mod interaction_tests;
+mod menu;
 mod page_edit;
 mod pages;
 mod pdf;
@@ -73,6 +74,7 @@ struct FastFill {
     confirm_delete_all: bool,
     confirm_delete_page: bool,
     show_shortcuts: bool,
+    open_menu: Option<menu::Kind>,
     dragged_page: Option<PageDrag>,
     // Shared by the clipped rail and its floating layer; not document state.
     rail_motion: std::cell::RefCell<rail::Motion>,
@@ -160,6 +162,7 @@ pub(crate) enum Message {
     PdfProgress(u64, usize, usize),
     PdfStage(u64, usize, usize, fastfill_rust::pdf_import::PdfStage),
     PdfImported(u64, Result<Option<std::sync::Arc<pdf::PdfBatch>>, String>),
+    #[cfg(test)]
     SelectPage(usize),
     MovePageLeft,
     MovePageRight,
@@ -175,6 +178,9 @@ pub(crate) enum Message {
     ConfirmDeleteAll,
     KeepAll,
     ModalBackdrop,
+    ToggleMenu(menu::Kind),
+    CloseMenu,
+    MenuAction(Box<Message>),
     ShowShortcuts,
     HideShortcuts,
     SendToBack,
@@ -227,8 +233,8 @@ pub(crate) fn run() -> iced::Result {
         .antialiasing(true)
         .theme(|state: &FastFill| state.theme_override.clone())
         .exit_on_close_request(false)
-        .subscription(|_| {
-            iced::Subscription::batch([
+        .subscription(|state| {
+            let mut subscriptions = vec![
                 iced::system::theme_changes().map(Message::SystemThemeChanged),
                 iced::event::listen_with(|event, status, id| match event {
                     iced::Event::Window(
@@ -254,7 +260,26 @@ pub(crate) fn run() -> iced::Result {
                     }
                     _ => None,
                 }),
-            ])
+            ];
+            if state.page_editor.is_open() {
+                subscriptions.push(iced::event::listen_with(|event, _, _| {
+                    match event {
+                        iced::Event::Mouse(
+                            iced::mouse::Event::ButtonReleased(
+                                iced::mouse::Button::Left,
+                            ),
+                        )
+                        | iced::Event::Touch(
+                            iced::touch::Event::FingerLifted { .. }
+                            | iced::touch::Event::FingerLost { .. },
+                        ) => Some(Message::PageEdit(page_edit::Event::View(
+                            page_edit::viewer::Event::Compare(false),
+                        ))),
+                        _ => None,
+                    }
+                }));
+            }
+            iced::Subscription::batch(subscriptions)
         })
         .run()
 }

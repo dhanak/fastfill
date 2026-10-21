@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::controller::update;
 use crate::app::tests::{annotated_page, render_themed_element, rendered_page};
-use crate::appearance::{TOOLBAR_HEIGHT, TOOLBAR_ROW_HEIGHT};
+use crate::appearance::TOOLBAR_ROW_HEIGHT;
 use fastfill_rust::annotations::AnnotationColor;
 use iced::advanced::renderer::Headless;
 use iced::advanced::{Layout, Shell, layout, widget};
@@ -136,11 +136,7 @@ fn workspace_bounds_stay_fixed_across_tools_in_wide_and_narrow_windows() {
         let wide = size.width >= appearance::PANEL_MIN_WORKSPACE_WIDTH;
         let expected = iced::Rectangle {
             x: 0.0,
-            y: if wide {
-                TOOLBAR_ROW_HEIGHT
-            } else {
-                TOOLBAR_HEIGHT
-            },
+            y: if wide { 0.0 } else { 2.0 * TOOLBAR_ROW_HEIGHT },
             width: size.width
                 - if wide {
                     appearance::TOOLS_PANEL_WIDTH
@@ -148,11 +144,7 @@ fn workspace_bounds_stay_fixed_across_tools_in_wide_and_narrow_windows() {
                     0.0
                 },
             height: size.height
-                - if wide {
-                    TOOLBAR_ROW_HEIGHT
-                } else {
-                    TOOLBAR_HEIGHT
-                },
+                - if wide { 0.0 } else { 2.0 * TOOLBAR_ROW_HEIGHT },
         };
         for tool in Tool::ALL {
             let _ = update(&mut state, Message::SetTool(tool));
@@ -160,9 +152,9 @@ fn workspace_bounds_stay_fixed_across_tools_in_wide_and_narrow_windows() {
             let (_, node) = lay_out(&mut element, &renderer, size);
             let root = Layout::new(&node);
             let document = if wide {
-                root.children().next().unwrap().children().nth(1).unwrap()
+                root.children().next().unwrap()
             } else {
-                root.children().nth(1).unwrap()
+                root.children().nth(2).unwrap()
             };
             assert_eq!(document.bounds(), expected, "{tool:?} at {size:?}");
         }
@@ -197,6 +189,16 @@ fn short_panels_scroll_properties_but_keep_equal_actions_fixed_and_visible() {
                 buttons.extend(row.children().map(|b| b.bounds()));
             }
             assert_eq!(buttons.len(), 4);
+            let reset = footer
+                .children()
+                .nth(1)
+                .unwrap()
+                .children()
+                .nth(1)
+                .unwrap()
+                .bounds();
+            assert_eq!(reset.width, buttons[1].width);
+            assert_eq!(reset.x, buttons[1].x);
             for button in &buttons {
                 assert_eq!(button.height, CONTROL_HEIGHT);
                 assert_eq!(button.width, buttons[0].width);
@@ -319,7 +321,7 @@ fn horizontal_tracks_do_not_cover_the_button_targets() {
 fn workspace_previews_render_in_both_layouts_and_themes() {
     let mut state = rendered_page();
     for theme in [Theme::Light, Theme::Dark] {
-        for width in [640, 1_200] {
+        for width in [400, 640, 1_200] {
             for tool in [Tool::Navigate, Tool::Rectangle, Tool::Text] {
                 let _ = update(&mut state, Message::SetTool(tool));
                 let pixels = render_themed_element(

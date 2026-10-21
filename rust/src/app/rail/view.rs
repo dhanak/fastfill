@@ -2,10 +2,11 @@
 
 use super::WIDTH;
 use super::layout::{number_position, page_size, paper_bounds};
-use super::{FastFill, ImagePicker, Message, Rail, SCROLLBAR_WIDTH};
+use super::{FastFill, ImagePicker, Message, Rail};
 use crate::app::pages::EditorPage;
-use crate::appearance::{self, accent, action_button};
-use iced::widget::{canvas, column, container, pick_list, row, text};
+use crate::appearance::{self, accent};
+use crate::icons::Glyph;
+use iced::widget::{Row, Space, canvas, column, container, row, text};
 use iced::{Color, Element, Fill, Point, Rectangle, Renderer, Size, Theme};
 use iced::{Vector, mouse};
 
@@ -15,69 +16,70 @@ pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
         && !state.confirm_delete_all
         && !state.confirm_delete_page
         && state.dragged_page.is_none();
-    let control = |label, message, available| {
-        action_button(label, (enabled && available).then_some(message))
-            .width(Fill)
-    };
-    let controls = column![
-            row![
-                text("Page"),
-                pick_list(
-                    (1..=state.pages.len()).collect::<Vec<_>>(),
-                    Some(
-                        state
-                            .dragged_page
-                            .map_or(state.pages.active_index(), |drag| drag
-                                .target,)
-                            + 1
-                    ),
-                    |number| Message::SelectPage(number - 1),
-                )
-                .width(56),
-                text(format!("/ {}", state.pages.len())),
-            ]
-            .align_y(iced::Alignment::Center)
-            .spacing(4),
-            control("Add image", Message::AddPage, state.pages.can_add()),
-            control(
-                "Import PDF",
-                Message::ImportPdf,
-                state.pages.pdf_capacity() > 0,
-            ),
-            control("Replace image", Message::AskReplacePage, true),
-            control(
-                "Edit page",
-                Message::PageEdit(crate::app::page_edit::Event::Begin),
-                state.image().is_some()
-            ),
-            control("Delete page", Message::AskDeletePage, true)
-                .style(appearance::destructive_action),
-            row![
-                control(
-                    "↑",
-                    Message::MovePageLeft,
-                    state.pages.active_index() > 0,
-                ),
-                control(
-                    "↓",
-                    Message::MovePageRight,
-                    state.pages.active_index() + 1 < state.pages.len(),
-                ),
-            ]
-            .spacing(4),
-        ];
+    let menu = page_menu(state, enabled);
+    let first = Row::new()
+        .push(super::super::toolbar::icon_button(
+            Glyph::AddImage,
+            "Add image page",
+            false,
+            (enabled && state.pages.can_add()).then_some(Message::AddPage),
+        ))
+        .push(super::super::toolbar::icon_button(
+            Glyph::ImportPdf,
+            "Import PDF",
+            false,
+            (enabled && state.pages.pdf_capacity() > 0)
+                .then_some(Message::ImportPdf),
+        ));
     #[cfg(all(
         feature = "native-camera",
         any(target_os = "linux", target_os = "windows")
     ))]
-    let controls = controls.push(
-        control(
-            "Camera",
-            Message::Camera(crate::app::camera::Event::Begin),
-            crate::app::camera::can_open(state),
-        )
-        .style(appearance::primary_action),
-    );
+    let first = first.push(super::super::toolbar::icon_button(
+        Glyph::Camera,
+        "Camera",
+        false,
+        crate::app::camera::can_open(state)
+            .then_some(Message::Camera(crate::app::camera::Event::Begin)),
+    ));
+    let first = first.spacing(8);
+    let second = row![
+        super::super::toolbar::icon_button(
+            Glyph::ReplaceImage,
+            "Replace image",
+            false,
+            enabled.then_some(Message::AskReplacePage),
+        ),
+        super::super::toolbar::icon_button(
+            Glyph::EditPage,
+            "Edit page",
+            false,
+            (enabled && state.image().is_some()).then_some(Message::PageEdit(
+                crate::app::page_edit::Event::Begin,
+            )),
+        ),
+        super::super::toolbar::icon_button(
+            Glyph::Delete,
+            "Delete page",
+            false,
+            enabled.then_some(Message::AskDeletePage),
+        ),
+    ]
+    .spacing(8);
+    let controls = column![
+        row![
+            text(format!("Pages ({})", state.pages.len()))
+                .size(18)
+                .width(Fill),
+            menu,
+        ]
+        // Empty and active menus must occupy the same row during a drag.
+        .height(appearance::CONTROL_HEIGHT)
+        .align_y(iced::Alignment::Center),
+        first,
+        second,
+    ]
+    .spacing(8);
     container(
         controls
             .push(
@@ -97,6 +99,20 @@ pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
     .padding(8)
     .style(container::bordered_box)
     .into()
+}
+
+fn page_menu(state: &FastFill, enabled: bool) -> Element<'static, Message> {
+    if state.pages.len() < 2 {
+        Space::new().width(48).height(40).into()
+    } else {
+        super::super::toolbar::icon_button(
+            Glyph::More,
+            "Page actions",
+            state.open_menu == Some(super::super::menu::Kind::Page),
+            enabled
+                .then_some(Message::ToggleMenu(super::super::menu::Kind::Page)),
+        )
+    }
 }
 
 pub(super) fn draw(
@@ -169,15 +185,15 @@ pub(super) fn draw(
         let height = rail.scroll_thumb_height(bounds);
         let top = rail.offset(bounds) / (total - bounds.height)
             * (bounds.height - height);
-        let width = bounds.width - SCROLLBAR_WIDTH;
+        let x = bounds.width - 6.0;
         frame.fill_rectangle(
-            Point::new(width + 4.0, 0.0),
-            Size::new(8.0, bounds.height),
+            Point::new(x, 0.0),
+            Size::new(4.0, bounds.height),
             theme.extended_palette().background.strong.color,
         );
         frame.fill_rectangle(
-            Point::new(width + 4.0, top),
-            Size::new(8.0, height),
+            Point::new(x, top),
+            Size::new(4.0, height),
             theme.extended_palette().primary.base.color,
         );
     }
