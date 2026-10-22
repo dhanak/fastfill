@@ -4404,13 +4404,22 @@ Windows retest after the next CI ZIP:
   the isolated render test. Native full/reduced-feature tests, Clippy, and WASM
   compilation pass. Keep SP6 physical validation and the user manual open.
 
+### 2026-10-22 — Document the Rust app
+
+- User confirms the host tests and requests a commit; commit the review fixes as
+  `861f877`.
+- Add a task-oriented user manual with current workspace, page-editor and camera
+  screenshots. Keep only the landing README at the Rust project root; place
+  manuals, the plan and package notes under `rust/docs/`.
+- Keep the separate physical SP6 save/export, touch, DPI and sleep checks open.
+
 ## References
 
 - [iced 0.14 documentation](https://docs.rs/iced/0.14.0/iced/)
 - [iced 0.14 features and MSRV](https://github.com/iced-rs/iced/blob/0.14.0/Cargo.toml)
 - [Hayro PDF renderer](https://github.com/LaurenzV/hayro)
-- Existing behavior: [user guide](../docs/USER_GUIDE.md).
-- Existing checks and fixtures: `../src/FastFill.Checks/`, `../tests/`.
+- Existing behavior: [user guide](../../docs/USER_GUIDE.md).
+- Existing checks and fixtures: `../../src/FastFill.Checks/`, `../../tests/`.
 - Windows camera lifetime investigation:
   [nokhwa bindings source](https://github.com/l1npengtul/nokhwa/blob/senpai/nokhwa-bindings-windows/src/lib.rs),
   [COM shutdown order](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-couninitialize).

@@ -1,4 +1,4 @@
-FastFill Rust prototype - Windows x64
+FastFill development build - Windows x64
 
 Extract this ZIP anywhere. Run FastFill-Rust.exe from the extracted folder.
 No Rust toolchain, compiler, .NET, installer, certificate import, or separate

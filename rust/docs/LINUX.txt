@@ -1,4 +1,4 @@
-FastFill Rust prototype - Linux x64
+FastFill development build - Linux x64
 
 Extract this archive anywhere. Run ./FastFill-Rust from the extracted folder.
 No Rust toolchain or compilation is needed. This is an experimental build;

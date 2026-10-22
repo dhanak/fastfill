@@ -9,7 +9,7 @@ $archive = Join-Path $env:RUNNER_TEMP "FastFill-Rust-windows-x64.zip"
 New-Item -ItemType Directory -Path $packageDir | Out-Null
 Copy-Item -LiteralPath $source `
     -Destination (Join-Path $packageDir "FastFill-Rust.exe")
-Copy-Item -LiteralPath (Join-Path $rustRoot "PORTABLE.txt") `
+Copy-Item -LiteralPath (Join-Path $rustRoot "docs/WINDOWS.txt") `
     -Destination (Join-Path $packageDir "README.txt")
 Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSE") `
     -Destination (Join-Path $packageDir "LICENSE.txt")

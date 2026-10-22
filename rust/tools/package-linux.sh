@@ -20,7 +20,7 @@ trap 'rm -rf -- "$package_dir" "$smoke_dir"' EXIT
 mkdir "$package_dir/FastFill-Rust"
 package="$package_dir/FastFill-Rust"
 install -m 755 "$source" "$package/FastFill-Rust"
-cp "$rust_root/LINUX.txt" "$package/README.txt"
+cp "$rust_root/docs/LINUX.txt" "$package/README.txt"
 cp "$repo_root/LICENSE" "$package/LICENSE.txt"
 cp "$rust_root/assets/icons/lucide/LICENSE" \
   "$package/LUCIDE-LICENSE.txt"
