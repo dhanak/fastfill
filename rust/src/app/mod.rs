@@ -225,7 +225,10 @@ pub(crate) enum Message {
 }
 
 pub(crate) fn run() -> iced::Result {
-    let window = iced::window::Settings::default();
+    let window = iced::window::Settings {
+        maximized: true,
+        ..iced::window::Settings::default()
+    };
     #[cfg(target_os = "windows")]
     let window = iced::window::Settings {
         icon: Some(window_icon()),
@@ -257,6 +260,19 @@ pub(crate) fn run() -> iced::Result {
                     iced::event::listen_with(normal_event)
                 },
             ];
+            #[cfg(not(target_arch = "wasm32"))]
+            if std::env::var_os("FASTFILL_TOUCH_LOG").is_some() {
+                subscriptions.push(iced::event::listen_with(
+                    |event, status, _| {
+                        touch_cursor::trace_input(
+                            &event,
+                            "global",
+                            format_args!("status={status:?}"),
+                        );
+                        None::<Message>
+                    },
+                ));
+            }
             if state.page_editor.is_open() {
                 subscriptions.push(iced::event::listen_with(|event, _, _| {
                     match event {
@@ -298,6 +314,20 @@ fn window_icon() -> iced::window::Icon {
 fn bundled_windows_icon_decodes() {
     let (_, size) = window_icon().into_raw();
     assert_eq!((size.width, size.height), (150, 150));
+}
+
+#[cfg(test)]
+#[test]
+fn bundled_icon_has_a_transparent_margin() {
+    let icon = image::load_from_memory_with_format(
+        include_bytes!("../../assets/AppIcon.png"),
+        image::ImageFormat::Png,
+    )
+    .unwrap()
+    .into_rgba8();
+    assert_eq!(icon.dimensions(), (150, 150));
+    assert_eq!(icon.get_pixel(0, 0)[3], 0);
+    assert_eq!(icon.get_pixel(75, 75)[3], 255);
 }
 
 fn normal_event(

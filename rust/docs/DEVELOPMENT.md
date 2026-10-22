@@ -90,6 +90,9 @@ arguments and device-name enumeration; no connected camera, capture stream or
 GUI interaction is required. Windows debug builds retain their console for
 diagnostics. Device/touch checks still need real hardware.
 
+The Rust icon's editable source is `assets/AppIcon.svg`; the generated PNG and
+ICO are embedded in the window and Windows executable respectively.
+
 On `master`, Windows/Linux tests, WASM checks and both portable packages must
 succeed before the public [`rust-dev` prerelease][rust-dev] is updated with the
 Windows ZIP and Linux archive together. macOS runs the same native tests
@@ -938,6 +941,17 @@ from Lucide (pinned to commit `20aef31d`); its license is kept in
 `assets/icons/lucide/LICENSE` and included with the Windows portable build.
 Options appear only when applicable. The tool/options rows scroll horizontally
 in narrower windows; the page view keeps its size when switching tools.
+
+For SP6 touch diagnosis, start the portable EXE from PowerShell with an opt-in
+pointer log:
+
+```powershell
+$env:FASTFILL_TOUCH_LOG = Join-Path $env:TEMP 'FastFill-touch.log'
+.\FastFill-Rust.exe
+```
+
+The log appends pointer events, sidebar routing and toolbar actions; it does not
+record typed text. Remove the environment variable after the test.
 
 Wider windows group tools and contextual properties in a right-hand panel sized
 to four tool columns, leaving a single command strip above the page. Color stays

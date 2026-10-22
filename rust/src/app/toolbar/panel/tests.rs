@@ -471,6 +471,130 @@ fn compatibility_mouse_press_does_not_steal_the_next_sidebar_tap() {
 }
 
 #[test]
+fn consecutive_touch_taps_switch_tools_after_rebuilding_panel() {
+    let renderer = renderer();
+    let mut state = annotated_page();
+    let size = iced::Size::new(appearance::TOOLS_PANEL_WIDTH, 700.0);
+    let mut element = view(&state);
+    let (mut tree, mut node) = lay_out(&mut element, &renderer, size);
+
+    for (index, tool) in [Tool::Arrow, Tool::Checkmark, Tool::Cross]
+        .into_iter()
+        .enumerate()
+    {
+        let column = Layout::new(&node).children().next().unwrap();
+        let content =
+            column.children().next().unwrap().children().next().unwrap();
+        let targets = tool_targets(content.children().nth(1).unwrap());
+        let position = targets[5 + index].center();
+        let mut messages = Vec::new();
+        for event in [
+            touch::Event::FingerPressed {
+                id: touch::Finger(index as u64),
+                position,
+            },
+            touch::Event::FingerMoved {
+                id: touch::Finger(index as u64),
+                position,
+            },
+            touch::Event::FingerLifted {
+                id: touch::Finger(index as u64),
+                position,
+            },
+        ] {
+            send_input(
+                &mut element,
+                &mut tree,
+                &node,
+                &renderer,
+                &mut messages,
+                &Event::Touch(event),
+                mouse::Cursor::Unavailable,
+            );
+        }
+        assert!(
+            matches!(messages.as_slice(), [Message::SetTool(t)] if *t == tool),
+            "tap {index}: {messages:?}",
+        );
+        drop(element);
+        let _ = update(&mut state, messages.remove(0));
+        element = view(&state);
+        tree.diff(element.as_widget());
+        node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(size, size),
+        );
+    }
+}
+
+#[test]
+fn dragging_sidebar_button_scrolls_without_clicking_it() {
+    let renderer = renderer();
+    let state = annotated_page();
+    let mut element = view(&state);
+    let (mut tree, node) = lay_out(
+        &mut element,
+        &renderer,
+        iced::Size::new(appearance::TOOLS_PANEL_WIDTH, 360.0),
+    );
+    let column = Layout::new(&node).children().next().unwrap();
+    let content = column.children().next().unwrap().children().next().unwrap();
+    let position = tool_targets(content.children().nth(1).unwrap())[5].center();
+    let moved = iced::Point::new(position.x, position.y + 20.0);
+    let mut messages = Vec::new();
+    for event in [
+        touch::Event::FingerPressed {
+            id: touch::Finger(1),
+            position,
+        },
+        touch::Event::FingerMoved {
+            id: touch::Finger(1),
+            position: moved,
+        },
+        touch::Event::FingerLifted {
+            id: touch::Finger(1),
+            position: moved,
+        },
+    ] {
+        send_input(
+            &mut element,
+            &mut tree,
+            &node,
+            &renderer,
+            &mut messages,
+            &Event::Touch(event),
+            mouse::Cursor::Unavailable,
+        );
+    }
+    assert!(messages.is_empty());
+    for event in [
+        touch::Event::FingerPressed {
+            id: touch::Finger(2),
+            position,
+        },
+        touch::Event::FingerLifted {
+            id: touch::Finger(2),
+            position,
+        },
+    ] {
+        send_input(
+            &mut element,
+            &mut tree,
+            &node,
+            &renderer,
+            &mut messages,
+            &Event::Touch(event),
+            mouse::Cursor::Unavailable,
+        );
+    }
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::SetTool(Tool::Arrow)]
+    ));
+}
+
+#[test]
 fn horizontal_tracks_do_not_cover_the_button_targets() {
     let renderer = renderer();
     let state = annotated_page();

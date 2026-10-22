@@ -221,6 +221,18 @@ impl FastFill {
 }
 
 pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
+    #[cfg(not(target_arch = "wasm32"))]
+    if matches!(
+        message,
+        Message::SetTool(_)
+            | Message::SetColor(_)
+            | Message::SendToBack
+            | Message::BringToFront
+            | Message::DeleteSelected
+            | Message::AskDeleteAll
+    ) {
+        super::touch_cursor::trace(format_args!("action {message:?}"));
+    }
     if let Message::SystemThemeChanged(mode) = &message {
         // Iced 0.14 leaves Linux's previous theme when the portal resets it.
         // Override only that case; native theme following owns every other.

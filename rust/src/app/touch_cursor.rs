@@ -8,6 +8,17 @@ use iced::time::{Duration, Instant};
 use iced::{Element, Event, Length, Rectangle, Size, Vector};
 use iced::{Renderer, Theme, mouse, touch};
 
+#[cfg(not(target_arch = "wasm32"))]
+use std::fmt;
+#[cfg(not(target_arch = "wasm32"))]
+use std::fs::OpenOptions;
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::Write;
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::OnceLock;
+
 pub(super) fn wrap(content: Element<'_, Message>) -> Element<'_, Message> {
     Element::new(TouchCursor { content })
 }
@@ -18,9 +29,95 @@ struct TouchCursor<'a> {
 
 #[derive(Default)]
 struct TouchState {
-    fingers: u8,
     last_touch: Option<Instant>,
-    touch_mode: bool,
+    gesture: Option<Gesture>,
+}
+
+struct Gesture {
+    finger: touch::Finger,
+    start: iced::Point,
+    dragging: bool,
+}
+
+const MOUSE_ECHO_WINDOW: Duration = Duration::from_millis(250);
+const SCROLL_SLOP: f32 = 8.0;
+
+fn recent_touch(last_touch: Option<Instant>) -> bool {
+    last_touch.is_some_and(|at| at.elapsed() < MOUSE_ECHO_WINDOW)
+}
+
+fn route_touch(
+    state: &mut TouchState,
+    event: &Event,
+    touch_event: touch::Event,
+    forward: &mut impl FnMut(&Event, mouse::Cursor),
+) {
+    state.last_touch = Some(Instant::now());
+    match touch_event {
+        touch::Event::FingerPressed { id, position } => {
+            state.gesture = Some(Gesture {
+                finger: id,
+                start: position,
+                dragging: false,
+            });
+            trace_input(event, "sidebar", format_args!("deferred"));
+        }
+        touch::Event::FingerMoved { id, position } => {
+            let Some(gesture) = state.gesture.as_mut() else {
+                return;
+            };
+            if gesture.finger != id {
+                return;
+            }
+            if !gesture.dragging
+                && (position.x - gesture.start.x)
+                    .hypot(position.y - gesture.start.y)
+                    > SCROLL_SLOP
+            {
+                forward(
+                    &Event::Touch(touch::Event::FingerPressed {
+                        id,
+                        position: gesture.start,
+                    }),
+                    mouse::Cursor::Available(gesture.start),
+                );
+                gesture.dragging = true;
+            }
+            if gesture.dragging {
+                forward(event, mouse::Cursor::Available(position));
+            } else {
+                trace_input(event, "sidebar", format_args!("deferred"));
+            }
+        }
+        touch::Event::FingerLifted { id, position }
+        | touch::Event::FingerLost { id, position } => {
+            let Some(gesture) = state.gesture.take() else {
+                return;
+            };
+            if gesture.finger != id {
+                state.gesture = Some(gesture);
+                return;
+            }
+            if gesture.dragging {
+                forward(event, mouse::Cursor::Available(position));
+            } else if matches!(touch_event, touch::Event::FingerLifted { .. }) {
+                // A tap follows the mouse path; drags keep native touch
+                // scrolling and never activate a control.
+                forward(
+                    &Event::Mouse(mouse::Event::ButtonPressed(
+                        mouse::Button::Left,
+                    )),
+                    mouse::Cursor::Available(gesture.start),
+                );
+                forward(
+                    &Event::Mouse(mouse::Event::ButtonReleased(
+                        mouse::Button::Left,
+                    )),
+                    mouse::Cursor::Available(position),
+                );
+            }
+        }
+    }
 }
 
 impl Widget<Message, Theme, Renderer> for TouchCursor<'_> {
@@ -84,57 +181,52 @@ impl Widget<Message, Theme, Renderer> for TouchCursor<'_> {
         viewport: &Rectangle,
     ) {
         let state = tree.state.downcast_mut::<TouchState>();
-        // iced buttons test the mouse cursor on touch release. Windows can
-        // also send compatibility mouse events for that same contact. Keep
-        // those from pressing another button until the tap has ended.
-        let cursor = match event {
-            Event::Touch(touch_event) => {
-                state.touch_mode = true;
-                state.last_touch = Some(Instant::now());
-                let position = match touch_event {
-                    touch::Event::FingerPressed { position, .. } => {
-                        state.fingers = state.fingers.saturating_add(1);
-                        position
-                    }
-                    touch::Event::FingerMoved { position, .. } => position,
-                    touch::Event::FingerLifted { position, .. }
-                    | touch::Event::FingerLost { position, .. } => {
-                        state.fingers = state.fingers.saturating_sub(1);
-                        position
-                    }
-                };
-                mouse::Cursor::Available(*position)
-            }
-            Event::Mouse(_)
-                if state.touch_mode
-                    && (state.fingers > 0
-                        || state.last_touch.is_some_and(|at| {
-                            at.elapsed() < Duration::from_millis(250)
-                        })) =>
-            {
-                return;
-            }
-            Event::Mouse(_) => {
-                state.touch_mode = false;
-                cursor
-            }
-            Event::Window(iced::window::Event::RedrawRequested(_))
-                if state.touch_mode =>
-            {
-                mouse::Cursor::Unavailable
-            }
-            _ => cursor,
+        let mut forward = |routed: &Event, routed_cursor| {
+            let mut messages = Vec::new();
+            let mut child_shell = Shell::new(&mut messages);
+            self.content.as_widget_mut().update(
+                &mut tree.children[0],
+                routed,
+                layout,
+                routed_cursor,
+                renderer,
+                clipboard,
+                &mut child_shell,
+                viewport,
+            );
+            trace_input(
+                event,
+                "sidebar",
+                format_args!(
+                    "routed={routed:?} captured={}",
+                    child_shell.is_event_captured()
+                ),
+            );
+            shell.merge(child_shell, |message| message);
         };
-        self.content.as_widget_mut().update(
-            &mut tree.children[0],
+        if let Event::Touch(touch_event) = event {
+            route_touch(state, event, *touch_event, &mut forward);
+            return;
+        }
+        // Windows can echo a touch as mouse input. Bound the suppression so
+        // a missing lift event cannot disable the real mouse indefinitely.
+        if matches!(event, Event::Mouse(_)) && recent_touch(state.last_touch) {
+            trace_input(event, "sidebar", format_args!("suppressed"));
+            return;
+        }
+        if matches!(event, Event::Mouse(_)) {
+            state.last_touch = None;
+        }
+        let cursor = if matches!(
             event,
-            layout,
-            cursor,
-            renderer,
-            clipboard,
-            shell,
-            viewport,
-        );
+            Event::Window(iced::window::Event::RedrawRequested(_))
+        ) && recent_touch(state.last_touch)
+        {
+            mouse::Cursor::Unavailable
+        } else {
+            cursor
+        };
+        forward(event, cursor);
     }
 
     fn mouse_interaction(
@@ -191,4 +283,44 @@ impl Widget<Message, Theme, Renderer> for TouchCursor<'_> {
             translation,
         )
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn trace_input(
+    event: &Event,
+    source: &str,
+    detail: fmt::Arguments<'_>,
+) {
+    if !matches!(event, Event::Touch(_) | Event::Mouse(_)) {
+        return;
+    }
+    trace(format_args!("{source} {event:?} {detail}"));
+}
+
+#[cfg(target_arch = "wasm32")]
+fn trace_input(_: &Event, _: &str, _: std::fmt::Arguments<'_>) {}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn trace(detail: fmt::Arguments<'_>) {
+    static PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
+    static START: OnceLock<Instant> = OnceLock::new();
+    let Some(path) = PATH
+        .get_or_init(|| std::env::var_os("FASTFILL_TOUCH_LOG").map(Into::into))
+    else {
+        return;
+    };
+    if let Ok(mut file) =
+        OpenOptions::new().create(true).append(true).open(path)
+    {
+        let elapsed = START.get_or_init(Instant::now).elapsed().as_millis();
+        let _ = writeln!(file, "{elapsed:>8} ms {detail}");
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn missing_lift_cannot_suppress_mouse_forever() {
+    let old_press = Instant::now().checked_sub(Duration::from_secs(1)).unwrap();
+    assert!(!recent_touch(Some(old_press)));
+    assert!(!recent_touch(None));
 }

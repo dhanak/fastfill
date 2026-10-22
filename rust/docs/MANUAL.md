@@ -7,6 +7,8 @@ available in supported Windows and Linux desktop builds, not in the browser.
 
 ## Start and organize a project
 
+The desktop window opens maximized; restore or resize it as needed.
+
 Open the project-name menu at top left for **New project** or **Open project**.
 Use **Add image** or **Import PDF** in the Pages rail to add pages. **Replace
 image** changes the selected page's source; FastFill asks before replacing a
