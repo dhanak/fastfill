@@ -8,10 +8,10 @@ const workflow = readFileSync(new URL(
 ), "utf8");
 
 for (const [job, target] of [
-  ["native", "rust/target"],
-  ["wasm", "rust/target"],
-  ["windows-portable", "${{ runner.temp }}/fastfill-rust-target"],
-  ["linux-portable", "${{ runner.temp }}/fastfill-rust-linux-target"],
+  ["test-native", "rust/target"],
+  ["check-wasm", "rust/target"],
+  ["package-windows", "${{ runner.temp }}/fastfill-rust-target"],
+  ["package-linux", "${{ runner.temp }}/fastfill-rust-linux-target"],
 ]) {
   test(`${job}: restore compiled dependencies before Cargo runs`, () => {
     const block = workflow.split(`\n  ${job}:\n`)[1]?.split(/\n  \w/)[0];
@@ -33,7 +33,7 @@ for (const [job, target] of [
     assert.equal(restore?.[1], prefix,
       "Reuse compatible artifacts after dependency changes");
     assert.match(prefix, /rust199/);
-    if (job !== "windows-portable") {
+    if (job !== "package-windows") {
       assert.ok(prefix.includes("${{ runner.os }}-${{ runner.arch }}"));
     }
     assert.ok(block.indexOf(cache[0]) < block.indexOf("cargo +1.99.0"),
@@ -52,7 +52,7 @@ test("CI caches omit debug symbols and incremental compiler state", () => {
 });
 
 test("Linux target path is set after runner assignment", () => {
-  const block = workflow.split("\n  linux-portable:\n")[1]
+  const block = workflow.split("\n  package-linux:\n")[1]
     ?.split(/\n  \w/)[0];
   assert.ok(block, "Find Linux package job");
   assert.doesNotMatch(block.split("\n    steps:")[0], /\$\{\{\s*runner\./,

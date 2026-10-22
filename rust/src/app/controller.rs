@@ -291,11 +291,7 @@ fn update_editor(state: &mut FastFill, message: Message) -> Task<Message> {
         return Task::none();
     }
     match message {
-        Message::SetTool(tool) => {
-            state.accept_text();
-            state.cancel_interaction();
-            state.annotations_mut().set_tool(tool);
-        }
+        Message::SetTool(tool) => switch_tool(state, tool),
         Message::SelectAll => state.select_all(),
         Message::Undo => state.undo(),
         Message::Redo => state.redo(),
@@ -362,6 +358,17 @@ fn update_editor(state: &mut FastFill, message: Message) -> Task<Message> {
     }
 
     Task::none()
+}
+
+fn switch_tool(state: &mut FastFill, tool: Tool) {
+    let changed = state.annotations().tool() != tool;
+    state.accept_text();
+    state.cancel_interaction();
+    let annotations = state.annotations_mut();
+    annotations.set_tool(tool);
+    if changed {
+        annotations.clear_selection();
+    }
 }
 
 pub(super) fn handle_text_format(

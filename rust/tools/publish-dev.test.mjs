@@ -12,7 +12,7 @@ const workflow = readFileSync(new URL(
   "../../.github/workflows/rust.yml", import.meta.url,
 ), "utf8");
 const step = workflow.split(
-  "      - name: Publish separate Rust development build\n",
+  "      - name: Publish Rust development build\n",
 )[1];
 assert.ok(step, "Find the release step in the workflow");
 const block = step.match(/        run: \|\n([\s\S]*?)(?=\n  \w|$)/);
@@ -20,51 +20,82 @@ assert.ok(block, "Find the release step in the workflow");
 const script = block[1].replace(/^ {10}/gm, "");
 assert.equal(spawnSync("bash", ["-n"], { input: script }).status, 0);
 
-test("Windows publication does not wait for macOS runner capacity", () => {
-  const native = workflow.split("\n  native:\n")[1]?.split(/\n  \w/)[0];
+test("CI jobs are grouped as checks, packages, then publication", () => {
+  const jobs = [...workflow.split("\njobs:\n")[1]
+    .matchAll(/^  ([a-z][a-z-]*):\n/gm)]
+    .map((match) => match[1]);
+  assert.deepEqual(jobs, [
+    "test-native", "test-macos", "check-wasm",
+    "package-windows", "package-linux",
+    "publish-dev",
+  ]);
+});
+
+test("Publication waits for both tested packages, not macOS", () => {
+  const native = workflow.split("\n  test-native:\n")[1]
+    ?.split(/\n  \w/)[0];
   assert.ok(native?.includes("- ubuntu-latest"));
   assert.ok(native.includes("- windows-latest"));
   assert.ok(!native.includes("macos"), "Keep macOS out of the release gate");
-  const macos = workflow.split("\n  macos:\n")[1]?.split(/\n  \w/)[0];
+  const macos = workflow.split("\n  test-macos:\n")[1]
+    ?.split(/\n  \w/)[0];
   assert.ok(macos?.includes("runs-on: macos-15-intel"));
   assert.ok(native.includes("steps: &native-tests"));
   assert.ok(macos.includes("steps: *native-tests"),
     "Keep the same cached test suite on macOS");
   assert.ok(!macos.includes("continue-on-error"),
     "Keep real macOS failures visible in workflow status");
-  const publish = workflow.split("\n  publish-rust-dev:\n")[1]
+  const publish = workflow.split("\n  publish-dev:\n")[1]
     ?.split(/\n  \w/)[0];
   const needs = publish?.match(/needs: \[([^\]]+)\]/)?.[1]
     .split(",").map((job) => job.trim());
-  assert.deepEqual(needs, ["native", "wasm", "windows-portable"],
-    "Still require Windows/Linux tests, WASM checks and the packaged app");
+  assert.deepEqual(needs, [
+    "test-native", "check-wasm", "package-windows", "package-linux",
+  ],
+    "Require shared checks and both tested archives");
   assert.ok(!publish.includes("always()"),
     "Do not bypass failed or cancelled required checks");
 });
 
-test("Download preserves the raw portable ZIP for publication", () => {
+test("Download preserves both raw archives for publication", () => {
   const upload = workflow.split(
     "      - name: Upload portable Windows ZIP\n",
   )[1]?.split(/\n  \w/)[0];
   assert.match(upload ?? "", /archive: false/);
   const download = workflow.split(
-    "      - name: Download tested portable ZIP\n",
+    "      - name: Download tested Windows ZIP\n",
   )[1]?.split(/\n      - /)[0];
   assert.match(download ?? "", /name: FastFill-Rust-windows-x64\.zip/);
   assert.match(download ?? "", /skip-decompress: true/,
     "Keep the uploaded ZIP instead of extracting its contents");
+  const linuxUpload = workflow.split(
+    "      - name: Upload portable Linux archive\n",
+  )[1]?.split(/\n  \w/)[0];
+  assert.match(linuxUpload ?? "", /archive: false/);
+  const linuxDownload = workflow.split(
+    "      - name: Download tested Linux archive\n",
+  )[1]?.split(/\n      - /)[0];
+  assert.match(linuxDownload ?? "",
+    /name: FastFill-Rust-linux-x64\.tar\.gz/);
+  assert.match(linuxDownload ?? "", /skip-decompress: true/,
+    "Keep the uploaded tarball instead of extracting its contents");
 });
 
 for (const mode of [
-  "new", "existing", "upload-failure", "missing-zip", "empty-zip",
+  "new", "existing", "upload-failure",
+  "missing-windows", "empty-windows", "missing-linux", "empty-linux",
 ]) {
   test(`Publish Rust prerelease: ${mode}`, () => {
     const directory = mkdtempSync(join(tmpdir(), "fastfill-publish-test-"));
     try {
       const log = join(directory, "calls.txt");
-      if (mode !== "missing-zip") {
+      if (mode !== "missing-windows") {
         writeFileSync(join(directory, "FastFill-Rust-windows-x64.zip"),
-          mode === "empty-zip" ? "" : "mock portable ZIP");
+          mode === "empty-windows" ? "" : "mock portable ZIP");
+      }
+      if (mode !== "missing-linux") {
+        writeFileSync(join(directory, "FastFill-Rust-linux-x64.tar.gz"),
+          mode === "empty-linux" ? "" : "mock Linux archive");
       }
       writeFileSync(join(directory, "gh"), `#!/bin/sh
 printf '%s\\n' "$*" >> "$TEST_LOG"
@@ -91,11 +122,11 @@ fi
           GITHUB_SHA: "0123456789abcdef",
         },
       });
-      if (mode === "missing-zip" || mode === "empty-zip") {
+      if (mode.startsWith("missing-") || mode.startsWith("empty-")) {
         assert.equal(result.status, 1, result.stderr);
-        assert.match(result.stderr, /Missing or empty portable ZIP/);
+        assert.match(result.stderr, /Missing or empty archive/);
         assert.ok(!existsSync(log),
-          "Never call GitHub without a nonempty portable ZIP");
+          "Never call GitHub without both nonempty archives");
         return;
       }
       const calls = readFileSync(log, "utf8").trim().split("\n");
@@ -106,11 +137,13 @@ fi
         assert.equal(calls.length, 2);
         assert.match(calls[1], /^release create rust-dev /);
         assert.match(calls[1], /FastFill-Rust-windows-x64\.zip/);
+        assert.match(calls[1], /FastFill-Rust-linux-x64\.tar\.gz/);
         assert.match(calls[1], /--prerelease --latest=false/);
         assert.match(calls[1], /--target 0123456789abcdef/);
       } else {
         assert.equal(calls[1], "release upload rust-dev " +
-          "FastFill-Rust-windows-x64.zip --clobber");
+          "FastFill-Rust-windows-x64.zip " +
+          "FastFill-Rust-linux-x64.tar.gz --clobber");
         if (mode === "upload-failure") {
           assert.equal(calls.length, 2,
             "Never advance tag after failed upload");

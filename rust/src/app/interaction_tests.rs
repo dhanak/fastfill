@@ -96,6 +96,77 @@ fn idle_escape_clears_selection_without_editing_the_last_annotation() {
 }
 
 #[test]
+fn changing_tools_clears_selection_before_changing_the_next_color() {
+    for tool in [Tool::Arrow, Tool::Text] {
+        let mut state = FastFill::default();
+        let _ = update(&mut state, Message::SetTool(tool));
+        let _ = update(
+            &mut state,
+            Message::DrawPressed(
+                Pointer::Mouse,
+                PagePoint::new(200.0, 200.0),
+                1.0,
+            ),
+        );
+        if tool == Tool::Text {
+            paste_text(&mut state, "Keep me");
+            let _ = update(&mut state, Message::AcceptText);
+        } else {
+            let _ = update(
+                &mut state,
+                Message::DrawReleased(
+                    Pointer::Mouse,
+                    PagePoint::new(260.0, 240.0),
+                    false,
+                ),
+            );
+        }
+        assert!(state.annotations().has_selection());
+        let shapes = state.annotations().shapes().cloned().collect::<Vec<_>>();
+        let texts = state.annotations().texts().cloned().collect::<Vec<_>>();
+        let identity = state.pages.identity();
+
+        let _ = update(&mut state, Message::SetTool(Tool::Rectangle));
+        assert!(!state.annotations().has_selection());
+        assert_eq!(state.pages.identity(), identity);
+        let _ = update(&mut state, Message::SetColor(AnnotationColor::Red));
+        assert_eq!(
+            state.annotations().shapes().cloned().collect::<Vec<_>>(),
+            shapes
+        );
+        assert_eq!(
+            state.annotations().texts().cloned().collect::<Vec<_>>(),
+            texts
+        );
+        assert_eq!(state.pages.identity(), identity);
+        assert_eq!(
+            state.annotations().current_style().unwrap().color,
+            AnnotationColor::Red
+        );
+        let _ = update(
+            &mut state,
+            Message::DrawPressed(
+                Pointer::Mouse,
+                PagePoint::new(300.0, 300.0),
+                1.0,
+            ),
+        );
+        let _ = update(
+            &mut state,
+            Message::DrawReleased(
+                Pointer::Mouse,
+                PagePoint::new(360.0, 340.0),
+                false,
+            ),
+        );
+        assert_eq!(
+            state.annotations().shapes().last().unwrap().color,
+            AnnotationColor::Red
+        );
+    }
+}
+
+#[test]
 fn escape_reverts_a_text_edit_before_clearing_its_selection() {
     let mut state = FastFill::default();
     let point = PagePoint::new(200.0, 200.0);

@@ -31,7 +31,8 @@ env:
   CARGO_PROFILE_TEST_DEBUG: "0"
 
 jobs:
-  native:
+  test-native:
+    name: Native tests (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -83,15 +84,46 @@ jobs:
         run: node tools/cache.test.mjs
 
   # Validate macOS without gating Windows publication on its runner capacity.
-  macos:
-    name: macOS compatibility (Intel, independent)
+  test-macos:
+    name: Native tests (macOS Intel, independent)
     runs-on: macos-15-intel
     defaults:
       run:
         working-directory: rust
     steps: *native-tests
 
-  windows-portable:
+  check-wasm:
+    name: WASM compatibility
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust and WASM target
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal
+          rustup target add --toolchain 1.99.0 wasm32-unknown-unknown
+      - name: Cache WASM dependencies and compiled metadata
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: >-
+            wasm-${{ runner.os }}-${{ runner.arch }}-rust199-lean-v1-${{
+            hashFiles('rust/Cargo.toml', 'rust/Cargo.lock') }}
+          restore-keys: |
+            wasm-${{ runner.os }}-${{ runner.arch }}-rust199-lean-v1-
+      - name: Check WASM GUI, PDF import, and PDF probe
+        run: >-
+          cargo +1.99.0 check
+          --all-features
+          --target wasm32-unknown-unknown
+
+  package-windows:
+    name: Windows portable archive
     runs-on: windows-2025
     defaults:
       run:
@@ -136,8 +168,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # Independent until a Linux desktop has verified dialogs and file output.
-  linux-portable:
+  package-linux:
+    name: Linux portable archive
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -176,71 +208,52 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  publish-rust-dev:
+  # Publish only after both platform archives and shared checks pass.
+  publish-dev:
+    name: Publish rust-dev
     if: >-
       github.event_name != 'pull_request' &&
       github.ref == 'refs/heads/master'
-    needs: [native, wasm, windows-portable]
+    needs: [test-native, check-wasm, package-windows, package-linux]
     runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: write
     steps:
-      - name: Download tested portable ZIP
+      - name: Download tested Windows ZIP
         uses: actions/download-artifact@v8
         with:
           name: FastFill-Rust-windows-x64.zip
           skip-decompress: true
-      - name: Publish separate Rust development build
+      - name: Download tested Linux archive
+        uses: actions/download-artifact@v8
+        with:
+          name: FastFill-Rust-linux-x64.tar.gz
+          skip-decompress: true
+      - name: Publish Rust development build
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          archive=FastFill-Rust-windows-x64.zip
-          test -s "$archive" || {
-            echo "::error::Missing or empty portable ZIP: $archive" >&2
-            exit 1
-          }
+          windows=FastFill-Rust-windows-x64.zip
+          linux=FastFill-Rust-linux-x64.tar.gz
+          for archive in "$windows" "$linux"; do
+            test -s "$archive" || {
+              echo "::error::Missing or empty archive: $archive" >&2
+              exit 1
+            }
+          done
           title="FastFill Rust development build"
           notes="Experimental Rust prototype at ${GITHUB_SHA}."
           if gh release view rust-dev >/dev/null 2>&1; then
-            gh release upload rust-dev "$archive" --clobber
+            gh release upload rust-dev "$windows" "$linux" --clobber
             gh api --method PATCH \
               "repos/${GITHUB_REPOSITORY}/git/refs/tags/rust-dev" \
               -f "sha=${GITHUB_SHA}" -F force=true >/dev/null
             gh release edit rust-dev --prerelease --latest=false \
               --title "$title" --notes "$notes"
           else
-            gh release create rust-dev "$archive" --prerelease \
+            gh release create rust-dev "$windows" "$linux" --prerelease \
               --latest=false --target "${GITHUB_SHA}" \
               --title "$title" --notes "$notes"
           fi
-
-  wasm:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: rust
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install Rust and WASM target
-        run: |
-          rustup toolchain install 1.99.0 --profile minimal
-          rustup target add --toolchain 1.99.0 wasm32-unknown-unknown
-      - name: Cache WASM dependencies and compiled metadata
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            rust/target
-          key: >-
-            wasm-${{ runner.os }}-${{ runner.arch }}-rust199-lean-v1-${{
-            hashFiles('rust/Cargo.toml', 'rust/Cargo.lock') }}
-          restore-keys: |
-            wasm-${{ runner.os }}-${{ runner.arch }}-rust199-lean-v1-
-      - name: Check WASM GUI, PDF import, and PDF probe
-        run: >-
-          cargo +1.99.0 check
-          --all-features
-          --target wasm32-unknown-unknown

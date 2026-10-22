@@ -174,6 +174,13 @@ fn select_ctrl_click_and_marquee_keep_text_in_mixed_groups() {
     paste_text(&mut state, "Group member");
     let _ = update(&mut state, Message::AcceptText);
     let _ = update(&mut state, Message::SetTool(Tool::Select));
+    let _ =
+        update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
+    let _ = update(
+        &mut state,
+        Message::DrawReleased(Pointer::Mouse, point, false),
+    );
+    assert_eq!(state.annotations().selected_text_indices(), [1]);
     state.modifiers.square = true;
     let _ = update(
         &mut state,
@@ -366,6 +373,7 @@ fn switching_tools_accepts_pending_text() {
     let _ = update(&mut state, Message::SetTool(Tool::Rectangle));
     assert_eq!(state.annotations().texts().next().unwrap().text, "Accepted");
     assert_eq!(state.annotations().tool(), Tool::Rectangle);
+    assert!(!state.annotations().has_selection());
 }
 
 #[test]
@@ -465,6 +473,7 @@ fn accepted_text_requires_confirmation_before_page_replacement() {
 fn select_drag_is_pending_escape_reverts_and_delete_removes_selection() {
     let mut state = annotated_page();
     let _ = update(&mut state, Message::SetTool(Tool::Select));
+    let _ = update(&mut state, Message::SelectAll);
     let original = state.annotations().shapes().next().unwrap().clone();
     let start = screen_point(&state, PagePoint::new(30.0, 45.0));
     let end = Point::new(start.x + 20.0, start.y + 30.0);
@@ -563,6 +572,7 @@ fn rectangle_mode_moves_tiny_objects_and_resizes_after_zooming_in() {
 fn lost_touch_in_select_mode_reverts_edit_without_navigating() {
     let mut state = annotated_page();
     let _ = update(&mut state, Message::SetTool(Tool::Select));
+    let _ = update(&mut state, Message::SelectAll);
     let original = state.annotations().shapes().next().unwrap().clone();
     let navigation = state.navigation;
     let start = screen_point(&state, PagePoint::new(30.0, 45.0));

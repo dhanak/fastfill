@@ -1079,16 +1079,20 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   including while text is pending. Recheck F1 handoff and Mod+A. User accepts 7I
   on 2026-10-21.
 
-#### 7J. Linux test archive — automated packaging pending host checks
+#### 7J. Linux test archive — manually accepted
 
 - [x] Build a release Linux x64 executable in an independent CI job and publish
-  a 14-day Actions artifact, without delaying Windows `rust-dev`.
+  a 14-day Actions artifact. After desktop acceptance, both packages gate their
+  shared `rust-dev` prerelease.
 - [x] Include instructions, licenses, sample form and source revision; extract
   elsewhere and check linked libraries and helper startup without a GUI.
 - [x] Document glibc, desktop, portal and camera requirements. Keep dynamic
   runtime drivers and interactive behavior outside the headless CI claim.
-- [ ] Verify archive launch, file open/save/export, help, diagnostics and
-  documentation on a Linux desktop after CI produces the artifact.
+- [x] Verify archive launch and general editor interaction on Linux desktop;
+  user confirms the completed CI build works on 2026-10-22.
+- [x] User checkpoint: verify the Linux CI archive on a desktop. User accepts 7J
+  on 2026-10-22, including the tool-change selection follow-up. This is an
+  Actions artifact check, not publication as a GitHub release.
 
 #### Remaining delivery work and replacement gate — pending
 
@@ -1099,11 +1103,15 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   names and workflows. Do not replace the C# app yet.
 - [ ] Complete 7A's remaining SP6 save/export check; ZIP launch, legacy project
   open and front/rear camera preview already passed.
-- [ ] Complete 7J's Linux desktop check. The independent archive, runtime
-  documentation and headless package gate are implemented; keep macOS
-  compatibility and WASM compilation checked.
-- [ ] Profile the browser harness if full-release builds remain sluggish; debug
-  builds already lightly optimize FastFill and its dependencies.
+- [x] Complete 7J's Linux desktop checkpoint. Keep macOS compatibility and WASM
+  compilation checked; GitHub release publication remains separate.
+- [ ] Confirm the tested Linux archive appears beside the Windows ZIP on the
+  `rust-dev` prerelease after the next `master` CI run. Both packages must pass
+  before the single publication job runs.
+- [x] Check the full-release browser harness before profiling. User reports
+  desktop and mobile LAN builds work well, including touch, pinch, zoom, drag
+  and annotation editing. Defer timed profiling unless lag recurs; memory and
+  latency remain part of the wider release gate below.
 - [ ] Run automated integration/regression checks and a focused fresh review
   after delivery work, without treating software checks as hardware tests.
 - [ ] User release gate: a 20-page project, repeated scans, save/reopen/export,
@@ -4334,12 +4342,49 @@ Windows retest after the next CI ZIP:
 
 ### 2026-10-22 — Repair pre-job workflow validation
 
-- The pushed Rust workflow failed before allocating any jobs. Its new Linux
-  job used `runner.temp` in job-level `env`, where that context is unavailable.
-- Set `CARGO_TARGET_DIR` from a runner step instead. Add a regression check
-  that fails on the invalid job-level expression; all six cache tests pass.
+- The pushed Rust workflow failed before allocating any jobs. Its new Linux job
+  used `runner.temp` in job-level `env`, where that context is unavailable.
+- Set `CARGO_TARGET_DIR` from a runner step instead. Add a regression check that
+  fails on the invalid job-level expression; all six cache tests pass.
 - CI remains unverified until this fix is pushed. Do not treat the first failed
   run as a Linux build or packaging result.
+
+### 2026-10-22 — Browser release baseline
+
+- Build the full-release WASM harness with Trunk, keeping target and output
+  under `/tmp`. The optimized bundle contains 12.9 MB WASM (5.0 MB gzipped) and
+  101 KB JavaScript. No browser executable is available in the container.
+- Retain the browser profiling gate. Measure loading and interaction on Android
+  before changing renderer structure; bundle size alone cannot explain lag.
+
+### 2026-10-22 — Linux archive smoke test and tool selection
+
+- User confirms the completed Linux CI archive launches and generally works.
+  Keep file workflows, help, diagnostics and camera checks open.
+- Clear selection when the UI picks a different tool, after accepting pending
+  text. This keeps new color changes from editing previously selected text.
+- Test old annotation color, new drawing color and pending-text acceptance;
+  update selection tests to select explicitly after switching tools.
+
+### 2026-10-22 — Accept 7J and prepare shared prerelease
+
+- User accepts the Linux 7J desktop checkpoint and tool-change deselection. Keep
+  the physical SP6 save/export, touch, DPI and sleep checks separate.
+- Group CI jobs as checks, packages and one publication step. Validate both
+  archives before attaching them together to `rust-dev`; Linux packaging now
+  gates publication, as requested for the simpler shared-release graph.
+- Mock release creation, replacement, failed upload and missing/empty archives;
+  release and cache tests pass. Keep the GitHub publication check open until a
+  pushed `master` run succeeds. Make no GitHub release changes from this
+  workspace.
+
+### 2026-10-22 — Accept release-mode browser smoke test
+
+- User tests the locally served WASM release in desktop and mobile browsers.
+  Touch, pinch, zoom, drag and annotation editing work well over the LAN.
+- Do not claim timed profiling. Defer browser performance instrumentation until
+  a release-mode slowdown is reproduced; retain the broader release latency and
+  memory gate.
 
 ## References
 

@@ -74,14 +74,13 @@ camera, capture stream or GUI interaction is required. Windows debug builds
 retain their console for diagnostics. Device/touch checks still need real
 hardware.
 
-On `master`, Windows/Linux tests, WASM checks and Windows packaging must succeed
-before the public [`rust-dev` prerelease][rust-dev] is updated. macOS runs the
-same native tests independently on `macos-15-intel`; its failures remain visible
-but runner delays or failures do not block the Windows download. No GitHub
-sign-in is needed for that release. Other branches and PRs produce the same
-`FastFill-Rust-windows-x64.zip` Actions artifact (14-day retention; sign-in
-required), not a public release. `workflow_dispatch` can rebuild it without
-source changes. The first ZIP appears after this workflow runs.
+On `master`, Windows/Linux tests, WASM checks and both portable packages must
+succeed before the public [`rust-dev` prerelease][rust-dev] is updated with the
+Windows ZIP and Linux archive together. macOS runs the same native tests
+independently on `macos-15-intel`; its failures remain visible but runner delays
+do not block publication. No GitHub sign-in is needed for the release. Other
+branches and PRs produce 14-day Actions artifacts (sign-in required), not a
+public release. `workflow_dispatch` can rebuild them without source changes.
 
 These names and assets are separate from C#'s `dev`, version releases and
 `FastFill-portable.zip`. The C# app, file associations and workflow stay
@@ -89,12 +88,12 @@ unchanged. This checkpoint does not introduce Rust version-tag releases.
 
 ## Linux testing without a compiler
 
-The `linux-portable` CI job creates `FastFill-Rust-linux-x64.tar.gz` as a 14-day
-Actions artifact. Download it from the workflow run, extract it, then run
-`./FastFill-Rust` inside the extracted folder. This artifact is separate from
-the Windows `rust-dev` release and does not gate its publication. CI checks
-archive contents, linked libraries and extracted-binary startup; it cannot check
-an interactive desktop.
+The `package-linux` CI job creates `FastFill-Rust-linux-x64.tar.gz` as a 14-day
+Actions artifact. After a successful `master` run, the same archive is also
+attached to the public [`rust-dev` prerelease][rust-dev]. Extract it, then run
+`./FastFill-Rust` inside the extracted folder. Both packages gate their shared
+release. CI checks archive contents, linked libraries and extracted-binary
+startup; it cannot check an interactive desktop.
 
 The binary is built on Ubuntu 24.04, not statically linked. It needs a
 compatible glibc-based x86-64 system, an X11 or Wayland session and working
@@ -200,7 +199,8 @@ mise exec -- trunk serve --release --address 0.0.0.0 --port 24800 \
   --no-autoreload true
 ```
 
-The browser remains a touch-test harness; responsiveness still needs tuning.
+The browser remains a touch-test harness. A release-mode desktop and mobile LAN
+smoke test passed; no timed browser performance profile has been recorded.
 
 Checkpoint 6A starts the correction pipeline with **an offline preview command**
 (interactive controls are described below). From `rust/`, create
