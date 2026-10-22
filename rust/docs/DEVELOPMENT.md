@@ -71,21 +71,24 @@ precedence. Appearance changes do not accept or cancel pending edits.
    valuable projects while testing. Print the bundled `sample-form.pdf` at
    actual size for camera and snapping checks.
 
-No Rust toolchain, compilation, .NET, installer or certificate import is needed
-on the test machine. CI statically links the C runtime and checks that the EXE
-does not import Visual C++ redistributable DLLs. Windows 10/11 x64 is the
-target; actual Windows/SP6 hardware testing remains necessary. The prototype is
-unsigned, so Windows may show an unrecognized-app warning. Only run downloads
-you trust; do not disable Windows protection globally.
+No Rust toolchain, compilation, .NET or installer is needed on the test machine.
+CI statically links the C runtime and checks that the EXE does not import Visual
+C++ redistributable DLLs. Windows 10/11 x64 is the target; actual Windows/SP6
+hardware testing remains necessary. The public `rust-dev` ZIP uses the existing
+FastFill self-signed certificate. PR and other-branch artifacts are unsigned.
+Local certificate trust does not guarantee Smart App Control approval; Windows
+may still warn or block either build. Only run downloads you trust; do not
+disable Windows protection globally.
 
-The `Rust prototype` workflow builds an optimized release EXE, packages it with
-instructions, the license, sample PDF and `BUILD.txt` revision/run details, then
-extracts it elsewhere and checks dependency/loader startup. CI also checks the
-Windows GUI subsystem (no extra terminal) and camera helper stdout/stderr pipes.
-It uses invalid helper arguments and device-name enumeration; no connected
-camera, capture stream or GUI interaction is required. Windows debug builds
-retain their console for diagnostics. Device/touch checks still need real
-hardware.
+The `Rust prototype` workflow builds an optimized release EXE with the FastFill
+Explorer/window icon. On `master`, it signs and timestamps the EXE before
+packaging it with instructions, the license, sample PDF and `BUILD.txt`
+revision/run details. It then extracts the ZIP elsewhere and checks
+dependency/loader startup. CI also checks the Windows GUI subsystem (no extra
+terminal) and camera helper stdout/stderr pipes. It uses invalid helper
+arguments and device-name enumeration; no connected camera, capture stream or
+GUI interaction is required. Windows debug builds retain their console for
+diagnostics. Device/touch checks still need real hardware.
 
 On `master`, Windows/Linux tests, WASM checks and both portable packages must
 succeed before the public [`rust-dev` prerelease][rust-dev] is updated with the
@@ -929,7 +932,9 @@ Available annotation tools:
 Tools use monochrome vector icons in equal 40-pixel touch targets. The active
 tool's name stays beside the buttons; Text uses Aa. Hover for labels. Selected
 tools, the magnet (Smart snap), and bucket (Fill) share the same highlight.
-Icons come from Lucide (pinned to commit `20aef31d`); its license is kept in
+Sidebar taps use contact positions; duplicate compatibility mouse events are
+ignored briefly, and hover hints return when the mouse is used again. Icons come
+from Lucide (pinned to commit `20aef31d`); its license is kept in
 `assets/icons/lucide/LICENSE` and included with the Windows portable build.
 Options appear only when applicable. The tool/options rows scroll horizontally
 in narrower windows; the page view keeps its size when switching tools.

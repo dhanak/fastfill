@@ -1117,7 +1117,29 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   pass; software checks do not replace the open hardware tests.
 - [ ] User release gate: a 20-page project, repeated scans, save/reopen/export,
   Surface touch at 150%/200% scaling, plus memory and latency checks.
+- [ ] Retest sidebar touch on SP6: user reports first tap works, later tool,
+  color and footer taps only hover or press. A compatibility-mouse filter and
+  regression test are in place; physical confirmation remains open. Canvas
+  gestures and annotation transforms already work.
 - [ ] Decide whether to replace the C# app; no automatic migration/removal.
+
+#### Rust promotion work — defer until the replacement decision
+
+- [ ] Make the Rust app the primary FastFill build and download. Remove the
+  prototype suffix from app and package names; preserve `.docscan` compatibility
+  and existing user recovery paths.
+- [ ] Add an automatic macOS package and release asset, with an extracted-app
+  smoke test. Choose supported architectures and signing/notarization policy
+  before publishing it as a user-facing download.
+- [ ] Build and publish the full-release WASM web bundle as a release asset,
+  with a smoke test of the packaged files. Decide on hosting separately.
+- [ ] Add tagged-version releases for the Rust app, like the C# workflow. Gate
+  publication on the relevant tests and package checks; keep development and
+  versioned releases distinct.
+- [ ] Update the root README, development guide, download links, badges and CI
+  names to describe the promoted app. Retire the C# release workflow only after
+  the replacement release is verified; decide separately whether to retain its
+  source as a legacy reference.
 
 ## Progress log
 

@@ -30,6 +30,27 @@ fn lay_out(
     (tree, node)
 }
 
+fn send_input(
+    element: &mut Element<'_, Message>,
+    tree: &mut widget::Tree,
+    node: &layout::Node,
+    renderer: &Renderer,
+    messages: &mut Vec<Message>,
+    event: &Event,
+    cursor: mouse::Cursor,
+) {
+    element.as_widget_mut().update(
+        tree,
+        event,
+        Layout::new(node),
+        cursor,
+        renderer,
+        &mut iced::advanced::clipboard::Null,
+        &mut Shell::new(messages),
+        &node.bounds(),
+    );
+}
+
 fn tool_targets(layout: Layout<'_>) -> Vec<iced::Rectangle> {
     if layout.bounds().size() == iced::Size::new(40.0, 40.0) {
         vec![layout.bounds()]
@@ -359,6 +380,94 @@ fn touch_color_tap_uses_release_position_even_with_stale_mouse_cursor() {
         state.annotations().current_style().unwrap().color,
         AnnotationColor::Red,
     );
+}
+
+#[test]
+fn compatibility_mouse_press_does_not_steal_the_next_sidebar_tap() {
+    let renderer = renderer();
+    let mut state = annotated_page();
+    let size = iced::Size::new(appearance::TOOLS_PANEL_WIDTH, 700.0);
+    let mut element = view(&state);
+    let (mut tree, node) = lay_out(&mut element, &renderer, size);
+    let column = Layout::new(&node).children().next().unwrap();
+    let content = column.children().next().unwrap().children().next().unwrap();
+    let targets = tool_targets(content.children().nth(1).unwrap());
+    let first = targets[2].center();
+    let next = targets[4].center();
+    let finger = touch::Finger(1);
+    let mut messages = Vec::new();
+    for event in [
+        touch::Event::FingerPressed {
+            id: finger,
+            position: first,
+        },
+        touch::Event::FingerLifted {
+            id: finger,
+            position: first,
+        },
+    ] {
+        send_input(
+            &mut element,
+            &mut tree,
+            &node,
+            &renderer,
+            &mut messages,
+            &Event::Touch(event),
+            mouse::Cursor::Unavailable,
+        );
+    }
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::SetTool(Tool::Rectangle)]
+    ));
+    drop(element);
+    let _ = update(&mut state, messages.remove(0));
+
+    let mut element = view(&state);
+    tree.diff(element.as_widget());
+    let node = element.as_widget_mut().layout(
+        &mut tree,
+        &renderer,
+        &layout::Limits::new(size, size),
+    );
+    for (event, cursor) in [
+        (
+            Event::Touch(touch::Event::FingerPressed {
+                id: finger,
+                position: next,
+            }),
+            mouse::Cursor::Unavailable,
+        ),
+        (
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            mouse::Cursor::Available(first),
+        ),
+        (
+            Event::Touch(touch::Event::FingerLifted {
+                id: finger,
+                position: next,
+            }),
+            mouse::Cursor::Unavailable,
+        ),
+        (
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            mouse::Cursor::Available(first),
+        ),
+    ] {
+        send_input(
+            &mut element,
+            &mut tree,
+            &node,
+            &renderer,
+            &mut messages,
+            &event,
+            cursor,
+        );
+    }
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::SetTool(Tool::Line)]
+    ));
 }
 
 #[test]

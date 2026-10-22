@@ -1,9 +1,10 @@
 //! Use touch coordinates for child widgets that rely on the mouse cursor.
 
 use super::Message;
-use iced::advanced::widget::{Operation, Tree};
+use iced::advanced::widget::{Operation, Tree, tree};
 use iced::advanced::{Clipboard, Layout, Shell, Widget};
 use iced::advanced::{layout, overlay, renderer};
+use iced::time::{Duration, Instant};
 use iced::{Element, Event, Length, Rectangle, Size, Vector};
 use iced::{Renderer, Theme, mouse, touch};
 
@@ -15,7 +16,22 @@ struct TouchCursor<'a> {
     content: Element<'a, Message>,
 }
 
+#[derive(Default)]
+struct TouchState {
+    fingers: u8,
+    last_touch: Option<Instant>,
+    touch_mode: bool,
+}
+
 impl Widget<Message, Theme, Renderer> for TouchCursor<'_> {
+    fn tag(&self) -> tree::Tag {
+        tree::Tag::of::<TouchState>()
+    }
+
+    fn state(&self) -> tree::State {
+        tree::State::new(TouchState::default())
+    }
+
     fn children(&self) -> Vec<Tree> {
         vec![Tree::new(&self.content)]
     }
@@ -67,15 +83,46 @@ impl Widget<Message, Theme, Renderer> for TouchCursor<'_> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        // iced 0.14 buttons test the mouse cursor on touch release.
-        // See iced-rs/iced#3471; use this event's position if it is stale.
+        let state = tree.state.downcast_mut::<TouchState>();
+        // iced buttons test the mouse cursor on touch release. Windows can
+        // also send compatibility mouse events for that same contact. Keep
+        // those from pressing another button until the tap has ended.
         let cursor = match event {
-            Event::Touch(
-                touch::Event::FingerPressed { position, .. }
-                | touch::Event::FingerMoved { position, .. }
-                | touch::Event::FingerLifted { position, .. }
-                | touch::Event::FingerLost { position, .. },
-            ) => mouse::Cursor::Available(*position),
+            Event::Touch(touch_event) => {
+                state.touch_mode = true;
+                state.last_touch = Some(Instant::now());
+                let position = match touch_event {
+                    touch::Event::FingerPressed { position, .. } => {
+                        state.fingers = state.fingers.saturating_add(1);
+                        position
+                    }
+                    touch::Event::FingerMoved { position, .. } => position,
+                    touch::Event::FingerLifted { position, .. }
+                    | touch::Event::FingerLost { position, .. } => {
+                        state.fingers = state.fingers.saturating_sub(1);
+                        position
+                    }
+                };
+                mouse::Cursor::Available(*position)
+            }
+            Event::Mouse(_)
+                if state.touch_mode
+                    && (state.fingers > 0
+                        || state.last_touch.is_some_and(|at| {
+                            at.elapsed() < Duration::from_millis(250)
+                        })) =>
+            {
+                return;
+            }
+            Event::Mouse(_) => {
+                state.touch_mode = false;
+                cursor
+            }
+            Event::Window(iced::window::Event::RedrawRequested(_))
+                if state.touch_mode =>
+            {
+                mouse::Cursor::Unavailable
+            }
             _ => cursor,
         };
         self.content.as_widget_mut().update(

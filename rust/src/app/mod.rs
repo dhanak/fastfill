@@ -225,7 +225,14 @@ pub(crate) enum Message {
 }
 
 pub(crate) fn run() -> iced::Result {
+    let window = iced::window::Settings::default();
+    #[cfg(target_os = "windows")]
+    let window = iced::window::Settings {
+        icon: Some(window_icon()),
+        ..window
+    };
     iced::application(boot, update, view)
+        .window(window)
         .title(|state: &FastFill| {
             format!(
                 "FastFill — {}{}",
@@ -271,6 +278,26 @@ pub(crate) fn run() -> iced::Result {
             iced::Subscription::batch(subscriptions)
         })
         .run()
+}
+
+#[cfg(target_os = "windows")]
+fn window_icon() -> iced::window::Icon {
+    let pixels = image::load_from_memory_with_format(
+        include_bytes!("../../assets/AppIcon.png"),
+        image::ImageFormat::Png,
+    )
+    .expect("Bundled app icon must be a valid PNG")
+    .into_rgba8();
+    let (width, height) = pixels.dimensions();
+    iced::window::icon::from_rgba(pixels.into_raw(), width, height)
+        .expect("Bundled app icon must have valid dimensions")
+}
+
+#[cfg(all(test, target_os = "windows"))]
+#[test]
+fn bundled_windows_icon_decodes() {
+    let (_, size) = window_icon().into_raw();
+    assert_eq!((size.width, size.height), (150, 150));
 }
 
 fn normal_event(

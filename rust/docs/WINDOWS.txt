@@ -1,11 +1,13 @@
 FastFill development build - Windows x64
 
 Extract this ZIP anywhere. Run FastFill-Rust.exe from the extracted folder.
-No Rust toolchain, compiler, .NET, installer, certificate import, or separate
-Visual C++ runtime is required. Windows 10/11 x64 is the target platform.
+No Rust toolchain, compiler, .NET, installer, or separate Visual C++ runtime is
+required. Windows 10/11 x64 is the target platform.
 
-This experimental build is unsigned. Windows may show an unrecognized-app
-warning. Only run downloads you trust; do not disable Windows protection.
+The public rust-dev build is signed with the existing FastFill self-signed
+certificate. Pull-request and other-branch CI builds remain unsigned. Signing
+does not guarantee Smart App Control approval; Windows may still warn or block
+the app. Only run downloads you trust; do not disable Windows protection.
 The production C#/WinUI application and its file associations are unchanged.
 
 Open an image, PDF or .docscan using the app. Save a copy of valuable projects

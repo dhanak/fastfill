@@ -21,12 +21,12 @@ No installer, Rust toolchain, or .NET runtime is needed.
 | Windows 10/11 x64 | [Portable ZIP][windows]   | `FastFill-Rust\FastFill-Rust.exe` |
 | Linux x64         | [Portable archive][linux] | `FastFill-Rust/FastFill-Rust`     |
 
-Keep the extracted files together. The Windows build is unsigned, so Windows may
-show an unrecognized-app warning; run only downloads you trust. The Linux build
-needs a compatible glibc-based system, a graphical session, and an XDG desktop
-portal for file dialogs. See the bundled `README.txt` for platform diagnostics.
-Both archives and their source revision appear on the
-[development release page][downloads].
+Keep the extracted files together. The public Windows build uses the existing
+FastFill self-signed certificate; Windows may still warn or block it. Run only
+downloads you trust. The Linux build needs a compatible glibc-based system, a
+graphical session, and an XDG desktop portal for file dialogs. See the bundled
+`README.txt` for platform diagnostics. Both archives and their source revision
+appear on the [development release page][downloads].
 
 ## ⭐ Features
 
