@@ -136,6 +136,46 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # Independent until a Linux desktop has verified dialogs and file output.
+  linux-portable:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure output
+        run: >-
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/fastfill-rust-linux-target"
+          >> "$GITHUB_ENV"
+      - name: Install release toolchain
+        run: rustup toolchain install 1.99.0 --profile minimal
+      - name: Cache release dependencies
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ runner.temp }}/fastfill-rust-linux-target
+          key: >-
+            linux-${{ runner.os }}-${{ runner.arch }}-rust199-v1-${{
+            hashFiles('rust/Cargo.toml', 'rust/Cargo.lock') }}
+          restore-keys: |
+            linux-${{ runner.os }}-${{ runner.arch }}-rust199-v1-
+      - name: Build optimized Linux app
+        run: >-
+          cargo +1.99.0 build --locked --release --all-features
+          --bin fastfill-rust
+      - name: Package and smoke-test extracted app
+        run: bash ./tools/package-linux.sh
+      - name: Upload portable Linux archive
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ runner.temp }}/FastFill-Rust-linux-x64.tar.gz
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
   publish-rust-dev:
     if: >-
       github.event_name != 'pull_request' &&

@@ -27,9 +27,9 @@ replays the 224-frame camera regression, and compares the rendered page with
 `tests/goldens/annotated-page.png`. Preview outputs land in
 `artifacts/preview/`.
 
-`make clean` removes generated `bin/` and `obj/` directories below `src/`,
-plus disposable check, preview, and scan-analysis outputs below `artifacts/`.
-It preserves captures, test assets, documentation, `artifacts/signing/`, and
+`make clean` removes generated `bin/` and `obj/` directories below `src/`, plus
+disposable check, preview, and scan-analysis outputs below `artifacts/`. It
+preserves captures, test assets, documentation, `artifacts/signing/`, and
 `artifacts/.gitkeep`.
 
 The check covers document detection, perspective correction, filters,
@@ -55,12 +55,12 @@ make lab
 
 Open `http://localhost:5077` and choose a lab. Snap Lab tests text-line,
 checkbox, and cross-box placement. Frame Lab tests document framing,
-stabilization, and auto-capture timing. Repeating one camera frame is useful
-for watching consensus and countdown state advance without hardware.
+stabilization, and auto-capture timing. Repeating one camera frame is useful for
+watching consensus and countdown state advance without hardware.
 
-The cached checks image is rebuilt first. Press `Ctrl+C` once to stop and
-remove the lab container. PDFs must first be imported and saved as `.docscan`
-for Snap Lab because Linux has no native Windows PDF renderer.
+The cached checks image is rebuilt first. Press `Ctrl+C` once to stop and remove
+the lab container. PDFs must first be imported and saved as `.docscan` for Snap
+Lab because Linux has no native Windows PDF renderer.
 
 Calibrate detection against captured camera samples without changing the test
 suite:
@@ -79,17 +79,17 @@ When an intentional renderer change alters the preview:
 make update-goldens
 ```
 
-Linux cannot execute WinUI's Windows-only XAML compiler. GitHub Actions runs
-the same checks on Windows and compiles the complete WinUI application.
+Linux cannot execute WinUI's Windows-only XAML compiler. GitHub Actions runs the
+same checks on Windows and compiles the complete WinUI application.
 
-Known limitation: CI does not currently run the Linux-only pixel-exact
-rendering golden. Run `make check` locally before merging rendering changes or
-preparing a release.
+Known limitation: CI does not currently run the Linux-only pixel-exact rendering
+golden. Run `make check` locally before merging rendering changes or preparing a
+release.
 
 ## Windows development
 
-Requirements: Windows 10 or 11, Visual Studio with WinUI/C# workloads, and
-.NET 10.
+Requirements: Windows 10 or 11, Visual Studio with WinUI/C# workloads, and .NET
+10\.
 
 ```powershell
 dotnet restore FastFill.slnx
@@ -104,28 +104,30 @@ review, correction, annotation, project, and export paths as camera capture.
 ## CI and portable releases
 
 The `Windows` workflow checks and publishes FastFill as an unpackaged,
-self-contained x64 folder. Successful `master` builds replace the public
-`dev` prerelease and include `FastFill.cer` in the portable archive. Pull
-request builds create a private workflow artifact but do not publish a
-release. Pushing a version tag such as `v0.2.0` creates a permanent release
-with the same name and signed `FastFill-portable.zip` asset.
+self-contained x64 folder. Successful `master` builds replace the public `dev`
+prerelease and include `FastFill.cer` in the portable archive. Pull request
+builds create a private workflow artifact but do not publish a release. Pushing
+a version tag such as `v0.2.0` creates a permanent release with the same name
+and signed `FastFill-portable.zip` asset.
 
 The separate `Rust prototype` workflow also builds an optimized, unsigned
 Windows x64 test ZIP. Successful `master` checks update the public `rust-dev`
-prerelease without changing C# release assets or tags. Its test machines
-need no compiler or Rust dependencies; see the [prototype guide][rust-guide]
-for direct downloads, archive contents, startup checks and known limits.
-Windows/Linux tests, WASM checks and packaging gate Rust publication; the
-independent macOS compatibility check does not block the Windows download.
-
-[rust-guide]: ../rust/README.md
+prerelease without changing C# release assets or tags. Its test machines need no
+compiler or Rust dependencies; see the [prototype guide][rust-guide] for direct
+downloads, archive contents, startup checks and known limits. Windows/Linux
+tests, WASM checks and packaging gate Rust publication; the independent macOS
+compatibility check does not block the Windows download. An independent Linux
+job builds an x64 test archive and checks it after extraction without a
+graphical session. It is an Actions artifact, not a release asset; desktop file
+dialogs, graphics, help and output still need a physical Linux check. Its first
+release build does not block `rust-dev`.
 
 ## Minimal SP6 release gate
 
 Use the Surface only before a release candidate. One short pass:
 
-1. Test both cameras, permission denial, rotation, suspend/resume, and
-   automatic capture under bright, dim, and glare-heavy light.
+1. Test both cameras, permission denial, rotation, suspend/resume, and automatic
+   capture under bright, dim, and glare-heavy light.
 2. Drag crop handles and every annotation tool using touch and Surface Pen.
    Verify controls at 150% and 200% display scaling.
 3. Import a multi-page PDF, export it, reopen a `.docscan`, share to Mail, and
@@ -134,3 +136,5 @@ Use the Surface only before a release candidate. One short pass:
 
 Keep calibration thresholds in `AutoCaptureGate` and capture throttling in
 `CameraFrameSource`; both require final real-device calibration.
+
+[rust-guide]: ../rust/README.md

@@ -1,0 +1,12 @@
+[tools.mdformat]
+version = "latest"
+with = [
+  "mdformat-deflist",
+  "mdformat-footnote",
+  "mdformat-frontmatter",
+  "mdformat-gfm",
+  "mdformat-toc",
+]
+
+[tool_alias]
+mdformat = "pypi:mdformat"

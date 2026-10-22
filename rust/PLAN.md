@@ -12,15 +12,15 @@
   Start with one package containing a library and an optional GUI binary.
 - Use explicit interaction states and separate pending edits from committed
   document state. Preserve Escape, undo, and save semantics.
-- Keep schema-v1 `.docscan` readable. Schema-v2 output is allowed when it
-  adds meaningful capabilities or precision; the old C# app need not read it.
-  Until conversion and atomic-save tests pass, do not overwrite projects.
+- Keep schema-v1 `.docscan` readable. Schema-v2 output is allowed when it adds
+  meaningful capabilities or precision; the old C# app need not read it. Until
+  conversion and atomic-save tests pass, do not overwrite projects.
 - Reuse existing images, forms, camera sequences, and behavioral checks as
   acceptance fixtures. Do not blindly port the old controller or its bugs.
 - Treat C# as a behavior reference, not a layout specification. Aim for a
   familiar but more intuitive UI; redesign awkward workflows and grouping.
-- Add dependencies only when their checkpoint needs them. Defer OpenCV,
-  camera backends, PDF import/output, and platform integration decisions.
+- Add dependencies only when their checkpoint needs them. Defer OpenCV, camera
+  backends, PDF import/output, and platform integration decisions.
 
 ## Iteration protocol
 
@@ -32,10 +32,10 @@
 6. Hand off a reproducible manual check and stop at each checkpoint. Do not
    silently proceed through the whole rewrite.
 
-Use Rust's built-in test harness; no extra test framework initially. Unit
-tests cover deterministic geometry and state changes. Later add file-format
-round trips, malformed-input cases, recorded camera replays, and renderer
-checks. Automated checks cannot replace touch/DPI/camera calibration.
+Use Rust's built-in test harness; no extra test framework initially. Unit tests
+cover deterministic geometry and state changes. Later add file-format round
+trips, malformed-input cases, recorded camera replays, and renderer checks.
+Automated checks cannot replace touch/DPI/camera calibration.
 
 ## Checkpoints
 
@@ -50,11 +50,11 @@ checks. Automated checks cannot replace touch/DPI/camera calibration.
 - [x] Add independent Linux/Windows CI and macOS/WASM compile checks.
 - [x] Run automated checks and document exact commands/results.
 - [x] User checkpoint: launch, resize, and inspect page proportions and text.
-      High-DPI behavior remains untested by user request; assume iced's
-      logical-pixel scaling is correct until suitable hardware is available.
+  High-DPI behavior remains untested by user request; assume iced's
+  logical-pixel scaling is correct until suitable hardware is available.
 
-Completed after user confirmed launch, resize, proportions, and normal-DPI
-text. No importing, saving, camera, or annotations were included.
+Completed after user confirmed launch, resize, proportions, and normal-DPI text.
+No importing, saving, camera, or annotations were included.
 
 ### 2. Image page and navigation — accepted
 
@@ -62,27 +62,26 @@ text. No importing, saving, camera, or annotations were included.
 
 - [x] Import one bounded, validated PNG/JPEG through a cross-platform picker.
 - [x] Display the image with Fit, 1:1, zoom buttons, pointer-anchored wheel
-      zoom, and left/right-button panning in the navigation tool.
+  zoom, and left/right-button panning in the navigation tool.
 - [x] Test transforms, zoom limits, cursor anchoring, reset, and 1:1 scale.
-- [x] User checkpoint: real form, mouse navigation, resizing, and errors.
-      Import errors worked but were easy to overlook in the normal status line;
-      make errors visually distinct in 2B.
+- [x] User checkpoint: real form, mouse navigation, resizing, and errors. Import
+  errors worked but were easy to overlook in the normal status line; make errors
+  visually distinct in 2B.
 
 #### 2B. Touch navigation and input isolation — accepted
 
 - [x] Add one-finger pan while the navigation tool is active.
 - [x] Add two-finger pan and pinch zoom with stable gesture transitions.
 - [x] Prove navigation input is ignored while a drawing tool owns input.
-- [x] User checkpoint: gestures through the Android WASM harness. Native
-      Windows touch remains deferred until better touchscreen hardware is
-      available.
+- [x] User checkpoint: gestures through the Android WASM harness. Native Windows
+  touch remains deferred until better touchscreen hardware is available.
 
 ### 3. Editable annotations and history — in progress
 
 - Split into small slices: rectangle; select/move/resize; undo/redo; other
   shapes and endpoint editing; then multi-selection and layers.
-- Keep strokes constant when objects resize. Support partial off-page
-  placement without making wholly inaccessible objects uneditable.
+- Keep strokes constant when objects resize. Support partial off-page placement
+  without making wholly inaccessible objects uneditable.
 - Test state transitions, modifiers, hit regions, rotation, and history.
 - User checkpoint after each slice, not after all annotation tools.
 
@@ -106,7 +105,7 @@ text. No importing, saving, camera, or annotations were included.
 - [x] Allow temporary editing of the selected rectangle in Rectangle mode.
 - [x] Keep partial off-page placement; prevent wholly inaccessible edits.
 - [x] Commit edits on release; cancel on Escape, lost input, or tool/view
-      change.
+  change.
 - [x] Delete the selection with a button or Delete key.
 - [x] User checkpoint: selection, drag edits, modifiers, and deletion.
 
@@ -118,7 +117,7 @@ text. No importing, saving, camera, or annotations were included.
 - [x] Clear redo when a new committed change follows undo.
 - [x] Add buttons, Ctrl+Z, Ctrl+Y, and Ctrl+Shift+Z.
 - [x] Preserve history when page replacement is canceled; clear it after a
-      successful replacement.
+  successful replacement.
 - [x] User checkpoint: mixed edit sequence, cancellation, and shortcuts.
 
 #### 3D. Oval annotations — accepted
@@ -199,16 +198,16 @@ text. No importing, saving, camera, or annotations were included.
 #### 3L. Architecture review before text — accepted
 
 - [x] Audit recent commits for unavoidable cross-layer work versus accidental
-      file coupling.
+  file coupling.
 - [x] Separate annotation model, tool catalog, editor operations, and styles.
 - [x] Separate application state, update/controller logic, and iced views.
 - [x] Separate canvas input, annotation rendering, clipping, and selection UI.
 - [x] Drive toolbar order, labels, cursor mode, and style defaults from one
-      authoritative tool catalog.
+  authoritative tool catalog.
 - [x] Keep the platform-independent annotation editor free of iced/native
-      dependencies.
+  dependencies.
 - [x] Fix the macOS shortcut regression test to use iced's platform command
-      modifier instead of hard-coded Ctrl.
+  modifier instead of hard-coded Ctrl.
 - [x] User checkpoint: smoke-test existing tools before phase 4 starts.
 
 ### 4. Text and toolkit decision gate — accepted
@@ -242,10 +241,10 @@ text. No importing, saving, camera, or annotations were included.
 #### 4D. Shared rendering and toolkit decision — accepted
 
 - [x] Extract backend-neutral paths and text layout in page coordinates; make
-      the iced preview consume it without changing output.
+  the iced preview consume it without changing output.
 - [x] User checkpoint: existing annotation preview remains visually unchanged.
 - [x] Feed the same layout into a narrow PDF-output probe. Flag text or image
-      mismatches rather than hiding them.
+  mismatches rather than hiding them.
 - [x] Decide whether iced remains suitable before proceeding.
 
 ### 5. Projects, pages, imports, and PDF — accepted
@@ -253,28 +252,28 @@ text. No importing, saving, camera, or annotations were included.
 - Incremental slices: safe `.docscan` loading; compatible atomic saving;
   multiple pages/reorder; PDF import; matching PDF export; recovery.
 - Keep the current 20-page limit and trust-boundary protections.
-- Test C#/Rust cross-reading, archive limits, hostile input, interrupted
-  saves, dirty revisions, cancellation, and exported page geometry.
+- Test C#/Rust cross-reading, archive limits, hostile input, interrupted saves,
+  dirty revisions, cancellation, and exported page geometry.
 - User checkpoint with copies of existing projects, never originals first.
 
 #### 5A. Safe schema-v1 project loading — accepted
 
 - [x] Mirror the C# manifest without converting or dropping edit data.
 - [x] Bound ZIP entries, manifest size, expanded size, images, pages,
-      annotations, ink points, and text length before use.
-- [x] Reject unsafe paths, duplicate entries/IDs, unknown JSON fields,
-      malformed geometry, missing assets, and image metadata mismatches.
-- [x] Load a synthetic C#-compatible archive and the available review
-      projects through the same public API.
+  annotations, ink points, and text length before use.
+- [x] Reject unsafe paths, duplicate entries/IDs, unknown JSON fields, malformed
+  geometry, missing assets, and image metadata mismatches.
+- [x] Load a synthetic C#-compatible archive and the available review projects
+  through the same public API.
 - [x] Keep UI opening and Rust annotation conversion for a later slice.
 
 #### 5B. Compatible atomic project saving — accepted
 
-- [x] Serialize schema-v1 manifests and referenced page assets without
-      dropping edit data.
+- [x] Serialize schema-v1 manifests and referenced page assets without dropping
+  edit data.
 - [x] Validate generated archives before replacing an existing project.
 - [x] Commit native files atomically in the destination directory on Windows,
-      Linux, and macOS; preserve the old file on every pre-commit failure.
+  Linux, and macOS; preserve the old file on every pre-commit failure.
 - [x] Keep the shared archive writer buildable for WebAssembly.
 - [x] Round-trip synthetic and real C# projects through load-save-load tests.
 
@@ -282,17 +281,17 @@ text. No importing, saving, camera, or annotations were included.
 
 - [x] Own image, annotations, selection, and annotation undo/redo per page.
 - [x] Add images after the active page, with a 20-page limit and safe picker
-      cancellation/error handling.
-- [x] Switch pages from a thumbnail rail or native page selector; accept
-      pending text, cancel unfinished shape edits, and fit the selected page.
+  cancellation/error handling.
+- [x] Switch pages from a thumbnail rail or native page selector; accept pending
+  text, cancel unfinished shape edits, and fit the selected page.
 - [x] Keep tool and default style settings across page switches.
-- [x] Reorder with buttons or whole-thumbnail mouse/touch dragging; preview
-      the order, accept end-of-list drops, and keep scrolling separate.
+- [x] Reorder with buttons or whole-thumbnail mouse/touch dragging; preview the
+  order, accept end-of-list drops, and keep scrolling separate.
 - [x] Confirm page deletion and annotated image replacement; keep a blank
-      editable page after deleting the last page.
+  editable page after deleting the last page.
 - [x] Pass native/core tests, strict lint, and WebAssembly checks.
 - [x] User checkpoint: imports, independent history, switches, reorder,
-      replacement/deletion, page limit, and touch where available.
+  replacement/deletion, page limit, and touch where available.
 
 Project open/save UI and editable conversion are accepted. Continue with PDF
 import, matching PDF export, then recovery as separate checkpoints.
@@ -302,9 +301,9 @@ import, matching PDF export, then recovery as separate checkpoints.
 - [x] Give annotations stable IDs through drafts, edits, layers, and history.
 - [x] Track committed content revisions without counting selection or defaults.
 - [x] Convert full-frame, uncorrected pages to the C# 612-point coordinate
-      system, preserving layer order, styles, alpha, IDs, and rigid rotations.
-- [x] Preserve untouched schema metadata and reject unsupported crops,
-      filters, affine distortion, and text layout explicitly.
+  system, preserving layer order, styles, alpha, IDs, and rigid rotations.
+- [x] Preserve untouched schema metadata and reject unsupported crops, filters,
+  affine distortion, and text layout explicitly.
 - [x] Round-trip all current tools through editor-schema-editor and ZIP tests.
 - [x] Keep rendering and WebAssembly checks green; GUI behavior unchanged.
 - [x] Host checkpoint: all-feature tests passed; no new manual UI behavior.
@@ -325,16 +324,14 @@ introduce v2 only when a concrete requirement justifies it.
 - [x] Add New, Open, Save, Save as, and standard command-key shortcuts.
 - [x] Load editable v1 pages transactionally; keep current data on failure.
 - [x] Snapshot saves and use the atomic writer; cancel/failure stays dirty.
-- [x] Track page identity/order and annotation revisions against the last
-      save.
+- [x] Track page identity/order and annotation revisions against the last save.
 - [x] Guard new/open/window close with Save, Discard, and Cancel.
 - [x] Accept pending text, cancel shape drafts, and block editing during I/O.
 - [x] Use point units consistently, retaining image-pixel 1:1 navigation.
 - [x] Keep WASM open/download-save buildable; document browser limitations.
 - [x] Test file/geometry paths, archive round trips, and existing rendering.
 - [x] User checkpoint: native dialogs, dirty guard choices, reopen fidelity,
-      image 1:1, and browser upload/download where available. See checklist
-      below.
+  image 1:1, and browser upload/download where available. See checklist below.
 
 #### 5E. Transactional multi-page PDF import — accepted
 
@@ -347,26 +344,26 @@ introduce v2 only when a concrete requirement justifies it.
 - [x] Preserve annotations on existing pages and dirty the imported document.
 - [x] Verify save/reopen, native/WASM builds, errors, limits, and cancellation.
 - [x] User checkpoint: PDF appearance, insertion, limits, cancel, save/reopen.
-      Stop before PDF export or recovery.
+  Stop before PDF export or recovery.
 
 Performance/progress, mixed text/shape selection, and bulk font controls are
-also accepted. See the follow-up logs below. Matching PDF export is next;
-keep recovery separate.
+also accepted. See the follow-up logs below. Matching PDF export is next; keep
+recovery separate.
 
 #### 5F. Matching PDF export — accepted
 
-- [x] Flatten committed pages at 300 DPI using the editor's renderer,
-      preserving order, images, formatted text, layers, alpha, and clipping.
+- [x] Flatten committed pages at 300 DPI using the editor's renderer, preserving
+  order, images, formatted text, layers, alpha, and clipping.
 - [x] Exclude selection handles, drafts, navigation, and other UI overlays.
 - [x] Export all pages through a PDF save dialog, with native worker progress
-      and cancellation; replace native destinations atomically.
+  and cancellation; replace native destinations atomically.
 - [x] Accept pending text without marking the project saved or changing its
-      `.docscan` path, page selection, history, or navigation.
+  `.docscan` path, page selection, history, or navigation.
 - [x] Bound page dimensions and total raster work before allocating pixels.
 - [x] Test PDF round trips, rendering fidelity, cancellation, failures, and
-      native/core/WASM builds. Document flattened/non-searchable output.
+  native/core/WASM builds. Document flattened/non-searchable output.
 - [x] User checkpoint: export, view/print, page order, appearance, overwrite,
-      cancel, dirty state, and browser download where available.
+  cancel, dirty state, and browser download where available.
 
 Stop at the export checkpoint. Recovery remains a separate slice.
 
@@ -374,35 +371,34 @@ Stop at the export checkpoint. Recovery remains a separate slice.
 
 - [x] Test native, atomic recovery storage and concurrent-instance isolation.
 - [x] Snapshot committed dirty work every 10 seconds in a background worker.
-      Skip pending text/drawing edits; never accept them automatically.
-- [x] Offer startup Restore/Discard/Not now; restore into an unsaved copy,
-      never the original project's path. Keep snapshots until saved or
-      discarded.
+  Skip pending text/drawing edits; never accept them automatically.
+- [x] Offer startup Restore/Discard/Not now; restore into an unsaved copy, never
+  the original project's path. Keep snapshots until saved or discarded.
 - [x] Serialize writes and cleanup so late completion cannot resurrect old
-      recovery after Save, New, Open, or normal exit.
+  recovery after Save, New, Open, or normal exit.
 - [x] Document per-user paths, failure reporting, and browser limitations.
 - [x] Run automated checks; stop for native crash/relaunch manual testing.
 - [x] User checkpoint: crash recovery, deferred restore, Save/Discard cleanup,
-      and concurrent instances. All requested checks passed.
+  and concurrent instances. All requested checks passed.
 
 Native locations: `%LOCALAPPDATA%/FastFill/Recovery` on Windows,
 `$XDG_STATE_HOME/fastfill/recovery` (fallback
 `$HOME/.local/state/fastfill/recovery`) on Linux, and
 `$HOME/Library/Application Support/FastFill/Recovery` on macOS.
-`FASTFILL_RECOVERY_DIR` overrides the directory for isolated testing.
-Browser recovery is deferred; browser Save still downloads a project.
-User suggested browser-local recovery: record IndexedDB as a follow-up for
-binary project/image data, rather than synchronous, string-only localStorage.
-Handle quota/eviction, private browsing, and multiple live tabs explicitly.
-See [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API).
+`FASTFILL_RECOVERY_DIR` overrides the directory for isolated testing. Browser
+recovery is deferred; browser Save still downloads a project. User suggested
+browser-local recovery: record IndexedDB as a follow-up for binary project/image
+data, rather than synchronous, string-only localStorage. Handle quota/eviction,
+private browsing, and multiple live tabs explicitly. See
+[IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API).
 
 ### 6. Correction, snapping, and camera — accepted
 
 - Port image correction and form snapping, retaining calibrated fixtures.
 - Port document detection and temporal capture gating with all 224 frames.
 - Add native camera adapters only after recorded-image tests pass.
-- Keep blocking native work outside UI updates. Browser implementations may
-  use different adapters; avoid unconditional native-only dependencies.
+- Keep blocking native work outside UI updates. Browser implementations may use
+  different adapters; avoid unconditional native-only dependencies.
 - User checkpoints: lab parity first, then laptop camera, then SP6 cameras,
   permissions, orientation, countdown, cancellation, and suspend/resume.
 
@@ -412,45 +408,45 @@ full capture/export and touch/DPI calibration remain open.
 
 #### 6A. Correction geometry and offline preview — accepted
 
-- [x] Test perspective correction and quarter-turn rotation independently of
-      the GUI. Reuse the current crop schema and image dependency.
-- [x] Validate source/crop/output limits before allocating output pixels;
-      reject crossed, nonfinite, or numerically unusable quadrangles.
+- [x] Test perspective correction and quarter-turn rotation independently of the
+  GUI. Reuse the current crop schema and image dependency.
+- [x] Validate source/crop/output limits before allocating output pixels; reject
+  crossed, nonfinite, or numerically unusable quadrangles.
 - [x] Preserve full-frame dimensions and pixels exactly. Treat normalized
-      corners as pixel centers; include both endpoints in output dimensions.
+  corners as pixel centers; include both endpoints in output dimensions.
 - [x] Add a small native PNG preview command using optional JSON correction
-      settings. Bound reads and refuse existing output files.
+  settings. Bound reads and refuse existing output files.
 - [x] Test synthetic geometry, real sample forms, alpha interpolation, and
-      command parsing. Keep native/core/WASM builds green.
+  command parsing. Keep native/core/WASM builds green.
 - [x] User checkpoint: inspect generated crops/rotation. Main application
-      behavior and corrected-project editing remain unchanged in this slice.
+  behavior and corrected-project editing remain unchanged in this slice.
 
 #### 6B. Portable image filters — accepted
 
 - [x] Test grayscale, contrast, enhanced color, and adaptive B&W first.
 - [x] Reuse schema-v1 filter settings and validate contrast before allocation.
-      Apply filters after perspective correction/rotation, without modifying
-      source pixels, dimensions, alpha, or explicit project files.
-- [x] Retain gray-world balance, Lab CLAHE (8x8 tiles, clip 2), and Gaussian
-      B&W calibration (31-pixel window, sigma 5, offset 12). Avoid blanket
-      median blur that erases fine rules/dots; test that intentional change.
+  Apply filters after perspective correction/rotation, without modifying source
+  pixels, dimensions, alpha, or explicit project files.
+- [x] Retain gray-world balance, Lab CLAHE (8x8 tiles, clip 2), and Gaussian B&W
+  calibration (31-pixel window, sigma 5, offset 12). Avoid blanket median blur
+  that erases fine rules/dots; test that intentional change.
 - [x] Reuse installed image primitives where semantics match. Add no native
-      OpenCV dependency; keep core/native/WASM checks green.
+  OpenCV dependency; keep core/native/WASM checks green.
 - [x] Extend the existing preview command and document numeric filter modes.
 - [x] User checkpoint: accept generated form/camera filter comparisons.
 - [x] Add brightness -100..100, default 0, after the selected color mode.
-      Combine with contrast in one clamped lookup; test limits, ordering,
-      alpha/source preservation, JSON defaults, and invalid-input safety.
-- [x] User checkpoint: accept the added brightness comparisons.
-      Continue separately with page editing and corrected-project I/O in 6C.
+  Combine with contrast in one clamped lookup; test limits, ordering,
+  alpha/source preservation, JSON defaults, and invalid-input safety.
+- [x] User checkpoint: accept the added brightness comparisons. Continue
+  separately with page editing and corrected-project I/O in 6C.
 
 Follow-up slices, each with its own checkpoint:
 
-- **6C — Page editor:** original-image corner adjustment, full frame,
-  rotation, live filtered preview, Accept/Cancel, and corrected-project I/O.
-  Persist brightness in schema-v2 projects while retaining schema-v1 loading.
-  Specify annotation behavior and keep displaced objects accessible, with a
-  warning when moved. Apply changes transactionally; keep originals intact.
+- **6C — Page editor:** original-image corner adjustment, full frame, rotation,
+  live filtered preview, Accept/Cancel, and corrected-project I/O. Persist
+  brightness in schema-v2 projects while retaining schema-v1 loading. Specify
+  annotation behavior and keep displaced objects accessible, with a warning when
+  moved. Apply changes transactionally; keep originals intact.
 - **6D — Form snapping:** port line/box detection against existing form
   fixtures, then connect global smart-snap placement and Ctrl corner snapping.
 - **6E — Document detection:** port still-image framing against calibrated
@@ -464,216 +460,216 @@ Follow-up slices, each with its own checkpoint:
 ##### 6C1. Corrected-project compatibility — accepted
 
 - [x] Test loading/editing crop, rotation, and filter metadata against the
-      corrected image geometry, without moving annotations during loading.
+  corrected image geometry, without moving annotations during loading.
 - [x] Add schema-v2 brightness persistence; continue loading schema-v1 and
-      preserve v1 output unless a new feature requires v2.
-- [x] Stage corrected display pixels outside UI updates, retain original
-      encoded assets for Save/recovery, and reuse decoded input pixels.
+  preserve v1 output unless a new feature requires v2.
+- [x] Stage corrected display pixels outside UI updates, retain original encoded
+  assets for Save/recovery, and reuse decoded input pixels.
 - [x] Test shared assets with different corrections, round trips, failures,
-      display/PDF geometry, and source preservation.
+  display/PDF geometry, and source preservation.
 - [x] User checkpoint: open corrected fixtures, edit annotations, Save as,
-      reopen, and export. No interactive page-correction controls yet.
+  reopen, and export. No interactive page-correction controls yet.
 
 ##### 6C2. Interactive page editor — accepted
 
 - [x] Original-image mouse/touch corner dragging, full frame, quarter-turn
-      rotation, color mode, brightness, and contrast with corrected preview.
-- [x] Transactional Accept/Cancel and stale-preview protection; explicitly
-      test cancellation and undo. Pending edits do not change page identity.
-- [x] Include accepted corrections in dirty tracking, undo/redo, Save, PDF,
-      and recovery snapshots. Retain original encoded source assets.
+  rotation, color mode, brightness, and contrast with corrected preview.
+- [x] Transactional Accept/Cancel and stale-preview protection; explicitly test
+  cancellation and undo. Pending edits do not change page identity.
+- [x] Include accepted corrections in dirty tracking, undo/redo, Save, PDF, and
+  recovery snapshots. Retain original encoded source assets.
 - [x] Follow image-space annotation centers, not fixed page-point positions.
-      Apply independent X/Y local magnification as clarified by the user.
-      Preserve stroke width and object rotation; do not warp/skew objects.
-      Text follows vertical font scaling with natural glyph proportions.
-      Reject unsupported resulting font sizes rather than silently clamp.
-- [x] After mapping, keep partly visible objects in place. Translate only
-      wholly displaced objects back into reach and warn on acceptance.
-- [x] Coalesce preview work to one worker plus the latest settings. Reject
-      stale completions; Accept requires the current settings' preview.
+  Apply independent X/Y local magnification as clarified by the user. Preserve
+  stroke width and object rotation; do not warp/skew objects. Text follows
+  vertical font scaling with natural glyph proportions. Reject unsupported
+  resulting font sizes rather than silently clamp.
+- [x] After mapping, keep partly visible objects in place. Translate only wholly
+  displaced objects back into reach and warn on acceptance.
+- [x] Coalesce preview work to one worker plus the latest settings. Reject stale
+  completions; Accept requires the current settings' preview.
 - [x] User confirms page editing, image-space annotation anchors, undo/redo,
-      export, and displaced-annotation warnings. Physical touch untested.
-- [x] User accepts compact scaled-font labels and near-instant debug
-      corrections on 2026-10-16. Proceed separately to form snapping in 6D.
+  export, and displaced-annotation warnings. Physical touch untested.
+- [x] User accepts compact scaled-font labels and near-instant debug corrections
+  on 2026-10-16. Proceed separately to form snapping in 6D.
 
-The old C# full-frame processor loses one pixel in each dimension. Preserve
-the Rust viewer's exact full-frame dimensions instead; document this intended
+The old C# full-frame processor loses one pixel in each dimension. Preserve the
+Rust viewer's exact full-frame dimensions instead; document this intended
 difference rather than porting the off-by-one into the new pipeline.
 
 ##### 6D1. Portable form-feature detection — accepted
 
-- [x] Port line/checkbox analysis and nearest-feature queries independently
-      of GUI state, zoom, or annotation coordinates. Retain the calibrated
-      1600-pixel analysis edge, line/mark/gap thresholds, and short-axis
-      distance metric. Avoid a native OpenCV dependency.
+- [x] Port line/checkbox analysis and nearest-feature queries independently of
+  GUI state, zoom, or annotation coordinates. Retain the calibrated 1600-pixel
+  analysis edge, line/mark/gap thresholds, and short-axis distance metric. Avoid
+  a native OpenCV dependency.
 - [x] Cover solid/dashed/dotted lines, adjacent labels, separate same-row
-      fields, small boxes inside bordered forms, transparency, bad queries,
-      and the existing sample-form/Hungarian Dátum fixtures.
-- [x] Provide a bounded native diagnostic producing candidate overlays and
-      JSON; compare against the existing Snap Lab before placement wiring.
+  fields, small boxes inside bordered forms, transparency, bad queries, and the
+  existing sample-form/Hungarian Dátum fixtures.
+- [x] Provide a bounded native diagnostic producing candidate overlays and JSON;
+  compare against the existing Snap Lab before placement wiring.
 - [x] User confirms legacy project opening and baseline line/box detection
-      matches the C# implementation. Retain valid table/box top borders.
-- [x] Add table-cell candidates at vertical dividers without removing full
-      row rules. Cover stacked cells, merged rows, and stray text stems.
+  matches the C# implementation. Retain valid table/box top borders.
+- [x] Add table-cell candidates at vertical dividers without removing full row
+  rules. Cover stacked cells, merged rows, and stray text stems.
 - [x] User confirms crowded-area click selection improves with drag slop.
 - [x] User approves click-vs-drag rules and Ctrl-forced marquee gestures.
 - [x] User confirms geometry-aware marquees and new gesture rules work.
-- [x] User accepts group move cursors and all 6D1 follow-ups. Mark this
-      slice complete and proceed to 6D2 on 2026-10-16; no commit requested.
+- [x] User accepts group move cursors and all 6D1 follow-ups. Mark this slice
+  complete and proceed to 6D2 on 2026-10-16; no commit requested.
 
 ##### 6D2. Smart-snap annotation placement — accepted
 
-- [x] Keep a session-global, default-off Smart snap toggle for Text, Check,
-      and Cross; retain it across tools/pages/projects, outside document data.
-- [x] Cache calibrated features by corrected-display identity. Run one
-      native worker at a time, coalesce to the current page, reject stale
-      project/image completions, and bound the cache to live page images.
+- [x] Keep a session-global, default-off Smart snap toggle for Text, Check, and
+  Cross; retain it across tools/pages/projects, outside document data.
+- [x] Cache calibrated features by corrected-display identity. Run one native
+  worker at a time, coalesce to the current page, reject stale project/image
+  completions, and bound the cache to live page images.
 - [x] Snap clicked/tapped marks to a centered 78% inset square in detected
-      boxes. Keep manual drag sizing and edits of existing objects intact.
-- [x] Start new text at a nearby rule's left end, bottom-anchored above it.
-      Keep natural widths, explicit newlines, and existing-text editing.
-- [x] Show pending/failed analysis; use ordinary placement until ready,
-      without asynchronous changes to annotations already created.
+  boxes. Keep manual drag sizing and edits of existing objects intact.
+- [x] Start new text at a nearby rule's left end, bottom-anchored above it. Keep
+  natural widths, explicit newlines, and existing-text editing.
+- [x] Show pending/failed analysis; use ordinary placement until ready, without
+  asynchronous changes to annotations already created.
 - [x] Test disabled/fallback snap, zoom independence, tools/pages, canceled
-      gestures/stale workers, corrections/undo, style preservation, one-step
-      history, save/reload, and native/core/WASM builds.
+  gestures/stale workers, corrections/undo, style preservation, one-step
+  history, save/reload, and native/core/WASM builds.
 - [x] User accepts smart-snap placement on 2026-10-16. Address the separate
-      caret, small-object controls, and Escape observations before 6D3.
+  caret, small-object controls, and Escape observations before 6D3.
 
 ##### 6D3. Ctrl-assisted crop corners — accepted
 
-- [x] Add portable grayscale corner features with the C# calibration:
-      1600-pixel analysis edge, up to 300 features, quality 0.02, minimum
-      spacing 8 analysis pixels, and a 5-pixel structure-tensor window.
-- [x] Analyze original pixels once in the existing native preview worker.
-      Reuse results across crop, filter, and rotation changes; keep manual
-      editing available if analysis is unavailable. No global snap toggle.
+- [x] Add portable grayscale corner features with the C# calibration: 1600-pixel
+  analysis edge, up to 300 features, quality 0.02, minimum spacing 8 analysis
+  pixels, and a 5-pixel structure-tensor window.
+- [x] Analyze original pixels once in the existing native preview worker. Reuse
+  results across crop, filter, and rotation changes; keep manual editing
+  available if analysis is unavailable. No global snap toggle.
 - [x] Snap only while Ctrl is held during a corner drag. Restore raw pointer
-      placement immediately when Ctrl is released, without moving the mouse.
-      Retain the calibrated 52-screen-pixel radius, clamped to 0.015–0.09
-      of the displayed image's shorter side. Reject invalid snapped quads.
+  placement immediately when Ctrl is released, without moving the mouse. Retain
+  the calibrated 52-screen-pixel radius, clamped to 0.015–0.09 of the displayed
+  image's shorter side. Reject invalid snapped quads.
 - [x] Test original/preview coordinates, letterboxing, modifier changes,
-      convexity, cancellation, pointer ownership, lost touch, and stale jobs.
-      Cover bounded analysis, real forms, transparency, and native/core/WASM.
-- [x] User confirms Ctrl snapping, free dragging, and page-edit behavior
-      on 2026-10-16. Continue with still-image document detection in 6E.
+  convexity, cancellation, pointer ownership, lost touch, and stale jobs. Cover
+  bounded analysis, real forms, transparency, and native/core/WASM.
+- [x] User confirms Ctrl snapping, free dragging, and page-edit behavior on
+  2026-10-16. Continue with still-image document detection in 6E.
 
 ##### 6E1. Offline document detector and diagnostics — accepted
 
 - [x] Port bounded still-image analysis and related outline/line candidates
-      before GUI wiring. Keep the 1280-pixel edge, two Canny threshold pairs,
-      paper-mask thresholds/morphology, polygon simplification, geometry,
-      seeded progressive Hough, paper/Lab boundaries, continuing-side checks,
-      and the C# 0.72 acceptance threshold. Add no native dependency.
+  before GUI wiring. Keep the 1280-pixel edge, two Canny threshold pairs,
+  paper-mask thresholds/morphology, polygon simplification, geometry, seeded
+  progressive Hough, paper/Lab boundaries, continuing-side checks, and the C#
+  0.72 acceptance threshold. Add no native dependency.
 - [x] Add a native probe with normalized JSON and candidate/accepted overlays;
-      preserve source files and reject invalid/oversized inputs and outputs.
+  preserve source files and reject invalid/oversized inputs and outputs.
 - [x] Cover synthetic perspective documents, distracting background lines,
-      printed forms without outer boundaries, transparency, scale, and a
-      representative subset of the committed laptop-camera recording.
-- [x] Record gaps against the full C# detector rather than weaken tolerances
-      or present this connected-outline checkpoint as complete lab parity.
+  printed forms without outer boundaries, transparency, scale, and a
+  representative subset of the committed laptop-camera recording.
+- [x] Record gaps against the full C# detector rather than weaken tolerances or
+  present this connected-outline checkpoint as complete lab parity.
 - [x] User accepts the gallery on 2026-10-16, including minor errors and known
-      misses against misleading high-contrast backgrounds. Retain these as
-      documented limitations rather than block GUI integration on parity.
+  misses against misleading high-contrast backgrounds. Retain these as
+  documented limitations rather than block GUI integration on parity.
 
 ##### 6E2. Auto frame in Edit page — accepted
 
 - [x] Record user acceptance of current detector limits. Defer further
-      contour/pixel parity work; do not change accepted thresholds/fixtures.
+  contour/pixel parity work; do not change accepted thresholds/fixtures.
 - [x] Add explicit Auto frame alongside Full frame. Analyze original pixels
-      lazily in the existing native worker, caching the result per session.
-      Opening Edit page must not detect or alter existing crops.
-- [x] Use the C# manual-review cutoff 0.45 for rejected candidates; label
-      weaker suggestions. No usable result/failure must preserve the crop
-      and manual editing. Keep tone/rotation settings and original bytes.
+  lazily in the existing native worker, caching the result per session. Opening
+  Edit page must not detect or alter existing crops.
+- [x] Use the C# manual-review cutoff 0.45 for rejected candidates; label weaker
+  suggestions. No usable result/failure must preserve the crop and manual
+  editing. Keep tone/rotation settings and original bytes.
 - [x] Reject stale sessions/results and let intervening manual edits win,
-      including Full frame when already full. Block stale Accept during
-      framing, keep Cancel/Escape available, and avoid overlapping workers.
+  including Full frame when already full. Block stale Accept during framing,
+  keep Cancel/Escape available, and avoid overlapping workers.
 - [x] Cover cache reuse, errors, races, current preview, history/annotations,
-      save/reload, and native/core/WASM checks.
+  save/reload, and native/core/WASM checks.
 - [x] User confirms Auto frame, manual override, correction settings, and
-      Cancel/Accept/Undo/Redo on 2026-10-16. Retain the documented 11-19
-      background-edge limitation after a small scoring experiment regresses
-      an existing fixture. Stop before temporal/countdown work in 6F.
+  Cancel/Accept/Undo/Redo on 2026-10-16. Retain the documented 11-19
+  background-edge limitation after a small scoring experiment regresses an
+  existing fixture. Stop before temporal/countdown work in 6F.
 
 ##### 6F1. Temporal core and replay diagnostics — accepted
 
 - [x] Port four-frame/two-vote consensus, 0.08 agreement, coordinate medians,
-      0.35 smoothing, and calibrated previous-frame ranking hints. Keep hint
-      bonuses separate from confidence and do not alter unhinted detection.
+  0.35 smoothing, and calibrated previous-frame ranking hints. Keep hint bonuses
+  separate from confidence and do not alter unhinted detection.
 - [x] Port the countdown with a one-second handheld wait, 0.04 drift limit,
-      confidence 0.72, area 0.1, and laptop-frame sharpness 25. Emit one Ready
-      decision per capture cycle; reset on loss, blur, or explicit restart.
+  confidence 0.72, area 0.1, and laptop-frame sharpness 25. Emit one Ready
+  decision per capture cycle; reset on loss, blur, or explicit restart.
 - [x] Cover invalid values, rejected candidates, jitter, changing majorities,
-      cumulative drift, clock rollback, reset, and current-frame sharpness.
+  cumulative drift, clock rollback, reset, and current-frame sharpness.
 - [x] Replay all 224 committed laptop-camera frames in virtual 33 ms steps.
-      Retain strict geometry/quality gates. Track the initially exposed
-      detector-parity failure and its resolution separately in 6F2.
+  Retain strict geometry/quality gates. Track the initially exposed
+  detector-parity failure and its resolution separately in 6F2.
 - [x] Add bounded offline replay diagnostics with raw/stable overlays,
-      playback/scrubbing, countdown progress, and the capture event. Preserve
-      source images and reject existing destinations; no live camera yet.
+  playback/scrubbing, countdown progress, and the capture event. Preserve source
+  images and reject existing destinations; no live camera yet.
 - [x] User accepts the restored detector and one-second replay on 2026-10-16.
-      Stop before native capture in 6G; offline replay does not validate
-      physical camera adapters.
+  Stop before native capture in 6G; offline replay does not validate physical
+  camera adapters.
 
 ##### 6F2. Full-recording detector parity — accepted
 
-- [x] Restore connected contour candidates and strict diagonal edge maxima.
-      User clarifies viewfinder screenshots contain app chrome absent from
-      actual camera pixels; do not treat that status-bar crop as a blocking
-      regression. Keep genuine camera fixtures and generic clutter checks.
-- [x] Pass the full-recording test: 224 frames, raw
-      correct >= 160, stable correct >= 180, wrong = 0 for both, and a
-      correctly framed capture. Keep 0.1 normalized corner tolerance, image
-      quality/geometry calibration, and three unhinted smoke checks. Only
-      countdown duration changes from two seconds to one, as requested.
+- [x] Restore connected contour candidates and strict diagonal edge maxima. User
+  clarifies viewfinder screenshots contain app chrome absent from actual camera
+  pixels; do not treat that status-bar crop as a blocking regression. Keep
+  genuine camera fixtures and generic clutter checks.
+- [x] Pass the full-recording test: 224 frames, raw correct >= 160, stable
+  correct >= 180, wrong = 0 for both, and a correctly framed capture. Keep 0.1
+  normalized corner tolerance, image quality/geometry calibration, and three
+  unhinted smoke checks. Only countdown duration changes from two seconds to
+  one, as requested.
 - [x] User accepts the complete replay checkpoint on 2026-10-16. Close 6F,
-      commit the work unsigned, and stop for today. Leave 6G unstarted.
+  commit the work unsigned, and stop for today. Leave 6G unstarted.
 
 ##### 6G1. Native camera backend probe — manually accepted
 
-- [x] Evaluate native capture without coupling it to document/UI state.
-      Prefer OS APIs over OpenCV/GStreamer or a bundled media runtime.
+- [x] Evaluate native capture without coupling it to document/UI state. Prefer
+  OS APIs over OpenCV/GStreamer or a bundled media runtime.
 - [x] Add an opt-in command to list devices/formats and capture one PNG.
-      Validate arguments, dimensions, frame buffers, and output safety;
-      keep hardware access out of automated tests.
-- [x] Check Linux build/device listing and native-free WASM compilation.
-      Keep Windows Media Foundation and macOS isolation explicit; native
-      Windows/macOS compilation still awaits CI. Install no container tools.
-- [x] User marks the backend probe manually checked on 2026-10-19.
-      Laptop checks cover enumeration, formats, image orientation/color,
-      repeat capture/release, errors and permissions. SP6 checks remain
-      separate; do not infer Surface hardware acceptance from laptop tests.
+  Validate arguments, dimensions, frame buffers, and output safety; keep
+  hardware access out of automated tests.
+- [x] Check Linux build/device listing and native-free WASM compilation. Keep
+  Windows Media Foundation and macOS isolation explicit; native Windows/macOS
+  compilation still awaits CI. Install no container tools.
+- [x] User marks the backend probe manually checked on 2026-10-19. Laptop checks
+  cover enumeration, formats, image orientation/color, repeat capture/release,
+  errors and permissions. SP6 checks remain separate; do not infer Surface
+  hardware acceptance from laptop tests.
 
 ##### 6G2. Native preview and manual capture — manually accepted
 
-- [x] Restore the stashed camera probe and exposure warm-up after the
-      annotation refactor; share its adapter/decoder with the GUI.
+- [x] Restore the stashed camera probe and exposure warm-up after the annotation
+  refactor; share its adapter/decoder with the GUI.
 - [x] Add a camera screen with immediate live preview, manual Capture, Retake,
-      Use photo and Cancel. Add photos without discarding existing pages;
-      reuse the page-correction editor after insertion.
-- [x] Keep driver calls in a killable subprocess, bound frame delivery,
-      prepare PNG off the UI thread and reject stale session completions.
-- [x] Stop/reap workers on cancellation, capture and closure;
-      expose recoverable errors and retain the 20-page limit.
-- [x] User marks native preview/manual capture manually checked on
-      2026-10-19, including immediate capture and uninterrupted window moves.
-      Repeat on Windows/SP6 after laptop checks.
+  Use photo and Cancel. Add photos without discarding existing pages; reuse the
+  page-correction editor after insertion.
+- [x] Keep driver calls in a killable subprocess, bound frame delivery, prepare
+  PNG off the UI thread and reject stale session completions.
+- [x] Stop/reap workers on cancellation, capture and closure; expose recoverable
+  errors and retain the 20-page limit.
+- [x] User marks native preview/manual capture manually checked on 2026-10-19,
+  including immediate capture and uninterrupted window moves. Repeat on
+  Windows/SP6 after laptop checks.
 
 ##### 6G3. Live framing and capture integration — manually accepted
 
 Keep follow-ups small and manually testable:
 
-- **6G3a — Live framing/countdown:** reuse the calibrated detector,
-  stabilizer and one-second capture gate off the UI thread. Show a
-  translucent quad and circular capture progress. Freeze the analyzed
-  frame, carry its crop into pending page corrections and keep manual
-  capture immediate. Bound analysis and reject stale sessions/results.
-- **6G3b — Device and capture modes:** camera picker/switching, supported
-  modes and higher-resolution capture, without silently distorting frames.
-- **6G3c — Hardware lifecycle:** orientation, suspend/resume, permissions
-  and actual SP6 front/rear camera calibration. Browser/macOS capture
-  remains outside these native Linux/Windows checkpoints.
+- **6G3a — Live framing/countdown:** reuse the calibrated detector, stabilizer
+  and one-second capture gate off the UI thread. Show a translucent quad and
+  circular capture progress. Freeze the analyzed frame, carry its crop into
+  pending page corrections and keep manual capture immediate. Bound analysis and
+  reject stale sessions/results.
+- **6G3b — Device and capture modes:** camera picker/switching, supported modes
+  and higher-resolution capture, without silently distorting frames.
+- **6G3c — Hardware lifecycle:** orientation, suspend/resume, permissions and
+  actual SP6 front/rear camera calibration. Browser/macOS capture remains
+  outside these native Linux/Windows checkpoints.
 
 6G3a, 6G3b and 6G3c are manually accepted. SP6 front/rear preview, resolution
 selection, mirroring and framing passed on 2026-10-22. Physical sleep and full
@@ -681,340 +677,340 @@ SP6 capture/export remain separate checks.
 
 6G3a implementation checklist:
 
-- [x] Run hinted detection, consensus and one-second gating off the UI
-      thread; keep one analysis job across canceled/restarted sessions.
-- [x] Draw a translucent quad aligned with the contained preview and
-      circular capture progress; retain immediate manual capture.
+- [x] Run hinted detection, consensus and one-second gating off the UI thread;
+  keep one analysis job across canceled/restarted sessions.
+- [x] Draw a translucent quad aligned with the contained preview and circular
+  capture progress; retain immediate manual capture.
 - [x] Freeze analyzed pixels/corners together, reject stale/current-missing
-      final frames, and pass the crop into pending correction settings.
+  final frames, and pass the crop into pending correction settings.
 - [x] Preserve photo cancellation, manual capture, original pixels, errors,
-      focus/move behavior and the existing recorded-sequence calibration.
-- [x] Validate automated model/rendering, core, native and WASM checks.
-      Pass 505 native/all-target and 270 dependency-light tests; keep the
-      full replay opt-in. Strict Clippy, WASM and formatting checks pass.
+  focus/move behavior and the existing recorded-sequence calibration.
+- [x] Validate automated model/rendering, core, native and WASM checks. Pass 505
+  native/all-target and 270 dependency-light tests; keep the full replay opt-in.
+  Strict Clippy, WASM and formatting checks pass.
 - [x] User checkpoint: live quad, countdown/auto-freeze, motion/blur reset,
-      Retake, manual capture and suggested-crop Accept/Cancel/Full frame.
-      User accepts the captured-corner lag fix and 6G3a on 2026-10-19.
+  Retake, manual capture and suggested-crop Accept/Cancel/Full frame. User
+  accepts the captured-corner lag fix and 6G3a on 2026-10-19.
 
 6G3b implementation checklist:
 
 - [x] Discover named cameras and decoder-supported modes off the UI thread;
-      bound discovery output and terminate stalled/canceled driver helpers.
-- [x] Add touch-sized camera/mode pickers and Refresh cameras. Restart
-      preview on changes; reject old frames, queries and queued starts.
+  bound discovery output and terminate stalled/canceled driver helpers.
+- [x] Add touch-sized camera/mode pickers and Refresh cameras. Restart preview
+  on changes; reject old frames, queries and queued starts.
 - [x] Prefer full HD when available, at up to 30 FPS. Expose higher reported
-      modes within image limits; never silently substitute a failed request.
-- [x] Use the selected resolution for preview and the untouched photo.
-      Preserve frame/corner alignment, immediate Capture, Retake and editing.
-- [x] Pass 517 native/all-target and 270 dependency-light tests, strict
-      Clippy, WASM, formatting and whitespace checks. Keep full replay opt-in.
+  modes within image limits; never silently substitute a failed request.
+- [x] Use the selected resolution for preview and the untouched photo. Preserve
+  frame/corner alignment, immediate Capture, Retake and editing.
+- [x] Pass 517 native/all-target and 270 dependency-light tests, strict Clippy,
+  WASM, formatting and whitespace checks. Keep full replay opt-in.
 - [x] User accepts device/mode selection, preview and auto-capture after
-      resolution normalization on 2026-10-19. Laptop maximum is 1280×720;
-      full-HD behavior is covered synthetically, not physically accepted.
+  resolution normalization on 2026-10-19. Laptop maximum is 1280×720; full-HD
+  behavior is covered synthetically, not physically accepted.
 
 6G3c implementation checklist — manually accepted:
 
 - [x] Add lossless orientation controls shared by preview, detection and
-      capture; keep window layout changes separate from sensor orientation.
-      Mirror camera preview/review and overlay until Use photo; default on
-      for explicit Front labels. Page editing/output stay unmirrored.
+  capture; keep window layout changes separate from sensor orientation. Mirror
+  camera preview/review and overlay until Use photo; default on for explicit
+  Front labels. Page editing/output stay unmirrored.
 - [x] Handle sleep/interruption without stale auto-capture; release workers,
-      reset tracking and provide an explicit fresh-preview recovery path.
+  reset tracking and provide an explicit fresh-preview recovery path.
 - [x] Show actionable Linux/Windows camera permission/device guidance.
-- [x] Automate pixel orientation, interruption, stale-completion, permission
-      and recovery checks; retain native/WASM build coverage.
-      Pass 536 native/all-target and 272 dependency-light checks, strict
-      Clippy, WASM, formatting and whitespace checks; keep replay opt-in.
-- [x] User accepts the final camera workflow on 2026-10-19, including
-      mirrored snapshot review until Use photo opens the normal page editor.
-      User defers physical sleep testing; do not mark it passed.
-      Repeat SP6 front/rear/orientation and sleep tests there when available;
-      do not infer their calibration from container or laptop tests.
+- [x] Automate pixel orientation, interruption, stale-completion, permission and
+  recovery checks; retain native/WASM build coverage. Pass 536 native/all-target
+  and 272 dependency-light checks, strict Clippy, WASM, formatting and
+  whitespace checks; keep replay opt-in.
+- [x] User accepts the final camera workflow on 2026-10-19, including mirrored
+  snapshot review until Use photo opens the normal page editor. User defers
+  physical sleep testing; do not mark it passed. Repeat SP6
+  front/rear/orientation and sleep tests there when available; do not infer
+  their calibration from container or laptop tests.
 
 ### 7. Packaging and replacement decision — in progress
 
 #### 7A. Prebuilt Windows test ZIP — Windows camera follow-up
 
-- [x] Build an optimized Windows x64 EXE in a dedicated CI job, with a static
-      C runtime and release dependency cache; do not require a local compiler.
+- [x] Build an optimized Windows x64 EXE in a dedicated CI job, with a static C
+  runtime and release dependency cache; do not require a local compiler.
 - [x] Package only the executable, instructions, license, sample form and
-      revision/run metadata. Extract elsewhere; inspect imports and test
-      loader/helper startup without opening a camera or GUI.
-- [x] Upload a raw ZIP artifact on every run. Publish successful `master`
-      checks separately as `rust-dev`; preserve C# releases and file names.
-- [x] Exercise release creation, replacement and failed uploads locally with
-      the real workflow shell block and a mock CLI; make no GitHub writes.
+  revision/run metadata. Extract elsewhere; inspect imports and test
+  loader/helper startup without opening a camera or GUI.
+- [x] Upload a raw ZIP artifact on every run. Publish successful `master` checks
+  separately as `rust-dev`; preserve C# releases and file names.
+- [x] Exercise release creation, replacement and failed uploads locally with the
+  real workflow shell block and a mock CLI; make no GitHub writes.
 - [x] Remove the Windows camera-format unreachable match arm instead of
-      suppressing its warning. Keep exhaustive handling of the six formats.
-- [x] Run the Windows package job in GitHub, including extracted startup
-      checks. User reports success in just under ten minutes; Windows native
-      build/tests also pass. These platforms remain unavailable locally.
-- [x] Obtain the CI build and launch the Windows EXE. User reports green CI
-      and a brief Windows test; console/camera follow-up fixes are recorded
-      below, not assumed verified from this initial test.
-- [x] Retest camera discovery/preview on Windows after the cleanup fix.
-      User confirms working camera on 2026-10-20, with a populated resolution
-      picker and live preview. Keep SP6 front/rear, sleep and touch checks
-      separate; do not infer those from this result.
+  suppressing its warning. Keep exhaustive handling of the six formats.
+- [x] Run the Windows package job in GitHub, including extracted startup checks.
+  User reports success in just under ten minutes; Windows native build/tests
+  also pass. These platforms remain unavailable locally.
+- [x] Obtain the CI build and launch the Windows EXE. User reports green CI and
+  a brief Windows test; console/camera follow-up fixes are recorded below, not
+  assumed verified from this initial test.
+- [x] Retest camera discovery/preview on Windows after the cleanup fix. User
+  confirms working camera on 2026-10-20, with a populated resolution picker and
+  live preview. Keep SP6 front/rear, sleep and touch checks separate; do not
+  infer those from this result.
 - [x] Confirm SP6 front/rear cameras, resolution choice, front-camera preview
-      mirroring and framing. User reports all four working on 2026-10-22.
-      This does not cover suspend/resume or the full capture/export gate.
-- [x] Confirm the Windows ZIP downloads, extracts and launches without a
-      local Rust toolchain; the user's legacy SP6 project opens. Save/export
-      still need a physical Windows check.
+  mirroring and framing. User reports all four working on 2026-10-22. This does
+  not cover suspend/resume or the full capture/export gate.
+- [x] Confirm the Windows ZIP downloads, extracts and launches without a local
+  Rust toolchain; the user's legacy SP6 project opens. Save/export still need a
+  physical Windows check.
 - [ ] User checkpoint: save and export a project on SP6; check the output.
-      Physical sleep, touch gestures and high-DPI calibration remain separate.
+  Physical sleep, touch gestures and high-DPI calibration remain separate.
 
 #### 7B. Font-size spinner — manually accepted
 
-- [x] Replace the preset list with equal-sized minus/plus touch buttons and
-      a numeric field. Step by 1 pt, including mouse wheel; clamp to 6–144 pt.
+- [x] Replace the preset list with equal-sized minus/plus touch buttons and a
+  numeric field. Step by 1 pt, including mouse wheel; clamp to 6–144 pt.
 - [x] Accept valid numeric entry with Enter or an existing click-away accept
-      path; reject invalid values without changing annotations. Escape first
-      discards the numeric draft, not the page's pending text edit.
+  path; reject invalid values without changing annotations. Escape first
+  discards the numeric draft, not the page's pending text edit.
 - [x] Preserve imported/scaled fractional sizes until the user changes them.
-      Show mixed selections correctly; apply a chosen size to selected text
-      only, in one undoable change, and keep shape geometry untouched.
+  Show mixed selections correctly; apply a chosen size to selected text only, in
+  one undoable change, and keep shape geometry untouched.
 - [x] Keep font changes to inline text pending until text acceptance; Escape
-      must still restore the original text and format. Add regressions first.
-- [x] Keep the control local to text options and existing appearance tokens;
-      do not introduce a generic widget framework or redesign every panel.
+  must still restore the original text and format. Add regressions first.
+- [x] Keep the control local to text options and existing appearance tokens; do
+  not introduce a generic widget framework or redesign every panel.
 - [x] Validate native tests, WASM compilation and lint. Hand off a Linux check;
-      physical touch and the Windows camera retest remain deferred.
-- [x] User checkpoint on Linux: enter 22 pt, step with buttons/wheel, reject
-      200 pt, and verify Escape/Undo on inline text and mixed selections.
-      User confirms these checks on 2026-10-20; touch remains deferred.
+  physical touch and the Windows camera retest remain deferred.
+- [x] User checkpoint on Linux: enter 22 pt, step with buttons/wheel, reject 200
+  pt, and verify Escape/Undo on inline text and mixed selections. User confirms
+  these checks on 2026-10-20; touch remains deferred.
 
 #### 7C. Stable confirmation overlays — manually accepted
 
-- [x] Move replace-page, delete-page, delete-all and unsaved-project prompts
-      out of the header into a centered modal layer. Never resize/reposition
-      the editor, page rail or toolbars when a confirmation appears.
-- [x] Use readable themed cards, a dimmed backdrop and equal-height/width
-      touch actions. Fit small windows; keep styling in appearance.rs.
+- [x] Move replace-page, delete-page, delete-all and unsaved-project prompts out
+  of the header into a centered modal layer. Never resize/reposition the editor,
+  page rail or toolbars when a confirmation appears.
+- [x] Use readable themed cards, a dimmed backdrop and equal-height/width touch
+  actions. Fit small windows; keep styling in appearance.rs.
 - [x] Block background pointer/wheel input; preserve existing workflow guards,
-      Keep/Cancel, Escape, saving and undo behavior. Do not dismiss on a
-      backdrop click or accept destructive actions implicitly with Enter.
+  Keep/Cancel, Escape, saving and undo behavior. Do not dismiss on a backdrop
+  click or accept destructive actions implicitly with Enter.
 - [x] Test layout stability, actual button routing, mouse/touch/wheel input
-      isolation, and rendering above a zoomed page at both DPI scales.
+  isolation, and rendering above a zoomed page at both DPI scales.
 - [x] Pass all 556 native/all-target tests, strict lint, WASM compilation and
-      formatting. Exhaustive replay remains ignored/opt-in; physical touch,
-      Windows camera and Surface DPI/sleep checks remain deferred.
-- [x] User checkpoint on Linux: open/cancel each prompt; confirm delete-all
-      then Undo; verify the page stays put and backdrop clicks do nothing.
-      User confirms dialogs work well on 2026-10-20; touch remains deferred.
+  formatting. Exhaustive replay remains ignored/opt-in; physical touch, Windows
+  camera and Surface DPI/sleep checks remain deferred.
+- [x] User checkpoint on Linux: open/cancel each prompt; confirm delete-all then
+  Undo; verify the page stays put and backdrop clicks do nothing. User confirms
+  dialogs work well on 2026-10-20; touch remains deferred.
 
 #### 7D. Compact vector tools and color swatches — accepted
 
-- [x] Replace the eleven text tool buttons with centered vector icons in
-      equal 40-pixel square targets. Keep native tooltips and an active-tool
-      label; use consistent stroke weights and selected-theme foregrounds.
-- [x] Replace Smart snap and Fill labels with monochrome magnet/bucket
-      buttons using the same sizes, selected styles and applicability rules.
+- [x] Replace the eleven text tool buttons with centered vector icons in equal
+  40-pixel square targets. Keep native tooltips and an active-tool label; use
+  consistent stroke weights and selected-theme foregrounds.
+- [x] Replace Smart snap and Fill labels with monochrome magnet/bucket buttons
+  using the same sizes, selected styles and applicability rules.
 - [x] Show six round color swatches with a separated selection ring; retain
-      pigment on hover and dim rather than whiten disabled colors.
-- [x] Keep toolbar layout/styles local. Reuse iced canvas/native controls;
-      add no new font, image, dependency or generic icon/widget framework.
+  pigment on hover and dim rather than whiten disabled colors.
+- [x] Keep toolbar layout/styles local. Reuse iced canvas/native controls; add
+  no new font, image, dependency or generic icon/widget framework.
 - [x] Automate size/centering, theme/selected/disabled rendering, color/hover
-      behavior and existing command routing; pass native/WASM/lint checks.
-      All 563 native/all-target tests, strict Clippy, WASM and formatting pass;
-      exhaustive replay remains opt-in. Preview both themes headlessly.
-- [x] User checkpoint on Linux: inspect icons, hover labels, selection and
-      color rings; use every tool, Fill and Smart snap, including after
-      placement and in a narrower window. Keep Windows/touch checks deferred.
-      User accepts the icons on 2026-10-20 except the ambiguous Text glyph;
-      replace it with Aa using the existing bundled font. Verify that small
-      follow-up headlessly; user explicitly defers scrollbar overlap.
+  behavior and existing command routing; pass native/WASM/lint checks. All 563
+  native/all-target tests, strict Clippy, WASM and formatting pass; exhaustive
+  replay remains opt-in. Preview both themes headlessly.
+- [x] User checkpoint on Linux: inspect icons, hover labels, selection and color
+  rings; use every tool, Fill and Smart snap, including after placement and in a
+  narrower window. Keep Windows/touch checks deferred. User accepts the icons on
+  2026-10-20 except the ambiguous Text glyph; replace it with Aa using the
+  existing bundled font. Verify that small follow-up headlessly; user explicitly
+  defers scrollbar overlap.
 
 #### 7E. Organized editor workspace — manually accepted
 
 - [x] Use C# as a behavior reference, not a layout constraint. Group tools,
-      contextual properties and selection actions for clearer navigation.
-- [x] On wider windows, replace three toolbar rows with a compact command
-      strip and a fixed-width tools/properties panel. Give the page more
-      vertical space; keep selection actions visible at the panel bottom.
-      Derive panel width from four 40-pixel buttons, three 8-pixel gaps and
-      two 12-pixel padding edges: 208 pixels, with tracks inside padding.
-- [x] Retain a compact horizontal fallback for narrow windows. Reserve
-      scrollbar space rather than drawing tracks over button targets.
-- [x] Keep tools/actions stable when selection or properties change. Stack
-      text controls in the panel, preserve all existing edit transactions,
-      and hide only inapplicable properties. Scroll properties on short views.
+  contextual properties and selection actions for clearer navigation.
+- [x] On wider windows, replace three toolbar rows with a compact command strip
+  and a fixed-width tools/properties panel. Give the page more vertical space;
+  keep selection actions visible at the panel bottom. Derive panel width from
+  four 40-pixel buttons, three 8-pixel gaps and two 12-pixel padding edges: 208
+  pixels, with tracks inside padding.
+- [x] Retain a compact horizontal fallback for narrow windows. Reserve scrollbar
+  space rather than drawing tracks over button targets.
+- [x] Keep tools/actions stable when selection or properties change. Stack text
+  controls in the panel, preserve all existing edit transactions, and hide only
+  inapplicable properties. Scroll properties on short views.
 - [x] Reuse native layout/scrolling and shared control builders; add no new
-      dependencies, document state or C# changes. Defer animated page-rail
-      redesign, startup/help screens and packaging to separate checkpoints.
+  dependencies, document state or C# changes. Defer animated page-rail redesign,
+  startup/help screens and packaging to separate checkpoints.
 - [x] Automate layout, command routing, short/narrow views and clipping;
-      validate native tests, WASM, lint and headless previews.
-- [x] User checkpoint on Linux: compare workspace at normal/narrow sizes,
-      use text/shape/group properties and fixed selection actions, then
-      zoom/pan near the panel. Keep Windows/real-touch checks deferred.
-      User confirms functionality on 2026-10-20. After an alignment follow-up,
-      clarify the desired layout: keep a left-aligned four-column grid and
-      aligned properties; remove excess panel width, not stagger the rows.
-      User accepts the final padding and common-properties-first refinements.
+  validate native tests, WASM, lint and headless previews.
+- [x] User checkpoint on Linux: compare workspace at normal/narrow sizes, use
+  text/shape/group properties and fixed selection actions, then zoom/pan near
+  the panel. Keep Windows/real-touch checks deferred. User confirms
+  functionality on 2026-10-20. After an alignment follow-up, clarify the desired
+  layout: keep a left-aligned four-column grid and aligned properties; remove
+  excess panel width, not stagger the rows. User accepts the final padding and
+  common-properties-first refinements.
 
 #### 7F1. Floating page thumbnail and insertion gap — manually accepted
 
-- [x] Keep each grabbed point attached to a translucent thumbnail above the
-      UI, including outside the rail. Retain mouse/touch pointer ownership.
+- [x] Keep each grabbed point attached to a translucent thumbnail above the UI,
+  including outside the rail. Retain mouse/touch pointer ownership.
 - [x] On an actual drag, remove the source card from the rail and show a
-      full-card insertion gap. Keep a simple click as page selection.
-- [x] Preserve document order until a valid drop. Release outside the rail
-      or over its scrollbar, Escape, lost touch/focus or resize must cancel.
+  full-card insertion gap. Keep a simple click as page selection.
+- [x] Preserve document order until a valid drop. Release outside the rail or
+  over its scrollbar, Escape, lost touch/focus or resize must cancel.
 - [x] Retain wheel/scrollbar navigation, release-position drop targeting and
-      empty-space drops below the last card. Remove drag instruction labels.
+  empty-space drops below the last card. Remove drag instruction labels.
 - [x] Keep rail input, display and drag geometry local; reuse native canvas
-      layering and opacity without a widget or animation dependency.
+  layering and opacity without a widget or animation dependency.
 - [x] Automate grab offsets, gap slots, pointer ownership, cancellation,
-      clipping, overlay layering and unchanged document order while dragging.
+  clipping, overlay layering and unchanged document order while dragging.
 - [x] User checkpoint: drag from different thumbnail locations; cross the
-      canvas/toolbar, drop between pages or below the last one, and cancel
-      outside/by Escape. Check scrolling and ordinary click selection.
-      User confirms smooth behavior on 2026-10-20. Continue to 7F2.
+  canvas/toolbar, drop between pages or below the last one, and cancel
+  outside/by Escape. Check scrolling and ordinary click selection. User confirms
+  smooth behavior on 2026-10-20. Continue to 7F2.
 
 #### 7F2. Animated rail shifts and settling — manually accepted
 
 - [x] Ease neighboring cards around the insertion gap, then slide the floating
-      card into its destination or back to its source on cancellation.
+  card into its destination or back to its source on cancellation.
 - [x] Keep ordering commits separate from visual settling; handle interrupted
-      animations and scrolling. Preserve the visible gap's scroll position on
-      valid drops; keep arrow-button auto-scroll unchanged.
+  animations and scrolling. Preserve the visible gap's scroll position on valid
+  drops; keep arrow-button auto-scroll unchanged.
 - [x] Request native redraws only while animating, without application tick
-      messages, background timers or animation dependencies. Keep presentation
-      state shared by the clipped rail and floating canvas in the rail module.
+  messages, background timers or animation dependencies. Keep presentation state
+  shared by the clipped rail and floating canvas in the rail module.
 - [x] Use 180 ms eased transitions. Support instant motion with desktop
-      FASTFILL_REDUCED_MOTION=1 and browser prefers-reduced-motion. Defer native
-      OS preference lookup until a shared platform settings API is needed.
+  FASTFILL_REDUCED_MOTION=1 and browser prefers-reduced-motion. Defer native OS
+  preference lookup until a shared platform settings API is needed.
 - [x] Validate timing, reversals, grabbing moving cards, reduced motion,
-      cancellation, scrolling, stale geometry, redraw shutdown and layering;
-      run full native, WASM, lint and formatting checks.
+  cancellation, scrolling, stale geometry, redraw shutdown and layering; run
+  full native, WASM, lint and formatting checks.
 - [x] User checkpoint on Linux: inspect gap shifts and drop/cancel slides;
-      reverse direction quickly, grab again during settling and scroll while
-      dragging. Check simple clicks and instant-motion opt-out. Touch deferred.
-      User accepts the animations on 2026-10-20. Clean up rail cards next.
+  reverse direction quickly, grab again during settling and scroll while
+  dragging. Check simple clicks and instant-motion opt-out. Touch deferred. User
+  accepts the animations on 2026-10-20. Clean up rail cards next.
 
 #### 7F3. Image-first page cards — manually accepted
 
-- [x] Remove filename/UID and annotation-count labels. Put the page number in
-      a narrow column to the left of the preview, not in its own row.
-- [x] Enlarge previews within the existing rail width; fit card heights to
-      image aspect ratios, with shorter landscape cards and a touch-size floor.
-      Preserve aspect ratio, selection feedback and accepted drag animations.
+- [x] Remove filename/UID and annotation-count labels. Put the page number in a
+  narrow column to the left of the preview, not in its own row.
+- [x] Enlarge previews within the existing rail width; fit card heights to image
+  aspect ratios, with shorter landscape cards and a touch-size floor. Preserve
+  aspect ratio, selection feedback and accepted drag animations.
 - [x] Keep controls, page operations and thumbnail contents unchanged; do not
-      expand this appearance slice into annotated-preview caching or a broader
-      page-control redesign.
-- [x] Check portrait/landscape/blank cards, metadata-independent rendering,
-      both themes/DPI scales, selection, clipping and drag regressions.
+  expand this appearance slice into annotated-preview caching or a broader
+  page-control redesign.
+- [x] Check portrait/landscape/blank cards, metadata-independent rendering, both
+  themes/DPI scales, selection, clipping and drag regressions.
 - [x] User checkpoint: inspect larger previews, left-side page numbers and
-      selected cards; verify click/reorder/cancel still feel right.
-      User accepts the base appearance on 2026-10-20, requesting the follow-up
-      below before proceeding.
+  selected cards; verify click/reorder/cancel still feel right. User accepts the
+  base appearance on 2026-10-20, requesting the follow-up below before
+  proceeding.
 - [x] Top-align numbers and vary card heights. Share layout across rendering,
-      scrolling, insertion gaps, hit-testing and animation. Resolve queued
-      pointer input against current geometry rather than stale widget targets.
+  scrolling, insertion gaps, hit-testing and animation. Resolve queued pointer
+  input against current geometry rather than stale widget targets.
 - [x] Update the floating card's number during drag, consistently with its
-      proposed insertion slot. Preserve original numbering on cancellation.
+  proposed insertion slot. Preserve original numbering on cancellation.
 - [x] Follow-up checkpoint: inspect mixed portrait/landscape/square cards and
-      drag them past each other; check top alignment, unique preview numbers,
-      settling, cancellation and scrolling. Real touch remains deferred.
-      User accepts the follow-up on 2026-10-20. Windows testing follows the
-      user's push; keep that validation separate from Linux acceptance.
+  drag them past each other; check top alignment, unique preview numbers,
+  settling, cancellation and scrolling. Real touch remains deferred. User
+  accepts the follow-up on 2026-10-20. Windows testing follows the user's push;
+  keep that validation separate from Linux acceptance.
 
 #### 7G. In-app shortcuts reference — manually accepted
 
 - [x] Add Shortcuts before Undo and F1 in the main editor. Show a themed,
-      scrollable Context / Shortcut / Action table with bold shortcuts.
+  scrollable Context / Shortcut / Action table with bold shortcuts.
 - [x] Document implemented project, history, selection, geometry, inline text,
-      navigation, page-reordering and page-correction controls. Distinguish
-      platform command shortcuts from literal Ctrl geometry modifiers.
+  navigation, page-reordering and page-correction controls. Distinguish platform
+  command shortcuts from literal Ctrl geometry modifiers.
 - [x] Preserve pending text, numeric drafts, selection and history when
-      opening/closing help. Block background input and late edit messages;
-      keep recovery/analysis completions and normal close guards working.
+  opening/closing help. Block background input and late edit messages; keep
+  recovery/analysis completions and normal close guards working.
 - [x] Fit narrow/short windows without cutting off descriptions. Reuse iced
-      table, scrolling, modal styles and existing dependencies.
+  table, scrolling, modal styles and existing dependencies.
 - [x] Automate lifecycle, input isolation, command routing, layout and themed
-      rendering checks; validate native, WASM, lint and formatting.
+  rendering checks; validate native, WASM, lint and formatting.
 - [x] User checkpoint: open with button/F1, scroll the table, close with
-      Close/Escape, resume pending text, and inspect a small window.
-      User passes Close/Escape, pending text/format and narrow-window checks
-      on 2026-10-20 and finds the button. Keep it before Undo. Follow-up:
-      show platform-correct shortcuts in the table; remove the redundant
-      modifier legend entirely, as requested.
+  Close/Escape, resume pending text, and inspect a small window. User passes
+  Close/Escape, pending text/format and narrow-window checks on 2026-10-20 and
+  finds the button. Keep it before Undo. Follow-up: show platform-correct
+  shortcuts in the table; remove the redundant modifier legend entirely, as
+  requested.
 
 #### 7H1. Main-editor action buttons — manually accepted
 
 - [x] Use shared native button sizing/type/padding/corners and themed styles.
-      Prefer neutral outlined secondary actions; keep Save and Camera entry
-      accented and destructive actions red. Preserve action labels and order.
-- [x] Apply to header, rail, navigation/selection actions, property steppers
-      and formatting toggles, plus the main-editor help/confirmation actions.
-      Keep tool icons and color swatches unchanged. No new icon catalog.
+  Prefer neutral outlined secondary actions; keep Save and Camera entry accented
+  and destructive actions red. Preserve action labels and order.
+- [x] Apply to header, rail, navigation/selection actions, property steppers and
+  formatting toggles, plus the main-editor help/confirmation actions. Keep tool
+  icons and color swatches unchanged. No new icon catalog.
 - [x] Preserve availability, confirmations, pending text, command routing,
-      workspace heights/rail width, narrow-window scrolling and touch targets.
+  workspace heights/rail width, narrow-window scrolling and touch targets.
 - [x] Test roles/states/contrast, label alignment, actual mouse/touch routing,
-      disabled controls and light/dark software rendering at 1x/2x.
+  disabled controls and light/dark software rendering at 1x/2x.
 - [x] Run native tests, strict lint, WASM and formatting checks. Stop for a
-      manual main-editor appearance/functionality check; do not commit yet.
-- [x] User checkpoint: inspect both themes, hover/disabled/selected states,
-      use header/rail/navigation actions and text/shape options, then inspect
-      a narrow/short window. Physical touch/Windows calibration stays separate.
-      User accepts appearance on 2026-10-20. Follow up the reported Linux
-      dark-to-light transition separately; camera/page-edit styling is 7H2.
+  manual main-editor appearance/functionality check; do not commit yet.
+- [x] User checkpoint: inspect both themes, hover/disabled/selected states, use
+  header/rail/navigation actions and text/shape options, then inspect a
+  narrow/short window. Physical touch/Windows calibration stays separate. User
+  accepts appearance on 2026-10-20. Follow up the reported Linux dark-to-light
+  transition separately; camera/page-edit styling is 7H2.
 
 7H2 covers camera/page-correction controls separately. The Ctrl+. palette
 remains a later behavior slice, not part of this visual pass.
 
 ##### Camera resolution picker — manually accepted
 
-- [x] Show one dimensions-only entry per resolution. Automatically choose
-      the highest advertised FPS, preferring MJPG when rates tie. Preserve
-      full diagnostic catalogs and exact capture requests; no driver changes.
+- [x] Show one dimensions-only entry per resolution. Automatically choose the
+  highest advertised FPS, preferring MJPG when rates tie. Preserve full
+  diagnostic catalogs and exact capture requests; no driver changes.
 - [x] Keep the initial resolution preference up to full HD; do not demote it
-      merely because its fastest mode exceeds the former 30 FPS preference.
-      Preserve device/session guards, restart and frozen-photo behavior.
+  merely because its fastest mode exceeds the former 30 FPS preference. Preserve
+  device/session guards, restart and frozen-photo behavior.
 - [x] Test shuffled catalogs, ties, invalid/empty modes, selected native specs
-      and resolution labels. Remove FPS/encoding from frozen-photo text too.
-- [x] User checkpoint: inspect the simplified resolution list. User confirms
-      it looks good on 2026-10-20. No further capture or hardware calibration
-      is implied beyond the earlier working-camera report.
+  and resolution labels. Remove FPS/encoding from frozen-photo text too.
+- [x] User checkpoint: inspect the simplified resolution list. User confirms it
+  looks good on 2026-10-20. No further capture or hardware calibration is
+  implied beyond the earlier working-camera report.
 
 ##### Linux theme reset — manually accepted
 
-- [x] Handle system "no preference" as the default light appearance instead
-      of retaining a previous dark theme. Work around iced's Linux reset
-      omission via its existing theme subscription; preserve ICED_THEME.
+- [x] Handle system "no preference" as the default light appearance instead of
+  retaining a previous dark theme. Work around iced's Linux reset omission via
+  its existing theme subscription; preserve ICED_THEME.
 - [x] Leave Windows/macOS/WASM native theme following unchanged. Keep theme
-      messages independent of modal/edit guards and document/history state.
+  messages independent of modal/edit guards and document/history state.
 - [x] Test repeated light/dark/no-preference transitions, pending text and
-      font-size entry, help, page edit and camera; run the automated checks.
-- [x] User checkpoint: user confirms Linux theme switching works on
-      2026-10-20. H1 accepted, including this follow-up. Continue with H2.
+  font-size entry, help, page edit and camera; run the automated checks.
+- [x] User checkpoint: user confirms Linux theme switching works on 2026-10-20.
+  H1 accepted, including this follow-up. Continue with H2.
 
 #### 7H2. Camera and page-correction controls — awaiting manual check
 
 - [x] Reuse H1 action styles and touch-sized, centered targets. Accent
-      Capture/Use photo/Accept and selected toggles; keep other actions quiet.
+  Capture/Use photo/Accept and selected toggles; keep other actions quiet.
 - [x] Fit the full camera image first. Put a six-button dock in existing
-      side/bottom margins, otherwise float it over the image. Keep compact
-      circular Capture/countdown and same-slot Use photo/Retake actions.
-- [x] Keep quick camera switching at the image's upper right, separate from
-      the scrollable settings popover (camera, resolution, Refresh). Escape
-      closes settings before canceling capture; outside click/tap closes it.
-- [x] Keep status/error notices in a translucent rounded lozenge over the
-      image, bottom center or above the overlay dock. Replace Mirror with
-      solid/dashed reflected triangles separated by a vertical axis.
+  side/bottom margins, otherwise float it over the image. Keep compact circular
+  Capture/countdown and same-slot Use photo/Retake actions.
+- [x] Keep quick camera switching at the image's upper right, separate from the
+  scrollable settings popover (camera, resolution, Refresh). Escape closes
+  settings before canceling capture; outside click/tap closes it.
+- [x] Keep status/error notices in a translucent rounded lozenge over the image,
+  bottom center or above the overlay dock. Replace Mirror with solid/dashed
+  reflected triangles separated by a vertical axis.
 - [x] Organize page corrections in a scrollable panel. Keep Cancel immediately
-      before Accept. On narrow windows put corrections below the source image
-      instead of squeezing it beside a fixed-width panel. Preserve preview,
-      corner dragging/Ctrl snap, filters, tone controls and warning handling.
+  before Accept. On narrow windows put corrections below the source image
+  instead of squeezing it beside a fixed-width panel. Preserve preview, corner
+  dragging/Ctrl snap, filters, tone controls and warning handling.
 - [x] Test actual layout, centered/disabled actions and mouse/touch routing;
-      render both screens in light/dark, wide/narrow and 1x/2x. Keep drivers
-      closed and hardware calibration separate from software rendering.
+  render both screens in light/dark, wide/narrow and 1x/2x. Keep drivers closed
+  and hardware calibration separate from software rendering.
 - [x] Run native tests, strict lint, WASM, formatting and whitespace checks.
 - [x] User checkpoint: inspect both screens/themes, small-window scrolling,
-      adaptive dock/status placement, settings/quick camera switching,
-      preview/capture/review/retake and pending correction Accept/Cancel.
-      This is today's last slice. Stop here; do not commit unless requested.
+  adaptive dock/status placement, settings/quick camera switching,
+  preview/capture/review/retake and pending correction Accept/Cancel. This is
+  today's last slice. Stop here; do not commit unless requested.
 
 Camera layout and refined glyphs accepted on 2026-10-20. User confirms the
 remaining 7H2 manual checkpoint on 2026-10-21. Physical sleep, SP6 and touch
@@ -1023,84 +1019,95 @@ checks remain separate hardware checks, not part of this UI checkpoint.
 #### 7H2 follow-up. Full-size page correction views — 2026-10-21
 
 - [x] Replace the small sidebar preview with Frame and Preview canvas views.
-      Keep both correction groups visible; framing actions select Frame,
-      color and tone actions select Preview.
+  Keep both correction groups visible; framing actions select Frame, color and
+  tone actions select Preview.
 - [x] Add zoom, pan, Fit and 1:1 to both views. Compare the corrected preview
-      with the unadjusted image at the same crop and rotation.
+  with the unadjusted image at the same crop and rotation.
 - [x] Use the native scrollbar gutter only while the sidebar overflows, and
-      retain pending corrections when changing the view.
+  retain pending corrections when changing the view.
 - [x] Check mouse/touch routing, rotation, worker staleness, history safety,
-      wide/narrow layout, both themes, native tests, lint and WASM.
+  wide/narrow layout, both themes, native tests, lint and WASM.
 - [x] Keep a corner drag active through crop previews, and show the original
-      only while Compare is held, including release outside the control.
+  only while Compare is held, including release outside the control.
 - [x] User checkpoint: inspect framing, full-size corrections, comparison,
-      continuous corner dragging, zoom/pan and sidebar padding before
-      marking this follow-up accepted.
+  continuous corner dragging, zoom/pan and sidebar padding before marking this
+  follow-up accepted.
 
 User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 
 #### 7H3. Compact main-window chrome — manually accepted
 
 - [x] Replace split header/toolbar rows with one 56-pixel header on wide
-      windows. Keep the project menu, Undo/Redo, zoom, Save, Export PDF,
-      Shortcuts and status reachable; use a compact overflow on narrow ones.
-- [x] Remove the redundant page-number selector. Use thumbnails to switch
-      pages, compact rail action icons and a page menu for move earlier/later.
+  windows. Keep the project menu, Undo/Redo, zoom, Save, Export PDF, Shortcuts
+  and status reachable; use a compact overflow on narrow ones.
+- [x] Remove the redundant page-number selector. Use thumbnails to switch pages,
+  compact rail action icons and a page menu for move earlier/later.
 - [x] Use magnifier +/- zoom glyphs and icon-plus-text primary actions. Keep
-      Reset angle with annotation controls, not beside page navigation.
+  Reset angle with annotation controls, not beside page navigation.
 - [x] Keep errors, recovery notices and PDF progress above the editor without
-      resizing or shifting the canvas. Preserve mouse/touch action routing.
+  resizing or shifting the canvas. Preserve mouse/touch action routing.
 - [x] Run native tests, strict lint, WASM, formatting and whitespace checks.
 - [x] Replace improvised action icons with pinned Lucide SVGs and retain its
-      license in source and portable packages. Center Save/Export contents;
-      make project, page and overflow menus wide enough for their labels.
+  license in source and portable packages. Center Save/Export contents; make
+  project, page and overflow menus wide enough for their labels.
 - [x] Follow-up: use Lucide throughout the camera dock; scope the
-      compare-release listener to page edit, align the page rail, distinguish
-      Delete all, make narrow actions icon-only, keep hover text/icon colors
-      matched, and add 1:1/Fit icons. Use image-up for Replace image, shredder
-      for Delete all and menu glyphs for overflow triggers.
+  compare-release listener to page edit, align the page rail, distinguish Delete
+  all, make narrow actions icon-only, keep hover text/icon colors matched, and
+  add 1:1/Fit icons. Use image-up for Replace image, shredder for Delete all and
+  menu glyphs for overflow triggers.
 - [x] Preserve menus across incidental updates, center footer action groups,
-      fill page cards across the rail, and remove the static Fill label. Test
-      menu persistence and rail-edge dragging.
-- [x] User visually accepts the main chrome on 2026-10-21 and requests the
-      wide Reset angle "To 0°" label. Do not infer touch or DPI checks.
+  fill page cards across the rail, and remove the static Fill label. Test menu
+  persistence and rail-edge dragging.
+- [x] User visually accepts the main chrome on 2026-10-21 and requests the wide
+  Reset angle "To 0°" label. Do not infer touch or DPI checks.
 - [x] Confirm project, page and More menus stay open on the host after the
-      explicit-only dismissal fix. User accepts 7H3 on 2026-10-21; physical
-      touch and high-DPI checks remain separate.
+  explicit-only dismissal fix. User accepts 7H3 on 2026-10-21; physical touch
+  and high-DPI checks remain separate.
 
 #### 7I. Searchable command palette — manually accepted
 
 - [x] Keep F1 as the read-only shortcut/gesture reference. Open a separate
-      action palette with Ctrl+. (also Cmd+. on macOS) or a visible command
-      button; let search find project, page, view, tool and edit commands.
+  action palette with Ctrl+. (also Cmd+. on macOS) or a visible command button;
+  let search find project, page, view, tool and edit commands.
 - [x] Show unavailable commands without executing them. Support mouse/touch,
-      arrow keys, Enter and Escape; run commands through existing handlers.
+  arrow keys, Enter and Escape; run commands through existing handlers.
 - [x] Test filtering, availability, keyboard routing, pointer dispatch,
-      wide/narrow layout, themes, formatting, strict lint and WASM.
-- [x] Add Mod+A to select every annotation on the current page without
-      changing history; keep text and palette input selection native.
+  wide/narrow layout, themes, formatting, strict lint and WASM.
+- [x] Add Mod+A to select every annotation on the current page without changing
+  history; keep text and palette input selection native.
 - [x] User checkpoint: verify search focus and run commands on the host,
-      including while text is pending. Recheck F1 handoff and Mod+A. User
-      accepts 7I on 2026-10-21.
+  including while text is pending. Recheck F1 handoff and Mod+A. User accepts 7I
+  on 2026-10-21.
+
+#### 7J. Linux test archive — automated packaging pending host checks
+
+- [x] Build a release Linux x64 executable in an independent CI job and publish
+  a 14-day Actions artifact, without delaying Windows `rust-dev`.
+- [x] Include instructions, licenses, sample form and source revision; extract
+  elsewhere and check linked libraries and helper startup without a GUI.
+- [x] Document glibc, desktop, portal and camera requirements. Keep dynamic
+  runtime drivers and interactive behavior outside the headless CI claim.
+- [ ] Verify archive launch, file open/save/export, help, diagnostics and
+  documentation on a Linux desktop after CI produces the artifact.
 
 #### Remaining delivery work and replacement gate — pending
 
 - [x] Accept desktop UI polish through 7I: confirmations, tools, rail,
-      camera/page correction, main chrome, shortcuts and command palette.
-      Keep physical touch, high-DPI and sleep checks separate.
-- [x] Keep the Rust testing ZIP, prerelease and assets separate from C#
-      release names and workflows. Do not replace the C# app yet.
-- [ ] Complete 7A's remaining SP6 save/export check; ZIP launch, legacy
-      project open and front/rear camera preview already passed.
-- [ ] Document Linux runtime dependencies and a distributable package;
-      verify file opening, diagnostics, help and user documentation in the
-      shipped builds. Keep macOS compatibility and WASM compilation checked.
-- [ ] Profile the browser harness if full-release builds remain sluggish;
-      debug builds already lightly optimize FastFill and its dependencies.
+  camera/page correction, main chrome, shortcuts and command palette. Keep
+  physical touch, high-DPI and sleep checks separate.
+- [x] Keep the Rust testing ZIP, prerelease and assets separate from C# release
+  names and workflows. Do not replace the C# app yet.
+- [ ] Complete 7A's remaining SP6 save/export check; ZIP launch, legacy project
+  open and front/rear camera preview already passed.
+- [ ] Complete 7J's Linux desktop check. The independent archive, runtime
+  documentation and headless package gate are implemented; keep macOS
+  compatibility and WASM compilation checked.
+- [ ] Profile the browser harness if full-release builds remain sluggish; debug
+  builds already lightly optimize FastFill and its dependencies.
 - [ ] Run automated integration/regression checks and a focused fresh review
-      after delivery work, without treating software checks as hardware tests.
+  after delivery work, without treating software checks as hardware tests.
 - [ ] User release gate: a 20-page project, repeated scans, save/reopen/export,
-      Surface touch at 150%/200% scaling, plus memory and latency checks.
+  Surface touch at 150%/200% scaling, plus memory and latency checks.
 - [ ] Decide whether to replace the C# app; no automatic migration/removal.
 
 ## Progress log
@@ -1108,8 +1115,8 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 ### 2026-10-12 — planning and environment inspection
 
 - Existing C# files and untracked `manual-checks.txt` remain untouched.
-- No Cargo/Rust compiler is currently available through PATH or installed
-  mise tools. User authorized installing required tools through mise.
+- No Cargo/Rust compiler is currently available through PATH or installed mise
+  tools. User authorized installing required tools through mise.
 - Checked iced's published 0.14.0 APIs and feature configuration rather than
   developing against the unreleased main branch.
 - Added independent `Rust prototype` CI. Native checks run on Linux, Windows,
@@ -1117,10 +1124,10 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 - TDD red: `cargo test --no-default-features` failed because the tested
   `geometry` module did not exist. Green: three tests now cover page fitting,
   coordinate round trips, and invalid dimensions.
-- Passed locally with Rust 1.99.0: formatting, all-feature tests, strict
-  Clippy, native GUI compilation, and WASM GUI compilation.
-- Native Windows and macOS compilation await the new CI workflow. GUI layout
-  and DPI behavior await user testing because this container has no display.
+- Passed locally with Rust 1.99.0: formatting, all-feature tests, strict Clippy,
+  native GUI compilation, and WASM GUI compilation.
+- Native Windows and macOS compilation await the new CI workflow. GUI layout and
+  DPI behavior await user testing because this container has no display.
 - Next: user checks this viewer on Linux and Windows. Record feedback before
   starting checkpoint 2.
 
@@ -1128,9 +1135,8 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 
 - User accepted checkpoint 1 at normal DPI. No high-DPI display was available;
   keep that check open for later hardware rather than blocking progress.
-- TDD red: four new navigation tests failed before `Navigation` existed.
-  Green: fit, pan, 1:1, pointer anchoring, zoom limits, and invalid changes
-  pass.
+- TDD red: four new navigation tests failed before `Navigation` existed. Green:
+  fit, pan, 1:1, pointer anchoring, zoom limits, and invalid changes pass.
 - TDD red: image-input tests failed before the validation boundary existed.
   Green: PNG/JPEG decoding enforces the existing 100 MiB and 50 MP limits and
   rejects empty, unsupported, oversized, truncated, or corrupt input.
@@ -1138,13 +1144,13 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   buttons, pointer-anchored mouse-wheel zoom, and left/right-button panning.
 - Passed nine tests, strict Clippy, formatting, native compilation, and WASM
   compilation. Windows and macOS remain covered by CI once pushed.
-- User accepted image import and mouse navigation. Import errors worked but
-  were too easy to miss in the normal status line.
+- User accepted image import and mouse navigation. Import errors worked but were
+  too easy to miss in the normal status line.
 
 ### 2026-10-12 — checkpoint 2B touch navigation
 
-- Made import failures a prominent warning panel while retaining the status
-  text as the single source of error details.
+- Made import failures a prominent warning panel while retaining the status text
+  as the single source of error details.
 - TDD red: interaction tests failed while the touch module was absent. Green:
   four tests now cover one-finger pan, two-finger pan/pinch, stable finger
   transitions, and suppression when a drawing tool owns input.
@@ -1182,8 +1188,8 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 - Added a headless software-rendering test at 100% and 200% scale. It exposed
   iced's image-over-stroke ordering and lost nested stroke clips. Use separate
   stack layers and explicit band clipping to cover both renderers.
-- CI now runs application/input/rendering tests on Linux, Windows, and macOS
-  as well as the independent core tests and WASM compilation.
+- CI now runs application/input/rendering tests on Linux, Windows, and macOS as
+  well as the independent core tests and WASM compilation.
 - Passed all 30 tests, the independent core test run, strict Clippy, formatting,
   and a linked Trunk WASM build locally. The expanded native CI awaits a push.
 - Annotations remain temporary; selection, object resizing, deletion, and
@@ -1193,8 +1199,8 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 - Follow-up: enable pointer-anchored wheel zoom in both tools while idle, and
   ignore it during drawing/panning. Two regression tests first reproduced the
   missing rectangle-tool zoom and unwanted zoom during a navigation drag.
-- Follow-up validation passed: all 32 tests, strict Clippy, formatting, and
-  the linked WASM build.
+- Follow-up validation passed: all 32 tests, strict Clippy, formatting, and the
+  linked WASM build.
 - User accepts the temporary confirmation bar shrinking the canvas. Record a
   stable confirmation overlay and a full visual-polish pass for checkpoint 7.
 
@@ -1208,16 +1214,16 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   object when the pointer starts within its controls and draws elsewhere.
 - Keep each edit separate from committed state until release. Escape, lost
   input, tool changes, and view changes restore the original rectangle.
-- Keep stroke width independent of resize geometry. Ctrl constrains a resize
-  to a square, Shift forces movement, and Alt forces the nearest-corner resize.
+- Keep stroke width independent of resize geometry. Ctrl constrains a resize to
+  a square, Shift forces movement, and Alt forces the nearest-corner resize.
 - Allow partly off-page edits while continuously retaining a small reachable
   portion instead of forcing full containment.
 - Added a software-renderer regression check proving an edit preview replaces
   the committed outline instead of leaving a ghost at its old position.
 - Passed all 49 feature-enabled tests, the dependency-light core suite, strict
   Clippy, formatting, and a linked Trunk WASM build.
-- Follow-up: continuously clamp one document unit while dragging off-page.
-  Tests cover crossing and reversing without a jump at three zoom levels.
+- Follow-up: continuously clamp one document unit while dragging off-page. Tests
+  cover crossing and reversing without a jump at three zoom levels.
 - Follow-up: keep the visible selection frame snug to small objects. Retain
   larger mouse/touch hit regions invisibly around the actual corner handles.
 - Next: user checks selection, handles, modifiers, cancellation, deletion, and
@@ -1225,18 +1231,18 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 
 ### 2026-10-13 — checkpoint 3C undo and redo
 
-- User accepted selection, movement, resizing, deletion, off-page clamping,
-  and snug selection frames. Committed checkpoints 3A and 3B as `f8003bd`.
+- User accepted selection, movement, resizing, deletion, off-page clamping, and
+  snug selection frames. Committed checkpoints 3A and 3B as `f8003bd`.
 - TDD red: history tests failed before undo, redo, and availability APIs
-  existed. Green: creation, movement, resizing, deletion, pending drafts,
-  no-op edits, selection restoration, and redo invalidation pass.
+  existed. Green: creation, movement, resizing, deletion, pending drafts, no-op
+  edits, selection restoration, and redo invalidation pass.
 - Store full rectangle snapshots for now. This is the smallest reliable model
   for the one-page rectangle prototype; structured history can wait until
   document and annotation types justify it.
 - Added Undo and Redo buttons plus platform-command Z, Shift+Z, and Y. On
   Windows and Linux the platform command is Ctrl; on macOS it is Command.
-- Canceled page replacement preserves history. Successful replacement starts
-  a new empty history with the new page.
+- Canceled page replacement preserves history. Successful replacement starts a
+  new empty history with the new page.
 - Passed all 54 feature-enabled tests, the dependency-light core suite, strict
   Clippy, formatting, and a linked Trunk WASM build.
 
@@ -1251,8 +1257,8 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   duplicating selection, editing, reachability, or history code.
 - Approximate oval outlines with 128 segments and clip each segment explicitly.
   This avoids iced's known lost nested clip in the software renderer.
-- Split the former monolithic entry point into a seven-line `main.rs`, app
-  state in `app.rs`, app checks in `app_tests.rs`, canvas input/rendering in
+- Split the former monolithic entry point into a seven-line `main.rs`, app state
+  in `app.rs`, app checks in `app_tests.rs`, canvas input/rendering in
   `page_canvas.rs`, and validated image selection in `picker.rs`.
 - Passed all 58 feature-enabled tests, the dependency-light core suite, strict
   Clippy, formatting, and a linked Trunk WASM build.
@@ -1261,8 +1267,8 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 
 ### 2026-10-13 — checkpoint 3E straight-line annotations
 
-- User accepted checkpoint 3D. Committed history, ovals, and the source split
-  as `479eeb8` before starting this slice.
+- User accepted checkpoint 3D. Committed history, ovals, and the source split as
+  `479eeb8` before starting this slice.
 - TDD red: line tests failed before explicit line geometry, tools, and endpoint
   hits existed. Green: creation in every direction, live Ctrl snapping,
   selection, movement, endpoint editing, cancellation, deletion, history,
@@ -1373,11 +1379,11 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   Include visible stroke in bounds so ink stays inside its selection frame.
 - Clip filled polygons and stroked path runs at page boundaries. Selection,
   cancel, delete, undo, redo, and reachability reuse existing annotation flow.
-- Close a filled pen's outline as a joined path instead of leaving round caps
-  at its start and end. Preserve separate runs where the page clips the path.
+- Close a filled pen's outline as a joined path instead of leaving round caps at
+  its start and end. Preserve separate runs where the page clips the path.
 - User accepted drawing, editing, filling, and interior selection after the
-  filled-outline join fix. Thick off-page clipping remains an accepted edge
-  case for this checkpoint.
+  filled-outline join fix. Thick off-page clipping remains an accepted edge case
+  for this checkpoint.
 - Passed 98 all-feature tests, 66 core-only tests, strict Clippy, formatting,
   native and WASM compilation, and a linked Trunk WASM build.
 
@@ -1395,8 +1401,8 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 - Rotate painted geometry and oriented selection controls together. Continue
   clipping fills and stroke centerlines at the page boundary.
 - Split annotation math, draft interaction, and state into focused modules.
-  Split canvas event handling from rendering and move renderer tests out of
-  the implementation file before starting another feature stage.
+  Split canvas event handling from rendering and move renderer tests out of the
+  implementation file before starting another feature stage.
 - Passed 102 all-feature tests, 71 core-only tests, strict Clippy, formatting,
   native and WASM compilation, and a linked Trunk WASM build.
 - User accepted mouse rotation, snapping, reset, editing, and rendering after
@@ -1411,8 +1417,8 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   Delete-all application tests failed before a confirmation state existed.
 - Keep selected object indices sorted. Ctrl-click toggles one object; dragging
   from empty page space selects every object intersecting the marquee.
-- Move a selected group with one shared constrained translation so every
-  object retains a reachable part. Render active group edits above siblings.
+- Move a selected group with one shared constrained translation so every object
+  retains a reachable part. Render active group edits above siblings.
 - Apply color and thickness to every selected object. Apply Fill only to
   compatible rectangles, ovals, and pen paths.
 - Delete a selection in one history entry. Require explicit confirmation for
@@ -1421,9 +1427,9 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   preserving the relative order within both groups.
 - Split style, selection, and selection-rendering code into focused modules;
   keep UI dimensions and colors centralized for checkpoint 7 restyling.
-- User accepted marquee and Ctrl-click selection, grouped movement, bulk
-  styles, layers, both deletion paths, edge reachability, and history. Native
-  touch behavior remains deferred for later hardware.
+- User accepted marquee and Ctrl-click selection, grouped movement, bulk styles,
+  layers, both deletion paths, edge reachability, and history. Native touch
+  behavior remains deferred for later hardware.
 - Follow-up feedback exposed ambiguous membership for objects inside a group
   boundary. Draw a faint frame around every member beneath the strong outer
   frame; a headless renderer regression toggles an interior member while the
@@ -1438,22 +1444,22 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   couple the reusable core to iced. The avoidable coupling was inside large
   module roots and duplicated tool lists.
 - Turned `annotations`, `app`, and `page_canvas` into directory modules. Their
-  roots now expose state and wiring while focused children own model types,
-  tool metadata, controller logic, views, rendering, clipping, input, and
-  selection visuals.
+  roots now expose state and wiring while focused children own model types, tool
+  metadata, controller logic, views, rendering, clipping, input, and selection
+  visuals.
 - Added one `Tool::ALL` catalog for toolbar order and per-tool defaults. Tool
   capabilities now drive canvas input and cursors, so another drawing tool no
   longer requires duplicate exhaustive lists in GUI code.
-- Kept geometry and editor state independent of iced and native APIs. Avoided
-  a trait-per-tool design: current geometry families already provide the
-  useful extension seam without speculative abstractions.
+- Kept geometry and editor state independent of iced and native APIs. Avoided a
+  trait-per-tool design: current geometry families already provide the useful
+  extension seam without speculative abstractions.
 - The macOS CI failure was a platform-specific test bug. The application uses
   iced's command modifier correctly; its test now uses `Modifiers::COMMAND`
   instead of assuming Ctrl on every operating system.
 - Passed 114 all-feature tests, 80 core-only tests, strict Clippy, formatting,
   native and WASM compilation, and a linked Trunk WASM build.
-- User smoke-tested the existing tools and accepted the refactor before phase
-  4 started.
+- User smoke-tested the existing tools and accepted the refactor before phase 4
+  started.
 
 ### 2026-10-14 — checkpoint 4A plain inline text
 
@@ -1463,15 +1469,14 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 - TDD red: the isolated text tests failed before the Text tool, pending draft,
   acceptance, history, and deletion APIs existed.
 - Place text by click or tap, left-aligned at that page point. Edit it in a
-  focused, translucent input over the page; Enter or another page click
-  accepts it and Escape cancels it.
+  focused, translucent input over the page; Enter or another page click accepts
+  it and Escape cancels it.
 - Keep empty or canceled drafts out of history. Include accepted text in undo,
   redo, delete-all, replacement confirmation, annotation count, and rendering.
-- Keep edge placement consistent by storing the adjusted editor anchor and
-  width used by final rendering. Use high-contrast black editor text.
-- Match the editor's padding and 1.3 line-height in canvas rendering. A
-  headless renderer check requires editing and finalized glyph bounds to be
-  identical.
+- Keep edge placement consistent by storing the adjusted editor anchor and width
+  used by final rendering. Use high-contrast black editor text.
+- Match the editor's padding and 1.3 line-height in canvas rendering. A headless
+  renderer check requires editing and finalized glyph bounds to be identical.
 - Passed 124 all-feature tests, 85 core-only tests, strict Clippy, formatting,
   native and WASM compilation, and a linked Trunk WASM build.
 - User accepted 4A after left-aligned placement, high-contrast input, shared
@@ -1482,17 +1487,17 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 - User accepted 4A. TDD red then covered multiline bounds, reopening, moving,
   edit history, deletion safety, and zoom-independent placement.
 - Replace the single-line input with iced's multiline editor. Plain Enter
-  accepts; Shift+Enter inserts a line break. Click-away and Escape retain
-  their accepted and canceled meanings.
+  accepts; Shift+Enter inserts a line break. Click-away and Escape retain their
+  accepted and canceled meanings.
 - Measure the same font, shaping, size, and line height used by the canvas
   renderer. Keep content bounds in page units, so zoom does not alter object
   geometry. Preserve only explicit line breaks; never soft-wrap at page edges.
 - Preserve the text origin while content grows. Reopen text immediately with
   Text, or click-release with Select; drag with Select to move it as one
   undoable edit.
-- Draw a selection frame for accepted text, allow deletion when not editing,
-  and clip rendered glyphs at the page edge. Editing and finalized multiline
-  glyph bounds match in headless renderer checks.
+- Draw a selection frame for accepted text, allow deletion when not editing, and
+  clip rendered glyphs at the page edge. Editing and finalized multiline glyph
+  bounds match in headless renderer checks.
 - Edge testing exposed bounds clamped to the remaining paper area. Text frames
   now retain full measured size outside the paper, while accepted glyphs are
   clipped to both paper and document viewport. This also prevents panned text
@@ -1504,9 +1509,9 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 
 ### 2026-10-14 — checkpoint 4C formatting and rotation
 
-- TDD red covered pending format changes, Escape restoration, acceptance as
-  one history entry, remembered defaults, rotated hit testing, Ctrl snapping,
-  reset, and undo/redo.
+- TDD red covered pending format changes, Escape restoration, acceptance as one
+  history entry, remembered defaults, rotated hit testing, Ctrl snapping, reset,
+  and undo/redo.
 - Add generic Sans, Serif, and Monospace choices; 8–64 point sizes; bold,
   italic, underline, and six existing colors. Measure and render with the same
   selected font attributes.
@@ -1519,8 +1524,8 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 - Keep editing horizontal and size it from unrotated measured bounds. Render
   accepted glyphs and underlines rotated and clipped to the page.
 - Fall back to bundled Fira Sans instead of crashing when a minimal Linux or
-  WASM environment lacks a requested generic or italic face. Normal desktop
-  font installations retain their native generic families.
+  WASM environment lacks a requested generic or italic face. Normal desktop font
+  installations retain their native generic families.
 - Select clicks now retain an inactive text selection for move, rotation,
   deletion, and immediate undoable formatting. Text clicks still reopen the
   inline editor, whose formatting remains pending and cancelable.
@@ -1536,14 +1541,13 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 
 ### 2026-10-14 — checkpoint 4D1 shared annotation layout
 
-- TDD red: backend-neutral rendering tests failed before a core rendering
-  module exposed annotation paths and text layout.
+- TDD red: backend-neutral rendering tests failed before a core rendering module
+  exposed annotation paths and text layout.
 - Generate rectangle, oval, line, arrow, mark, pen, and highlighter paths in
-  page coordinates without iced or platform dependencies. Keep color,
-  opacity, stroke width, joins, caps, fill, rotation, and layer order intact.
-- Make the iced canvas a thin adapter over that shared layout. Existing
-  clipping stays in the preview backend and all pixel-rendering regressions
-  remain green.
+  page coordinates without iced or platform dependencies. Keep color, opacity,
+  stroke width, joins, caps, fill, rotation, and layer order intact.
+- Make the iced canvas a thin adapter over that shared layout. Existing clipping
+  stays in the preview backend and all pixel-rendering regressions remain green.
 - Keep text content, measured bounds, format, and rotation in shared layout.
   Actual glyph shaping remains iced-specific; the PDF probe must expose any
   metric mismatch or flatten the same shaped output rather than silently
@@ -1551,27 +1555,27 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 - Add no dependency. The PDF backend decision remains deferred until 4D2.
 - Passed 150 all-feature tests and 103 dependency-light core tests, strict
   Clippy, formatting, native and WASM compilation, and a linked Trunk build.
-- User confirmed that existing annotation rendering remains visually
-  unchanged. Start the PDF probe without reopening preview work.
+- User confirmed that existing annotation rendering remains visually unchanged.
+  Start the PDF probe without reopening preview work.
 
 ### 2026-10-14 — checkpoint 4D2 PDF probe and toolkit decision
 
 - TDD red: the PDF probe test failed before its feature and module existed.
-  Green: valid page geometry produces a one-page PDF and invalid dimensions
-  fail explicitly.
+  Green: valid page geometry produces a one-page PDF and invalid dimensions fail
+  explicitly.
 - Add optional Krilla 0.8.2 with no default features. Translate the shared
   paths, fills, strokes, joins, caps, colors, rotations, and opacity directly;
   do not duplicate annotation geometry in the PDF adapter.
-- Reject text with `TextRequiresFlattening`. Iced/cosmic-text owns current
-  font fallback, shaping, and measured bounds; reshaping with another engine
-  could move or wrap text. Imported page images are likewise absent from this
+- Reject text with `TextRequiresFlattening`. Iced/cosmic-text owns current font
+  fallback, shaping, and measured bounds; reshaping with another engine could
+  move or wrap text. Imported page images are likewise absent from this
   vector-only probe rather than silently rendered differently.
 - Keep iced. It has passed the required desktop interactions, inline editing,
   shared layer rendering, native CI, and WASM compilation. It need not be the
   PDF serializer. Phase 5 should flatten the complete page with matching text
   layout, then use the PDF library as the container.
-- Passed 153 all-feature tests, 103 dependency-light core tests, strict
-  Clippy, formatting, all-feature WASM compilation, and a linked Trunk build.
+- Passed 153 all-feature tests, 103 dependency-light core tests, strict Clippy,
+  formatting, all-feature WASM compilation, and a linked Trunk build.
 
 ### 2026-10-14 — checkpoint 5A safe project loading
 
@@ -1579,11 +1583,10 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   slice began.
 - TDD red: the archive tests failed before the project module existed. Green:
   six focused checks cover compatible data, hostile names, normalized-name
-  collisions, unknown fields, model limits, geometry, assets, and manifest
-  size.
+  collisions, unknown fields, model limits, geometry, assets, and manifest size.
 - Mirror schema version 1 as a separate lossless project model. Preserve all
-  crop, filter, annotation, style, transform, identity, and timestamp data;
-  do not prematurely force normalized C# geometry into the Rust editor model.
+  crop, filter, annotation, style, transform, identity, and timestamp data; do
+  not prematurely force normalized C# geometry into the Rust editor model.
 - Bound entry count, compressed and expanded sizes, manifest and image bytes,
   decoded pixels, pages, annotations, ink points, and UTF-16 text lengths.
   Reject non-regular/unsafe entries, duplicate entries or IDs, malformed JSON,
@@ -1593,21 +1596,21 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   compatible.
 - Add only pure-Rust ZIP/JSON/schema dependencies. All-feature WASM compilation
   and the linked Trunk build remain green.
-- Passed 159 all-feature tests, 109 dependency-light core tests, strict
-  Clippy, formatting, all-feature WASM compilation, and a linked Trunk build.
-- UI opening and conversion into editable Rust pages remain deliberately out
-  of this trust-boundary slice. User confirmed the host test suite remains
-  green, so 5A is accepted.
+- Passed 159 all-feature tests, 109 dependency-light core tests, strict Clippy,
+  formatting, all-feature WASM compilation, and a linked Trunk build.
+- UI opening and conversion into editable Rust pages remain deliberately out of
+  this trust-boundary slice. User confirmed the host test suite remains green,
+  so 5A is accepted.
 
 ### 2026-10-14 — checkpoint 5B atomic project saving
 
-- TDD red: archive tests failed before save APIs existed. Green: schema-v1
-  data and assets survive load-save-load, missing assets fail before output,
-  invalid saves preserve the old file, and successful saves leave no
-  temporary entries behind.
+- TDD red: archive tests failed before save APIs existed. Green: schema-v1 data
+  and assets survive load-save-load, missing assets fail before output, invalid
+  saves preserve the old file, and successful saves leave no temporary entries
+  behind.
 - Validate the model, encoded images, dimensions, formats, manifest size, and
-  expanded size before writing. Reopen and compare the temporary archive
-  before committing it.
+  expanded size before writing. Reopen and compare the temporary archive before
+  committing it.
 - Use `atomicwrites` only on native targets. It writes beside the destination,
   syncs data, uses durable Unix rename, and uses `MoveFileExW` with replace and
   write-through flags on Windows. Keep the shared ZIP writer dependency-free
@@ -1617,30 +1620,29 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   loader.
 - Round-trip both available C# review projects without changing their project
   model or page assets.
-- Passed 162 all-feature tests, 112 dependency-light core tests, strict
-  Clippy, formatting, all-feature WebAssembly compilation, and a linked Trunk
-  build locally. Native Windows and macOS replacement still rely on CI.
+- Passed 162 all-feature tests, 112 dependency-light core tests, strict Clippy,
+  formatting, all-feature WebAssembly compilation, and a linked Trunk build
+  locally. Native Windows and macOS replacement still rely on CI.
 - User confirmed the host test suite passes; 5B is accepted.
 
 ### 2026-10-14 — checkpoint 5C multiple image pages
 
-- TDD red: controller tests failed before multi-page state and messages
-  existed. Green: independent annotations/history, switches, tool defaults,
-  page limits, picker cancellation, stale replies, reorder, and confirmed
-  deletion retain the expected page data.
+- TDD red: controller tests failed before multi-page state and messages existed.
+  Green: independent annotations/history, switches, tool defaults, page limits,
+  picker cancellation, stale replies, reorder, and confirmed deletion retain the
+  expected page data.
 - Move page ownership and page-specific controller actions into `app/pages`.
-  Copy only tool settings between pages; keep each page's annotation history
-  in place. Store no duplicated active-page annotation state.
-- Add a fixed-width rail with image thumbnails, annotation counts, native
-  page selector, import/replace/delete controls, and reorder buttons. A
-  dedicated drag grip owns mouse/touch reorder; touch elsewhere scrolls.
-- Preview reorder until release. Use the final release position, reject a
-  drop outside the rail, ignore other pointers, and cancel on Escape or lost
-  touch. Automated input tests cover these paths without a display.
-- Keep annotation Undo/Redo per page. Page operations currently require
-  explicit confirmation where destructive and are not part of undo. Project
-  open/save UI, archive-to-editor conversion, and dirty revisions follow in
-  the next slice.
+  Copy only tool settings between pages; keep each page's annotation history in
+  place. Store no duplicated active-page annotation state.
+- Add a fixed-width rail with image thumbnails, annotation counts, native page
+  selector, import/replace/delete controls, and reorder buttons. A dedicated
+  drag grip owns mouse/touch reorder; touch elsewhere scrolls.
+- Preview reorder until release. Use the final release position, reject a drop
+  outside the rail, ignore other pointers, and cancel on Escape or lost touch.
+  Automated input tests cover these paths without a display.
+- Keep annotation Undo/Redo per page. Page operations currently require explicit
+  confirmation where destructive and are not part of undo. Project open/save UI,
+  archive-to-editor conversion, and dirty revisions follow in the next slice.
 - Add a software-rendered full-window layout check for rail/canvas separation
   and keep all existing rendering tests green. Let the tool row scroll
   horizontally when the narrower editor cannot fit every control.
@@ -1657,19 +1659,19 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   during the current run. Fall back to the normal dialog location if that
   directory no longer exists; browsers cannot expose the selected folder.
 - Allow drag from the whole thumbnail. Reflow thumbnails into their preview
-  positions, highlight the moved card, and separate the drop marker from
-  the card. Accept empty space below the final page as an end-of-list drop.
-- Provide a separate right-edge scrollbar for mouse/touch list scrolling.
-  Mouse wheel scrolling also works while reordering a long list.
+  positions, highlight the moved card, and separate the drop marker from the
+  card. Accept empty space below the final page as an end-of-list drop.
+- Provide a separate right-edge scrollbar for mouse/touch list scrolling. Mouse
+  wheel scrolling also works while reordering a long list.
 - The previous Add path retained an annotated starter blank as another page.
   Make the first-image workflow explicit instead: ask before replacing an
-  annotated starter, and retain its annotations/history if confirmation or
-  image selection is canceled. Add on image pages still inserts a new page.
-- TDD red: folder-memory and reorder-preview APIs were absent. Green: new
-  tests cover whole-thumbnail mouse/touch drags, end-of-list release through
-  actual input events, preview/cancel geometry, folder memory, and confirmed
-  starter replacement. All 178 all-feature tests, strict Clippy, formatting,
-  WebAssembly compilation, and the linked Trunk build pass locally.
+  annotated starter, and retain its annotations/history if confirmation or image
+  selection is canceled. Add on image pages still inserts a new page.
+- TDD red: folder-memory and reorder-preview APIs were absent. Green: new tests
+  cover whole-thumbnail mouse/touch drags, end-of-list release through actual
+  input events, preview/cancel geometry, folder memory, and confirmed starter
+  replacement. All 178 all-feature tests, strict Clippy, formatting, WebAssembly
+  compilation, and the linked Trunk build pass locally.
 - User confirmed the behavior; 5C is accepted. Record the requested animated
   floating-thumbnail/gap reorder under Phase 7. Keep the current labels until
   that rail redesign; no further UI implementation in this checkpoint.
@@ -1679,29 +1681,29 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 - Commit accepted 5B/5C progress as `81489b8`, unsigned and without pushing.
 - Split 5D into a core conversion checkpoint and a later open/save UI slice.
   Keep the current image-pixel GUI coordinate system unchanged until 5D2.
-- TDD red: bridge APIs, object IDs, and content revisions did not exist.
-  Green: all current tools preserve identity/order/styles through conversion
-  and a real ZIP round-trip. Rotated rectangles, ovals, marks, and ink retain
-  physical corners on portrait pages; loading starts with empty history.
+- TDD red: bridge APIs, object IDs, and content revisions did not exist. Green:
+  all current tools preserve identity/order/styles through conversion and a real
+  ZIP round-trip. Rotated rectangles, ovals, marks, and ink retain physical
+  corners on portrait pages; loading starts with empty history.
 - Generate IDs once per draft. Preserve them through editing, translation,
   rotation, layer changes, and history. Use the existing UUID dependency's
   native RNG/Web Crypto support rather than a new ID mechanism.
 - Track only committed content revisions. Cancel, selection, and tool defaults
-  do not dirty the document; undo/redo restores the previous revision, and
-  a new branch receives a distinct revision.
+  do not dirty the document; undo/redo restores the previous revision, and a new
+  branch receives a distinct revision.
 - Preserve unchanged schema objects exactly, including unused metadata. Map
-  arbitrary ARGB colors without reducing them to the palette; combine alpha
-  and highlighter transparency once in backend-neutral paint. A software
-  renderer test also verifies alpha is not multiplied twice on the canvas.
+  arbitrary ARGB colors without reducing them to the palette; combine alpha and
+  highlighter transparency once in backend-neutral paint. A software renderer
+  test also verifies alpha is not multiplied twice on the canvas.
 - Reject pending edits and unsupported crops, page rotation, filters, affine
-  scaling/shear, fonts, and soft-wrap settings. The archive loader continues
-  to preserve full schema-v1 projects. These are temporary editable-conversion
+  scaling/shear, fonts, and soft-wrap settings. The archive loader continues to
+  preserve full schema-v1 projects. These are temporary editable-conversion
   limits, not the final v1 import policy; font metrics are not pixel-identical
   across the old and new renderers.
 - TDD red also exposed finite normalized coordinates overflowing to NaN/Inf
   after point conversion. Reject geometry outside the editor's numeric range.
-- Record user approval for meaningful schema-v2 output, retaining v1 import.
-  No schema change in this foundation; original image bytes are never resized.
+- Record user approval for meaningful schema-v2 output, retaining v1 import. No
+  schema change in this foundation; original image bytes are never resized.
 - Passed 190 all-feature tests, 123 core-only tests, strict Clippy, formatting,
   all-feature WebAssembly compilation, and a linked Trunk build locally.
 - Next: host tests, then connect open/save dialogs, point-space page geometry,
@@ -1711,30 +1713,30 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 
 - User confirmed the 5D1 host tests; mark that foundation accepted.
 - TDD red: project controller/actions were absent. Green: accept pending text,
-  cancel drafts, prompt on dirty New/Open/Close, and retain the current pages
-  on cancellation, unsupported content, or failed load/save. A successful
+  cancel drafts, prompt on dirty New/Open/Close, and retain the current pages on
+  cancellation, unsupported content, or failed load/save. A successful
   Save-before-leave resumes its intended action; failed/canceled saves do not.
 - Keep project transaction state, file I/O, and project UI in focused modules.
   Image/ZIP processing and native archive I/O run through background tasks;
-  bounded schema/editor conversion stays in the controller. Install loaded
-  pages only after the whole project is editable. Use request IDs to
-  reject stale completions; preserve numbering across New.
+  bounded schema/editor conversion stays in the controller. Install loaded pages
+  only after the whole project is editable. Use request IDs to reject stale
+  completions; preserve numbering across New.
 - Show the filename and dirty `*` in the heading/title. Add New/Open/Save/Save
   as and Ctrl/Command+N/O/S/Shift+S. Native close requests use the same guard.
   Keep confirmation state on focus loss; Escape keeps the project.
 - Identify saved content by ordered page IDs plus annotation revisions.
   Replacement gets a new page ID; selection/navigation/defaults do not count.
   Undo/redo restores dirty identity. Page operations still are not undoable.
-- Snapshot all pages, retain original PNG/JPEG bytes, and encode blank pages
-  as white PNGs. Use the tested atomic writer for native Save and Save as.
-  Restore clean state/path only after success; retain successful folder choices.
+- Snapshot all pages, retain original PNG/JPEG bytes, and encode blank pages as
+  white PNGs. Use the tested atomic writer for native Save and Save as. Restore
+  clean state/path only after success; retain successful folder choices.
 - Use a 612-point width for image and blank pages. Retain exact source pixel
   dimensions in image metadata, and derive 1:1 from those pixels rather than
   point units. Update thickness labels to points. Renderer fixtures explicitly
   keep pixel-aligned test units so old raster assertions stay meaningful.
-- Cover real ZIP save/reload, multiple pages, byte equality, stable IDs,
-  fresh loaded history, native disk writing, page reorder/replacement dirty
-  state, platform command keys, and command-key release during save.
+- Cover real ZIP save/reload, multiple pages, byte equality, stable IDs, fresh
+  loaded history, native disk writing, page reorder/replacement dirty state,
+  platform command keys, and command-key release during save.
 - Keep browser upload/download-save buildable using the existing dialog API.
   Enable existing dependency features for file-size checks before browser reads
   and UTC time without unsupported WASM system-clock calls. A download receipt
@@ -1742,8 +1744,7 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   Browser archive/image processing still runs on its event thread.
 - Full v1 archives remain readable, but editable imports retain 5D1's temporary
   crop/filter/affine/font/layout restrictions. Do not silently flatten/drop
-  them.
-  No new schema yet. User confirmed the manual file-workflow checkpoint;
+  them. No new schema yet. User confirmed the manual file-workflow checkpoint;
   mark 5D2 accepted.
 - Passed 206 all-feature tests, 123 core-only tests, strict Clippy, formatting,
   all-feature WebAssembly compilation, and a linked Trunk build locally.
@@ -1759,10 +1760,10 @@ Manual checkpoint — accepted (use copies for legacy files):
 4. Test New/Open/native window close while dirty: Cancel, Discard, and Save.
    Cancel the save dialog; verify the old project remains open. Save as creates
    another file; later Save updates it without another destination picker.
-5. Try a corrupt/unsupported project and an unwritable save destination;
-   verify a visible error, unchanged current data, and unchanged old save file.
-6. Check Ctrl+N/O/S/Shift+S (Command on macOS), remembered project folders,
-   and ordinary mouse editing. Browser upload/download is optional; save before
+5. Try a corrupt/unsupported project and an unwritable save destination; verify
+   a visible error, unchanged current data, and unchanged old save file.
+6. Check Ctrl+N/O/S/Shift+S (Command on macOS), remembered project folders, and
+   ordinary mouse editing. Browser upload/download is optional; save before
    closing/reloading its tab. Native touch remains a hardware checkpoint.
 
 User requested a stop at 5D2. Resumed below after the green CI report.
@@ -1775,37 +1776,37 @@ User requested a stop at 5D2. Resumed below after the green CI report.
   cover sizing, page order, white backgrounds, printed standard-font text,
   crop/rotation/UserUnit, invalid input, count/pixel budgets, cancellation,
   renderer warnings, and the tracked printable sample form.
-- Select Hayro 0.8 with embedded substitute fonts/CMaps and CPU rendering.
-  It builds without a separate PDFium/native renderer installation. Keep the
+- Select Hayro 0.8 with embedded substitute fonts/CMaps and CPU rendering. It
+  builds without a separate PDFium/native renderer installation. Keep the
   GUI-independent adapter behind `pdf-import`, enabled by the GUI feature;
   core-only tests need not compile the renderer. Existing `pdf` export probe
   remains separate and unchanged.
 - Import every PDF page at 300 DPI as a white-backed PNG. Stage all images
-  before inserting after the active page; replace only an empty starter.
-  Retain annotated starter pages, other page IDs, selection, and history.
-  Printed PDF content/forms become image backgrounds, not editable objects.
-- Check input length before parsing, all page dimensions before rendering,
-  and encoded output size before installation. Limits: 100 MiB input,
-  20 project pages, 50 MP/page, 200 MP/batch, 600 MiB encoded batch output.
-  Fail the complete batch on reported content warnings or native renderer
-  panic. These limits are not an internal memory/CPU/decompression sandbox;
-  use trusted PDFs and visually verify complex content.
+  before inserting after the active page; replace only an empty starter. Retain
+  annotated starter pages, other page IDs, selection, and history. Printed PDF
+  content/forms become image backgrounds, not editable objects.
+- Check input length before parsing, all page dimensions before rendering, and
+  encoded output size before installation. Limits: 100 MiB input, 20 project
+  pages, 50 MP/page, 200 MP/batch, 600 MiB encoded batch output. Fail the
+  complete batch on reported content warnings or native renderer panic. These
+  limits are not an internal memory/CPU/decompression sandbox; use trusted PDFs
+  and visually verify complex content.
 - Native import owns one worker thread. Page progress/cancellation use the
   existing project-operation guard and request IDs. Cancel discards the batch
   and releases the UI; an in-flight page can finish but its late result is
   ignored. Cannot interrupt a single page or parsing. Reuse image folder memory.
 - Keep the browser upload path buildable, but explicitly document synchronous
-  browser rasterization and unavailable progress/cancel during that work.
-  A browser worker runtime is outside this small native-first checkpoint.
+  browser rasterization and unavailable progress/cancel during that work. A
+  browser worker runtime is outside this small native-first checkpoint.
 - Controller checks cover all-or-nothing insertion, an annotated starter,
-  modal/edit guards, stale replies, modifier release, and pending text/drafts.
-  A real sample PDF raster passes through annotation, ZIP save, reload, and
+  modal/edit guards, stale replies, modifier release, and pending text/drafts. A
+  real sample PDF raster passes through annotation, ZIP save, reload, and
   editable page reconstruction with stable IDs and exact raster dimensions.
-- Remove stale prototype README claims that project open/save is absent and
-  all content is temporary. Document PDF behavior and current limitations.
+- Remove stale prototype README claims that project open/save is absent and all
+  content is temporary. Document PDF behavior and current limitations.
 - Passed 224 all-feature tests, 123 core-only tests, strict Clippy, formatting,
-  all-feature WebAssembly compilation, and a linked Trunk build locally.
-  New Windows/macOS runtime checks still rely on CI and manual testing.
+  all-feature WebAssembly compilation, and a linked Trunk build locally. New
+  Windows/macOS runtime checks still rely on CI and manual testing.
 
 Manual checkpoint — accepted, with performance/selection follow-up below:
 
@@ -1816,11 +1817,11 @@ Manual checkpoint — accepted, with performance/selection follow-up below:
 3. Annotate an existing page, then import another PDF. Check insertion after
    that page, retained annotations/history, and an unsaved `*`. An annotated
    starter blank must remain rather than being silently replaced.
-4. Annotate imported pages, reorder, save as `.docscan`, New, and reopen.
-   Check all page images, annotations, IDs/order behavior, and clean state.
-5. Cancel the picker or an in-progress multi-page import. Try a damaged PDF
-   and a PDF exceeding remaining page capacity. Check that no partial pages
-   appear and existing content remains usable. Password PDFs have no prompt.
+4. Annotate imported pages, reorder, save as `.docscan`, New, and reopen. Check
+   all page images, annotations, IDs/order behavior, and clean state.
+5. Cancel the picker or an in-progress multi-page import. Try a damaged PDF and
+   a PDF exceeding remaining page capacity. Check that no partial pages appear
+   and existing content remains usable. Password PDFs have no prompt.
 6. Confirm progress and Cancel remain responsive in the native app. Browser
    upload is optional; large imports can freeze the harness while rendering.
 
@@ -1828,9 +1829,9 @@ Stop for this checkpoint; do not start PDF export or recovery yet.
 
 ### 2026-10-15 — 5E performance and mixed-selection follow-up
 
-- User confirmed functional import checks. Reported slow import/open/save,
-  page images appearing after annotations, minimal progress, and missing text
-  from marquee/Ctrl-click groups. Do not advance to export yet.
+- User confirmed functional import checks. Reported slow import/open/save, page
+  images appearing after annotations, minimal progress, and missing text from
+  marquee/Ctrl-click groups. Do not advance to export yet.
 - Found the supplied sample at `artifacts/reviews/docscans/sample-page.docscan`
   rather than `artifacts/previews/`. Its 1.3 MiB archive holds 18.8 MP of image
   data, about 75 MB as RGBA. Unoptimized local timings: validated open 0.91 s,
@@ -1840,12 +1841,12 @@ Stop for this checkpoint; do not start PDF export or recovery yet.
   original PNG/JPEG handles for saving; use decoded RGBA handles for the page
   and rail. Share a display handle across repeated asset references. Install
   only after the entire project succeeds; no UI-thread image decode gap.
-- Retain rendered PDF pixels for display and encode PNG with the existing
-  image codec's fast default. This trades some compression for speed, not
-  image quality. Keep 300 DPI and all input/output limits unchanged.
+- Retain rendered PDF pixels for display and encode PNG with the existing image
+  codec's fast default. This trades some compression for speed, not image
+  quality. Keep 300 DPI and all input/output limits unchanged.
 - Optimize dependencies in debug/test builds while leaving FastFill's code
-  debuggable. Accept the one-time dependency rebuild; subsequent app edits
-  reuse it. Keep agent build output under `/tmp`.
+  debuggable. Accept the one-time dependency rebuild; subsequent app edits reuse
+  it. Keep agent build output under `/tmp`.
 - Remove a redundant full decode in GUI save snapshot preparation. The archive
   writer still fully validates every source image before writing. Native
   read-back checks exact manifest/asset bytes, entry count, and ZIP CRC without
@@ -1861,9 +1862,9 @@ Stop for this checkpoint; do not start PDF export or recovery yet.
   Show faint text-member frames; retain single-object edit/rotation controls.
 - Do not add archive thumbnails or a new schema yet. Profile the corrected
   pipeline first; previews could be a later optimization for very large files.
-- The same local sample now opens/validates in 82 ms and writes/validates in
-  66 ms. Actual native atomic save including byte/CRC read-back takes 67 ms.
-  These are container measurements, not native GUI/SP6 latency promises.
+- The same local sample now opens/validates in 82 ms and writes/validates in 66
+  ms. Actual native atomic save including byte/CRC read-back takes 67 ms. These
+  are container measurements, not native GUI/SP6 latency promises.
 - Passed 234 all-feature tests, 129 core-only tests, strict Clippy, formatting,
   and all-feature WASM compilation. Native UI responsiveness and mixed-selection
   feedback still need the checks below.
@@ -1885,31 +1886,31 @@ Follow-up manual checkpoint — accepted, with font-control follow-up below:
 - Show text controls whenever selected text exists, including mixed groups.
   Retain shape thickness/fill and shared colors; scroll the options row
   horizontally rather than clipping controls in narrower windows.
-- Display mixed typefaces/sizes with a placeholder. Mark B/I/U active only
-  when all selected text shares the attribute; click to enable all otherwise,
-  or disable all when already active.
-- Apply only the requested attribute to each selected text, retaining its
-  other formatting, content, ID, anchor, and rotation. Measure each updated
-  text separately. Stage/validate every result before one undoable commit;
-  preserve shapes and block formatting during active drags or text drafts.
+- Display mixed typefaces/sizes with a placeholder. Mark B/I/U active only when
+  all selected text shares the attribute; click to enable all otherwise, or
+  disable all when already active.
+- Apply only the requested attribute to each selected text, retaining its other
+  formatting, content, ID, anchor, and rotation. Measure each updated text
+  separately. Stage/validate every result before one undoable commit; preserve
+  shapes and block formatting during active drags or text drafts.
 - Preserve pending inline edit formatting and Escape behavior. Shared color
   still reaches both shapes and text; font attributes apply only to text.
 - TDD red: bulk API was missing. New core/controller checks cover mixed
   formatting, independent box measurement, field preservation, invalid batch
   rollback, active drags, shared color, shape thickness, and undo/redo.
 - Passed 236 all-feature tests, 130 core-only tests, strict Clippy, formatting,
-  and all-feature WASM compilation locally. User confirmed the focused UI
-  checks below; mark 5E and its follow-ups complete.
+  and all-feature WASM compilation locally. User confirmed the focused UI checks
+  below; mark 5E and its follow-ups complete.
 
 Manual checkpoint — accepted:
 
-1. Select text plus shapes, or multiple texts with different fonts/sizes.
-   Check that font controls show alongside compatible shape options, with
-   "Mixed" placeholders where applicable.
+1. Select text plus shapes, or multiple texts with different fonts/sizes. Check
+   that font controls show alongside compatible shape options, with "Mixed"
+   placeholders where applicable.
 2. Change font/size/B/I/U. Check only text changes, no unwanted attribute
    copying, boxes update correctly, and one Undo restores the whole action.
-3. Check shared color and shape thickness/fill, font-size wheel adjustment,
-   and ordinary inline editing/Enter/Escape. Do not start PDF export yet.
+3. Check shared color and shape thickness/fill, font-size wheel adjustment, and
+   ordinary inline editing/Enter/Escape. Do not start PDF export yet.
 
 Stop after the requested commit. Resume with matching PDF export next, then
 recovery as a separate checkpoint; neither is implemented in this slice.
@@ -1920,10 +1921,10 @@ recovery as a separate checkpoint; neither is implemented in this slice.
 - Add tests for page order/dimensions, whole-document preflight, page-boundary
   cancellation, and exclusion of selection/draft overlays before wiring UI.
 - Reuse iced's headless software renderer and the existing annotation drawing
-  functions. Keep one explicit renderer layer per annotation to retain
-  text/path order. A regression test caught that separate geometries alone
-  still batch text above paths; mirror the UI stack's layer boundaries.
-  Snapshot committed objects without copying selection or undo history.
+  functions. Keep one explicit renderer layer per annotation to retain text/path
+  order. A regression test caught that separate geometries alone still batch
+  text above paths; mirror the UI stack's layer boundaries. Snapshot committed
+  objects without copying selection or undo history.
 - Flatten at 300 DPI in page-point coordinates; embed raw RGBA losslessly with
   the existing Krilla dependency. Enable its raster-images feature for GUI
   builds only; the standalone vector PDF probe stays dependency-light.
@@ -1939,23 +1940,24 @@ recovery as a separate checkpoint; neither is implemented in this slice.
 - Add render/round-trip checks covering formatted Unicode text, rotation,
   translucent shapes/highlighting, clipping, real canvas parity, blank paper,
   and imported backgrounds. Add controller and atomic-write regressions.
-- Document raster/non-searchable output, page-point printing dimensions, and
-  the existing browser event-thread/download acknowledgment limitations.
+- Document raster/non-searchable output, page-point printing dimensions, and the
+  existing browser event-thread/download acknowledgment limitations.
 
-Automated validation: all green. All-feature suite: 249 tests; core-only:
-130 tests. Formatting, strict all-target/all-feature Clippy, native test
-compilation, WebAssembly compilation, and diff whitespace checks pass.
-The PDF-only feature build also passes its three vector-probe tests without
-the GUI or raster-image feature.
-Builds use `/tmp/fastfill-rust-codex-target`, never the host target directory.
+Automated validation: all green. All-feature suite: 249 tests; core-only: 130
+tests. Formatting, strict all-target/all-feature Clippy, native test
+compilation, WebAssembly compilation, and diff whitespace checks pass. The
+PDF-only feature build also passes its three vector-probe tests without the GUI
+or raster-image feature. Builds use `/tmp/fastfill-rust-codex-target`, never the
+host target directory.
 
 Manual checkpoint 5F — passed by user; see follow-up below:
 
 1. Open a copy of a multi-page project, reorder pages, and export. Check count,
    order, backgrounds, and annotation placement in a PDF viewer.
-2. Include B/I/U, multiple fonts, Unicode, rotated text, overlapping text/shapes,
-   highlighter, and objects crossing the page edge. Check appearance/clipping.
-   Try print preview with fit-to-paper; output uses project point dimensions.
+2. Include B/I/U, multiple fonts, Unicode, rotated text, overlapping
+   text/shapes, highlighter, and objects crossing the page edge. Check
+   appearance/clipping. Try print preview with fit-to-paper; output uses project
+   point dimensions.
 3. Export while zoomed/panned and with an object selected. Output must contain
    the full page, without selection handles, toolbars, or unfinished drawings.
 4. Export directly from an active text editor. Pending text must be included;
@@ -1977,45 +1979,45 @@ Manual checkpoint 5F — passed by user; see follow-up below:
 - Replace intimidating atomic-write paths in export errors with the chosen
   destination and a useful reason. Keep write/read-back verification context.
 - Reproduce page-image bleed over the toolbar with a rendering regression at
-  100%/200% DPI. iced clips later stack children but not its first child; use
-  an empty base so every page layer, including its background, is clipped.
-  Apply the same fix to the scrolling thumbnail canvas; a separate failing
-  regression reproduced thumbnails covering the rail's page controls.
+  100%/200% DPI. iced clips later stack children but not its first child; use an
+  empty base so every page layer, including its background, is clipped. Apply
+  the same fix to the scrolling thumbnail canvas; a separate failing regression
+  reproduced thumbnails covering the rail's page controls.
 - Replace browser save/download modals with one small Blob/download adapter
-  shared by PDF export and project saving. Keep native dialogs unchanged.
-  Remove the temporary link and revoke its URL after download startup; report
+  shared by PDF export and project saving. Keep native dialogs unchanged. Remove
+  the temporary link and revoke its URL after download startup; report
   synchronous browser errors without claiming verified disk persistence.
 - Add standalone Node assertions for PDF/project filenames, MIME types, byte
-  subarrays, immediate clicks, delayed URL cleanup, and DOM failure cleanup.
-  Run this check in CI without adding a JS framework or package dependencies.
+  subarrays, immediate clicks, delayed URL cleanup, and DOM failure cleanup. Run
+  this check in CI without adding a JS framework or package dependencies.
 - Keep overall WASM responsiveness as a known harness limitation. Document a
   fully optimized application build for comparison before deeper profiling.
 
 Automated follow-up validation: 253 all-feature Rust tests and the standalone
 browser adapter check pass. Native/WASM strict Clippy, formatting, and diff
-whitespace checks pass. Trunk builds the complete WASM bundle; its generated
-JS imports the copied download module correctly. Container build/distribution
+whitespace checks pass. Trunk builds the complete WASM bundle; its generated JS
+imports the copied download module correctly. Container build/distribution
 outputs stay under `/tmp`, outside the host target and dist directories.
 
 Focused manual recheck — passed by user:
 
 1. Zoom/pan a large image page under the toolbar and toward the rail. Nothing
    should cover controls or their backgrounds, including in the browser.
-2. Try an unwritable PDF destination. Error should show the chosen filename
-   and a useful reason, with no `.atomicwrite` or random temporary filenames.
+2. Try an unwritable PDF destination. Error should show the chosen filename and
+   a useful reason, with no `.atomicwrite` or random temporary filenames.
 3. Browser Save/Save as and Export PDF should start normal browser downloads
    without FastFill's extra modal. Open the resulting `.docscan` and PDF.
 
 ### 2026-10-15 — 5F follow-ups accepted
 
-- User confirms all requested native/browser checks passed. Close checkpoint
-  5F, including the export error, clipping, and direct-download follow-ups.
-- Hide Save as in WASM only: it is equivalent to Save's download-copy flow.
-  Keep native Save as and the existing Ctrl+Shift+S shortcut unchanged; the
-  shortcut remains a Save/download alias in the browser.
+- User confirms all requested native/browser checks passed. Close checkpoint 5F,
+  including the export error, clipping, and direct-download follow-ups.
+- Hide Save as in WASM only: it is equivalent to Save's download-copy flow. Keep
+  native Save as and the existing Ctrl+Shift+S shortcut unchanged; the shortcut
+  remains a Save/download alias in the browser.
 - Add a platform-aware project-controls check and update the prototype guide.
-- Validation: 254 all-feature tests, formatting, and strict native/WASM
-  Clippy pass.
+- Validation: 254 all-feature tests, formatting, and strict native/WASM Clippy
+  pass.
 
 Next separate checkpoint: 5G recovery. Do not start it in this change.
 
@@ -2023,55 +2025,55 @@ Next separate checkpoint: 5G recovery. Do not start it in this change.
 
 - Add a single native worker for periodic snapshots, loading recovery, and
   ordered cleanup. Reuse the project's bounded archive loader, decoded image
-  cache, original encoded assets, and atomic verified writer. No dependency
-  or C# application changes.
-- Snapshot changed, committed dirty content about every 10 seconds; skip
-  pending draws/text and modal file operations. Do not change explicit-save
-  identity, history, navigation, or the current editor. Recovery is a safety
-  net, not an explicit save; a crash may lose work after the last snapshot.
+  cache, original encoded assets, and atomic verified writer. No dependency or
+  C# application changes.
+- Snapshot changed, committed dirty content about every 10 seconds; skip pending
+  draws/text and modal file operations. Do not change explicit-save identity,
+  history, navigation, or the current editor. Recovery is a safety net, not an
+  explicit save; a crash may lose work after the last snapshot.
 - Use UUID session names and OS file locks in a private per-user directory.
-  Ignore live sessions and foreign links/names. Offer abandoned snapshots
-  newest first with Restore, Discard, and Not now. Keep corrupt files until
-  explicit discard. Restore an unsaved copy without the original file path;
-  keep its snapshot until explicit Save/Discard or a newer atomic snapshot.
+  Ignore live sessions and foreign links/names. Offer abandoned snapshots newest
+  first with Restore, Discard, and Not now. Keep corrupt files until explicit
+  discard. Restore an unsaved copy without the original file path; keep its
+  snapshot until explicit Save/Discard or a newer atomic snapshot.
 - Queue cleanup behind in-flight writes on Save, New, successful Open, and
-  normal close. Canceled/failed dialogs retain current work and recovery.
-  Wait for cleanup acknowledgment before closing. Ignore late restore results
-  once closing, and keep the window open if cleanup fails.
+  normal close. Canceled/failed dialogs retain current work and recovery. Wait
+  for cleanup acknowledgment before closing. Ignore late restore results once
+  closing, and keep the window open if cleanup fails.
 - Show persistent, actionable recovery warnings. Retry snapshot/cleanup I/O
   failures on later ticks without a retry loop; worker/startup failure leaves
   ordinary editing and explicit saving available.
-- Per user request, paths use FastFill/fastfill, never a -rust suffix. Keep
-  the C# workspaces subdirectory and explicit project files untouched.
-- Record browser-local recovery as a possible IndexedDB follow-up. Do not
-  add it to this native checkpoint; account for quotas, eviction, private
-  browsing, and concurrent tabs before promising browser recovery.
-- Automated checks: 271 all-feature Rust tests (17 new recovery checks),
-  130 core-only tests, native/WASM strict Clippy, formatting, browser download
+- Per user request, paths use FastFill/fastfill, never a -rust suffix. Keep the
+  C# workspaces subdirectory and explicit project files untouched.
+- Record browser-local recovery as a possible IndexedDB follow-up. Do not add it
+  to this native checkpoint; account for quotas, eviction, private browsing, and
+  concurrent tabs before promising browser recovery.
+- Automated checks: 271 all-feature Rust tests (17 new recovery checks), 130
+  core-only tests, native/WASM strict Clippy, formatting, browser download
   adapter assertions, whitespace checks, and a complete Trunk bundle build.
   Container outputs remain under /tmp; host target/dist stay untouched.
 
 Manual checkpoint 5G — passed by user:
 
-1. Add at least two pages, shapes, and accepted text; reorder pages. Wait
-   about 15 seconds, then kill the FastFill process with the system task
-   manager (not the window close button). Relaunch: choose Not now, close,
-   relaunch again, then Restore. Check page order, images, text, formatting,
-   and layers. Restored work must be unsaved, without an original save path.
+1. Add at least two pages, shapes, and accepted text; reorder pages. Wait about
+   15 seconds, then kill the FastFill process with the system task manager (not
+   the window close button). Relaunch: choose Not now, close, relaunch again,
+   then Restore. Check page order, images, text, formatting, and layers.
+   Restored work must be unsaved, without an original save path.
 2. Save the recovered work to a new .docscan. Close and relaunch: no recovery
-   prompt for that session. Existing explicitly saved projects must not
-   change unless you deliberately save over them.
-3. Make another accepted change; wait for a snapshot. Cancel an attempted
-   Save as, then force-kill/relaunch: recovery must still exist. Restore,
-   make another change, wait, then close normally and choose Discard. The
-   next launch must not offer that session. Also check New + Discard.
+   prompt for that session. Existing explicitly saved projects must not change
+   unless you deliberately save over them.
+3. Make another accepted change; wait for a snapshot. Cancel an attempted Save
+   as, then force-kill/relaunch: recovery must still exist. Restore, make
+   another change, wait, then close normally and choose Discard. The next launch
+   must not offer that session. Also check New + Discard.
 4. Run two instances. Create unsaved work in each and wait for snapshots.
    Launching another instance must not offer either live project's recovery.
-   Kill only one original instance; a new launch should offer only its
-   abandoned work. The still-running instance must remain unaffected.
-5. Optional error check: set FASTFILL_RECOVERY_DIR to an existing regular
-   file, not a directory. Startup should show a visible recovery warning;
-   annotation editing and explicit Save must still work. Unset afterward.
+   Kill only one original instance; a new launch should offer only its abandoned
+   work. The still-running instance must remain unaffected.
+5. Optional error check: set FASTFILL_RECOVERY_DIR to an existing regular file,
+   not a directory. Startup should show a visible recovery warning; annotation
+   editing and explicit Save must still work. Unset afterward.
 
 User confirms all requested checks passed. Close checkpoint 5G and Phase 5;
 browser recovery remains a documented follow-up. Phase 6 is not started.
@@ -2080,40 +2082,40 @@ browser recovery remains a documented follow-up. Phase 6 is not started.
 
 - Record user acceptance of all 5G manual checks and close the final planned
   Phase 5 checkpoint. Keep browser recovery as a documented follow-up.
-- Leave the implementation and staged changes unchanged. Wait for an
-  explicit request before committing or starting Phase 6.
+- Leave the implementation and staged changes unchanged. Wait for an explicit
+  request before committing or starting Phase 6.
 
 ### 2026-10-15 — Phase 5 commit and checkpoint 6A
 
 - At user request, commit accepted Phase 5 work as unsigned 0d9f1c0. Do not
   push. Keep subsequent Phase 6 changes separate and uncommitted.
 - Split Phase 6 into correction geometry, filters, transactional page editing,
-  form snapping, still detection, temporal framing, and native capture. Stop
-  at each checkpoint; do not combine camera work with this foundation.
+  form snapping, still detection, temporal framing, and native capture. Stop at
+  each checkpoint; do not combine camera work with this foundation.
 - TDD red: ten new correction tests fail at the unimplemented geometry API.
-  Green: add bounded four-corner projective correction and quarter turns,
-  using the existing image dependency for exact rotations. No new dependency.
-- Keep the pipeline independent of iced, filesystem, and project mutation.
-  Share finite/in-bounds/convex crop validation with the archive model, using
-  f64 cross-products. Reject unusable projections and oversized output before
+  Green: add bounded four-corner projective correction and quarter turns, using
+  the existing image dependency for exact rotations. No new dependency.
+- Keep the pipeline independent of iced, filesystem, and project mutation. Share
+  finite/in-bounds/convex crop validation with the archive model, using f64
+  cross-products. Reject unusable projections and oversized output before
   allocating a destination. Accept the existing reversed-winding contract.
-- Include endpoint pixel centers in dimensions. Full-frame identity keeps
-  exact dimensions and bytes; arbitrary crops use inverse bilinear sampling.
+- Include endpoint pixel centers in dimensions. Full-frame identity keeps exact
+  dimensions and bytes; arbitrary crops use inverse bilinear sampling.
   Accumulate premultiplied colors to avoid transparent-edge halos without a
-  large float-image copy. Borrow full-frame input while rotating to avoid
-  an unnecessary full-size clone.
+  large float-image copy. Borrow full-frame input while rotating to avoid an
+  unnecessary full-size clone.
 - Add the native correct_page preview example and a small JSON preset. Bound
-  PNG/JPEG reads to 100 MiB and settings to 16 KiB; write PNG atomically with
-  no overwrite. Test empty/missing/extra arguments and destination safety.
+  PNG/JPEG reads to 100 MiB and settings to 16 KiB; write PNG atomically with no
+  overwrite. Test empty/missing/extra arguments and destination safety.
 - Add 14 core correction checks and three preview checks. Cover exact crops,
   skewed/perspective corners, nonfinite/concave/crossed input, output budgets,
   negative/large rotation counts, alpha, single-pixel axes, JSON, and the real
-  sample form. Make native CI test all targets so examples run too, and
-  trigger checks when the sample PNG changes.
-- Validation: 288 all-feature/all-target tests and 147 core/example tests
-  pass; strict native/WASM all-target Clippy, formatting, and diff whitespace
-  checks pass. Trunk builds the complete browser bundle. Existing GUI behavior
-  and C# sources remain unchanged.
+  sample form. Make native CI test all targets so examples run too, and trigger
+  checks when the sample PNG changes.
+- Validation: 288 all-feature/all-target tests and 147 core/example tests pass;
+  strict native/WASM all-target Clippy, formatting, and diff whitespace checks
+  pass. Trunk builds the complete browser bundle. Existing GUI behavior and C#
+  sources remain unchanged.
 - Generate and inspect full-form, cropped/rotated-form, and recorded laptop
   camera previews under artifacts/previews/correction-6a.k02IEf/. The camera
   example uses manually specified corners on folded-paper-0059.jpg, not an
@@ -2121,17 +2123,17 @@ browser recovery remains a documented follow-up. Phase 6 is not started.
 
 Manual checkpoint 6A — visual previews accepted by user:
 
-1. Inspect the generated full-form and cropped/rotated-form PNGs. Printed
-   text and lines should remain legible, with no missing final row/column.
-   The preset removes outer margins, then rotates 90 degrees clockwise.
+1. Inspect the generated full-form and cropped/rotated-form PNGs. Printed text
+   and lines should remain legible, with no missing final row/column. The preset
+   removes outer margins, then rotates 90 degrees clockwise.
 2. Optionally rerun from rust/ with fresh output filenames:
    `mise exec -- cargo run --no-default-features --example correct_page --`
-   followed by input PNG/JPEG, output PNG, and examples/correction.json.
-   Omit JSON for identity; change its rotationQuarterTurns to 0 for crop only.
+   followed by input PNG/JPEG, output PNG, and examples/correction.json. Omit
+   JSON for identity; change its rotationQuarterTurns to 0 for crop only.
    Rerunning with an existing output must refuse without changing that file.
-3. Inspect camera-manual-crop.png for the perspective/rotation smoke check.
-   This is a manually framed, folded laptop-camera sample, not an SP6 image
-   or an auto-framing test; four corners cannot flatten a physical fold.
+3. Inspect camera-manual-crop.png for the perspective/rotation smoke check. This
+   is a manually framed, folded laptop-camera sample, not an SP6 image or an
+   auto-framing test; four corners cannot flatten a physical fold.
 
 User accepts both generated form and camera previews. Command safety remains
 covered by automated tests. Proceed to the separate 6B filter checkpoint.
@@ -2141,59 +2143,59 @@ covered by automated tests. Proceed to the separate 6B filter checkpoint.
 - Record user acceptance of the corrected form and manually framed camera
   previews. Keep the main editor and C# application unchanged in 6B.
 - TDD red: ten filter tests fail at the unimplemented filter dispatcher;
-  contrast-bound validation already passes. Green: add schema-compatible
-  filters after perspective correction and rotation, with no new dependency.
+  contrast-bound validation already passes. Green: add schema-compatible filters
+  after perspective correction and rotation, with no new dependency.
 - Match BT.601 grayscale and the legacy linear contrast curve about 128.
   Validate contrast -100..100 before allocating output; apply contrast last.
   Preserve source pixels, output dimensions, alpha, and hidden RGB at alpha 0.
 - Keep gray-world balance plus 8x8 Lab CLAHE with clip limit 2. Use an sRGB
-  lookup and in-place Lab bytes instead of a large floating-point image.
-  Ignore transparent pixels in statistics; keep flat/empty tiles unchanged
-  and blend neighboring tile lookup tables. Test reference Lab colors,
-  contrast gain, boundary seams, cast removal, and colored marks.
+  lookup and in-place Lab bytes instead of a large floating-point image. Ignore
+  transparent pixels in statistics; keep flat/empty tiles unchanged and blend
+  neighboring tile lookup tables. Test reference Lab colors, contrast gain,
+  boundary seams, cast removal, and colored marks.
 - Reuse image's optimized byte Gaussian blur with the legacy 31-pixel
-  neighborhood, sigma 5, and threshold offset 12. Treat transparent neighbors
-  as white paper. Intentionally omit median blur: synthetic rules, dots, and
-  faint strokes must survive; the real form retains over 95% of dark ink.
-  Camera noise and very faint ink remain visual calibration concerns.
+  neighborhood, sigma 5, and threshold offset 12. Treat transparent neighbors as
+  white paper. Intentionally omit median blur: synthetic rules, dots, and faint
+  strokes must survive; the real form retains over 95% of dark ink. Camera noise
+  and very faint ink remain visual calibration concerns.
 - Extend the preview JSON with the existing numeric filter schema and add
   examples/filter.json. Test settings-to-PNG, invalid contrast, empty args,
   source/output safety, pipeline ordering, and tiny images. Print CLI errors
   using their human-readable message.
-- Validation: 303 all-feature/all-target tests and 162 core/example tests
-  pass; strict native/WASM all-target Clippy, formatting, and whitespace
-  checks pass. Trunk builds the browser bundle. Keep container builds under
-  /tmp, away from host targets.
-- Generate full-size original, grayscale, enhanced (+10 contrast), B&W,
-  and original +35 contrast for both the form and the manually cropped
-  laptop-camera frame. Comparisons live under
-  artifacts/previews/filters-6b.V3q7ss/index.html. Click images for full size.
-  Camera corners are manual; no detection/224-frame replay is claimed here.
+- Validation: 303 all-feature/all-target tests and 162 core/example tests pass;
+  strict native/WASM all-target Clippy, formatting, and whitespace checks pass.
+  Trunk builds the browser bundle. Keep container builds under /tmp, away from
+  host targets.
+- Generate full-size original, grayscale, enhanced (+10 contrast), B&W, and
+  original +35 contrast for both the form and the manually cropped laptop-camera
+  frame. Comparisons live under artifacts/previews/filters-6b.V3q7ss/index.html.
+  Click images for full size. Camera corners are manual; no detection/224-frame
+  replay is claimed here.
 
 Manual checkpoint 6B — original filters accepted 2026-10-15:
 
 1. Open the comparison HTML or the individual PNGs. Check the printed form's
    small text, dotted fields, fine rules, checkboxes, and tinted headers.
-2. Compare the camera's color cast and handwriting across modes. Enhanced
-   color can amplify compression/noise; B&W can lose very faint writing.
+2. Compare the camera's color cast and handwriting across modes. Enhanced color
+   can amplify compression/noise; B&W can lose very faint writing.
    Grayscale/original remain available when thresholding is unsuitable.
 3. Optional: run correct_page with examples/filter.json and a fresh output
    filename. Edit mode 0/1/2/3 or contrast -100..100; bad settings must fail
    without creating output or changing an existing file.
 
-User accepted the shown filters, including the laptop-camera comparison.
-Keep these samples; no replacement color document is needed. Brightness is
-an additional checkpoint before 6C; do not start page editing or commit yet.
+User accepted the shown filters, including the laptop-camera comparison. Keep
+these samples; no replacement color document is needed. Brightness is an
+additional checkpoint before 6C; do not start page editing or commit yet.
 
 ### 2026-10-15 — 6B brightness correction
 
 - TDD red: the preview-settings test rejects the unknown brightness field.
   Green: add brightness -100..100, default 0, to PageCorrection. Keep the
-  schema-v1 filter DTO unchanged; defer brightness persistence to schema-v2
-  page editing in 6C, with schema-v1 loading retained.
-- Apply additive brightness after the color mode, combined with contrast in
-  the existing byte lookup. Clamp/round once to avoid losing recoverable
-  tones between adjustments. No new dependency or second image pass.
+  schema-v1 filter DTO unchanged; defer brightness persistence to schema-v2 page
+  editing in 6C, with schema-v1 loading retained.
+- Apply additive brightness after the color mode, combined with contrast in the
+  existing byte lookup. Clamp/round once to avoid losing recoverable tones
+  between adjustments. No new dependency or second image pass.
 - Add five tests for JSON defaults/round trips, RGB offsets/limits, combined
   contrast clipping, every mode, alpha/hidden RGB, source preservation, and
   invalid settings at both correction entry points. Extend the CLI test to
@@ -2202,36 +2204,36 @@ an additional checkpoint before 6C; do not start page editing or commit yet.
   comparison HTML with the same manually cropped laptop-camera image at
   brightness -15, 0, +15, and brightness +10 with contrast +25. Inspect the
   generated PNGs; retain the original samples and accepted filter outputs.
-- Validation: 308 all-feature/all-target tests and 167 core/example tests
-  pass. Strict native/WASM all-target Clippy, formatting, whitespace checks,
-  and the full Trunk browser build pass. All build output remains under /tmp.
+- Validation: 308 all-feature/all-target tests and 167 core/example tests pass.
+  Strict native/WASM all-target Clippy, formatting, whitespace checks, and the
+  full Trunk browser build pass. All build output remains under /tmp.
 
 Manual checkpoint — brightness accepted 2026-10-15. User inspected the
-brightness comparisons and approved completion of 6B. Commit the pending
-6A/6B work, then start 6C separately. The main editor and C# app remain
-unchanged in this commit.
+brightness comparisons and approved completion of 6B. Commit the pending 6A/6B
+work, then start 6C separately. The main editor and C# app remain unchanged in
+this commit.
 
 ### 2026-10-15 — 6B committed; checkpoint 6C1 compatibility
 
 - Mark 6B accepted and create unsigned commit f88ae26 for the pending 6A/6B
   work. Do not push. Keep subsequent 6C changes uncommitted for review.
-- Split 6C into corrected-project I/O and interactive page editing, each
-  with its own checkpoint. Keep correction controls out of 6C1.
+- Split 6C into corrected-project I/O and interactive page editing, each with
+  its own checkpoint. Keep correction controls out of 6C1.
 - TDD red: v2 archives reject the brightness field; staged cropped/rotated
   images still have source dimensions (9x7 instead of 7x5). Green: accept
   schema-v1/v2 and stage each page's corrections from its original pixels.
-- Base annotation coordinates on a 612-point width and corrected output
-  aspect. Remove blanket rejection of crop/rotation/filter metadata; retain
-  explicit rejection of unsupported affine/font/soft-wrap layouts. Test
-  rotated shape/ink frame corners on a corrected page.
+- Base annotation coordinates on a 612-point width and corrected output aspect.
+  Remove blanket rejection of crop/rotation/filter metadata; retain explicit
+  rejection of unsupported affine/font/soft-wrap layouts. Test rotated shape/ink
+  frame corners on a corrected page.
 - Persist brightness as a page-level v2 field. Omit zero for v1 compatibility;
-  missing schemaVersion remains legacy v1. Upgrade snapshots only when
-  nonzero brightness needs v2, and never implicitly downgrade loaded v2.
-- Validate correction/output limits before decoding assets. Decode each
-  source asset once and stage corrected displays before installing any page.
-  Share source handles, not corrected results, across differently edited
-  pages. Use corrected display dimensions for the rail, 1:1, and PDF aspect;
-  keep source info/encoded bytes intact for saves and recovery.
+  missing schemaVersion remains legacy v1. Upgrade snapshots only when nonzero
+  brightness needs v2, and never implicitly downgrade loaded v2.
+- Validate correction/output limits before decoding assets. Decode each source
+  asset once and stage corrected displays before installing any page. Share
+  source handles, not corrected results, across differently edited pages. Use
+  corrected display dimensions for the rail, 1:1, and PDF aspect; keep source
+  info/encoded bytes intact for saves and recovery.
 - Test all color modes, shared assets with different corrections, unchanged
   source bytes, annotation editing and reload, v1/v2 round trips, schema
   failures, preflight output limits, and actual corrected PDF pixels/aspect.
@@ -2239,166 +2241,166 @@ unchanged in this commit.
   open/save pipeline. Generate three-page v1/v2 fixtures under
   artifacts/previews/correction-6c1.sXnKAa/ and validate both through the same
   pipeline. The v2 camera page adds brightness +15; both retain source assets.
-- Validation: 316 all-feature/all-target tests and 170 core/example tests
-  pass. Native/WASM strict all-target Clippy, formatting, whitespace, and the
-  full Trunk build pass. Keep all compilation output under /tmp.
+- Validation: 316 all-feature/all-target tests and 170 core/example tests pass.
+  Native/WASM strict all-target Clippy, formatting, whitespace, and the full
+  Trunk build pass. Keep all compilation output under /tmp.
 
 Manual checkpoint 6C1 — accepted 2026-10-15:
 
 1. Open correction-v1.docscan and correction-v2.docscan from the generated
-   fixture directory. Inspect original form, cropped/rotated grayscale
-   form, and enhanced camera page. V2's camera page should be brighter.
+   fixture directory. Inspect original form, cropped/rotated grayscale form, and
+   enhanced camera page. V2's camera page should be brighter.
 2. Check Fit, 1:1, wheel zoom, page thumbnails, and annotation selection.
    Move/resize a rectangle and edit a text label; undo/redo those changes.
-3. Save as to a new filename, reopen, and verify corrections/annotations
-   persist without repeated cropping, rotation, or brightness changes.
-4. Export PDF; verify page orientation, backgrounds, annotation placement,
-   and page order match the canvas. Optionally open the existing 11-19 scan.
+3. Save as to a new filename, reopen, and verify corrections/annotations persist
+   without repeated cropping, rotation, or brightness changes.
+4. Export PDF; verify page orientation, backgrounds, annotation placement, and
+   page order match the canvas. Optionally open the existing 11-19 scan.
 
-User confirmed all checks. Record the font-size control mismatch: the
-fixtures use 22 pt, but the dropdown offers sizes in 4 pt increments. Defer
-replacement with a 1 pt spinner to Phase 7 UI polish, as requested.
+User confirmed all checks. Record the font-size control mismatch: the fixtures
+use 22 pt, but the dropdown offers sizes in 4 pt increments. Defer replacement
+with a 1 pt spinner to Phase 7 UI polish, as requested.
 
 Next: 6C2 adds correction controls, transactional previews, accessibility of
-displaced objects, and correction-aware dirty/history/recovery behavior.
-The C# application remains unchanged. No new commit requested.
+displaced objects, and correction-aware dirty/history/recovery behavior. The C#
+application remains unchanged. No new commit requested.
 
 ### 2026-10-15 — 6C2 interactive page editor
 
 - Add Edit page to the rail for image pages. Keep correction input, view,
   preview work, and per-page version handling in focused modules rather than
   expanding the main controller. Add no dependencies; leave C# untouched.
-- Show the original image with a translucent quadrangle and mouse/touch
-  corner handles, alongside a corrected image preview. Add Full frame,
-  quarter-turn rotation, all four color modes, and brightness/contrast
-  sliders with 1-step buttons. Reject crossed or invalid corners.
-- Keep draft settings and pixels outside committed page state. Accept only
-  a completed preview matching the draft; Cancel/Escape change no page data.
-  Window resize/focus loss preserve the draft, aborting handle gestures.
-  Block other document commands and require Accept/Cancel before closing.
-- Run native preview work off the UI thread, retaining decoded originals
-  between changes. Permit one running job plus the latest queued settings;
-  reject stale settings/session completions. Browser work remains on its
-  UI thread, matching the current PDF-import harness limitation.
+- Show the original image with a translucent quadrangle and mouse/touch corner
+  handles, alongside a corrected image preview. Add Full frame, quarter-turn
+  rotation, all four color modes, and brightness/contrast sliders with 1-step
+  buttons. Reject crossed or invalid corners.
+- Keep draft settings and pixels outside committed page state. Accept only a
+  completed preview matching the draft; Cancel/Escape change no page data.
+  Window resize/focus loss preserve the draft, aborting handle gestures. Block
+  other document commands and require Accept/Cancel before closing.
+- Run native preview work off the UI thread, retaining decoded originals between
+  changes. Permit one running job plus the latest queued settings; reject stale
+  settings/session completions. Browser work remains on its UI thread, matching
+  the current PDF-import harness limitation.
 - Clarification: image-space anchors, not fixed page-point positions, govern
-  annotation placement after correction. Map centers through the original
-  image, and scale width/height independently. Keep strokes and annotation
-  rotation fixed; do not apply perspective skew or warp to annotations.
-  Text follows vertical magnification with natural glyph proportions.
-  Reject unsupported resulting font sizes (6–144 pt); never drop objects.
-- TDD red: composing perspective derivatives accumulates annotation size
-  drift on crop/reset. Green: compare local magnification in fixed source
-  axes, making forward/reverse scale ratios cancel at the image anchor.
-  Filter-only changes preserve geometry exactly without float rebuilding.
-- After image-space mapping, translate only wholly off-page annotations
-  enough to remain reachable. Warn explicitly when this extra move occurs.
-  Partly visible items need no additional translation or clipping constraint.
-- Stage/validate all mapped annotations and metadata before committing.
-  Couple page-version keys to existing annotation snapshots, making each
-  accepted correction one undo step with exact pixels/geometry restoration.
-  Support interleaved annotation/page edits; release unused image versions
-  when a new edit discards redo. Retain original encoded image bytes.
+  annotation placement after correction. Map centers through the original image,
+  and scale width/height independently. Keep strokes and annotation rotation
+  fixed; do not apply perspective skew or warp to annotations. Text follows
+  vertical magnification with natural glyph proportions. Reject unsupported
+  resulting font sizes (6–144 pt); never drop objects.
+- TDD red: composing perspective derivatives accumulates annotation size drift
+  on crop/reset. Green: compare local magnification in fixed source axes, making
+  forward/reverse scale ratios cancel at the image anchor. Filter-only changes
+  preserve geometry exactly without float rebuilding.
+- After image-space mapping, translate only wholly off-page annotations enough
+  to remain reachable. Warn explicitly when this extra move occurs. Partly
+  visible items need no additional translation or clipping constraint.
+- Stage/validate all mapped annotations and metadata before committing. Couple
+  page-version keys to existing annotation snapshots, making each accepted
+  correction one undo step with exact pixels/geometry restoration. Support
+  interleaved annotation/page edits; release unused image versions when a new
+  edit discards redo. Retain original encoded image bytes.
 - Test preview coalescing, stale/error results, canceled/reopened sessions,
   invalid crops, no-op acceptance, modal guards, dirty state, original bytes,
   Save/reload, recovery, reachability warnings, and exact undo/redo. Cover
   independent geometry scales, natural text scaling, pending/stale staged
   changes, perspective round trips, rotation, and unclamped image anchors.
 - Exercise mouse/touch handle ownership, release positions, and lost-touch
-  rollback with synthetic events. Render the real sample form offscreen;
-  assert overlay/header visibility. Use the bundled font and a redraw event
-  in the headless helper, avoiding unavailable container fonts and
-  uninitialized button status. Inspect page-editor-readable.png under
+  rollback with synthetic events. Render the real sample form offscreen; assert
+  overlay/header visibility. Use the bundled font and a redraw event in the
+  headless helper, avoiding unavailable container fonts and uninitialized button
+  status. Inspect page-editor-readable.png under
   artifacts/previews/page-editor-6c2.d8M45H/.
-- Validation: 343 all-feature/all-target tests and 180 core/example tests
-  pass. Strict native/WASM all-target Clippy, formatting, whitespace checks,
-  and full Trunk build pass. All compilation output stays under /tmp.
+- Validation: 343 all-feature/all-target tests and 180 core/example tests pass.
+  Strict native/WASM all-target Clippy, formatting, whitespace checks, and full
+  Trunk build pass. All compilation output stays under /tmp.
 
 Manual checkpoint 6C2 — functional checks accepted 2026-10-15:
 
 1. Run the native app and Add image, or open a corrected project copy. Choose
-   Edit page in the rail. Confirm original corner handles and corrected
-   preview are separate and legible; try touch if a device is available.
-2. Drag all four corners. Try an invalid/crossed crop, then restore a valid
-   crop or Full frame. Check both rotation buttons, every color mode, and
+   Edit page in the rail. Confirm original corner handles and corrected preview
+   are separate and legible; try touch if a device is available.
+2. Drag all four corners. Try an invalid/crossed crop, then restore a valid crop
+   or Full frame. Check both rotation buttons, every color mode, and
    brightness/contrast. Rapid slider changes must settle at the last value.
 3. Cancel or press Escape: page, annotations, dirty state, and history stay
    unchanged. Resize/switch focus while editing: keep pending settings.
 4. With existing rectangles, lines, ink, and text, accept a crop/rotation.
-   Centers follow image locations, shape axes scale independently, strokes
-   and object angles stay fixed, and text keeps natural glyph proportions.
-   No annotation warping is expected. The draft preview omits annotations.
-5. Crop enough to displace an annotation completely. Confirm a visible
-   warning and a reachable object. Partly visible objects need no extra move.
-   Undo/redo must restore the image, settings, and annotations together.
-6. Interleave page corrections with annotation edits and check undo/redo.
-   Save as, reopen, and export PDF; confirm geometry/settings persist and
-   corrections are not applied twice. Check recovery if practical.
+   Centers follow image locations, shape axes scale independently, strokes and
+   object angles stay fixed, and text keeps natural glyph proportions. No
+   annotation warping is expected. The draft preview omits annotations.
+5. Crop enough to displace an annotation completely. Confirm a visible warning
+   and a reachable object. Partly visible objects need no extra move. Undo/redo
+   must restore the image, settings, and annotations together.
+6. Interleave page corrections with annotation edits and check undo/redo. Save
+   as, reopen, and export PDF; confirm geometry/settings persist and corrections
+   are not applied twice. Check recovery if practical.
 
 Pause for user acceptance before 6D form snapping. No commit requested.
 
 ### 2026-10-15 — 6C2 font-label and preview-performance follow-up
 
-- User confirms page editing, image-space annotation anchoring, quick
-  undo/redo, PDF export, and displaced-object warnings. Record two issues:
-  scaled font-size digits overflow the dropdown, and each live correction
-  takes several seconds with high CPU use. Physical touch remains untested.
-- TDD red: the compact font-size display type is absent. Green: round labels
-  to at most one decimal place, but retain the original floating-point value.
-  Do not round document geometry repeatedly during crop/reset. Keep the
-  1 pt font spinner deferred to Phase 7, as previously agreed.
-- Native debug builds optimized only dependencies; FastFill's perspective
-  and filter loops remained unoptimized. Enable level-1 optimization for
-  application code while retaining debug symbols/assertions and level-2
-  dependency optimization. This also applies to the browser harness.
-- Measure the existing CLI on the 1241x1754 sample form, including decode
-  and PNG output. Crop/rotate drops from 1.62 s to 0.68 s elapsed (1.57 to
-  0.53 s user CPU); enhanced color from 2.38 s to 1.31 s (2.35 to 0.99 s
-  user CPU). Outputs before/after have identical SHA-256 hashes. These are
-  container measurements, not a guarantee for host or Surface hardware.
+- User confirms page editing, image-space annotation anchoring, quick undo/redo,
+  PDF export, and displaced-object warnings. Record two issues: scaled font-size
+  digits overflow the dropdown, and each live correction takes several seconds
+  with high CPU use. Physical touch remains untested.
+- TDD red: the compact font-size display type is absent. Green: round labels to
+  at most one decimal place, but retain the original floating-point value. Do
+  not round document geometry repeatedly during crop/reset. Keep the 1 pt font
+  spinner deferred to Phase 7, as previously agreed.
+- Native debug builds optimized only dependencies; FastFill's perspective and
+  filter loops remained unoptimized. Enable level-1 optimization for application
+  code while retaining debug symbols/assertions and level-2 dependency
+  optimization. This also applies to the browser harness.
+- Measure the existing CLI on the 1241x1754 sample form, including decode and
+  PNG output. Crop/rotate drops from 1.62 s to 0.68 s elapsed (1.57 to 0.53 s
+  user CPU); enhanced color from 2.38 s to 1.31 s (2.35 to 0.99 s user CPU).
+  Outputs before/after have identical SHA-256 hashes. These are container
+  measurements, not a guarantee for host or Surface hardware.
 - Keep full-resolution previews and the existing single-worker/coalescing
-  behavior. Try the compiler setting before adding thumbnail correction,
-  caching layers, or a second asynchronous full-resolution Accept pipeline.
-  Comparisons are under artifacts/previews/correction-performance.0aM0As/.
-- Validation: 344 all-feature/all-target tests and 180 core/example tests
-  pass. Strict native/WASM all-target Clippy, formatting, whitespace checks,
-  and full Trunk build pass. Compilation remains isolated under /tmp.
+  behavior. Try the compiler setting before adding thumbnail correction, caching
+  layers, or a second asynchronous full-resolution Accept pipeline. Comparisons
+  are under artifacts/previews/correction-performance.0aM0As/.
+- Validation: 344 all-feature/all-target tests and 180 core/example tests pass.
+  Strict native/WASM all-target Clippy, formatting, whitespace checks, and full
+  Trunk build pass. Compilation remains isolated under /tmp.
 
 Follow-up checkpoint — accepted 2026-10-16: user confirms all checks passed,
-near-instant page editing, and compact one-decimal font labels. Mark 6C
-complete and commit its pending work unsigned, as requested. Keep subsequent
-6D form-snapping changes separate and stop at its next manual checkpoint.
+near-instant page editing, and compact one-decimal font labels. Mark 6C complete
+and commit its pending work unsigned, as requested. Keep subsequent 6D
+form-snapping changes separate and stop at its next manual checkpoint.
 
 ### 2026-10-16 — 6C committed; portable form snapping checkpoint 6D1
 
-- Commit accepted 6C1/6C2 work unsigned as 154542c. The owner subsequently
-  signs history; current commit 308314a has the identical tree. Do not push.
+- Commit accepted 6C1/6C2 work unsigned as 154542c. The owner subsequently signs
+  history; current commit 308314a has the identical tree. Do not push.
 - Split 6D into portable form detection, global smart-snap placement, and
-  Ctrl-assisted page corners. Keep each checkpoint independently testable;
-  do not add placement/UI state before the detector comparison is accepted.
-- TDD red: form-feature analysis is absent. Green: add normalized checkbox
-  and solid/dashed/dotted rule candidates with nearest-feature queries.
-  Keep the calibrated 1600-pixel analysis edge, 31-pixel Gaussian window,
-  threshold offset 10, box-size/aspect limits, broken-mark grouping,
-  gap trimming, and short-axis distance units. Reject invalid queries.
-- Use installed image resizing/blur and a small eight-connected component
-  walk instead of introducing OpenCV. Replace horizontal opening with row
-  runs. Include enclosed rectangular white regions so boxes connected to
-  larger table borders survive. Composite transparency on white first.
+  Ctrl-assisted page corners. Keep each checkpoint independently testable; do
+  not add placement/UI state before the detector comparison is accepted.
+- TDD red: form-feature analysis is absent. Green: add normalized checkbox and
+  solid/dashed/dotted rule candidates with nearest-feature queries. Keep the
+  calibrated 1600-pixel analysis edge, 31-pixel Gaussian window, threshold
+  offset 10, box-size/aspect limits, broken-mark grouping, gap trimming, and
+  short-axis distance units. Reject invalid queries.
+- Use installed image resizing/blur and a small eight-connected component walk
+  instead of introducing OpenCV. Replace horizontal opening with row runs.
+  Include enclosed rectangular white regions so boxes connected to larger table
+  borders survive. Composite transparency on white first.
 - Intentional limit: axis-aligned edge/interior checks, not arbitrary
   perspective/rotated contour approximation. Intended input is corrected,
   upright form pixels. Image resampling is not OpenCV pixelwise parity.
-- TDD red from visual review: padded letter counters produce 72/60 boxes
-  instead of the forms' five/14. Green: check rectangular white interiors
-  as well as ink frames and narrow the edge bands. Lock both actual counts;
-  retain the real checkboxes while excluding letters in titles/body text.
-- Copy the existing Hungarian form PNG into tests/samples/datum-form.png
-  so Dátum/short-dotted-line regressions also run on CI. Extend workflow
-  triggers to all sample fixtures. Leave C# algorithms/labs untouched.
+- TDD red from visual review: padded letter counters produce 72/60 boxes instead
+  of the forms' five/14. Green: check rectangular white interiors as well as ink
+  frames and narrow the edge bands. Lock both actual counts; retain the real
+  checkboxes while excluding letters in titles/body text.
+- Copy the existing Hungarian form PNG into tests/samples/datum-form.png so
+  Dátum/short-dotted-line regressions also run on CI. Extend workflow triggers
+  to all sample fixtures. Leave C# algorithms/labs untouched.
 - Add tests for attached boxes, separate same-row fields, short dots, label
-  exclusion, ordinary text, transparency, small/empty images, normalized
-  output at the final row, invalid queries, and resized-image consistency.
-- Composite onto white before grayscale downsampling; hidden transparent
-  RGB otherwise makes false ink rules. Keep a regression for those fringes.
+  exclusion, ordinary text, transparency, small/empty images, normalized output
+  at the final row, invalid queries, and resized-image consistency.
+- Composite onto white before grayscale downsampling; hidden transparent RGB
+  otherwise makes false ink rules. Keep a regression for those fringes.
 - Add form_probe: bounded native PNG/JSON diagnostics with atomic,
   non-overwriting output. Test empty/malformed arguments, candidate overlay
   pixels, existing outputs, and invalid input without filesystem changes.
@@ -2406,30 +2408,30 @@ complete and commit its pending work unsigned, as requested. Keep subsequent
   artifacts/previews/form-snap-6d1.UbfZ3p/. Sample form: 14 boxes, 40 rules;
   Hungarian form: five boxes, 33 rules. Table borders are valid rules, not
   OCR-classified fields. No new application snapping controls in this slice.
-- Validation: 359 all-feature/all-target tests and 195 core/example tests
-  pass. Strict native/WASM all-target Clippy, formatting, whitespace checks,
-  and full Trunk build pass. Keep all compilation output under /tmp.
+- Validation: 359 all-feature/all-target tests and 195 core/example tests pass.
+  Strict native/WASM all-target Clippy, formatting, whitespace checks, and full
+  Trunk build pass. Keep all compilation output under /tmp.
 
 Manual checkpoint 6D1 — baseline accepted 2026-10-16; follow-up below:
 
 1. Open the generated comparison index.html or sample-form-refined.png and
-   datum-form-refined.png. Blue boxes should match real checkboxes, not
-   enclosed letters. Orange rules should leave printed labels/text alone.
-2. Inspect part B's dotted field, the Dátum field, the three short dotted
-   fields near év/hónap, and separate same-row solid fields. Test another
-   PNG/JPEG with form_probe if useful; use a new output filename each time.
+   datum-form-refined.png. Blue boxes should match real checkboxes, not enclosed
+   letters. Orange rules should leave printed labels/text alone.
+2. Inspect part B's dotted field, the Dátum field, the three short dotted fields
+   near év/hónap, and separate same-row solid fields. Test another PNG/JPEG with
+   form_probe if useful; use a new output filename each time.
 3. Accept detector output before 6D2 placement. Corner snapping stays 6D3.
 
 ### 2026-10-16 — legacy text loading compatibility follow-up
 
 - User requires loading existing C# projects, without adding Rust auto-wrap.
-  Inspect Scan 2026-09-15 09-00.docscan: two short texts, hahó and bubu.
-  Their absent maximumWidth fields default to 0.4; neither word needs wrap.
-  The prior rejection treated a creation/fitting hint as proof of soft wrap.
-- TDD red: setting a valid legacy width hint blocks editable conversion.
-  Green: remove that false rejection. Keep annotation content, explicit
-  newlines, bounds, translations, rotation, and untouched schema metadata.
-  Retain existing format/range validation; do not introduce wrapping state.
+  Inspect Scan 2026-09-15 09-00.docscan: two short texts, hahó and bubu. Their
+  absent maximumWidth fields default to 0.4; neither word needs wrap. The prior
+  rejection treated a creation/fitting hint as proof of soft wrap.
+- TDD red: setting a valid legacy width hint blocks editable conversion. Green:
+  remove that false rejection. Keep annotation content, explicit newlines,
+  bounds, translations, rotation, and untouched schema metadata. Retain existing
+  format/range validation; do not introduce wrapping state.
 - Add regression coverage for missing early-C# font/width fields, accented
   content and explicit newlines, annotation geometry, and unchanged saves.
   Genuine legacy automatic wrapping may flow differently under Rust's
@@ -2438,38 +2440,38 @@ Manual checkpoint 6D1 — baseline accepted 2026-10-16; follow-up below:
   missing from the Rust mapping. Load them as Sans and preserve their family
   names through non-font edits, rather than reject legacy pages or silently
   rewrite family metadata. Test every original picker choice and Consolas.
-- Run the actual 09-00 archive through the GUI's open/save/reopen pipeline
-  using FASTFILL_DOCSCAN_FIXTURE. Both pages load successfully. Repeat for
-  11-19, blank-with-annot, images-with-annot, and sample-page: all five
-  provided .docscan files pass. No source files change. Leave this follow-up
-  uncommitted for the user's check.
+- Run the actual 09-00 archive through the GUI's open/save/reopen pipeline using
+  FASTFILL_DOCSCAN_FIXTURE. Both pages load successfully. Repeat for 11-19,
+  blank-with-annot, images-with-annot, and sample-page: all five provided
+  .docscan files pass. No source files change. Leave this follow-up uncommitted
+  for the user's check.
 
 ### 2026-10-16 — click selection and table-cell detection follow-up
 
-- User confirms legacy loading succeeds and detector output matches C#.
-  Keep table/box top edges as valid candidates; do not add OCR filtering.
-- TDD red: an empty-space click inside overlapping diagonal-line frames
-  selects a group. A zero-area marquee still intersects those frames.
-  Green: require 4 mouse/8 touch screen pixels before displaying or applying
-  a marquee. Derive page-space thresholds from zoom at gesture start.
-  Preserve ordinary single-object picking, Ctrl-click, real marquee drags,
-  and dragging an existing group from its members' frames.
+- User confirms legacy loading succeeds and detector output matches C#. Keep
+  table/box top edges as valid candidates; do not add OCR filtering.
+- TDD red: an empty-space click inside overlapping diagonal-line frames selects
+  a group. A zero-area marquee still intersects those frames. Green: require 4
+  mouse/8 touch screen pixels before displaying or applying a marquee. Derive
+  page-space thresholds from zoom at gesture start. Preserve ordinary
+  single-object picking, Ctrl-click, real marquee drags, and dragging an
+  existing group from its members' frames.
 - Cover exact clicks and small jitter at three zoom levels for mouse and
-  synthetic touch. Confirm real drags select both overlapping frames and
-  a subsequent click on an actual stroke selects only one object.
-- TDD red: a synthetic three-column, three-row table snaps to full rows.
-  Green: add cell segments where vertical ink connects two horizontal rules.
-  Coalesce thick divider columns; prefer the shorter candidate on distance
-  ties. Keep every original row rule, including top and bottom borders.
+  synthetic touch. Confirm real drags select both overlapping frames and a
+  subsequent click on an actual stroke selects only one object.
+- TDD red: a synthetic three-column, three-row table snaps to full rows. Green:
+  add cell segments where vertical ink connects two horizontal rules. Coalesce
+  thick divider columns; prefer the shorter candidate on distance ties. Keep
+  every original row rule, including top and bottom borders.
 - Cover shared stacked borders, T-junctions, merged rows, scaled images,
   thin/thick rules, and text stems touching just one rule. Retain real-form
   tests, including checkboxes, Dátum, short dots, and part B's dotted field.
-- Do not wire annotation snapping or change C# code in this follow-up.
-  Ask for a crowded-area click check before continuing to 6D2 placement.
-- Validation: 363 all-feature/all-target tests and 199 core/example tests
-  pass. Strict native/WASM all-target Clippy, formatting, and whitespace
-  checks pass. Physical touch remains untested; use synthetic touch events.
-  Keep all compilation output isolated under /tmp.
+- Do not wire annotation snapping or change C# code in this follow-up. Ask for a
+  crowded-area click check before continuing to 6D2 placement.
+- Validation: 363 all-feature/all-target tests and 199 core/example tests pass.
+  Strict native/WASM all-target Clippy, formatting, and whitespace checks pass.
+  Physical touch remains untested; use synthetic touch events. Keep all
+  compilation output isolated under /tmp.
 
 ### 2026-10-16 — consistent marquee geometry follow-up
 
@@ -2477,147 +2479,146 @@ Manual checkpoint 6D1 — baseline accepted 2026-10-16; follow-up below:
   diagonal lines/arrows when only their outer bounds intersect the marquee.
 - TDD red: reproduce bounding-box-only hits for diagonal lines, arrowheads,
   open/filled pen, highlighter, and rotated frames. Green: intersect line
-  shafts/arrowheads and transformed ink paths, including stroke thickness.
-  Test filled ink as a polygon, including its closing stroke. For bounded
-  shapes and text, intersect the actual rotated frame, matching point picks.
+  shafts/arrowheads and transformed ink paths, including stroke thickness. Test
+  filled ink as a polygon, including its closing stroke. For bounded shapes and
+  text, intersect the actual rotated frame, matching point picks.
 - Keep mouse/touch drag thresholds, Ctrl-click membership, and existing
   selected-frame movement. A small empty marquee must no longer select
   overlapping diagonal frames; a larger one crossing their strokes must.
-- Put rectangle hit queries in one focused annotations/marquee.rs module.
-  Keep geometry independent of GUI rendering and avoid new dependencies.
-  Test contained polygons and edge-only overlap, not just corner inclusion.
-  Measure stroke distance instead of inflating marquees along screen axes;
-  diagonal strokes must not acquire wider hit areas at rectangle corners.
-- TDD red: thick line edges at high zoom and filled pen closing edges are
-  not clickable. Green: include physical line width and the filled closing
-  stroke in existing point queries, retaining the mouse/touch hit tolerance.
+- Put rectangle hit queries in one focused annotations/marquee.rs module. Keep
+  geometry independent of GUI rendering and avoid new dependencies. Test
+  contained polygons and edge-only overlap, not just corner inclusion. Measure
+  stroke distance instead of inflating marquees along screen axes; diagonal
+  strokes must not acquire wider hit areas at rectangle corners.
+- TDD red: thick line edges at high zoom and filled pen closing edges are not
+  clickable. Green: include physical line width and the filled closing stroke in
+  existing point queries, retaining the mouse/touch hit tolerance.
 - Pause for a crowded-area mouse check. No commit or 6D2 wiring requested.
-- Validation: 373 all-feature/all-target tests and 209 core/example tests
-  pass. Strict native/WASM all-target Clippy, formatting, and whitespace
-  checks pass. Mouse/touch thresholds retain synthetic coverage; physical
-  touch remains untested. Compilation output stays isolated under /tmp.
+- Validation: 373 all-feature/all-target tests and 209 core/example tests pass.
+  Strict native/WASM all-target Clippy, formatting, and whitespace checks pass.
+  Mouse/touch thresholds retain synthetic coverage; physical touch remains
+  untested. Compilation output stays isolated under /tmp.
 
 ### 2026-10-16 — selection gesture intent follow-up
 
-- User reports marquee starts over selectable objects immediately moving
-  or resizing them. Ask about the intended gesture rules; user approves
+- User reports marquee starts over selectable objects immediately moving or
+  resizing them. Ask about the intended gesture rules; user approves
   click-to-select, unselected-drag-to-marquee, selected-drag-to-edit, and
   Ctrl+drag forcing a fresh marquee while Ctrl-click toggles membership.
-- TDD red: presses on unselected bodies/corners immediately edit them;
-  Ctrl presses toggle too early to allow forced marquees. Green: defer
-  ordinary/Control click picks until release, retaining the previous
-  selection while pending. Marquee completion replaces selection; cancel,
-  foreign pointers, and invalid releases cannot commit a click or edit.
-- Latch movement past the existing mouse/touch screen-pixel threshold.
-  A real drag returning to its start must not become a toggle click.
-  Keep geometry-based marquee hits and selection changes outside history.
+- TDD red: presses on unselected bodies/corners immediately edit them; Ctrl
+  presses toggle too early to allow forced marquees. Green: defer
+  ordinary/Control click picks until release, retaining the previous selection
+  while pending. Marquee completion replaces selection; cancel, foreign
+  pointers, and invalid releases cannot commit a click or edit.
+- Latch movement past the existing mouse/touch screen-pixel threshold. A real
+  drag returning to its start must not become a toggle click. Keep
+  geometry-based marquee hits and selection changes outside history.
 - Preserve selected-object, selected-group, and drawing-tool edits. Keep
-  Shift/Alt explicit move/resize overrides, including Ctrl constraints.
-  In Select, press Ctrl after starting a handle drag to constrain it;
-  Ctrl held before pointer press instead forces a marquee.
-- Match cursor feedback to pending/forced marquees. Only selected text
-  offers the move cursor; group members retain their selected move target.
-- Cover mouse and synthetic touch at three zoom levels across rectangle,
-  oval, line, arrow, pen, highlighter, and text. Test corners, rotation
-  handles, Ctrl toggling/replacement, cancellation, pointer ownership,
-  release positions, no content/history changes, and cursor feedback.
-  Update earlier click fixtures to send both pointer press and release;
-  explicitly select a loaded object before testing its undoable move.
+  Shift/Alt explicit move/resize overrides, including Ctrl constraints. In
+  Select, press Ctrl after starting a handle drag to constrain it; Ctrl held
+  before pointer press instead forces a marquee.
+- Match cursor feedback to pending/forced marquees. Only selected text offers
+  the move cursor; group members retain their selected move target.
+- Cover mouse and synthetic touch at three zoom levels across rectangle, oval,
+  line, arrow, pen, highlighter, and text. Test corners, rotation handles, Ctrl
+  toggling/replacement, cancellation, pointer ownership, release positions, no
+  content/history changes, and cursor feedback. Update earlier click fixtures to
+  send both pointer press and release; explicitly select a loaded object before
+  testing its undoable move.
 - Pause for manual mouse checks. Do not commit or begin 6D2 placement.
 
 ### 2026-10-16 — selected-group cursor follow-up
 
-- User confirms gesture behavior, but group members show a crosshair even
-  though dragging moves the group. The cursor queried only single-object
-  controls and selected text; group hit testing lived in the press handler.
-- TDD red: group-member edit hits are absent. Green: share group targets
-  through the existing selected-object hit query and use that result for
-  both cursor feedback and gesture dispatch. Retain move access through
-  members' frames, but do not treat empty combined-group gaps or an
-  unselected topmost object as group-move targets.
-- Keep the move cursor throughout an active group drag. Only Ctrl held
-  before a new press offers a forced-marquee crosshair; Ctrl pressed during
-  an existing edit cannot change its cursor to a different gesture mode.
+- User confirms gesture behavior, but group members show a crosshair even though
+  dragging moves the group. The cursor queried only single-object controls and
+  selected text; group hit testing lived in the press handler.
+- TDD red: group-member edit hits are absent. Green: share group targets through
+  the existing selected-object hit query and use that result for both cursor
+  feedback and gesture dispatch. Retain move access through members' frames, but
+  do not treat empty combined-group gaps or an unselected topmost object as
+  group-move targets.
+- Keep the move cursor throughout an active group drag. Only Ctrl held before a
+  new press offers a forced-marquee crosshair; Ctrl pressed during an existing
+  edit cannot change its cursor to a different gesture mode.
 - Cover shape, ink, and text groups, mouse/touch, three zoom levels, invalid
   query scales, overlapping unselected layers, Ctrl override, and cursor
   feedback before/during movement. Retain all earlier selection tests.
 - Pause for the cursor check; leave changes uncommitted and 6D2 untouched.
-- Validation: 383 all-feature/all-target tests and 218 core/example tests
-  pass. Strict native/WASM all-target Clippy, formatting, and whitespace
-  checks pass. Keep compilation isolated under /tmp; physical touch remains
-  untested beyond synthetic input coverage.
+- Validation: 383 all-feature/all-target tests and 218 core/example tests pass.
+  Strict native/WASM all-target Clippy, formatting, and whitespace checks pass.
+  Keep compilation isolated under /tmp; physical touch remains untested beyond
+  synthetic input coverage.
 
 ### 2026-10-16 — 6D1 accepted; smart-snap placement checkpoint 6D2
 
-- User accepts the final selected-group cursor follow-up. Close 6D1 and
-  connect the existing portable detector without changing its calibration
-  or the C# implementation. Leave all current changes uncommitted.
-- Add a session-global, default-off Smart snap button for Text, Check,
-  and Cross. Retain its state across tools, pages, and projects, including
-  temporary selected-object editing. Do not serialize it or dirty history.
-  Intentionally reset it at application restart; no preference file yet.
-- Keep scheduling/cache/placement in app/snap, pixel work in its worker,
-  and the two small draft-placement hooks in the portable annotation core.
-  Reuse corrected display identities, existing tasks, and undo history;
-  add no dependencies or new annotation/document types.
-- Native analysis uses one background thread at a time. Coalesce page
-  changes to the current image after it finishes. Cache only live displayed
-  images, reject removed/replaced/corrected images and other projects, and
-  process completions even while a modal editor is open. Browser analysis
-  intentionally uses the existing UI-thread fallback until worker support.
+- User accepts the final selected-group cursor follow-up. Close 6D1 and connect
+  the existing portable detector without changing its calibration or the C#
+  implementation. Leave all current changes uncommitted.
+- Add a session-global, default-off Smart snap button for Text, Check, and
+  Cross. Retain its state across tools, pages, and projects, including temporary
+  selected-object editing. Do not serialize it or dirty history. Intentionally
+  reset it at application restart; no preference file yet.
+- Keep scheduling/cache/placement in app/snap, pixel work in its worker, and the
+  two small draft-placement hooks in the portable annotation core. Reuse
+  corrected display identities, existing tasks, and undo history; add no
+  dependencies or new annotation/document types.
+- Native analysis uses one background thread at a time. Coalesce page changes to
+  the current image after it finishes. Cache only live displayed images, reject
+  removed/replaced/corrected images and other projects, and process completions
+  even while a modal editor is open. Browser analysis intentionally uses the
+  existing UI-thread fallback until worker support.
 - Query in page/image coordinates with the C# short-axis radius of 0.04,
   independent of zoom. Clicked/tapped marks use centered 78% inset squares;
   moving beyond 8 logical screen pixels keeps manual drag sizing instead.
-  Preserve styles and existing-object editing. Freeze each gesture's hint;
-  late completions cannot alter drafts or committed annotations.
-- New text starts at a nearby rule's left end, bottom-anchored above it.
-  Reuse natural-width measurement, explicit newlines, format controls, and
-  table-cell candidates. Content/font changes keep its bottom on the rule;
-  later editing of accepted text does not snap it again. Save only ordinary
-  annotation geometry, not an ongoing relationship to the printed rule.
-- Show Off/No image/Analyzing/Ready/Unavailable. Pending, missing, failed,
-  and unmatched features fall back to normal placement. Cache failures to
-  avoid retry loops; toggling off/on explicitly retries. Analysis alone
-  cannot modify annotations, history, or project dirty state.
-- TDD: draft tests cover inset previews, manual drags, existing edits,
-  pointer ownership, invalid hints, text anchoring, styles, and history.
-  App regressions cover zoom, synthetic touch, global state, stale results,
-  page coalescing, live cache pruning, correction undo/redo, modal delivery,
-  failures/retries, the real sample form/Dátum fixtures, and table cells.
-  Save/reload retains text/mark geometry within existing normalized-float
-  precision and preserves original source bytes. Native worker delivery
-  also runs without a GUI runtime.
-- Additional TDD red: a rejected duplicate pointer press could overwrite
-  an active mark's frozen hint. Green: attach hints only after a successful
+  Preserve styles and existing-object editing. Freeze each gesture's hint; late
+  completions cannot alter drafts or committed annotations.
+- New text starts at a nearby rule's left end, bottom-anchored above it. Reuse
+  natural-width measurement, explicit newlines, format controls, and table-cell
+  candidates. Content/font changes keep its bottom on the rule; later editing of
+  accepted text does not snap it again. Save only ordinary annotation geometry,
+  not an ongoing relationship to the printed rule.
+- Show Off/No image/Analyzing/Ready/Unavailable. Pending, missing, failed, and
+  unmatched features fall back to normal placement. Cache failures to avoid
+  retry loops; toggling off/on explicitly retries. Analysis alone cannot modify
+  annotations, history, or project dirty state.
+- TDD: draft tests cover inset previews, manual drags, existing edits, pointer
+  ownership, invalid hints, text anchoring, styles, and history. App regressions
+  cover zoom, synthetic touch, global state, stale results, page coalescing,
+  live cache pruning, correction undo/redo, modal delivery, failures/retries,
+  the real sample form/Dátum fixtures, and table cells. Save/reload retains
+  text/mark geometry within existing normalized-float precision and preserves
+  original source bytes. Native worker delivery also runs without a GUI runtime.
+- Additional TDD red: a rejected duplicate pointer press could overwrite an
+  active mark's frozen hint. Green: attach hints only after a successful
   interaction start. Foreign pointers and canceled gestures stay harmless.
-- Validation: 402 all-feature/all-target tests and 222 core/example tests
-  pass. Strict native/WASM all-target Clippy, formatting, whitespace, and
-  Trunk browser-build checks pass. Keep build output isolated under /tmp;
-  physical touch remains untested beyond synthetic input coverage.
+- Validation: 402 all-feature/all-target tests and 222 core/example tests pass.
+  Strict native/WASM all-target Clippy, formatting, whitespace, and Trunk
+  browser-build checks pass. Keep build output isolated under /tmp; physical
+  touch remains untested beyond synthetic input coverage.
 
 Manual checkpoint 6D2 — accepted 2026-10-16:
 
-1. Open tests/samples/sample-form.png. Select Check or Cross, enable Smart
-   snap, and wait for Ready. Click/tap several boxes at different zooms;
-   marks should fit inside them with the chosen color/thickness. The snap
-   button should remain available after placement. Drag to size manually;
-   moving/resizing an existing mark must not snap it somewhere else.
-2. Select Text and click above solid/dotted fields, including Part B.
-   New text should begin at the field's left end and stay immediately
-   above its rule while typing/changing format. Explicit newlines work;
-   long text does not wrap automatically. Accept/Escape and later editing
-   keep their usual behavior. Check Dátum in tests/samples/datum-form.png
-   and a multi-column bordered table if available.
-3. Switch tools, pages, and projects: the toggle should stay on during the
-   run, but a fresh app launch starts off. Turning it off restores ordinary
+1. Open tests/samples/sample-form.png. Select Check or Cross, enable Smart snap,
+   and wait for Ready. Click/tap several boxes at different zooms; marks should
+   fit inside them with the chosen color/thickness. The snap button should
+   remain available after placement. Drag to size manually; moving/resizing an
+   existing mark must not snap it somewhere else.
+2. Select Text and click above solid/dotted fields, including Part B. New text
+   should begin at the field's left end and stay immediately above its rule
+   while typing/changing format. Explicit newlines work; long text does not wrap
+   automatically. Accept/Escape and later editing keep their usual behavior.
+   Check Dátum in tests/samples/datum-form.png and a multi-column bordered table
+   if available.
+3. Switch tools, pages, and projects: the toggle should stay on during the run,
+   but a fresh app launch starts off. Turning it off restores ordinary
    placement. Blank pages and analysis still pending also place normally;
    objects must not jump when analysis finishes.
-4. Accept a crop/rotation/filter change and wait for Ready before placing
-   again. Snap must follow the corrected image, including after undo/redo.
-   Snap creation itself is one undo step; canceling a gesture adds none.
-5. Save/reopen and export a PDF. Snapped marks/text should stay where
-   placed. Browser smoke checks are useful if convenient; expect a brief
-   UI-thread analysis pause rather than native background responsiveness.
+4. Accept a crop/rotation/filter change and wait for Ready before placing again.
+   Snap must follow the corrected image, including after undo/redo. Snap
+   creation itself is one undo step; canceling a gesture adds none.
+5. Save/reopen and export a PDF. Snapped marks/text should stay where placed.
+   Browser smoke checks are useful if convenient; expect a brief UI-thread
+   analysis pause rather than native background responsiveness.
 
 Stop here for user acceptance; do not begin 6D3 or create a commit.
 
@@ -2625,135 +2626,135 @@ Stop here for user acceptance; do not begin 6D3 or create a commit.
 
 - User accepts smart-snap placement and reports three separate interaction
   issues. Close 6D2; address these without starting crop-corner snapping.
-- TDD red: reopening text starts the caret at the beginning regardless of
-  the click; tiny selected objects still intercept presses as resize hits;
-  idle Escape leaves the last annotation selected. Green: reuse iced's
-  shaped-text editor hit testing, share handle eligibility between rendering
-  and picking, and clear idle selection outside content/history.
+- TDD red: reopening text starts the caret at the beginning regardless of the
+  click; tiny selected objects still intercept presses as resize hits; idle
+  Escape leaves the last annotation selected. Green: reuse iced's shaped-text
+  editor hit testing, share handle eligibility between rendering and picking,
+  and clear idle selection outside content/history.
 - Position the first-click caret using the annotation's inverse rotation,
   selected font/style, actual zoom, and explicit newlines. Keep the editor
-  horizontal and preserve its existing unrotated sizing. Let iced handle
-  Unicode caret boundaries rather than estimating character widths.
+  horizontal and preserve its existing unrotated sizing. Let iced handle Unicode
+  caret boundaries rather than estimating character widths.
 - Keep small-object frames visible and movable. Hide/inactivate corner,
   endpoint, and shape rotation controls below a conservative screen-space
-  threshold leaving at least half each edge/shaft clear. Share handle size
-  and stroke constants with drawing. Account for diagonal shafts and
-  rotated, axis-aligned handle squares so visible controls never overlap.
-  Zoom restores handles; even Alt cannot activate a hidden resize target.
-  Existing resize gestures can still finish after shrinking below cutoff.
+  threshold leaving at least half each edge/shaft clear. Share handle size and
+  stroke constants with drawing. Account for diagonal shafts and rotated,
+  axis-aligned handle squares so visible controls never overlap. Zoom restores
+  handles; even Alt cannot activate a hidden resize target. Existing resize
+  gestures can still finish after shrinking below cutoff.
 - Include the thin visible frame stroke in small-object move hits, avoiding
-  accidental new objects from screen/page rounding at a selected corner.
-  Retain normal mouse/touch stroke-picking tolerance. Test small moves and
+  accidental new objects from screen/page rounding at a selected corner. Retain
+  normal mouse/touch stroke-picking tolerance. Test small moves and
   zoom-restored resizing through the application, not only core hit queries.
-- Escape clears selection only when no text editor, annotation gesture, or
-  page reorder is active. It keeps the current tool/settings, content, dirty
-  state, and history. During an active edit, the first Escape still reverts
-  it and retains selection; a second Escape clears it. Focus loss/window
-  resize and confirmation-dialog Escape keep their prior behavior.
+- Escape clears selection only when no text editor, annotation gesture, or page
+  reorder is active. It keeps the current tool/settings, content, dirty state,
+  and history. During an active edit, the first Escape still reverts it and
+  retains selection; a second Escape clears it. Focus loss/window resize and
+  confirmation-dialog Escape keep their prior behavior.
 - Cover mouse/touch targets, all shape kinds, invalid scales, zoom,
   rotated/narrow-frame non-overlap, inactive Alt targets, Unicode/formatted
   caret placement, undo/redo, and pending text cancellation. Software-render
   tiny check/cross/arrow selections at 1x/2x DPI to verify that only their
   frames remain. Update old resize/rotation fixtures to zoom in where their
   narrow objects now intentionally hide controls.
-- Validation: 410 all-feature/all-target tests and 225 core/example tests
-  pass. Strict native/WASM all-target Clippy, formatting, whitespace, and
-  Trunk browser-build checks pass. Keep all build output under /tmp and
-  preserve the host target/dist directories. Physical touch remains untested.
+- Validation: 410 all-feature/all-target tests and 225 core/example tests pass.
+  Strict native/WASM all-target Clippy, formatting, whitespace, and Trunk
+  browser-build checks pass. Keep all build output under /tmp and preserve the
+  host target/dist directories. Physical touch remains untested.
 
 Manual checkpoint — accepted 2026-10-16:
 
-1. With Text, click existing text near its middle and on different lines.
-   The initial caret should be near the clicked glyph. Repeat after zooming
-   and rotating; verify typing and Escape still behave normally.
-2. Select small checks/crosses and arrows, then zoom out. Only the thin
-   frame should remain; dragging inside it moves rather than resizes, even
-   with Alt. Zoom in to restore non-overlapping controls and verify resizing.
+1. With Text, click existing text near its middle and on different lines. The
+   initial caret should be near the clicked glyph. Repeat after zooming and
+   rotating; verify typing and Escape still behave normally.
+2. Select small checks/crosses and arrows, then zoom out. Only the thin frame
+   should remain; dragging inside it moves rather than resizes, even with Alt.
+   Zoom in to restore non-overlapping controls and verify resizing.
 3. Place an annotation, press Escape, and change its style. The last object
-   should stay unchanged; the next annotation should use the new style.
-   While editing/moving, first Escape should revert, second should deselect.
+   should stay unchanged; the next annotation should use the new style. While
+   editing/moving, first Escape should revert, second should deselect.
 
 Leave changes uncommitted and stop before 6D3 for user acceptance.
 
 ### 2026-10-16 — reuse text already placed on a snapped rule
 
 - User accepts the caret, small-handle, and Escape follow-ups. A new request:
-  clicking a filled rule should reopen its existing text with the caret at
-  the end instead of creating another annotation over it.
+  clicking a filled rule should reopen its existing text with the caret at the
+  end instead of creating another annotation over it.
 - TDD red: clicking past a short field's text creates a new empty draft ID.
   Reuse the topmost text whose left/bottom anchor matches the detected rule
-  within one page point, allowing normalized-coordinate rounding. Derive
-  this from ordinary geometry; add no persisted field links or schema data.
-  Text overflowing from a neighboring cell is not an anchor match.
+  within one page point, allowing normalized-coordinate rounding. Derive this
+  from ordinary geometry; add no persisted field links or schema data. Text
+  overflowing from a neighboring cell is not an anchor match.
 - Keep direct text clicks ahead of snap lookup, preserving glyph-based caret
   positioning. Reopening through a rule moves the caret to DocumentEnd,
   including multiline/Unicode content, without moving or restyling the text.
-  Opening/canceling creates no content/history change; accepted typing edits
-  the existing ID in one undo step. Off/pending/unmatched snap stays ordinary.
-- Remove the obsolete editor reset on pointer release: annotation finish
-  cannot open a text draft. A stray release must not reset the chosen caret
-  or replace content while an editor is already active.
+  Opening/canceling creates no content/history change; accepted typing edits the
+  existing ID in one undo step. Off/pending/unmatched snap stays ordinary.
+- Remove the obsolete editor reset on pointer release: annotation finish cannot
+  open a text draft. A stray release must not reset the chosen caret or replace
+  content while an editor is already active.
 - Cover mouse/touch at three zoom levels, direct caret picks, missing/pending
   features, late results, format/geometry/ID preservation, Escape, undo/redo,
   overlapping neighboring fields, layer order, invalid queries, and drafts.
-- Validation: 414 all-feature/all-target tests and 227 core/example tests
-  pass. Strict native/WASM all-target Clippy, formatting, and whitespace
-  checks pass. Keep build output isolated under /tmp; no commit requested.
+- Validation: 414 all-feature/all-target tests and 227 core/example tests pass.
+  Strict native/WASM all-target Clippy, formatting, and whitespace checks pass.
+  Keep build output isolated under /tmp; no commit requested.
 
 Manual checkpoint — accepted 2026-10-16:
 
-1. Fill a short text value on a long rule. With Text and Smart snap on,
-   click an empty part of that same rule: reopen the original text at its
-   end. Typing should append; Escape should discard that edit, not the field.
+1. Fill a short text value on a long rule. With Text and Smart snap on, click an
+   empty part of that same rule: reopen the original text at its end. Typing
+   should append; Escape should discard that edit, not the field.
 2. Click existing text directly: caret should still follow the clicked glyph.
    Check another field/table cell and snap off: do not reuse the first field.
 
-User confirms the filled-rule reuse check and requests an unsigned commit
-of the accepted 6D1/6D2 work and follow-ups, then continuation with 6D3.
+User confirms the filled-rule reuse check and requests an unsigned commit of the
+accepted 6D1/6D2 work and follow-ups, then continuation with 6D3.
 
 ### 2026-10-16 — accepted snapping committed; crop-corner checkpoint 6D3
 
 - Commit accepted 6D1/6D2 and their interaction/compatibility follow-ups as
   `1c8da37`, unsigned, without pushing. Keep the C# application unchanged.
-- Add portable Shi–Tomasi corner hints using grayscale source pixels and
-  the existing 1600-pixel analysis bound. Retain 300 corners, quality 0.02,
-  8-pixel spacing, and a 5-pixel structure-tensor window. Reuse image/alpha
-  handling; add no dependency. Portable borders/resampling need not match
-  OpenCV pixelwise. These are local hints, not document auto-framing.
-- Analyze once while the existing preview worker decodes the original;
-  reuse the same source/hints across crop, rotation, and filter adjustments.
-  Existing session guards reject stale hints along with stale previews.
-  A hint-analysis error leaves manual corrections available. The browser
-  retains the existing UI-thread fallback rather than adding a worker stack.
+- Add portable Shi–Tomasi corner hints using grayscale source pixels and the
+  existing 1600-pixel analysis bound. Retain 300 corners, quality 0.02, 8-pixel
+  spacing, and a 5-pixel structure-tensor window. Reuse image/alpha handling;
+  add no dependency. Portable borders/resampling need not match OpenCV
+  pixelwise. These are local hints, not document auto-framing.
+- Analyze once while the existing preview worker decodes the original; reuse the
+  same source/hints across crop, rotation, and filter adjustments. Existing
+  session guards reject stale hints along with stale previews. A hint-analysis
+  error leaves manual corrections available. The browser retains the existing
+  UI-thread fallback rather than adding a worker stack.
 - Keep raw pointer positions separate from snapped targets. Ctrl press or
   release changes the target immediately, without moving the pointer. Cache
-  modifier events locally too: another pointer event can arrive before the
-  root rebuilds the view. Reject snapped quads that cross or collapse, using
-  the existing convexity validator; keep ordinary manual placement instead.
+  modifier events locally too: another pointer event can arrive before the root
+  rebuilds the view. Reject snapped quads that cross or collapse, using the
+  existing convexity validator; keep ordinary manual placement instead.
 - Use the original image's fitted/letterboxed dimensions for the calibrated
-  52-screen-pixel radius, clamped to 0.015–0.09 of the short image axis.
-  Lost touch or unavailable release positions restore the exact unsnapped
-  starting corner. Keep the annotation Smart snap toggle independent.
+  52-screen-pixel radius, clamped to 0.015–0.09 of the short image axis. Lost
+  touch or unavailable release positions restore the exact unsnapped starting
+  corner. Keep the annotation Smart snap toggle independent.
 - TDD: first reproduce missing modifier/touch snapping, then the root-view
   modifier lag. Cover rectangular/skewed targets, straight-edge rejection,
   resize normalization, feature spacing/caps, real forms, transparency, bad
   queries, letterboxing, pointer ownership, lost touch, invalid snaps, hint
   reuse, stale jobs, and transactional Accept/Cancel/Undo/Redo.
-- Validation: 425 all-feature/all-target tests and 232 core/example tests
-  pass. Strict native/WASM all-target Clippy, formatting, whitespace, and
-  Trunk browser-build checks pass. Keep target/dist output isolated under
-  /tmp. Physical touch remains untested; browser validation is build-only.
+- Validation: 425 all-feature/all-target tests and 232 core/example tests pass.
+  Strict native/WASM all-target Clippy, formatting, whitespace, and Trunk
+  browser-build checks pass. Keep target/dist output isolated under /tmp.
+  Physical touch remains untested; browser validation is build-only.
 
 Manual checkpoint 6D3 — accepted 2026-10-16:
 
 1. Open an image page, choose Edit page, and drag a corner near a visible
-   document/printed-box corner. Without Ctrl, movement stays free. Hold Ctrl
-   to snap; release Ctrl without moving the mouse to restore the raw point.
-   Press Ctrl again, release the mouse, and verify the snapped point stays.
+   document/printed-box corner. Without Ctrl, movement stays free. Hold Ctrl to
+   snap; release Ctrl without moving the mouse to restore the raw point. Press
+   Ctrl again, release the mouse, and verify the snapped point stays.
 2. Change rotation, filters, brightness, and contrast. Snapping on the left
    continues to follow the original image, not the corrected preview. Try a
-   different window shape to check letterboxing. No nearby corner means
-   ordinary dragging; the annotation Smart snap button is unrelated.
+   different window shape to check letterboxing. No nearby corner means ordinary
+   dragging; the annotation Smart snap button is unrelated.
 3. Cancel/Escape leaves the page unchanged. Accept commits the crop as one
    Undo/Redo step. If touch is available, verify free corner dragging and
    cancellation still work; no physical touch check has run in the container.
@@ -2766,546 +2767,542 @@ changes uncommitted; no new commit was requested.
 - User confirms crop-corner snapping. Close 6D3 and proceed without a new
   commit. Split 6E into offline detector inspection and difficult-frame/GUI
   integration; keep the C# application and all capture/temporal code intact.
-- Add a portable still-image detector and `frame_probe INPUT OUTPUT.png`.
-  Return normalized accepted/rejected corners separately, confidence, area,
-  sharpness, and analysis dimensions. Emit green accepted/amber rejected
-  overlays and JSON; keep inputs intact and reject existing output files.
-  Apply existing 100 MiB/50 MP trust limits before processing/allocation.
-- Keep the 1280-pixel analysis edge; grayscale 5-tap binomial smoothing;
-  Canny 60/180 and 35/120 with the original repeated rectangular closing;
-  HSV paper V >= 115/S <= 105, elliptical closing/opening; hull perimeter
-  tolerances 0.01/0.015/0.02/0.03/0.04; convexity, minimum area 0.05,
-  aspect <= 5, 40% area saturation, and 2% border/0.12-corner penalties.
-- Add line-pair recovery in this offline slice after real frames prove
-  connected outlines insufficient. Retain 1 px/1 degree progressive Hough,
-  votes 70/50, lengths 18%/12%, gaps 60/80, 14 distinct lines per orientation,
-  3 degree/1.5% line deduplication, pair spacing, and intersection margins.
-  Seed sampling deterministically and consume traced pixels; a full global
-  Hough peak approximation invented rays and failed the clutter fixture.
-- Retain 24 samples per side, 1.5% boundary offsets, paper/Lab contrast,
-  9-pixel Lab smoothing, and paired continuing-side penalties. Reuse the
-  existing tested Lab conversion in a private shared image-color module;
-  do not duplicate it or expose correction internals to the detector.
-- TDD: observe missing detector imports, then recorded-frame misses, then
-  a cluttered synthetic document's displaced bottom. Fix implementation
+- Add a portable still-image detector and `frame_probe INPUT OUTPUT.png`. Return
+  normalized accepted/rejected corners separately, confidence, area, sharpness,
+  and analysis dimensions. Emit green accepted/amber rejected overlays and JSON;
+  keep inputs intact and reject existing output files. Apply existing 100 MiB/50
+  MP trust limits before processing/allocation.
+- Keep the 1280-pixel analysis edge; grayscale 5-tap binomial smoothing; Canny
+  60/180 and 35/120 with the original repeated rectangular closing; HSV paper V
+  \>= 115/S \<= 105, elliptical closing/opening; hull perimeter tolerances
+  0.01/0.015/0.02/0.03/0.04; convexity, minimum area 0.05, aspect \<= 5, 40%
+  area saturation, and 2% border/0.12-corner penalties.
+- Add line-pair recovery in this offline slice after real frames prove connected
+  outlines insufficient. Retain 1 px/1 degree progressive Hough, votes 70/50,
+  lengths 18%/12%, gaps 60/80, 14 distinct lines per orientation, 3 degree/1.5%
+  line deduplication, pair spacing, and intersection margins. Seed sampling
+  deterministically and consume traced pixels; a full global Hough peak
+  approximation invented rays and failed the clutter fixture.
+- Retain 24 samples per side, 1.5% boundary offsets, paper/Lab contrast, 9-pixel
+  Lab smoothing, and paired continuing-side penalties. Reuse the existing tested
+  Lab conversion in a private shared image-color module; do not duplicate it or
+  expose correction internals to the detector.
+- TDD: observe missing detector imports, then recorded-frame misses, then a
+  cluttered synthetic document's displaced bottom. Fix implementation
   differences without weakening the 0.72 acceptance threshold or existing
-  synthetic 0.04/0.02 and recording 0.1 normalized corner tolerances.
-  Cover blanks, transparent hidden RGB, tiny images, scale, input preservation,
+  synthetic 0.04/0.02 and recording 0.1 normalized corner tolerances. Cover
+  blanks, transparent hidden RGB, tiny images, scale, input preservation,
   saturated documents, internal form rules, candidate JSON, and command I/O.
 - Test frames 0059/0112/0168 directly from the trusted committed laptop-camera
   TAR, without an archive dependency/extraction. This is still-image coverage,
   not the full 224-frame temporal/countdown checkpoint in 6F.
-- Generate 14 local fixture overlays: the original card screenshot, seven
-  HOYA still/sequence images, three recorded sheets, and three booklets.
-  Card/HOYA/sheet frames are accepted; inspected representative outlines
-  follow their boundaries. Booklet 1/2/3 remain rejected at approximately
-  0.657/0.712/0.640, with
-  incorrect candidate outlines. Do not treat those polygons as valid crops
-  merely because manual review can use a lower confidence threshold.
-- Explicit parity gaps: component hulls/enclosed edge regions are present,
-  but original concave-contour candidates are not. Portable resampling,
+- Generate 14 local fixture overlays: the original card screenshot, seven HOYA
+  still/sequence images, three recorded sheets, and three booklets.
+  Card/HOYA/sheet frames are accepted; inspected representative outlines follow
+  their boundaries. Booklet 1/2/3 remain rejected at approximately
+  0.657/0.712/0.640, with incorrect candidate outlines. Do not treat those
+  polygons as valid crops merely because manual review can use a lower
+  confidence threshold.
+- Explicit parity gaps: component hulls/enclosed edge regions are present, but
+  original concave-contour candidates are not. Portable resampling,
   border/rounding, Lab smoothing, and segment enumeration may differ from
-  OpenCV. Investigate these for the booklet misses in 6E2; no blanket
-  threshold reduction. No previous-frame hints/stabilization are added yet.
-- Validation: 437 all-feature/all-target tests and 244 core/example tests
-  pass. Strict native/WASM all-target Clippy, formatting, whitespace, and
-  Trunk browser-build checks pass. Keep compilation/distribution under /tmp;
-  only generated review previews go under the ignored artifacts directory.
-  Browser validation is build-only; no new physical-camera claim is made.
+  OpenCV. Investigate these for the booklet misses in 6E2; no blanket threshold
+  reduction. No previous-frame hints/stabilization are added yet.
+- Validation: 437 all-feature/all-target tests and 244 core/example tests pass.
+  Strict native/WASM all-target Clippy, formatting, whitespace, and Trunk
+  browser-build checks pass. Keep compilation/distribution under /tmp; only
+  generated review previews go under the ignored artifacts directory. Browser
+  validation is build-only; no new physical-camera claim is made.
 
 Manual checkpoint 6E1 — accepted 2026-10-16:
 
-1. Open `artifacts/previews/framing-6e1.Z0H3zH/index.html` in a browser.
-   Inspect the green card/HOYA/sheet outlines; each image links to full size
-   and the untouched original. Report any corner that misses the boundary.
-2. The three amber booklet outlines are known misses, deliberately rejected
-   by automatic detection. Following gallery acceptance, retain them as
-   documented limits rather than block manual Auto frame integration.
+1. Open `artifacts/previews/framing-6e1.Z0H3zH/index.html` in a browser. Inspect
+   the green card/HOYA/sheet outlines; each image links to full size and the
+   untouched original. Report any corner that misses the boundary.
+2. The three amber booklet outlines are known misses, deliberately rejected by
+   automatic detection. Following gallery acceptance, retain them as documented
+   limits rather than block manual Auto frame integration.
 3. Optionally run `frame_probe` on another photographed PNG/JPEG. Existing
    output files must be refused. The desktop editor intentionally has no new
    button yet; current manual correction and Ctrl snapping remain available.
 
 User accepts the gallery, including minor errors and known misses against
 misleading high-contrast backgrounds, and requests continuation with 6E2.
-Proceed with Auto frame integration; retain detector limits and defer
-further parity tuning. Keep changes uncommitted; no commit requested.
+Proceed with Auto frame integration; retain detector limits and defer further
+parity tuning. Keep changes uncommitted; no commit requested.
 
 ### 2026-10-16 — 6E1 accepted; Auto frame checkpoint 6E2
 
 - User accepts the gallery's minor errors/known misses against misleading,
   high-contrast backgrounds. Retain the detector as accepted; defer further
   contour/pixel parity work rather than recalibrate thresholds or fixtures.
-- Add explicit Auto frame beside Full frame in Edit page. Opening the
-  editor stays manual and never changes an existing crop automatically.
-  Reuse the existing preview worker and decoded original, with a lazy
-  standard-library OnceLock for analysis results per editor session.
-  No second worker, native dependency, or document-format change.
-- Apply a detected quad only to the draft and corrected preview. Retain the
-  C# 0.45 manual-review cutoff for candidates below automatic acceptance;
-  label those Low-confidence. Render notices in a visible warning panel.
-  All results still require checking corners and explicit Accept. Missing,
-  unusable, or failed detection keeps the current crop and manual workflow.
+- Add explicit Auto frame beside Full frame in Edit page. Opening the editor
+  stays manual and never changes an existing crop automatically. Reuse the
+  existing preview worker and decoded original, with a lazy standard-library
+  OnceLock for analysis results per editor session. No second worker, native
+  dependency, or document-format change.
+- Apply a detected quad only to the draft and corrected preview. Retain the C#
+  0.45 manual-review cutoff for candidates below automatic acceptance; label
+  those Low-confidence. Render notices in a visible warning panel. All results
+  still require checking corners and explicit Accept. Missing, unusable, or
+  failed detection keeps the current crop and manual workflow.
 - Reuse analysis across repeated clicks, crops, filters, tone, and rotation;
   always analyze original pixels, not the corrected preview. Preserve all
-  non-crop settings and original encoded assets. Browser analysis retains
-  the existing UI-thread fallback; responsiveness is not claimed here.
-- Disable duplicate requests during preview/analysis work. Accept cannot
-  commit a cached old preview during framing; Cancel/Escape stays available.
-  Invalidate active crop gestures when Auto frame starts. Old sessions and
-  late worker completions cannot reframe another editor or page.
-- Track manual edit revisions as well as settings. Any intervening valid
-  manual change wins, including an unchanged Full frame or settings changed
-  and restored. Discard the late crop, finish the latest manual preview, and
-  report that manual changes were kept. A later Auto frame reuses the cache.
-  Worker failures are nonfatal notices, not blockers for manual acceptance.
+  non-crop settings and original encoded assets. Browser analysis retains the
+  existing UI-thread fallback; responsiveness is not claimed here.
+- Disable duplicate requests during preview/analysis work. Accept cannot commit
+  a cached old preview during framing; Cancel/Escape stays available. Invalidate
+  active crop gestures when Auto frame starts. Old sessions and late worker
+  completions cannot reframe another editor or page.
+- Track manual edit revisions as well as settings. Any intervening valid manual
+  change wins, including an unchanged Full frame or settings changed and
+  restored. Discard the late crop, finish the latest manual preview, and report
+  that manual changes were kept. A later Auto frame reuses the cache. Worker
+  failures are nonfatal notices, not blockers for manual acceptance.
 - TDD: first reproduce missing request/cache APIs. Add ten regressions for
-  explicit requests, pending Accept, duplicate jobs, original-space cache
-  reuse, 0.45 cutoff, invalid/weak/failed results, worker failure, manual/ABA
-  races, stale sessions, Cancel, one-step history, text/shape preservation,
-  original asset bytes, Save/reload, and corrected-dimension PDF export.
-- Validation: 447 all-feature/all-target tests and 244 core/example tests
-  pass. Strict native/WASM all-target Clippy, formatting, and whitespace
-  checks and the Trunk browser build pass. Compilation remains isolated
-  under /tmp; no C# source or CI changes. Inspect the software-rendered panel at
+  explicit requests, pending Accept, duplicate jobs, original-space cache reuse,
+  0.45 cutoff, invalid/weak/failed results, worker failure, manual/ABA races,
+  stale sessions, Cancel, one-step history, text/shape preservation, original
+  asset bytes, Save/reload, and corrected-dimension PDF export.
+- Validation: 447 all-feature/all-target tests and 244 core/example tests pass.
+  Strict native/WASM all-target Clippy, formatting, and whitespace checks and
+  the Trunk browser build pass. Compilation remains isolated under /tmp; no C#
+  source or CI changes. Inspect the software-rendered panel at
   `artifacts/previews/auto-frame-6e2.sMqDXi/panel.png`; physical touch and
   browser interaction are untested in this container.
 
 Manual checkpoint 6E2 — accepted 2026-10-16:
 
-1. Import a photographed document or open an existing image project. Enter
-   Edit page: the saved crop must stay unchanged. Press Auto frame and check
-   all four original-image corners plus the corrected preview. Full frame
-   restores the source; Ctrl-assisted dragging remains available.
-2. Try rotation, color mode, brightness, and contrast before/after framing.
-   They stay as selected. A booklet photo may yield a Low-confidence warning
-   and an imperfect suggestion at the intentional lower review threshold.
-   Adjust it manually. If changing settings while analysis runs, those edits
-   win; press Auto frame again after completion to reapply its suggestion.
-3. Cancel/Escape leaves the original page/annotations unchanged. Reopen,
-   Auto frame, Accept, then Undo/Redo: corrections and image-anchored objects
-   change together in one step. Optionally Save/reopen or export the PDF.
+1. Import a photographed document or open an existing image project. Enter Edit
+   page: the saved crop must stay unchanged. Press Auto frame and check all four
+   original-image corners plus the corrected preview. Full frame restores the
+   source; Ctrl-assisted dragging remains available.
+2. Try rotation, color mode, brightness, and contrast before/after framing. They
+   stay as selected. A booklet photo may yield a Low-confidence warning and an
+   imperfect suggestion at the intentional lower review threshold. Adjust it
+   manually. If changing settings while analysis runs, those edits win; press
+   Auto frame again after completion to reapply its suggestion.
+3. Cancel/Escape leaves the original page/annotations unchanged. Reopen, Auto
+   frame, Accept, then Undo/Redo: corrections and image-anchored objects change
+   together in one step. Optionally Save/reopen or export the PDF.
 
 Leave changes uncommitted and stop before recorded temporal replay in 6F.
 
 ### 2026-10-16 — 6E2 accepted; bounded 11-19 framing investigation
 
-- User confirms the editor checkpoint, but reports incorrect right corners
-  in `artifacts/reviews/docscans/Scan 2026-09-15 11-19.docscan`.
-  Compare the original 3264 x 1836 image with its saved manual crop; never
-  modify the project, asset, or saved crop. Generate a diagnostic overlay at
+- User confirms the editor checkpoint, but reports incorrect right corners in
+  `artifacts/reviews/docscans/Scan 2026-09-15 11-19.docscan`. Compare the
+  original 3264 x 1836 image with its saved manual crop; never modify the
+  project, asset, or saved crop. Generate a diagnostic overlay at
   `artifacts/previews/framing-11-19.JIXI7I/before.png`.
-- Candidate generation finds the card: its closest quad is within 4.3 px
-  of every saved manual corner at the 1280 x 720 analysis resolution.
-  Selection is the failure: that quad scores 0.786, while a larger quad
-  joining the card's left edge to speaker/cable edges scores 0.854.
-  Confidence is a heuristic, not a correctness guarantee.
-- Try a bounded scoring change: require nearby Canny-edge support for
-  sampled paper/Lab boundary contrast, reusing the existing distance map
-  and 0.6% tolerance. It still chooses the wrong 11-19 outline and breaks
-  the existing recorded-frame 0168 corner tolerance. Remove the experiment
-  and temporary instrumentation; leave detector behavior, thresholds, and
-  tests unchanged. Do not weaken the regression or tune to this one image.
-- Also test the user's rectangularity suggestion. This already contributes
-  0.33 of the existing score through area/minimum-enclosing-rectangle area.
-  Add a stronger 0.75 penalty for missing rectangularity as an experiment:
-  it rejects the speaker edge, but picks an incorrect, shorter crop that
-  cuts off about 13% of the card's height. Frame 0168 regresses too.
-  Keep the comparison overlay at
-  `artifacts/previews/framing-11-19.JIXI7I/stronger-rectangularity.png`.
-  Remove the extra penalty; stronger shape bias is not a safe small fix
-  and must not exclude genuine perspective-skewed documents.
+- Candidate generation finds the card: its closest quad is within 4.3 px of
+  every saved manual corner at the 1280 x 720 analysis resolution. Selection is
+  the failure: that quad scores 0.786, while a larger quad joining the card's
+  left edge to speaker/cable edges scores 0.854. Confidence is a heuristic, not
+  a correctness guarantee.
+- Try a bounded scoring change: require nearby Canny-edge support for sampled
+  paper/Lab boundary contrast, reusing the existing distance map and 0.6%
+  tolerance. It still chooses the wrong 11-19 outline and breaks the existing
+  recorded-frame 0168 corner tolerance. Remove the experiment and temporary
+  instrumentation; leave detector behavior, thresholds, and tests unchanged. Do
+  not weaken the regression or tune to this one image.
+- Also test the user's rectangularity suggestion. This already contributes 0.33
+  of the existing score through area/minimum-enclosing-rectangle area. Add a
+  stronger 0.75 penalty for missing rectangularity as an experiment: it rejects
+  the speaker edge, but picks an incorrect, shorter crop that cuts off about 13%
+  of the card's height. Frame 0168 regresses too. Keep the comparison overlay at
+  `artifacts/previews/framing-11-19.JIXI7I/stronger-rectangularity.png`. Remove
+  the extra penalty; stronger shape bias is not a safe small fix and must not
+  exclude genuine perspective-skewed documents.
 - Accept this as a known background-edge ranking limitation, as requested.
-  Manual corner adjustment and Ctrl snapping remain the workaround. A
-  broader scoring/candidate investigation is separate future work, not a
-  prerequisite for accepting 6E2. No new manual checkpoint or commit.
+  Manual corner adjustment and Ctrl snapping remain the workaround. A broader
+  scoring/candidate investigation is separate future work, not a prerequisite
+  for accepting 6E2. No new manual checkpoint or commit.
 - Validation after restoring the detector: all eight still-image framing
   regressions pass with their original tolerances. Formatting and whitespace
   checks pass. Retained changes for this investigation are documentation only.
 
 ### 2026-10-16 — accepted work committed; 6F1 temporal/replay checkpoint
 
-- Commit accepted 6D3–6E2 work unsigned as `7c3177d`, without pushing.
-  The owner's signing rebase changes it to `54bed57` with an identical tree.
-  Keep the C# app unchanged. No commit is requested for the new 6F work.
+- Commit accepted 6D3–6E2 work unsigned as `7c3177d`, without pushing. The
+  owner's signing rebase changes it to `54bed57` with an identical tree. Keep
+  the C# app unchanged. No commit is requested for the new 6F work.
 - TDD: first observe missing temporal APIs. Port bounded four-result history,
-  two-vote clusters, current-cluster tie preference, coordinate medians,
-  0.08 agreement, and 0.35 smoothing. Retain current-frame sharpness rather
-  than smooth away blur. Validate finite metrics and convex median results.
-- Add optional previous-frame ranking hints using the original 0.12 radius
-  and bonus. Invalid hints are ignored. Keep confidence separate from rank:
-  hints cannot invent corners or turn rejected candidates into detections.
-  The unhinted page editor and detector calibration stay unchanged.
+  two-vote clusters, current-cluster tie preference, coordinate medians, 0.08
+  agreement, and 0.35 smoothing. Retain current-frame sharpness rather than
+  smooth away blur. Validate finite metrics and convex median results.
+- Add optional previous-frame ranking hints using the original 0.12 radius and
+  bonus. Invalid hints are ignored. Keep confidence separate from rank: hints
+  cannot invent corners or turn rejected candidates into detections. The
+  unhinted page editor and detector calibration stay unchanged.
 - Port the current C# two-second countdown, confidence >= 0.72, area >= 0.1,
-  sharpness >= 25, and cumulative drift <= 0.04 from the countdown anchor.
-  Use monotonic Duration timestamps, handle clock rollback, expose progress,
-  and emit Ready once until loss/blur or an explicit reset rearms the gate.
-  Test jitter, majority changes, smoothing, invalid/rejected input, blur,
-  loss, resets, repeated timestamps, rollback, and capture rearming.
-- Add `frame_replay INPUT_DIR NEW_OUTPUT_DIR [INTERVAL_MS=33]`, bounded to
-  300 sorted regular JPEG/PNG frames and existing 100 MiB/50 MP image limits.
-  Stream one source at a time, copy original bytes, and emit JSON plus a
-  server-free HTML viewer with playback, scrubbing, optional outlines,
-  countdown, capture jump, and per-frame metadata. Reset for size changes.
-  Refuse existing outputs and escape embedded JSON against HTML injection.
-- Extend the recorded regression to all 224 trusted committed laptop frames
-  with virtual 33 ms timestamps. Retain all C# gates: raw correct >= 160,
-  stable correct >= 180, wrong = 0, and at least one correctly framed Ready.
-  Preserve the separate three-frame unhinted smoke test and its tolerance.
-- The new full gate fails: raw 143 correct/34 wrong/47 missing; stable
-  151 correct/33 wrong/40 missing; no capture, peak progress about 0.957.
-  Keep this test enabled and visibly red. Do not skip it, lower thresholds,
-  loosen tolerances, or claim 6F complete merely to keep CI green.
-- Investigate the earlier deferred contour gap and an OpenCV diagonal NMS
-  tie mismatch. The combined experiment reaches raw 181 correct/0 wrong
-  and stable 190 correct/0 wrong, but still never captures and regresses the
-  accepted card screenshot: its status bar becomes the proposed bottom.
-  Remove both detector experiments; retain no pixel/candidate changes.
-  This is broader detector-parity work, not a safe calibration-only tweak.
-  Compare the [upstream diagonal NMS rule][canny-nms-reference] when resuming.
-- Split 6F at this checkpoint: portable temporal logic and diagnostics are
-  ready to inspect; full-recording parity remains explicitly pending in
-  6F2. Do not start camera adapters in 6G or mark the full milestone complete.
-- Validation: native all-feature/all-target and core/example checks pass
-  when explicitly excluding the new known-red full-recording gate with
-  `-- --skip recorded_laptop_sequence --quiet`; it is not ignored in source
-  or disabled in CI. Strict native/WASM Clippy, formatting, whitespace,
-  and the final browser build pass. The eight temporal unit checks and
-  four replay-command checks pass. Rebuild/replay the actual corpus after
-  removing experiments; verify the four-frame hold demo reaches Ready.
-  All compilation/browser output stays under /tmp, not host target/dist.
+  sharpness >= 25, and cumulative drift \<= 0.04 from the countdown anchor. Use
+  monotonic Duration timestamps, handle clock rollback, expose progress, and
+  emit Ready once until loss/blur or an explicit reset rearms the gate. Test
+  jitter, majority changes, smoothing, invalid/rejected input, blur, loss,
+  resets, repeated timestamps, rollback, and capture rearming.
+- Add `frame_replay INPUT_DIR NEW_OUTPUT_DIR [INTERVAL_MS=33]`, bounded to 300
+  sorted regular JPEG/PNG frames and existing 100 MiB/50 MP image limits. Stream
+  one source at a time, copy original bytes, and emit JSON plus a server-free
+  HTML viewer with playback, scrubbing, optional outlines, countdown, capture
+  jump, and per-frame metadata. Reset for size changes. Refuse existing outputs
+  and escape embedded JSON against HTML injection.
+- Extend the recorded regression to all 224 trusted committed laptop frames with
+  virtual 33 ms timestamps. Retain all C# gates: raw correct >= 160, stable
+  correct >= 180, wrong = 0, and at least one correctly framed Ready. Preserve
+  the separate three-frame unhinted smoke test and its tolerance.
+- The new full gate fails: raw 143 correct/34 wrong/47 missing; stable 151
+  correct/33 wrong/40 missing; no capture, peak progress about 0.957. Keep this
+  test enabled and visibly red. Do not skip it, lower thresholds, loosen
+  tolerances, or claim 6F complete merely to keep CI green.
+- Investigate the earlier deferred contour gap and an OpenCV diagonal NMS tie
+  mismatch. The combined experiment reaches raw 181 correct/0 wrong and stable
+  190 correct/0 wrong, but still never captures and regresses the accepted card
+  screenshot: its status bar becomes the proposed bottom. Remove both detector
+  experiments; retain no pixel/candidate changes. This is broader
+  detector-parity work, not a safe calibration-only tweak. Compare the
+  [upstream diagonal NMS rule][canny-nms-reference] when resuming.
+- Split 6F at this checkpoint: portable temporal logic and diagnostics are ready
+  to inspect; full-recording parity remains explicitly pending in 6F2. Do not
+  start camera adapters in 6G or mark the full milestone complete.
+- Validation: native all-feature/all-target and core/example checks pass when
+  explicitly excluding the new known-red full-recording gate with
+  `-- --skip recorded_laptop_sequence --quiet`; it is not ignored in source or
+  disabled in CI. Strict native/WASM Clippy, formatting, whitespace, and the
+  final browser build pass. The eight temporal unit checks and four
+  replay-command checks pass. Rebuild/replay the actual corpus after removing
+  experiments; verify the four-frame hold demo reaches Ready. All
+  compilation/browser output stays under /tmp, not host target/dist.
 
 Initial manual checkpoint 6F1 — superseded by the one-second replay below:
 
-1. Open `artifacts/previews/temporal-6f.eCb9ro/replay/index.html`. Play,
-   scrub, step, and toggle raw/stable/prior-hint outlines. The actual laptop
-   sequence is a diagnostic failure: it does not reach a capture decision.
-2. Open `artifacts/previews/temporal-6f.eCb9ro/hold-demo/index.html`.
-   This deliberately repeats one real frame four times at 1000 ms intervals;
-   it is not footage or a detector-success claim. Check 0%, 50%, and 100%
-   progress, Jump to capture, and playback-speed-independent decisions.
-3. Inspect raw/stable differences and metadata. Browser interaction needs
-   host validation; no browser executable is installed in this container.
-   The viewer's controls, stale-image guard, and progress logic were checked
-   using V8 with DOM/image stubs, not a real browser or touchscreen.
-
-[canny-nms-reference]:
-  https://github.com/opencv/opencv/blob/4.11.0/modules/imgproc/src/canny.cpp#L585
+1. Open `artifacts/previews/temporal-6f.eCb9ro/replay/index.html`. Play, scrub,
+   step, and toggle raw/stable/prior-hint outlines. The actual laptop sequence
+   is a diagnostic failure: it does not reach a capture decision.
+2. Open `artifacts/previews/temporal-6f.eCb9ro/hold-demo/index.html`. This
+   deliberately repeats one real frame four times at 1000 ms intervals; it is
+   not footage or a detector-success claim. Check 0%, 50%, and 100% progress,
+   Jump to capture, and playback-speed-independent decisions.
+3. Inspect raw/stable differences and metadata. Browser interaction needs host
+   validation; no browser executable is installed in this container. The
+   viewer's controls, stale-image guard, and progress logic were checked using
+   V8 with DOM/image stubs, not a real browser or touchscreen.
 
 ### 2026-10-16 — 6F follow-up: one-second wait and real camera fixtures
 
-- User reports the framing is usable through much of the recording, but
-  two seconds is impractical for handheld steadiness. Shorten only the wait
-  to one second; keep confidence, area, sharpness, voting, smoothing, motion
-  limits, and corner tolerances unchanged.
-- User clarifies that the card/status-bar image is a screenshot of a
-  viewfinder, not raw camera pixels. Retain it as diagnostic-only rather
-  than require the detector to ignore artificial app chrome. Restore the
-  connected-contour candidates and strict diagonal Canny maxima. Genuine
-  camera fixtures and the synthetic background-extension check still gate
-  changes. The separate 11-19 background-ranking limit remains documented.
+- User reports the framing is usable through much of the recording, but two
+  seconds is impractical for handheld steadiness. Shorten only the wait to one
+  second; keep confidence, area, sharpness, voting, smoothing, motion limits,
+  and corner tolerances unchanged.
+- User clarifies that the card/status-bar image is a screenshot of a viewfinder,
+  not raw camera pixels. Retain it as diagnostic-only rather than require the
+  detector to ignore artificial app chrome. Restore the connected-contour
+  candidates and strict diagonal Canny maxima. Genuine camera fixtures and the
+  synthetic background-extension check still gate changes. The separate 11-19
+  background-ranking limit remains documented.
 - TDD: update timing checks first and observe three failures against the
-  two-second gate. Verify no capture at 999 ms, capture at 1000 ms, 50%
-  progress at 500 ms, cumulative drift/blur resets, clock rollback, and one
-  event per cycle. Update the replay's timing metadata and event checks.
-- The container interruption stops the corpus run and clears /tmp build
-  output. Preserve the partial report as `interrupted-replay`, rebuild in
-  the isolated target, and rerun all core/example tests and the full replay.
-  Do not alter host target/dist, C# source, or CI. Keep changes uncommitted.
-- Full-recording acceptance now passes: raw 181 correct / 0 wrong / 43
-  missing; stable 190 correct / 0 wrong / 34 missing. The first correctly
-  framed capture decision occurs at frame 83 (2706 ms), after 1023 ms of
-  steady input at the recording's 33 ms interval. Missing early/blurred
-  frames remain missing; do not claim detection on every frame.
+  two-second gate. Verify no capture at 999 ms, capture at 1000 ms, 50% progress
+  at 500 ms, cumulative drift/blur resets, clock rollback, and one event per
+  cycle. Update the replay's timing metadata and event checks.
+- The container interruption stops the corpus run and clears /tmp build output.
+  Preserve the partial report as `interrupted-replay`, rebuild in the isolated
+  target, and rerun all core/example tests and the full replay. Do not alter
+  host target/dist, C# source, or CI. Keep changes uncommitted.
+- Full-recording acceptance now passes: raw 181 correct / 0 wrong / 43 missing;
+  stable 190 correct / 0 wrong / 34 missing. The first correctly framed capture
+  decision occurs at frame 83 (2706 ms), after 1023 ms of steady input at the
+  recording's 33 ms interval. Missing early/blurred frames remain missing; do
+  not claim detection on every frame.
 - Validation: all 259 core/example tests pass, including the full enabled
-  224-frame gate without skips. Strict native and WASM core Clippy,
-  formatting, and whitespace checks pass after the rebuild. Before the
-  interruption, unchanged source also passed native all-feature checks
-  (with the duplicate corpus run excluded), strict native/WASM all-feature
-  Clippy, and a Trunk browser build. Physical camera access is still untested.
+  224-frame gate without skips. Strict native and WASM core Clippy, formatting,
+  and whitespace checks pass after the rebuild. Before the interruption,
+  unchanged source also passed native all-feature checks (with the duplicate
+  corpus run excluded), strict native/WASM all-feature Clippy, and a Trunk
+  browser build. Physical camera access is still untested.
 - Regenerate the complete offline replay and verify its JSON matches the
   embedded report, all 224 image files exist, and countdown/capture metadata
   matches the regression. Retain the small 500 ms repeated-still demo.
 
 Manual checkpoint 6F — accepted 2026-10-16:
 
-1. Open `artifacts/previews/temporal-6f-1s.N3mPss/index.html`, then the
-   updated 224-frame replay. Play, scrub, toggle raw/stable/prior-hint
-   outlines, and use Jump to capture. Verify the green outline follows the
-   paper at frame 83 rather than a fold or background edge.
+1. Open `artifacts/previews/temporal-6f-1s.N3mPss/index.html`, then the updated
+   224-frame replay. Play, scrub, toggle raw/stable/prior-hint outlines, and use
+   Jump to capture. Verify the green outline follows the paper at frame 83
+   rather than a fold or background edge.
 2. Inspect countdown progress immediately before that capture. Its one-second
-   wait uses virtual recording timestamps, not playback/analysis speed.
-   The separate repeated-still demo shows consensus, 0%, 50%, and 100% at
-   500 ms frame intervals; it is not footage or camera-adapter validation.
+   wait uses virtual recording timestamps, not playback/analysis speed. The
+   separate repeated-still demo shows consensus, 0%, 50%, and 100% at 500 ms
+   frame intervals; it is not footage or camera-adapter validation.
 3. The earlier two-second report remains available for comparison, clearly
    marked historical. Keep screenshot/status-bar effects diagnostic-only.
    Offline replay acceptance does not validate native camera adapters.
 
 User accepts the replay checkpoint and requests a commit and stop for today.
-Mark 6F1/6F2 complete, create an unsigned commit, and do not push. Leave
-native capture in 6G unstarted until the user requests continuation.
+Mark 6F1/6F2 complete, create an unsigned commit, and do not push. Leave native
+capture in 6G unstarted until the user requests continuation.
 
 ### 2026-10-19 — keep exhaustive camera replay out of routine tests
 
-- User reports the 224-frame regression takes 191.90 seconds locally and
-  Rust CI jobs exceed 15 minutes. The native matrix runs the corpus twice
-  per platform, once with core features and again with all features.
-- Mark only the exhaustive recording test with standard Rust `#[ignore]`.
-  Keep its 224-frame, correctness, quality, and capture assertions intact;
-  run it only when explicitly requested with `-- --ignored --nocapture`.
-  Existing Cargo/CI commands respect this without workflow changes.
-- Keep three independent real-camera smoke checks, temporal timing/loss/
-  reset checks, and the small replay-command tests in the routine suite.
-  Do not change production detection, countdown, fixtures, or calibration.
+- User reports the 224-frame regression takes 191.90 seconds locally and Rust CI
+  jobs exceed 15 minutes. The native matrix runs the corpus twice per platform,
+  once with core features and again with all features.
+- Mark only the exhaustive recording test with standard Rust `#[ignore]`. Keep
+  its 224-frame, correctness, quality, and capture assertions intact; run it
+  only when explicitly requested with `-- --ignored --nocapture`. Existing
+  Cargo/CI commands respect this without workflow changes.
+- Keep three independent real-camera smoke checks, temporal timing/loss/ reset
+  checks, and the small replay-command tests in the routine suite. Do not change
+  production detection, countdown, fixtures, or calibration.
 - Document the opt-in command in the Rust README. Leave 6G unstarted.
-- Validation: 258 core/example tests pass; only the full replay is ignored.
-  The detector suite takes 5.43 seconds, excluding compilation, with nine
-  passing tests and one ignored test. Verify the opt-in command with
-  `--ignored --list`: it selects exactly that recording test without
-  rerunning the unchanged corpus. Formatting, core Clippy, and whitespace
-  checks pass. Keep changes uncommitted; no commit requested.
+- Validation: 258 core/example tests pass; only the full replay is ignored. The
+  detector suite takes 5.43 seconds, excluding compilation, with nine passing
+  tests and one ignored test. Verify the opt-in command with `--ignored --list`:
+  it selects exactly that recording test without rerunning the unchanged corpus.
+  Formatting, core Clippy, and whitespace checks pass. Keep changes uncommitted;
+  no commit requested.
 
 ### 2026-10-19 — simplify annotation state and editing
 
-- Replace parallel shape/text stores and layer bookkeeping with ordered
-  enum content and UUID selection; simplify snapshots and mixed operations.
-- Share geometric drafts, previews, commits and style updates. Centralize
-  tool capabilities while keeping text layout and concrete geometry separate.
-- Preserve project schemas, legacy metadata, identity, alpha, off-page
-  geometry, defaults, pending-text acceptance/cancellation and history.
-- Fix dragging a single selected object behind unselected layers. Preserve
-  Ctrl toggles/marquees; cover all tools, zoom, mouse/touch and undo/redo.
+- Replace parallel shape/text stores and layer bookkeeping with ordered enum
+  content and UUID selection; simplify snapshots and mixed operations.
+- Share geometric drafts, previews, commits and style updates. Centralize tool
+  capabilities while keeping text layout and concrete geometry separate.
+- Preserve project schemas, legacy metadata, identity, alpha, off-page geometry,
+  defaults, pending-text acceptance/cancellation and history.
+- Fix dragging a single selected object behind unselected layers. Preserve Ctrl
+  toggles/marquees; cover all tools, zoom, mouse/touch and undo/redo.
 - Add schema-oracle and editing contracts plus a dependency-free source-size
   check: `node tools/source-size.mjs`. Remove 220 production source lines
   without new production files, dependencies or generic frameworks.
-- Validation: 473 native and 270 core tests pass; the full replay stays
-  opt-in. Strict Clippy, WASM, formatting and whitespace checks pass.
-  User accepts manual refactor checks and the overlap-drag follow-up.
+- Validation: 473 native and 270 core tests pass; the full replay stays opt-in.
+  Strict Clippy, WASM, formatting and whitespace checks pass. User accepts
+  manual refactor checks and the overlap-drag follow-up.
 - Keep native camera/exposure work stashed separately; C# remains unchanged.
 
 ### 2026-10-19 — test change committed; native camera probe checkpoint 6G1
 
-- Commit the accepted slow-test change unsigned as `a4bd8bb`, without
-  pushing. Start only the backend spike, not a GUI capture workflow.
-- Evaluate Nokhwa's native adapters. Its Linux V4L wrapper generates
-  bindings with libclang, absent from this container. Use rscam's direct
-  V4L2 mode on Linux instead; it needs only existing libc. Use Nokhwa's
-  Media Foundation adapter on Windows. Do not install missing tools or
-  add OpenCV/GStreamer/libv4l2/mozjpeg runtime requirements.
+- Commit the accepted slow-test change unsigned as `a4bd8bb`, without pushing.
+  Start only the backend spike, not a GUI capture workflow.
+- Evaluate Nokhwa's native adapters. Its Linux V4L wrapper generates bindings
+  with libclang, absent from this container. Use rscam's direct V4L2 mode on
+  Linux instead; it needs only existing libc. Use Nokhwa's Media Foundation
+  adapter on Windows. Do not install missing tools or add
+  OpenCV/GStreamer/libv4l2/mozjpeg runtime requirements.
 - Keep the spike in an opt-in example and optional `native-camera` feature.
-  Reuse Nokhwa's packed-pixel conversions and the existing bounded JPEG
-  decoder. No document/editor/correction/CI source changes. macOS returns
-  Unsupported for now; WASM excludes all native camera dependencies.
+  Reuse Nokhwa's packed-pixel conversions and the existing bounded JPEG decoder.
+  No document/editor/correction/CI source changes. macOS returns Unsupported for
+  now; WASM excludes all native camera dependencies.
 - Add list, formats, and one-frame PNG capture with explicit device/mode
-  selection. Default to 640x480@30 MJPG, without silent mode fallback.
-  Keep 50 MP/100 MiB bounds and reject malformed, padded, or changed frames.
-  Discard three exposure-startup frames, stop streams on read/decode errors,
-  and refuse existing output files with atomic no-overwrite PNG output.
-- Isolate driver calls in a child process with a 20-second timeout. Kill
-  and reap stalled workers, surface failures, and keep all camera access
-  out of automated tests. This diagnostic does not establish GUI threading,
-  streaming latency, full-resolution still capture, orientation, or lifecycle.
-- TDD: first observe missing command/spec/decoder/output APIs. Eight new
-  tests cover empty/malformed arguments, explicit modes and Unicode paths,
-  RGB/BGR/gray/YUYV/NV12/JPEG decoding, bounds/stride/mismatch rejection,
-  output preservation, worker success/failure, and timeout cleanup.
-- Validation: 266 core/example tests pass with `native-camera`, with only
-  the full 224-frame replay ignored. Strict camera-enabled core Clippy,
-  formatting, whitespace, and all-feature/all-target WASM compilation pass.
-  Inspect the WASM dependency tree: no camera crates. Native Windows/macOS
-  builds await existing CI; no cross toolchains are installed here.
-- Smoke-check help, enumeration, empty arguments, existing destinations,
-  and a guaranteed missing device. Enumeration finds the two Linux video
-  nodes without opening a stream. Do not capture from the user's camera
-  in the container; physical image/color/orientation/release checks await
-  the user. Keep new probe changes uncommitted and stop before 6G2.
+  selection. Default to 640x480@30 MJPG, without silent mode fallback. Keep 50
+  MP/100 MiB bounds and reject malformed, padded, or changed frames. Discard
+  three exposure-startup frames, stop streams on read/decode errors, and refuse
+  existing output files with atomic no-overwrite PNG output.
+- Isolate driver calls in a child process with a 20-second timeout. Kill and
+  reap stalled workers, surface failures, and keep all camera access out of
+  automated tests. This diagnostic does not establish GUI threading, streaming
+  latency, full-resolution still capture, orientation, or lifecycle.
+- TDD: first observe missing command/spec/decoder/output APIs. Eight new tests
+  cover empty/malformed arguments, explicit modes and Unicode paths,
+  RGB/BGR/gray/YUYV/NV12/JPEG decoding, bounds/stride/mismatch rejection, output
+  preservation, worker success/failure, and timeout cleanup.
+- Validation: 266 core/example tests pass with `native-camera`, with only the
+  full 224-frame replay ignored. Strict camera-enabled core Clippy, formatting,
+  whitespace, and all-feature/all-target WASM compilation pass. Inspect the WASM
+  dependency tree: no camera crates. Native Windows/macOS builds await existing
+  CI; no cross toolchains are installed here.
+- Smoke-check help, enumeration, empty arguments, existing destinations, and a
+  guaranteed missing device. Enumeration finds the two Linux video nodes without
+  opening a stream. Do not capture from the user's camera in the container;
+  physical image/color/orientation/release checks await the user. Keep new probe
+  changes uncommitted and stop before 6G2.
 
 Manual checkpoint 6G1 — pending:
 
 1. From `rust/`, follow the camera-probe commands in README: list devices,
-   inspect formats for the chosen ID, and capture a photographed document
-   into a new PNG. Start on the Linux laptop; use a listed exact mode if
-   the default is unavailable. Report device ID and selected format.
+   inspect formats for the chosen ID, and capture a photographed document into a
+   new PNG. Start on the Linux laptop; use a listed exact mode if the default is
+   unavailable. Report device ID and selected format.
 2. Check dimensions, orientation, aspect, and colors. Capture again to a
-   different path, then open another camera app to confirm device release.
-   Retry an existing destination: it must fail without replacing the file.
+   different path, then open another camera app to confirm device release. Retry
+   an existing destination: it must fail without replacing the file.
 3. Keep no-device/permission/busy/unsupported-mode errors visible. No live
-   preview/framing/countdown/project insertion is included yet. Confirm
-   this adapter checkpoint before GUI integration in 6G2; repeat on SP6
-   later, since laptop validation does not establish Surface compatibility.
+   preview/framing/countdown/project insertion is included yet. Confirm this
+   adapter checkpoint before GUI integration in 6G2; repeat on SP6 later, since
+   laptop validation does not establish Surface compatibility.
 
 ### 2026-10-19 — camera probe exposure warm-up
 
-- User confirms the captured image looks about right, but is dark because
-  the camera has insufficient time to adjust. Three discarded frames give
-  only about 100 ms at 30 FPS, not a useful exposure-settling interval.
-- Drain frames for at least two seconds after receiving the first frame
-  from either native stream, retaining the three-buffer minimum, then
-  read a fresh frame. Do not count slow device opening/first-read latency
-  as exposure-settling time; reproduce that case with a delayed fake frame.
-  Release every discarded buffer immediately; do not sleep over queued
-  stale images. Keep the 20-second worker timeout and existing cleanup.
-  This is deliberately a timed allowance, not exposure-stability analysis.
+- User confirms the captured image looks about right, but is dark because the
+  camera has insufficient time to adjust. Three discarded frames give only about
+  100 ms at 30 FPS, not a useful exposure-settling interval.
+- Drain frames for at least two seconds after receiving the first frame from
+  either native stream, retaining the three-buffer minimum, then read a fresh
+  frame. Do not count slow device opening/first-read latency as
+  exposure-settling time; reproduce that case with a delayed fake frame. Release
+  every discarded buffer immediately; do not sleep over queued stale images.
+  Keep the 20-second worker timeout and existing cleanup. This is deliberately a
+  timed allowance, not exposure-stability analysis.
 - TDD: first reproduce missing warm-up APIs. Add virtual-clock checks at
-  5/30/120 FPS, immediate buffer release, slow initial reads, and errors
-  during startup, warm-up, and final capture. No real waits or camera
-  access in these new checks. Keep 6G1 acceptance pending a brightness retry.
-- Validation: routine camera-enabled core/example tests pass (269 tests;
-  only the exhaustive replay ignored). All 11 probe checks, rerun after
-  first-frame timing calibration, pass in 0.1 seconds. Strict core Clippy,
-  formatting, whitespace checks, and the native probe build pass. Preserve
-  the user's sample image and unrelated untracked simplification notes.
-  Leave changes uncommitted; do not start 6G2 or claim hardware acceptance.
+  5/30/120 FPS, immediate buffer release, slow initial reads, and errors during
+  startup, warm-up, and final capture. No real waits or camera access in these
+  new checks. Keep 6G1 acceptance pending a brightness retry.
+- Validation: routine camera-enabled core/example tests pass (269 tests; only
+  the exhaustive replay ignored). All 11 probe checks, rerun after first-frame
+  timing calibration, pass in 0.1 seconds. Strict core Clippy, formatting,
+  whitespace checks, and the native probe build pass. Preserve the user's sample
+  image and unrelated untracked simplification notes. Leave changes uncommitted;
+  do not start 6G2 or claim hardware acceptance.
 
 ### 2026-10-19 — restore camera work; checkpoint 6G2 manual capture
 
-- User requests removing obsolete text/duplicate camera stashes and popping
-  the remaining camera work. Drop `ac46a5a` and `c85ce43`, restore `2684df6`,
-  preserve both sides of its progress-log conflict and drop the restored
-  stash. Keep the annotation refactor and C# application unchanged.
-- Move the probe's native adapter, decoding, exposure warm-up and checks
-  into the camera library module. The diagnostic example remains available.
-  Reuse that implementation for live preview; add no further dependencies.
+- User requests removing obsolete text/duplicate camera stashes and popping the
+  remaining camera work. Drop `ac46a5a` and `c85ce43`, restore `2684df6`,
+  preserve both sides of its progress-log conflict and drop the restored stash.
+  Keep the annotation refactor and C# application unchanged.
+- Move the probe's native adapter, decoding, exposure warm-up and checks into
+  the camera library module. The diagnostic example remains available. Reuse
+  that implementation for live preview; add no further dependencies.
 - Add a Camera screen, initially using device 0 and the explicit probe mode.
   Warm exposure before exposing capture; freeze the actual displayed frame,
-  allow Retake and add the photo only after Use photo. Insert after the
-  active page without replacing its annotations, then open page corrections.
+  allow Retake and add the photo only after Use photo. Insert after the active
+  page without replacing its annotations, then open page corrections.
 - Isolate streaming in the current executable's hidden helper mode. Bound
-  dimensions, payloads, errors and GUI frame delivery; discard surplus
-  previews rather than growing a backlog. A watchdog terminates stalled
-  workers; process guards reap them outside UI updates. Signal termination
-  immediately on draft disposal; never hold the UI-shared child lock while
-  waiting for a driver process to exit.
-- Keep preview/PNG work away from document updates. Cancel, Escape, focus
-  loss and close release the stream; stale frames, queued starts and photo
+  dimensions, payloads, errors and GUI frame delivery; discard surplus previews
+  rather than growing a backlog. A watchdog terminates stalled workers; process
+  guards reap them outside UI updates. Signal termination immediately on draft
+  disposal; never hold the UI-shared child lock while waiting for a driver
+  process to exit.
+- Keep preview/PNG work away from document updates. Cancel, Escape, focus loss
+  and close release the stream; stale frames, queued starts and photo
   preparation completions cannot revive canceled sessions. Resume explicitly
   after focus loss; retain normal unsaved-project confirmation on close.
-- TDD: first reproduce missing camera protocol/module APIs. Add protocol
-  round trips, malformed/oversized/truncated packets and Unicode errors,
-  timeout/cancellation/reaping checks using fake child processes and modal
-  state tests for capture, preservation, stale events, errors and page limits.
-  No automated test opens a real camera. Keep the long replay opt-in.
-- Validation: all 494 native/all-target tests and 270 dependency-light
-  core tests pass; the full replay remains ignored. Rerun all five camera
-  screen checks after tightening delivery to one in-flight frame across
-  iced's internal event queue. Strict native/camera-core Clippy, formatting,
-  whitespace and all-feature WASM checks pass. Confirm camera dependencies
-  are absent from the WASM tree and the probe's help still works.
-- Manual checkpoint 6G2 is pending. Use the GUI to retry exposure brightness
-  and verify live responsiveness, orientation/color/aspect, retake/cancel,
-  camera release, page correction and project save/reopen. Keep native
-  Windows/SP6 validation explicit. Do not start 6G3 before this check.
+- TDD: first reproduce missing camera protocol/module APIs. Add protocol round
+  trips, malformed/oversized/truncated packets and Unicode errors,
+  timeout/cancellation/reaping checks using fake child processes and modal state
+  tests for capture, preservation, stale events, errors and page limits. No
+  automated test opens a real camera. Keep the long replay opt-in.
+- Validation: all 494 native/all-target tests and 270 dependency-light core
+  tests pass; the full replay remains ignored. Rerun all five camera screen
+  checks after tightening delivery to one in-flight frame across iced's internal
+  event queue. Strict native/camera-core Clippy, formatting, whitespace and
+  all-feature WASM checks pass. Confirm camera dependencies are absent from the
+  WASM tree and the probe's help still works.
+- Manual checkpoint 6G2 is pending. Use the GUI to retry exposure brightness and
+  verify live responsiveness, orientation/color/aspect, retake/cancel, camera
+  release, page correction and project save/reopen. Keep native Windows/SP6
+  validation explicit. Do not start 6G3 before this check.
 - Keep all restored/new work uncommitted; no new commit was requested.
 
 ### 2026-10-19 — immediate camera preview; preserve it across window moves
 
-- User reports the basic GUI capture flow works. Holding back live frames
-  during warm-up looks like a broken camera, and moving the app can trigger
-  focus loss, terminate capture and display a misleading red warning.
+- User reports the basic GUI capture flow works. Holding back live frames during
+  warm-up looks like a broken camera, and moving the app can trigger focus loss,
+  terminate capture and display a misleading red warning.
 - Show the first live frame immediately, even while dark. Keep only Capture
   disabled for two seconds after the first displayed frame; use neutral
   exposure-adjustment text. Preserve the standalone probe's timed warm-up.
-- Keep the live stream, last frame, session ID and exposure timer on focus
-  loss or window move/resize. Clear input modifiers only. Explicit Cancel,
-  Escape, Capture, errors and app closure still stop the worker.
-- TDD: reproduce the focus-loss session reset and missing immediate-preview
-  read path. Cover a single immediate read without clock access, preserved
-  one-shot warm-up, visible startup frames, early-capture rejection, and
-  capture readiness across subsequent frames/focus changes without sleeps.
-- Validation: all 15 camera-core and seven camera-screen checks pass;
-  strict all-feature/all-target Clippy, WASM, formatting and whitespace
-  checks pass. Keep hardware access out of automated tests.
-- User follow-up: confirm immediate preview and moving/defocusing the window
-  no longer pauses it. Keep this change uncommitted; do not start 6G3 yet.
+- Keep the live stream, last frame, session ID and exposure timer on focus loss
+  or window move/resize. Clear input modifiers only. Explicit Cancel, Escape,
+  Capture, errors and app closure still stop the worker.
+- TDD: reproduce the focus-loss session reset and missing immediate-preview read
+  path. Cover a single immediate read without clock access, preserved one-shot
+  warm-up, visible startup frames, early-capture rejection, and capture
+  readiness across subsequent frames/focus changes without sleeps.
+- Validation: all 15 camera-core and seven camera-screen checks pass; strict
+  all-feature/all-target Clippy, WASM, formatting and whitespace checks pass.
+  Keep hardware access out of automated tests.
+- User follow-up: confirm immediate preview and moving/defocusing the window no
+  longer pauses it. Keep this change uncommitted; do not start 6G3 yet.
 
 ### 2026-10-19 — remove manual capture gate; clarify correction cancellation
 
-- User confirms immediate preview and uninterrupted window moves. Remove
-  the remaining two-second manual-capture gate and its GUI timer; enable
-  Capture as soon as a frame is available. Keep the standalone one-shot
-  diagnostic's warm-up, since it has no live preview to judge exposure.
-- Preserve the accepted Use photo transaction: it adds the page before
-  opening corrections. Cancel in the page editor discards only correction
-  edits; Delete page removes the photo. Explain this in the camera review
-  screen and README instead of changing cancellation into silent deletion.
-- TDD: reproduce the disabled first-frame Capture button. Check capture
-  before any frame stays disabled, the first frame permits capture without
+- User confirms immediate preview and uninterrupted window moves. Remove the
+  remaining two-second manual-capture gate and its GUI timer; enable Capture as
+  soon as a frame is available. Keep the standalone one-shot diagnostic's
+  warm-up, since it has no live preview to judge exposure.
+- Preserve the accepted Use photo transaction: it adds the page before opening
+  corrections. Cancel in the page editor discards only correction edits; Delete
+  page removes the photo. Explain this in the camera review screen and README
+  instead of changing cancellation into silent deletion.
+- TDD: reproduce the disabled first-frame Capture button. Check capture before
+  any frame stays disabled, the first frame permits capture without
   clocks/sleeps, and canceling subsequent corrections retains the photo,
   existing annotations and original correction settings.
-- Validation: all 196 application checks pass, including the first-frame
-  and correction-cancellation regressions. Strict GUI/camera-core Clippy,
+- Validation: all 196 application checks pass, including the first-frame and
+  correction-cancellation regressions. Strict GUI/camera-core Clippy,
   all-feature WASM, formatting and whitespace checks pass.
 - Keep changes uncommitted; do not start 6G3 in this follow-up.
 
 ### 2026-10-19 — accept 6G1/6G2; connect live auto-framing in 6G3a
 
 - User marks both native-camera checkpoints manually checked. Record their
-  acceptance and split 6G3 into live framing, device/mode controls and
-  hardware lifecycle checks. Keep Linux laptop acceptance separate from SP6.
+  acceptance and split 6G3 into live framing, device/mode controls and hardware
+  lifecycle checks. Keep Linux laptop acceptance separate from SP6.
 - Reuse hinted document detection, four-result consensus and the calibrated
   one-second gate. Run one background analysis across camera sessions while
   preview continues; coalesce incoming frames without a CPU-work backlog.
 - Overlay a translucent green quadrangle on the contained image, including
-  letterboxing, and draw circular progress around a touch-sized Capture.
-  Keep manual capture immediately available. Auto-capture freezes the exact
-  analyzed pixels and matching crop rather than a newer preview image.
-- Reject stale analysis and reset after long gaps, changed dimensions or
-  input errors. At the final capture, require the current raw quad to agree
-  with consensus at the existing 0.04 gate tolerance. Historical votes alone
-  cannot capture a missing or suddenly moved document. Do not retune the
-  detector, consensus, sharpness threshold or recorded-sequence fixtures.
-- Carry automatic corners into pending page-editor settings. Use photo
-  still inserts an untouched source image; Accept applies the crop, Full
-  frame removes it and Cancel keeps the uncorrected photo. Manual capture
-  retains its displayed frame and can use the editor's Auto frame button.
+  letterboxing, and draw circular progress around a touch-sized Capture. Keep
+  manual capture immediately available. Auto-capture freezes the exact analyzed
+  pixels and matching crop rather than a newer preview image.
+- Reject stale analysis and reset after long gaps, changed dimensions or input
+  errors. At the final capture, require the current raw quad to agree with
+  consensus at the existing 0.04 gate tolerance. Historical votes alone cannot
+  capture a missing or suddenly moved document. Do not retune the detector,
+  consensus, sharpness threshold or recorded-sequence fixtures.
+- Carry automatic corners into pending page-editor settings. Use photo still
+  inserts an untouched source image; Accept applies the crop, Full frame removes
+  it and Cancel keeps the uncorrected photo. Manual capture retains its
+  displayed frame and can use the editor's Auto frame button.
 - Keep camera I/O/PNG preparation, framing and preview widgets in focused
-  modules. Expose the existing ordered crop-point accessor for the GUI;
-  add no dependencies or generic task framework. Leave the C# app untouched.
+  modules. Expose the existing ordered crop-point accessor for the GUI; add no
+  dependencies or generic task framework. Leave the C# app untouched.
 - Tests cover virtual countdown/quality/gap changes, bounded work across
   cancel/reopen, detector failures with manual capture, exact source-frame
-  freezing and crop handoff. Render portrait/landscape overlays at 100/200%
-  DPI, verify partial/full countdown drawing and pending-crop Cancel/Accept
-  with undo. No real camera opens and the full replay remains opt-in.
-- Validation: 505 native/all-target checks and 270 dependency-light checks
-  pass, with only the full recording ignored. All 14 camera checks pass,
-  including four portrait/landscape and DPI render cases. Strict Clippy,
-  all-feature WASM, formatting and whitespace checks pass. Builds stay in
-  isolated container directories; host target/dist directories are untouched.
+  freezing and crop handoff. Render portrait/landscape overlays at 100/200% DPI,
+  verify partial/full countdown drawing and pending-crop Cancel/Accept with
+  undo. No real camera opens and the full replay remains opt-in.
+- Validation: 505 native/all-target checks and 270 dependency-light checks pass,
+  with only the full recording ignored. All 14 camera checks pass, including
+  four portrait/landscape and DPI render cases. Strict Clippy, all-feature WASM,
+  formatting and whitespace checks pass. Builds stay in isolated container
+  directories; host target/dist directories are untouched.
 
 Manual checkpoint 6G3a — pending:
 
 1. Run the native app, choose Camera and point at a printed form against a
-   contrasting background. Confirm immediate preview, a green quadrangle
-   around the paper and a ring filling during the one-second steady hold.
-2. Move/blur/remove the document mid-countdown. It must reset or reacquire,
-   not capture an old frame. Hold steady again and check the frozen image
-   matches its corners; no further automatic shot occurs until Retake.
-3. Use photo: inspect the suggested crop in page corrections. Adjust it,
-   choose Full frame or Accept. Cancel must keep the full, uncorrected photo.
+   contrasting background. Confirm immediate preview, a green quadrangle around
+   the paper and a ring filling during the one-second steady hold.
+2. Move/blur/remove the document mid-countdown. It must reset or reacquire, not
+   capture an old frame. Hold steady again and check the frozen image matches
+   its corners; no further automatic shot occurs until Retake.
+3. Use photo: inspect the suggested crop in page corrections. Adjust it, choose
+   Full frame or Accept. Cancel must keep the full, uncorrected photo.
    Save/reopen an accepted cropped page and verify its source is retained.
 4. Retake, press manual Capture immediately, and check it freezes the visible
-   image without waiting. Camera Cancel/Escape must add no page. Move the
-   window or switch focus while previewing; neither should require restart.
-5. Check responsiveness and camera release. This slice still uses the
-   accepted 640×480 MJPG mode; defer device selection/high-resolution stills
-   to 6G3b and real Surface orientation/suspend/resume checks to 6G3c.
+   image without waiting. Camera Cancel/Escape must add no page. Move the window
+   or switch focus while previewing; neither should require restart.
+5. Check responsiveness and camera release. This slice still uses the accepted
+   640×480 MJPG mode; defer device selection/high-resolution stills to 6G3b and
+   real Surface orientation/suspend/resume checks to 6G3c.
 
-Stop here for the user check. Keep restored/new changes uncommitted; no
-commit or push was requested.
+Stop here for the user check. Keep restored/new changes uncommitted; no commit
+or push was requested.
 
 ### 2026-10-19 — remove averaging lag from the captured crop
 
-- User reports the 6G3a flow works, but slow movement makes the averaged
-  frame trail the document. Keep preview smoothing and countdown unchanged;
-  use the exact frozen image's raw corners for the final crop, after the
-  existing agreement check. No additional detection pass or threshold change.
+- User reports the 6G3a flow works, but slow movement makes the averaged frame
+  trail the document. Keep preview smoothing and countdown unchanged; use the
+  exact frozen image's raw corners for the final crop, after the existing
+  agreement check. No additional detection pass or threshold change.
 - Add a virtual-time gradual-drift regression. Verify capture completes,
   tracking still smooths, and the crop uses current corners and source pixels.
   Confirm the test fails with the old averaged crop, then passes with the fix.
 - Validation: all 205 application tests pass, including all 15 camera tests.
   Strict all-feature/all-target Clippy, formatting and whitespace checks pass.
-- Manual follow-up: gently move the document during auto-capture; verify
-  frozen corners align despite live-overlay lag. Keep 6G3a open for this check;
-  do not start 6G3b or commit without a request.
+- Manual follow-up: gently move the document during auto-capture; verify frozen
+  corners align despite live-overlay lag. Keep 6G3a open for this check; do not
+  start 6G3b or commit without a request.
 
 ### 2026-10-19 — accept 6G3a; device/mode checkpoint 6G3b
 
@@ -3314,39 +3311,39 @@ commit or push was requested.
   keep real SP6 lifecycle/orientation calibration in 6G3c.
 - Replace the numeric device field with named cameras and a supported-mode
   picker. Discover devices/modes in bounded, killable subprocesses. The modal
-  owns each query handle, so switching, cancellation and closure kill it.
-  Keep driver work off the UI thread and reject stale completion/session IDs.
+  owns each query handle, so switching, cancellation and closure kill it. Keep
+  driver work off the UI thread and reject stale completion/session IDs.
 - Share typed device/mode results with the standalone probe; add no dependency.
   Validate dimensions, RGBA byte limits, rate and format at the worker boundary.
   Filter/deduplicate unsupported modes and retain exact requests, not silent
   fallback. Linux continuous grids offer endpoints/common sizes and exact
   integer frame intervals; do not fabricate rounded fractional-FPS support.
-- Prefer the largest supported resolution up to 1920×1080 at <=30 FPS,
-  preferring MJPG at that size. Higher reported modes remain selectable.
-  Stream and capture at the same selected resolution: keep original pixels
-  and matching corners without re-opening the camera for a separate still.
-- Reset preview/tracking on mode/device changes, retain mode on Retake and
-  lock choices for a frozen photo. Keep Capture immediate, recover from missing
-  or busy devices, and leave Use photo/correction cancellation unchanged.
+- Prefer the largest supported resolution up to 1920×1080 at \<=30 FPS,
+  preferring MJPG at that size. Higher reported modes remain selectable. Stream
+  and capture at the same selected resolution: keep original pixels and matching
+  corners without re-opening the camera for a separate still.
+- Reset preview/tracking on mode/device changes, retain mode on Retake and lock
+  choices for a frozen photo. Keep Capture immediate, recover from missing or
+  busy devices, and leave Use photo/correction cancellation unchanged.
 - Add checks for catalog normalization, full-HD defaults/pixel preservation,
   Linux rational intervals and stepwise grids, malformed/empty worker args,
   bounded query output, timeouts, drop cancellation/reaping, camera/mode
-  switching, stale queries/frames, errors and frozen-photo preservation.
-  Use synthetic children and unpolled discovery tasks; no real camera opens.
+  switching, stale queries/frames, errors and frozen-photo preservation. Use
+  synthetic children and unpolled discovery tasks; no real camera opens.
 - Validation: 517 native/all-target tests and 270 dependency-light tests pass;
-  only the exhaustive recorded replay remains ignored. All 19 camera-screen
-  and 21 camera-core checks pass. Strict Clippy, all-feature WASM, formatting
-  and whitespace checks pass. Build the native app and smoke-check named-device
+  only the exhaustive recorded replay remains ignored. All 19 camera-screen and
+  21 camera-core checks pass. Strict Clippy, all-feature WASM, formatting and
+  whitespace checks pass. Build the native app and smoke-check named-device
   discovery through its real helper flag without opening a stream. Keep all
   compilation under isolated `/tmp` targets; leave host target/dist untouched.
   Windows/macOS native compilation and physical capture remain CI/user checks.
 
 Manual checkpoint 6G3b — pending:
 
-1. Open Camera. Check named devices and the selected dimensions/FPS/format.
-   Full HD should be preferred if advertised; higher resolutions remain listed.
-2. Switch between 640×480 and 1920×1080 (or the highest supported mode).
-   Check aspect, colors, preview responsiveness, auto-frame and manual Capture.
+1. Open Camera. Check named devices and the selected dimensions/FPS/format. Full
+   HD should be preferred if advertised; higher resolutions remain listed.
+2. Switch between 640×480 and 1920×1080 (or the highest supported mode). Check
+   aspect, colors, preview responsiveness, auto-frame and manual Capture.
    Changing modes must restart tracking without reusing the old image/crop.
 3. Capture, Retake and capture again. Verify Retake retains the selected mode.
    Use photo, Full frame, Accept and save/reopen; source pixels should retain
@@ -3394,86 +3391,86 @@ Stop for this manual checkpoint. Do not start 6G3c or commit without a request.
   filters, Laplacian sharpness and analysis cost were not similarly bounded
   across the accepted VGA preview and larger modes, which can change both
   quality gating and stale-result frequency despite the same apparent scene.
-- Share the existing detector through a small live-preview entry point capped
-  at a 640-pixel longest edge. Keep source validation, aspect, hints, normalized
+- Share the existing detector through a small live-preview entry point capped at
+  a 640-pixel longest edge. Keep source validation, aspect, hints, normalized
   corners and the full-resolution frame for capture. Change no confidence,
-  movement, sharpness or countdown threshold. Still-image Auto frame and
-  offline replay retain the existing 1280-pixel path and calibration.
-- TDD: first reproduce differing analysis dimensions. A rescaled, mildly
-  blurred synthetic form passes the VGA sharpness gate but fails it at raw
-  720p; normalized live analysis detects the same corners and reaches capture
-  at 640×360, 1280×720 and 1920×1080. Add three recorded-camera live samples
-  checking the outer sheet and quality; extend allocation/aspect checks for
-  both analysis limits and portrait inputs. Keep the full replay opt-in.
-- Validation: 522 native/all-target and 272 dependency-light checks pass;
-  keep the full 224-frame replay ignored. Strict Clippy, all-feature WASM,
-  formatting and whitespace checks pass. No camera opens in these tests.
-  Stop for a 1280×720 live-camera retry; do not claim resolution normalization
-  removes genuine blur or hand motion. Keep changes uncommitted.
+  movement, sharpness or countdown threshold. Still-image Auto frame and offline
+  replay retain the existing 1280-pixel path and calibration.
+- TDD: first reproduce differing analysis dimensions. A rescaled, mildly blurred
+  synthetic form passes the VGA sharpness gate but fails it at raw 720p;
+  normalized live analysis detects the same corners and reaches capture at
+  640×360, 1280×720 and 1920×1080. Add three recorded-camera live samples
+  checking the outer sheet and quality; extend allocation/aspect checks for both
+  analysis limits and portrait inputs. Keep the full replay opt-in.
+- Validation: 522 native/all-target and 272 dependency-light checks pass; keep
+  the full 224-frame replay ignored. Strict Clippy, all-feature WASM, formatting
+  and whitespace checks pass. No camera opens in these tests. Stop for a
+  1280×720 live-camera retry; do not claim resolution normalization removes
+  genuine blur or hand motion. Keep changes uncommitted.
 
 ### 2026-10-19 — accept 6G3b; lifecycle checkpoint 6G3c
 
-- User accepts the normalized 720p preview/framing/countdown and requests
-  the final 6G3 slice. Mark 6G3b manually checked. Laptop maximum is 1280×720;
-  do not claim physical full-HD or SP6 coverage.
+- User accepts the normalized 720p preview/framing/countdown and requests the
+  final 6G3 slice. Mark 6G3b manually checked. Laptop maximum is 1280×720; do
+  not claim physical full-HD or SP6 coverage.
 - Add explicit quarter-turn and horizontal-mirror controls. Apply them to
-  accepted frames off the UI thread, before upload, detection and encoding,
-  so preview, crop and saved pixels share coordinates without resampling.
-  Retain orientation for mode changes/Retake/Resume; reset on choosing a
-  different camera. No sensor metadata, display-rotation hook or per-device
-  persistent preferences are added.
-- Add Pause/Resume. User explicitly chooses to remain paused after sleep
-  until Resume preview. Keep pause intent through discovery/configuration
-  changes; reject old frames, uploads, queries, jobs and queued starts.
-  Frozen photos and Use photo/Cancel semantics remain unchanged.
-- Reuse the independent driver watchdog: a three-second wall-clock polling
-  gap or rollback kills/reaps the helper and reports an interruption, mapped
-  to neutral paused status. This catches sleep/long process interruptions
-  without stopping preview for window moves or focus changes. It runs on
-  wake, not before suspend; very brief sleeps are not guaranteed to pause.
-  Also reject analysis by frame wall age: Linux Instant may exclude sleep.
+  accepted frames off the UI thread, before upload, detection and encoding, so
+  preview, crop and saved pixels share coordinates without resampling. Retain
+  orientation for mode changes/Retake/Resume; reset on choosing a different
+  camera. No sensor metadata, display-rotation hook or per-device persistent
+  preferences are added.
+- Add Pause/Resume. User explicitly chooses to remain paused after sleep until
+  Resume preview. Keep pause intent through discovery/configuration changes;
+  reject old frames, uploads, queries, jobs and queued starts. Frozen photos and
+  Use photo/Cancel semantics remain unchanged.
+- Reuse the independent driver watchdog: a three-second wall-clock polling gap
+  or rollback kills/reaps the helper and reports an interruption, mapped to
+  neutral paused status. This catches sleep/long process interruptions without
+  stopping preview for window moves or focus changes. It runs on wake, not
+  before suspend; very brief sleeps are not guaranteed to pause. Also reject
+  analysis by frame wall age: Linux Instant may exclude sleep.
 - Include actionable Windows desktop-camera and Linux session/device-access
   guidance with camera errors. Never change permissions, require elevation,
   developer mode or package identity. Keep unsupported macOS/browser capture
   unchanged; retain the existing native/WASM isolation.
-- Automated checks use exact rotation/mirror pixels, real PNG encoding,
-  headless allocations, synthetic query results and killable test children.
-  Cover pause/configuration, interruption, stale ready-to-capture results,
-  discovery, frozen photos, permission/busy errors and recovery. Inject clock
-  jumps; never sleep a real machine or open a real camera from tests.
-- Validation: 532 native/all-target tests pass, including 221 app checks;
-  all 272 dependency-light tests pass. Keep the full 224-frame replay ignored.
+- Automated checks use exact rotation/mirror pixels, real PNG encoding, headless
+  allocations, synthetic query results and killable test children. Cover
+  pause/configuration, interruption, stale ready-to-capture results, discovery,
+  frozen photos, permission/busy errors and recovery. Inject clock jumps; never
+  sleep a real machine or open a real camera from tests.
+- Validation: 532 native/all-target tests pass, including 221 app checks; all
+  272 dependency-light tests pass. Keep the full 224-frame replay ignored.
   Strict all-feature/all-target Clippy, all-feature WASM, formatting and
-  whitespace checks pass. Use only isolated `/tmp` compilation targets.
-  Native Windows/macOS compilation remains a CI check; physical camera,
-  permission prompts and system sleep remain user checks.
+  whitespace checks pass. Use only isolated `/tmp` compilation targets. Native
+  Windows/macOS compilation remains a CI check; physical camera, permission
+  prompts and system sleep remain user checks.
 
 Manual checkpoint 6G3c — accepted; sleep/SP6 checks deferred:
 
 1. Rotate a printed form through all four settings, then toggle Mirror preview.
    Verify preview colors/aspect and quad placement. Capture keeps the same
-   mirrored orientation; Use photo opens the unmirrored page editor. Check
-   Full frame / Accept; save/reopen.
-   A named Front camera defaults to mirrored live preview; unknown names do not.
-2. Retake and change resolution: retain orientation and reset countdown.
-   If multiple cameras exist, select another and check fresh orientation.
-3. Pause; change orientation/mode or Refresh cameras. Stay paused with no
-   old image/countdown until Resume preview. Capture should work immediately
-   after a fresh image appears. Move/resize/focus changes must keep it running.
-4. Deferred by user: sleep with live preview open for at least five seconds.
-   On wake, remain paused, then Resume. No pre-sleep result may trigger a
-   capture. A frozen photo must survive sleep. Cancel/reopen and check release.
+   mirrored orientation; Use photo opens the unmirrored page editor. Check Full
+   frame / Accept; save/reopen. A named Front camera defaults to mirrored live
+   preview; unknown names do not.
+2. Retake and change resolution: retain orientation and reset countdown. If
+   multiple cameras exist, select another and check fresh orientation.
+3. Pause; change orientation/mode or Refresh cameras. Stay paused with no old
+   image/countdown until Resume preview. Capture should work immediately after a
+   fresh image appears. Move/resize/focus changes must keep it running.
+4. Deferred by user: sleep with live preview open for at least five seconds. On
+   wake, remain paused, then Resume. No pre-sleep result may trigger a capture.
+   A frozen photo must survive sleep. Cancel/reopen and check release.
 5. Try a busy/denied/unavailable camera. Check inline guidance, retry/refresh,
    and unchanged project contents after cancellation. Repeat front/rear,
    portrait/landscape and suspend/resume checks on actual Windows/SP6 hardware.
 
-User accepts this checkpoint after the follow-ups recorded below. Physical
-sleep and Surface calibration remain deferred, not inferred from laptop tests.
+User accepts this checkpoint after the follow-ups recorded below. Physical sleep
+and Surface calibration remain deferred, not inferred from laptop tests.
 
 ### 2026-10-19 — preview-only mirroring and shared camera playback control
 
-- User requests front-camera mirroring only as a live positioning aid.
-  Rotate source pixels, but mirror only the displayed live image and overlay.
+- User requests front-camera mirroring only as a live positioning aid. Rotate
+  source pixels, but mirror only the displayed live image and overlay.
   Detection, captured preview, page corrections and PNG/PDF content retain
   unmirrored coordinates/pixels, so printed text remains readable.
 - Native adapters expose device names, not facing metadata. Default Mirror
@@ -3481,46 +3478,46 @@ sleep and Surface calibration remain deferred, not inferred from laptop tests.
   ambiguous Front/Rear labels and leave generic cameras unmirrored. Keep the
   manual checkbox. Refresh preserves the selected camera and manual override;
   switching to another camera restores its own default.
-- Keep normal and mirrored renderer allocations ready when mirroring is on.
-  Wait for both before replacing the visible frame, then switch immediately
-  to normal preview on capture. Retain one frame in flight through upload;
-  no high-resolution blank-frame regression or late crop coordinate conversion.
-- Replace separate Pause/Start buttons with one context-sensitive control:
-  Pause while running, Resume preview while paused, Start after errors,
-  Retake after capture. Preserve existing pause/configuration/session guards.
+- Keep normal and mirrored renderer allocations ready when mirroring is on. Wait
+  for both before replacing the visible frame, then switch immediately to normal
+  preview on capture. Retain one frame in flight through upload; no
+  high-resolution blank-frame regression or late crop coordinate conversion.
+- Replace separate Pause/Start buttons with one context-sensitive control: Pause
+  while running, Resume preview while paused, Start after errors, Retake after
+  capture. Preserve existing pause/configuration/session guards.
 - User explicitly defers physical sleep testing. Record it as deferred, not
   passed. Keep existing watchdog/stale-frame checks and hardware limitations.
 - TDD: reproduce mirroring of source pixels before fixing it. Check four
   lossless rotations, all mirror settings, asymmetric preview/quad reflection,
   readable captured PNG pixels, full-HD dual allocations, front-name defaults,
   device switching and manual overrides retained across refresh.
-- Validation: 535 native/all-target tests pass, including 224 app checks
-  and 34 camera-screen checks. Keep exhaustive replay opt-in. Strict Clippy,
+- Validation: 535 native/all-target tests pass, including 224 app checks and 34
+  camera-screen checks. Keep exhaustive replay opt-in. Strict Clippy,
   all-feature WASM, formatting and whitespace checks pass. Hardware checks
   remain manual; no actual camera or host build directory is used here.
 
 ### 2026-10-19 — keep camera review mirrored until Use photo
 
 - User finds the immediate unmirror on capture confusing. Keep camera live
-  preview, frozen review and crop overlay mirrored for the whole camera
-  screen, including PNG preparation. Unmirror only when Use photo leaves
-  that screen for page editing. Source pixels and crop coordinates remain
-  normal throughout; saved/exported content stays readable.
+  preview, frozen review and crop overlay mirrored for the whole camera screen,
+  including PNG preparation. Unmirror only when Use photo leaves that screen for
+  page editing. Source pixels and crop coordinates remain normal throughout;
+  saved/exported content stays readable.
 - Remove the now-unnecessary second renderer allocation per mirrored frame.
   Upload one display image while retaining the normal source pixels; keep
   existing upload readiness, backpressure and stale-session guards.
 - TDD: reproduce the capture-time flip in the actual camera view. Verify
-  mirrored pixels before capture, after capture and during Use photo,
-  followed by normal source bytes in the page editor. Preserve asymmetric
-  overlay reflection, PNG encoding and high-resolution allocation checks.
+  mirrored pixels before capture, after capture and during Use photo, followed
+  by normal source bytes in the page editor. Preserve asymmetric overlay
+  reflection, PNG encoding and high-resolution allocation checks.
 - All 536 native/all-target checks pass, including 35 camera-screen checks.
   Strict Clippy, all-feature WASM, formatting and whitespace checks pass.
   Physical sleep testing remains deferred, not marked accepted.
 
 ### 2026-10-19 — accept 6G3c and commit native camera integration
 
-- User accepts the final camera review flow and requests all pending changes
-  be committed. Mark 6G3c, 6G3 and Phase 6 accepted on available hardware.
+- User accepts the final camera review flow and requests all pending changes be
+  committed. Mark 6G3c, 6G3 and Phase 6 accepted on available hardware.
 - Retain physical sleep and actual Windows/SP6 front/rear calibration as
   explicit deferred checks. Do not convert deferred coverage into acceptance.
 - Include the restored native probe, Linux/Windows adapters, killable driver
@@ -3529,37 +3526,37 @@ sleep and Surface calibration remain deferred, not inferred from laptop tests.
 - Preserve the existing 536 native/all-target and 272 core passing checks,
   strict Clippy, WASM, formatting and whitespace validation. Keep exhaustive
   replay opt-in and all compilation outside host-owned target directories.
-- Commit unsigned as requested by repository policy. Do not push or start
-  Phase 7/UI polish in this turn; keep the C# app and release workflow intact.
+- Commit unsigned as requested by repository policy. Do not push or start Phase
+  7/UI polish in this turn; keep the C# app and release workflow intact.
 
 ### 2026-10-19 — Phase 7A prebuilt Windows testing and warning cleanup
 
-- User wants Windows testing without installing Rust or compiling a 23 GB
-  target directory. Start only the CI/portable-delivery checkpoint of Phase 7;
-  do not begin the broader UI polish or replace the C# app.
+- User wants Windows testing without installing Rust or compiling a 23 GB target
+  directory. Start only the CI/portable-delivery checkpoint of Phase 7; do not
+  begin the broader UI polish or replace the C# app.
 - Add a dedicated Windows release job using the existing pinned toolchain,
-  explicit MSVC x64 target and static CRT. Cache release dependencies with
-  the official cache action; keep bulky debug output off that job/zip.
+  explicit MSVC x64 target and static CRT. Cache release dependencies with the
+  official cache action; keep bulky debug output off that job/zip.
 - Add one ZIP containing the renamed prototype EXE, short run instructions,
   license, sample form and exact build revision/run link. Check PowerShell
-  syntax before compilation, inspect runtime imports, extract the archive
-  away from Cargo output and run a bounded no-camera startup check there.
-- Upload the ZIP without double-wrapping it. Publish only successful master
-  runs after native, WASM and package checks to a separate public `rust-dev`
-  prerelease. Pull requests get artifacts only; grant release writes only
-  to the publishing job. Keep C# dev/version assets and latest release intact.
-- Fix the reported Windows unreachable-pattern warning: the installed enum
-  has exactly six supported formats. Replace filter_map with exhaustive map;
-  a future enum change must be handled explicitly, not silently discarded.
+  syntax before compilation, inspect runtime imports, extract the archive away
+  from Cargo output and run a bounded no-camera startup check there.
+- Upload the ZIP without double-wrapping it. Publish only successful master runs
+  after native, WASM and package checks to a separate public `rust-dev`
+  prerelease. Pull requests get artifacts only; grant release writes only to the
+  publishing job. Keep C# dev/version assets and latest release intact.
+- Fix the reported Windows unreachable-pattern warning: the installed enum has
+  exactly six supported formats. Replace filter_map with exhaustive map; a
+  future enum change must be handled explicitly, not silently discarded.
 - Document direct download/extract/run, unsigned-build warnings, artifact
-  retention and remaining hardware checks. No Windows tools are installed
-  in the container; the first Windows CI run remains the packaging gate.
+  retention and remaining hardware checks. No Windows tools are installed in the
+  container; the first Windows CI run remains the packaging gate.
 - Test the workflow's actual publication shell with a mock GitHub CLI for
   new/existing releases and failed uploads. Assert separate rust-dev names,
   prerelease/non-latest flags and no tag advancement after upload failure.
 - Validation: all 536 native/all-target tests, three release-automation tests,
-  strict Clippy, all-feature WASM, formatting and whitespace checks pass.
-  Check expression context availability against GitHub's reference; set the
+  strict Clippy, all-feature WASM, formatting and whitespace checks pass. Check
+  expression context availability against GitHub's reference; set the
   runner-temp target directory in a step, not the unavailable job-env context.
   Windows packaging/script execution and real hardware remain CI/user checks.
 
@@ -3567,37 +3564,37 @@ sleep and Surface calibration remain deferred, not inferred from laptop tests.
 
 - The Windows portable job already cached release dependencies, but native
   Linux/Windows/macOS tests and WASM checks started cold on every run.
-- Cache Cargo registry/git data and compiled target output in each job.
-  Separate native OS/architecture, WASM metadata and static-CRT releases;
-  include pinned Rust and Cargo manifest/lockfile hashes in cache keys.
-- Restore the preceding compatible cache when dependencies change, so Cargo
-  can reuse unchanged crates. Keep all tests and checks running on cache
-  hits; leave C# workflows and local target directories unchanged.
+- Cache Cargo registry/git data and compiled target output in each job. Separate
+  native OS/architecture, WASM metadata and static-CRT releases; include pinned
+  Rust and Cargo manifest/lockfile hashes in cache keys.
+- Restore the preceding compatible cache when dependencies change, so Cargo can
+  reuse unchanged crates. Keep all tests and checks running on cache hits; leave
+  C# workflows and local target directories unchanged.
 - Omit CI-only debug symbols and incremental compiler state to keep caches
-  smaller. Preserve existing optimization, debug assertions and local
-  debugging settings. The first successful run must populate the caches.
+  smaller. Preserve existing optimization, debug assertions and local debugging
+  settings. The first successful run must populate the caches.
 - Add dependency-free Node checks for cache paths, key/fallback isolation,
   restore ordering and compact CI settings; run them in native Linux CI.
-- Validation: all eight Node test entries pass, including the four new
-  cache checks and existing publication/download checks; whitespace checks
-  pass. Actual cache population, hits and timings still require GitHub CI.
+- Validation: all eight Node test entries pass, including the four new cache
+  checks and existing publication/download checks; whitespace checks pass.
+  Actual cache population, hits and timings still require GitHub CI.
 
 ### 2026-10-19 — Isolate macOS capacity from Windows publication
 
 - User reports macOS ARM64 runner acquisition failed after about eighteen
-  minutes with GitHub capacity/internal-server errors. No macOS build or
-  test failure is established. Its matrix cancellation blocked publication
-  despite a successful Windows portable job and native Windows checks.
-- Keep Linux/Windows in the required native matrix. Move macOS to an
-  independent Intel runner job and reuse the same cached native steps with
-  a YAML anchor. GitHub documents both the runner label and YAML aliases.
-  Use runner.os for Linux-only steps so the shared list needs no matrix.
+  minutes with GitHub capacity/internal-server errors. No macOS build or test
+  failure is established. Its matrix cancellation blocked publication despite a
+  successful Windows portable job and native Windows checks.
+- Keep Linux/Windows in the required native matrix. Move macOS to an independent
+  Intel runner job and reuse the same cached native steps with a YAML anchor.
+  GitHub documents both the runner label and YAML aliases. Use runner.os for
+  Linux-only steps so the shared list needs no matrix.
 - Keep macOS failures visible in overall workflow status, not ignored with
-  continue-on-error. Publication depends only on Linux/Windows, WASM and
-  the package job; do not bypass any of those checks with always().
-- Add a regression for gate membership, the independent macOS runner and
-  shared tests. All nine Node test entries and whitespace checks pass.
-  Actual scheduling/publication still require another GitHub run.
+  continue-on-error. Publication depends only on Linux/Windows, WASM and the
+  package job; do not bypass any of those checks with always().
+- Add a regression for gate membership, the independent macOS runner and shared
+  tests. All nine Node test entries and whitespace checks pass. Actual
+  scheduling/publication still require another GitHub run.
 - At the time of the report, cache changes were still uncommitted; the
   seventeen-minute Windows test run did not measure warm-cache performance.
   Preserve C# workflows, existing release assets and deferred device checks.
@@ -3605,62 +3602,62 @@ sleep and Surface calibration remain deferred, not inferred from laptop tests.
 ### 2026-10-19 — Preserve the portable ZIP during publication
 
 - Inspect rust/logs_106435626898.zip: artifact upload/download and digest
-  verification succeeded, but the download action extracted the raw ZIP.
-  GitHub CLI then failed because the expected archive file was absent.
-- Set skip-decompress on the release download to keep the uploaded ZIP
-  intact. Check that it is nonempty before any release or tag operation,
-  with a clear error if missing. Keep permissions and release gates intact.
-- First reproduce the missing setting and missing/empty-file failures.
-  Extend the real-shell mock tests with archive fixtures and assert no
-  GitHub calls occur without a usable file. All twelve Node test entries
-  and whitespace checks pass; actual publication still awaits GitHub CI.
-- Confirm release dependency caching from the same log: restore succeeded
-  and only FastFill recompiled, finishing the release build in 24.34 seconds.
-  Leave the supplied log ZIP untouched and untracked.
+  verification succeeded, but the download action extracted the raw ZIP. GitHub
+  CLI then failed because the expected archive file was absent.
+- Set skip-decompress on the release download to keep the uploaded ZIP intact.
+  Check that it is nonempty before any release or tag operation, with a clear
+  error if missing. Keep permissions and release gates intact.
+- First reproduce the missing setting and missing/empty-file failures. Extend
+  the real-shell mock tests with archive fixtures and assert no GitHub calls
+  occur without a usable file. All twelve Node test entries and whitespace
+  checks pass; actual publication still awaits GitHub CI.
+- Confirm release dependency caching from the same log: restore succeeded and
+  only FastFill recompiled, finishing the release build in 24.34 seconds. Leave
+  the supplied log ZIP untouched and untracked.
 
 ### 2026-10-20 — Windows console and camera-mode discovery feedback
 
-- User reports the CI build succeeds and the Windows EXE starts, but a
-  terminal remains open beside the GUI. Both a regular webcam and an offline
-  Android-camera driver are listed; mode discovery fails for both after a
-  few seconds with the same empty/oversized-catalog error. Refresh repeats it.
+- User reports the CI build succeeds and the Windows EXE starts, but a terminal
+  remains open beside the GUI. Both a regular webcam and an offline
+  Android-camera driver are listed; mode discovery fails for both after a few
+  seconds with the same empty/oversized-catalog error. Refresh repeats it.
 - Mark Windows release binaries as GUI-subsystem applications; keep debug
   consoles and the separate command-line camera probe unchanged.
 - An empty supported-mode list has a nonempty JSON reply. The reported error
   instead means the helper returned no payload; the actual Windows driver
   failure cannot be established in this Linux container.
-- Query Windows formats through the already-transitive Media Foundation
-  bindings instead of Camera::new, which selects/sets a format before it
-  can list modes. Keep capture negotiation and device choices unchanged;
-  do not let an offline camera remove the usable camera from the picker.
-- Flush catalog replies explicitly. Retain only 4 KiB of stderr while
-  draining the rest to avoid pipe stalls. Observe worker exit status before
-  reaping, and distinguish empty replies from oversized catalogs. Preserve
-  timeout, sleep interruption, cancellation and process cleanup behavior.
-- Reproduce the previously hidden nonzero exit and misleading empty-reply
-  errors first. Add empty-mode/error serialization and offline-to-working
-  camera selection checks. Exercise noisy stderr and helper exit diagnostics
-  without hardware; keep physical Windows/SP6 verification deferred.
+- Query Windows formats through the already-transitive Media Foundation bindings
+  instead of Camera::new, which selects/sets a format before it can list modes.
+  Keep capture negotiation and device choices unchanged; do not let an offline
+  camera remove the usable camera from the picker.
+- Flush catalog replies explicitly. Retain only 4 KiB of stderr while draining
+  the rest to avoid pipe stalls. Observe worker exit status before reaping, and
+  distinguish empty replies from oversized catalogs. Preserve timeout, sleep
+  interruption, cancellation and process cleanup behavior.
+- Reproduce the previously hidden nonzero exit and misleading empty-reply errors
+  first. Add empty-mode/error serialization and offline-to-working camera
+  selection checks. Exercise noisy stderr and helper exit diagnostics without
+  hardware; keep physical Windows/SP6 verification deferred.
 - Extend extracted Windows package checks to inspect the GUI subsystem and
   verify stdout/stderr pipes from the actual release EXE. Device-name listing
-  opens no capture stream and accepts a well-formed driver error on the CI
-  host, so no camera is required. Actual PowerShell/MSVC checks remain in CI.
-- Validation: all 539 native/all-target tests and twelve Node automation
-  entries pass; exhaustive replay remains ignored/opt-in. Strict Clippy,
-  all-feature WASM compilation, formatting and whitespace checks pass.
-  Compilation stays under /tmp, not host target/dist.
+  opens no capture stream and accepts a well-formed driver error on the CI host,
+  so no camera is required. Actual PowerShell/MSVC checks remain in CI.
+- Validation: all 539 native/all-target tests and twelve Node automation entries
+  pass; exhaustive replay remains ignored/opt-in. Strict Clippy, all-feature
+  WASM compilation, formatting and whitespace checks pass. Compilation stays
+  under /tmp, not host target/dist.
 - Next Windows check: confirm Explorer starts only the GUI, regular-webcam
-  modes/preview work, and switching to the offline driver and back recovers.
-  If mode listing still fails, capture the new complete helper error;
-  do not claim the physical driver failure fixed from Linux-only tests.
-- User requests committing the fix and continuing without Windows access.
-  Defer physical retesting explicitly; do not mark camera behavior accepted.
+  modes/preview work, and switching to the offline driver and back recovers. If
+  mode listing still fails, capture the new complete helper error; do not claim
+  the physical driver failure fixed from Linux-only tests.
+- User requests committing the fix and continuing without Windows access. Defer
+  physical retesting explicitly; do not mark camera behavior accepted.
 
 ### 2026-10-20 — Start UI polish with checkpoint 7B
 
 - Commit the Windows console/camera-query fix unsigned as requested, with
-  physical Windows retesting explicitly deferred while hardware is absent.
-  Start one small UI checkpoint, not the entire visual redesign at once.
+  physical Windows retesting explicitly deferred while hardware is absent. Start
+  one small UI checkpoint, not the entire visual redesign at once.
 - TDD red: the old wheel handler changes 24 pt to 32, not the required 25.
   Replace preset sizes with a numeric field and 40-pixel minus/plus buttons;
   wheel and buttons change sizes by one point within the model's 6–144 range.
@@ -3673,22 +3670,22 @@ sleep and Surface calibration remain deferred, not inferred from laptop tests.
   paths for page/tool/navigation/save changes rather than duplicate dispatch
   lists. Keep modal/project-operation guards ahead of numeric editing.
 - Display imported/scaled sizes compactly without changing stored precision.
-  Support decimal dot/comma, preserve mixed-font selections, apply a chosen
-  size to selected text only, and undo a group size change in one operation.
-- Move text-option rendering and numeric-field handling into text_controls,
-  with separate colocated tests. Shrink view.rs; use existing spacing/theme
-  tokens and native iced controls, not a new dependency or widget framework.
+  Support decimal dot/comma, preserve mixed-font selections, apply a chosen size
+  to selected text only, and undo a group size change in one operation.
+- Move text-option rendering and numeric-field handling into text_controls, with
+  separate colocated tests. Shrink view.rs; use existing spacing/theme tokens
+  and native iced controls, not a new dependency or widget framework.
 - Thirteen focused tests cover numeric drafts, validation, limits, fractional
   values, wheel steps, inline Escape, grouped Undo, and project guards. A
   headless layout check verifies button/entry sizes stay fixed for 6–144 pt.
-- Respect captured Delete events so editing the numeric field cannot also
-  delete an annotation; keep Escape available to discard its pending value.
+- Respect captured Delete events so editing the numeric field cannot also delete
+  an annotation; keep Escape available to discard its pending value.
 - Validation: all 550 native/all-target tests pass; exhaustive replay stays
   opt-in. Strict Clippy, all-feature WASM compilation, formatting and whitespace
   checks pass. Keep compilation under /tmp and the C# app unchanged.
 - User confirms the Linux checkpoint on 2026-10-20. Mark 7B accepted and
-  continue to the stable-confirmation overlay checkpoint. Keep physical
-  touch and the Windows camera retest deferred.
+  continue to the stable-confirmation overlay checkpoint. Keep physical touch
+  and the Windows camera retest deferred.
 
 ### 2026-10-20 — Stable confirmation overlays, checkpoint 7C
 
@@ -3698,47 +3695,47 @@ sleep and Surface calibration remain deferred, not inferred from laptop tests.
   the editor. Reproduce this with the actual headless iced layout before
   connecting the overlay. Keep a regression for all six prompt paths at two
   window sizes, including each editor/toolbar/rail descendant's bounds.
-- Replace the three page/annotation header prompts and project-leave banner
-  with one local confirmation module. Keep project, page and annotation
-  workflow ownership unchanged; no document/history/schema changes.
+- Replace the three page/annotation header prompts and project-leave banner with
+  one local confirmation module. Keep project, page and annotation workflow
+  ownership unchanged; no document/history/schema changes.
 - Use native stack, opaque and mouse-area widgets instead of a modal widget
-  framework or dependency. Keep an explicit renderer layer under the dialog
-  so zoomed page images cannot cover its card or translucent backdrop.
+  framework or dependency. Keep an explicit renderer layer under the dialog so
+  zoomed page images cannot cover its card or translucent backdrop.
 - Centralize themed card/backdrop styling in appearance.rs. Center readable
   cards and equal-width 40-pixel actions, fitting down to a 320-pixel window.
-  Use red destructive actions and explicit Keep/Cancel options. Backdrop
-  input does not dismiss the dialog; Enter never confirms destruction.
+  Use red destructive actions and explicit Keep/Cancel options. Backdrop input
+  does not dismiss the dialog; Enter never confirms destruction.
 - Six colocated tests check unchanged editor layout, actual button routing,
-  backdrop mouse/touch/wheel isolation, late command guards, Escape without
-  data loss, Delete all/Undo, and image/modal layering at 100%/200% scale.
+  backdrop mouse/touch/wheel isolation, late command guards, Escape without data
+  loss, Delete all/Undo, and image/modal layering at 100%/200% scale.
 - Validation: all 556 native/all-target tests pass; exhaustive camera replay
   remains opt-in. Strict Clippy, all-feature WASM compilation, formatting and
-  whitespace checks pass. Rebuild cold container caches under /tmp only;
-  leave host target/dist, C# code and release workflows unchanged.
-- User confirms dialogs work well on 2026-10-20. Mark 7C manually accepted
-  and continue with compact vector tools. Keep Windows/real-touch deferrals.
+  whitespace checks pass. Rebuild cold container caches under /tmp only; leave
+  host target/dist, C# code and release workflows unchanged.
+- User confirms dialogs work well on 2026-10-20. Mark 7C manually accepted and
+  continue with compact vector tools. Keep Windows/real-touch deferrals.
 
 ### 2026-10-20 — Compact vector tools and swatches, checkpoint 7D
 
-- Accept the user's 7C dialog check and start one toolbar-only polish step.
-  Keep larger panel/rail animation, startup/help and packaging work separate.
+- Accept the user's 7C dialog check and start one toolbar-only polish step. Keep
+  larger panel/rail animation, startup/help and packaging work separate.
 - TDD red: Navigate measures 83.536 by 40 pixels, not the required equal
   40-pixel square target. Retain the check across all tools, options and colors.
-- Draw eleven tools plus magnet/bucket as monochrome native canvas paths.
-  Use one themed button/foreground policy for selected and disabled glyphs;
-  center rectangle/oval with equal bounds and stroke weight. Add no platform
-  font, emoji, bitmap, dependency or generic icon framework.
-- Preserve active-tool labels and native half-second hover hints. Suppress
-  hints when disabled so they cannot remain above modal/busy workflows.
-  Keep smart-snap readiness visible, global snap state, per-tool defaults and
+- Draw eleven tools plus magnet/bucket as monochrome native canvas paths. Use
+  one themed button/foreground policy for selected and disabled glyphs; center
+  rectangle/oval with equal bounds and stroke weight. Add no platform font,
+  emoji, bitmap, dependency or generic icon framework.
+- Preserve active-tool labels and native half-second hover hints. Suppress hints
+  when disabled so they cannot remain above modal/busy workflows. Keep
+  smart-snap readiness visible, global snap state, per-tool defaults and
   existing annotation command routing, including after temporary selection.
 - Replace named color buttons with six round 32-pixel patches in 40-pixel
   targets. Add a two-pixel selection ring with a two-pixel pigment gap; keep
   colors unchanged on hover and retain their RGB pigment when dimmed.
-- Move toolbar rendering to its own module with colocated tests; reduce
-  view.rs to window composition/document editing. Keep touched style/size
-  tokens in appearance.rs, with padding derived from icon/swatch size.
-  Maintain three fixed-height rows so tools/options never resize the page.
+- Move toolbar rendering to its own module with colocated tests; reduce view.rs
+  to window composition/document editing. Keep touched style/size tokens in
+  appearance.rs, with padding derived from icon/swatch size. Maintain three
+  fixed-height rows so tools/options never resize the page.
 - Six new checks cover full-target mouse/touch routing and disabled controls,
   geometry/centering, all thirteen glyphs at 100%/200% in light/dark themes,
   selected/disabled rendering, swatch hover/ring gaps, and post-placement snap.
@@ -3746,83 +3743,83 @@ sleep and Surface calibration remain deferred, not inferred from laptop tests.
   temporary icon grids and editor preview without adding generated assets.
 - Validation: all 562 native/all-target tests pass; exhaustive camera replay
   remains ignored/opt-in. Strict Clippy, all-feature WASM, formatting and
-  whitespace checks pass. Keep builds/previews under /tmp, not host target
-  or dist; leave C# code, serialization and release workflows unchanged.
-- User accepts the icons on Linux except the ambiguous Text glyph. Replace
-  that glyph with Aa using existing bundled Fira Sans, preserving selected
-  and disabled foregrounds. Add a headless letter-region regression at both
-  DPI scales and themes. Keep other icons unchanged.
-- Record scrollbar/button overlap for the later toolbar layout redesign,
-  as requested. Mark 7D accepted; do not infer Windows/real-touch checks.
+  whitespace checks pass. Keep builds/previews under /tmp, not host target or
+  dist; leave C# code, serialization and release workflows unchanged.
+- User accepts the icons on Linux except the ambiguous Text glyph. Replace that
+  glyph with Aa using existing bundled Fira Sans, preserving selected and
+  disabled foregrounds. Add a headless letter-region regression at both DPI
+  scales and themes. Keep other icons unchanged.
+- Record scrollbar/button overlap for the later toolbar layout redesign, as
+  requested. Mark 7D accepted; do not infer Windows/real-touch checks.
 - Validate the Aa follow-up: all 563 native/all-target tests, strict Clippy,
-  WASM compilation, formatting and whitespace pass. Inspect light/dark
-  previews, including selected/disabled states. Leave changes uncommitted.
+  WASM compilation, formatting and whitespace pass. Inspect light/dark previews,
+  including selected/disabled states. Leave changes uncommitted.
 
 ### 2026-10-20 — Organized editor workspace, checkpoint 7E
 
 - Commit accepted 7B–7D as unsigned 49f27bc. Record that C# is a behavior
   reference, not a visual template; keep polish in reviewable UI slices.
-- TDD red: the old three-row layout paints toolbar chrome, not the page, at
-  the new expected page position. Retain the headless regression.
+- TDD red: the old three-row layout paints toolbar chrome, not the page, at the
+  new expected page position. Retain the headless regression.
 - Give wider editor areas a 248-pixel tools/properties panel and one command
   strip, recovering 112 vertical pixels for the document. Keep the existing
   horizontal layout below an 840-pixel workspace width, excluding the rail.
-- Keep layer/delete actions in two equal-width rows at the panel bottom;
-  retain Reset angle in the command strip. Dim unavailable actions, hide
-  only inapplicable properties and scroll content independently on short views.
+- Keep layer/delete actions in two equal-width rows at the panel bottom; retain
+  Reset angle in the command strip. Dim unavailable actions, hide only
+  inapplicable properties and scroll content independently on short views.
 - Share tool, property, color and selection-action builders across layouts.
   Stack font/size/format controls in the panel, with a full-width 40-pixel
   typeface picker. Keep command handlers, text transactions and model state
   unchanged. Leave page-rail redesign and header/startup/help work separate.
-- Reserve scrollbar space below horizontal targets without moving buttons
-  as tracks appear. Keep style dimensions local to appearance.rs, and remove
-  the old annotation-count width branch unused by the compact fallback.
-- Add seven checks for page height, all-tool/breakpoint layout stability,
-  footer geometry, real mouse/touch command routing, scrollbar clearance,
-  stacked text targets and headless light/dark workspace previews. Extend
-  zoomed-image clipping coverage to the panel; derive the toolbar boundary
-  from the fitted viewport rather than the previous fixed prototype height.
+- Reserve scrollbar space below horizontal targets without moving buttons as
+  tracks appear. Keep style dimensions local to appearance.rs, and remove the
+  old annotation-count width branch unused by the compact fallback.
+- Add seven checks for page height, all-tool/breakpoint layout stability, footer
+  geometry, real mouse/touch command routing, scrollbar clearance, stacked text
+  targets and headless light/dark workspace previews. Extend zoomed-image
+  clipping coverage to the panel; derive the toolbar boundary from the fitted
+  viewport rather than the previous fixed prototype height.
 - Use the theme foreground in the headless renderer, matching the app rather
-  than painting dark-theme test labels black. Preview Navigate/Rectangle/Text
-  in both layouts; keep generated images/builds under /tmp only.
+  than painting dark-theme test labels black. Preview Navigate/Rectangle/Text in
+  both layouts; keep generated images/builds under /tmp only.
 - Validation: all 570 native/all-target tests pass; exhaustive replay remains
   opt-in. Strict Clippy, WASM compilation, formatting and whitespace checks
   pass. Keep C# code, release workflows and file formats unchanged.
-- Stop for the Linux checkpoint above. New workspace changes remain
-  uncommitted; Windows camera, real touch and Surface calibration stay deferred.
-- User confirms the Linux checkpoint with an alignment follow-up: center
-  each sidebar tool row, including its final three tools. Use native row and
+- Stop for the Linux checkpoint above. New workspace changes remain uncommitted;
+  Windows camera, real touch and Surface calibration stay deferred.
+- User confirms the Linux checkpoint with an alignment follow-up: center each
+  sidebar tool row, including its final three tools. Use native row and
   container alignment; keep icons, target sizes, spacing and options unchanged.
   Reproduce the offset in a layout regression covering Line/Text at tall and
   scrollable heights. Keep input-routing checks independent of the wrapper.
 - Validate the alignment follow-up: all 571 native/all-target tests, strict
-  Clippy, WASM compilation, formatting and whitespace checks pass. Inspect
-  the updated dark-theme preview. Leave changes uncommitted.
+  Clippy, WASM compilation, formatting and whitespace checks pass. Inspect the
+  updated dark-theme preview. Leave changes uncommitted.
 - User clarifies that per-row centering breaks the grid. Restore aligned
   columns, derive a 208-pixel panel from its controls/gaps/padding, and align
   options to the same content edges. Place the scrollbar in existing right
   padding so its appearance never squeezes the grid to three columns.
-- Let the stacked font-size entry flex within the panel instead of imposing
-  a fixed field width. Keep target sizes, font-size semantics and bottom
-  actions unchanged. Replace the superseded centering check with compact
-  grid/option alignment checks at tall and scrollable heights; verify text
-  controls at 184-pixel content width. Derive the image-clipping test's panel
-  boundary from the actual rendered viewport rather than the old width.
-- Validate the compact-panel revision: all 571 native/all-target tests,
-  strict Clippy, WASM compilation, formatting and whitespace checks pass.
-  Inspect the updated 208-pixel dark-theme panel; keep changes uncommitted.
+- Let the stacked font-size entry flex within the panel instead of imposing a
+  fixed field width. Keep target sizes, font-size semantics and bottom actions
+  unchanged. Replace the superseded centering check with compact grid/option
+  alignment checks at tall and scrollable heights; verify text controls at
+  184-pixel content width. Derive the image-clipping test's panel boundary from
+  the actual rendered viewport rather than the old width.
+- Validate the compact-panel revision: all 571 native/all-target tests, strict
+  Clippy, WASM compilation, formatting and whitespace checks pass. Inspect the
+  updated 208-pixel dark-theme panel; keep changes uncommitted.
 - Put Color first in both sidebar and compact options, then applicable line
   width, then tool-specific text/snap/fill controls. Reproduce the old swatch
   jump (240 to 288 pixels on switching Rectangle to Checkmark) and retain a
   rendering regression across all nine drawing tools.
 - Apply symmetric 12-pixel padding directly to content and footer instead of
   splitting it between the outer container and inner sections. Retain the
-  208-pixel panel, four columns and scrollbar within padding. Explicitly
-  verify equal left/right insets at tall and scrollable heights.
-- Measure the supplied screenshot: the panel spans x=5..212 and the first
-  tool row x=17..200, confirming equal 12-pixel insets. The crop includes
-  five pixels outside the left edge and seven outside the right edge; avoid
-  compensating for that crop difference in the application layout.
+  208-pixel panel, four columns and scrollbar within padding. Explicitly verify
+  equal left/right insets at tall and scrollable heights.
+- Measure the supplied screenshot: the panel spans x=5..212 and the first tool
+  row x=17..200, confirming equal 12-pixel insets. The crop includes five pixels
+  outside the left edge and seven outside the right edge; avoid compensating for
+  that crop difference in the application layout.
 - Validate stable properties: all 572 native/all-target tests, strict Clippy,
   WASM compilation, formatting and whitespace pass. Inspect the updated
   dark-theme panel; leave changes uncommitted.
@@ -3833,68 +3830,68 @@ sleep and Surface calibration remain deferred, not inferred from laptop tests.
   ordering. Close 7E without committing; keep the staged work intact.
 - Split the requested animated rail into two manual checkpoints: floating
   thumbnail/gap behavior now, then neighboring-card and drop/cancel animation.
-- TDD red: dragging a page beyond the rail leaves no floating paper above
-  the tools panel. Keep the regression and verify both themes at 1x/2x DPI.
-  Use a page-sized fixture, avoiding software-renderer rounding of a 1px
-  image enlarged hundreds of times.
+- TDD red: dragging a page beyond the rail leaves no floating paper above the
+  tools panel. Keep the regression and verify both themes at 1x/2x DPI. Use a
+  page-sized fixture, avoiding software-renderer rounding of a 1px image
+  enlarged hundreds of times.
 - Move drag geometry and event handling into the rail module; separate its
-  controls/card rendering from input. Replace six global message variants
-  with one rail event. Reuse existing page selection/reorder workflows and
-  native canvas layering; add no dependency or document-format changes.
+  controls/card rendering from input. Replace six global message variants with
+  one rail event. Reuse existing page selection/reorder workflows and native
+  canvas layering; add no dependency or document-format changes.
 - Keep the grabbed point attached to an 82%-opaque floating card. Once the
   pointer travels four logical pixels, hide its source and shift neighbors
   around a full-card highlighted gap. Remove redundant drag instructions.
 - Preserve document order until a valid release. Use the release position,
-  accept empty space below the last card, and reject the scrollbar/outside
-  rail. Escape, lost touch/focus and resize restore the original order.
-- Retain wheel and scrollbar navigation. Wheel scrolling updates the gap,
-  not the floating card's position. Keep the original mouse/touch owner and
-  tolerate native press/move/release batches before a view rebuild; clear
-  stale captures after explicit cancellation so the next grab works.
+  accept empty space below the last card, and reject the scrollbar/outside rail.
+  Escape, lost touch/focus and resize restore the original order.
+- Retain wheel and scrollbar navigation. Wheel scrolling updates the gap, not
+  the floating card's position. Keep the original mouse/touch owner and tolerate
+  native press/move/release batches before a view rebuild; clear stale captures
+  after explicit cancellation so the next grab works.
 - Add eight regression checks for ghost layering, full-card gap rendering,
   threshold/jitter, grab offsets, scrolling, pointer ownership, native event
   batching, interruption and event pass-through. Preserve prior rail tests.
 - Validation: all 580 native/all-target tests, strict Clippy, WASM compilation,
   formatting and whitespace checks pass. Exhaustive camera replay remains
   opt-in. No C# changes; no commit. Keep Windows/real-touch checks deferred.
-- Stop for the Linux checkpoint below. Movement is intentionally immediate
-  in 7F1; animation remains separate in 7F2.
+- Stop for the Linux checkpoint below. Movement is intentionally immediate in
+  7F1; animation remains separate in 7F2.
 
 Manual checkpoint 7F1 — accepted 2026-10-20:
 
-1. Open at least three distinct pages. Click to switch, then drag from
-   different parts of a thumbnail. Confirm the grabbed point stays attached
-   across the document, toolbar and tools panel without duplicate source cards.
+1. Open at least three distinct pages. Click to switch, then drag from different
+   parts of a thumbnail. Confirm the grabbed point stays attached across the
+   document, toolbar and tools panel without duplicate source cards.
 2. Move up/down the rail; confirm a full-card gap previews insertion. Drop
    between pages and below the last one. Check the resulting page order.
 3. Cancel outside the rail, over the scrollbar or with Escape. Confirm order
-   stays unchanged and another drag works immediately. In a short window,
-   check wheel scrolling while dragging and scrollbar dragging when idle.
+   stays unchanged and another drag works immediately. In a short window, check
+   wheel scrolling while dragging and scrollbar dragging when idle.
 
 User confirms all behavior works smoothly. Continue with animation in 7F2.
 
 ### 2026-10-20 — Accept 7F1; animate page reordering in 7F2
 
-- Mark the floating-thumbnail/gap checkpoint manually accepted. Keep all
-  changes uncommitted and preserve the user's staged sidebar changes.
-- TDD red: presentation has no timed intermediate positions or settling
-  state. Add deterministic-clock checks before the animation implementation;
-  retain the earlier ownership, batching, cancellation and layering checks.
-- Add rail-local presentation state shared by the rail and floating canvas.
-  Use native redraw requests, not application tick messages or a background
-  timer. Keep all animation out of page metadata, history and recovery.
-- Ease neighboring cards toward their new positions over 180 ms. Retarget
-  from each visible position on rapid reversals, without a positional jump.
-  Follow the pointer immediately; animate only neighbors and released cards.
+- Mark the floating-thumbnail/gap checkpoint manually accepted. Keep all changes
+  uncommitted and preserve the user's staged sidebar changes.
+- TDD red: presentation has no timed intermediate positions or settling state.
+  Add deterministic-clock checks before the animation implementation; retain the
+  earlier ownership, batching, cancellation and layering checks.
+- Add rail-local presentation state shared by the rail and floating canvas. Use
+  native redraw requests, not application tick messages or a background timer.
+  Keep all animation out of page metadata, history and recovery.
+- Ease neighboring cards toward their new positions over 180 ms. Retarget from
+  each visible position on rapid reversals, without a positional jump. Follow
+  the pointer immediately; animate only neighbors and released cards.
 - Commit valid drops once, then slide the floating card into the destination.
   Slide canceled cards back; hide their stationary source until they land.
-  Preserve the rail scroll offset on drag/drop so the destination does not
-  jump away. Keep arrow-button auto-scroll and existing data safety unchanged.
-- Hit-test visible animated positions, not eventual slots. Allow a new grab
-  to supersede settling, and retarget the settling card if the rail scrolls.
+  Preserve the rail scroll offset on drag/drop so the destination does not jump
+  away. Keep arrow-button auto-scroll and existing data safety unchanged.
+- Hit-test visible animated positions, not eventual slots. Allow a new grab to
+  supersede settling, and retarget the settling card if the rail scrolls.
   Discard obsolete geometry on resize/modal entry or project replacement.
-- Stop native redraw requests when transitions finish, including while a
-  held thumbnail is stationary. Support instant transitions via desktop
+- Stop native redraw requests when transitions finish, including while a held
+  thumbnail is stationary. Support instant transitions via desktop
   FASTFILL_REDUCED_MOTION=1 and browser prefers-reduced-motion; explicitly
   document that native OS motion preferences are not queried automatically.
 - Add eight checks for intermediate/reversed motion, commit-before-settle,
@@ -3914,9 +3911,9 @@ Manual checkpoint 7F2 — accepted 2026-10-20:
 2. Drop into the gap, then cancel another drag outside the rail or with Esc.
    Check the slide to the destination/source, no duplicate card, correct page
    order and no rail jump on a valid drop. Grab again during settling.
-3. In a short window, scroll while dragging and immediately after release.
-   Check that settling adapts to scrolling and normal clicks still select.
-   Optionally launch with FASTFILL_REDUCED_MOTION=1 for instant transitions.
+3. In a short window, scroll while dragging and immediately after release. Check
+   that settling adapts to scrolling and normal clicks still select. Optionally
+   launch with FASTFILL_REDUCED_MOTION=1 for instant transitions.
 
 User accepts the animations. Continue with larger, less cluttered rail cards;
 user explicitly chooses numbers to the left, not overlaid or below the image.
@@ -3935,9 +3932,9 @@ user explicitly chooses numbers to the left, not overlaid or below the image.
   Portrait previews grow from 72 to about 128–138 logical pixels high. Blank
   paper uses the page's own aspect ratio. Keep rail width and card slots fixed.
 - Use rounded card/gap outlines and subtle paper shadows. Preserve theme
-  contrast, active-card selection and the same appearance while dragging.
-  Leave page controls, annotations, data formats and accepted input/animation
-  logic unchanged; annotated-preview generation is outside this slice.
+  contrast, active-card selection and the same appearance while dragging. Leave
+  page controls, annotations, data formats and accepted input/animation logic
+  unchanged; annotated-preview generation is outside this slice.
 - Add three checks for portrait/landscape/blank preview geometry, rendering
   independent of asset names and annotation counts, and one-/two-digit page
   numbers fitting beside selected previews. Render both themes at 1x/2x.
@@ -3959,8 +3956,8 @@ landscape cards and consistent numbering of the dragged page.
 ### 2026-10-20 — Variable-height cards and consistent drag numbering
 
 - Top-align page numbers in the left gutter. Fit each preview to its image
-  aspect ratio, capped at 138 logical pixels of paper height; retain a
-  40-pixel minimum card target for very wide pages. Keep rail width unchanged.
+  aspect ratio, capped at 138 logical pixels of paper height; retain a 40-pixel
+  minimum card target for very wide pages. Keep rail width unchanged.
 - TDD red: portrait and landscape cards still have equal heights, and the
   floating number retains its original index. Load fonts and assert visible
   glyph pixels in the rendering check so missing fonts cannot mask failures.
@@ -3968,12 +3965,12 @@ landscape cards and consistent numbering of the dragged page.
   scrollbar, insertion gaps and animation offsets. Size the gap to the actual
   dragged card. Compare dragged and neighboring card centers to avoid target
   oscillation when a short card moves past a tall one.
-- Resolve raw native pointer events against the current application layout,
-  not stale precomputed targets from a queued event batch. Use measured page
-  offsets for import, camera, PDF, deletion and arrow-reordering scroll targets.
-- Number all cards by their proposed insertion slots during dragging,
-  including the floating card. Use committed order after drop and original
-  order after cancellation; preserve existing settling animations.
+- Resolve raw native pointer events against the current application layout, not
+  stale precomputed targets from a queued event batch. Use measured page offsets
+  for import, camera, PDF, deletion and arrow-reordering scroll targets.
+- Number all cards by their proposed insertion slots during dragging, including
+  the floating card. Use committed order after drop and original order after
+  cancellation; preserve existing settling animations.
 - Add seven checks covering mixed-height geometry, all 16 source/target
   permutations over four differently shaped pages, minimum target size,
   source-sized gaps, unique labels, stable short/tall dragging, queued input,
@@ -3981,14 +3978,14 @@ landscape cards and consistent numbering of the dragged page.
   appearance checks to verify the number gutter is top-aligned.
 - Validation: all 598 native/all-target tests pass; exhaustive replay remains
   opt-in. Strict Clippy, WASM compilation, formatting and whitespace checks
-  pass. Inspect mixed-page and page-20 snapshots in both themes at 1x/2x.
-  No C#, format, dependency or workflow changes. Preserve staged work, leave
-  these edits uncommitted and keep host build outputs untouched.
+  pass. Inspect mixed-page and page-20 snapshots in both themes at 1x/2x. No C#,
+  format, dependency or workflow changes. Preserve staged work, leave these
+  edits uncommitted and keep host build outputs untouched.
 
 Manual checkpoint 7F3 — follow-up accepted 2026-10-20:
 
-1. Mix portrait, landscape and square pages. Check top-aligned numbers,
-   shorter landscape cards and unchanged preview aspect ratios.
+1. Mix portrait, landscape and square pages. Check top-aligned numbers, shorter
+   landscape cards and unchanged preview aspect ratios.
 2. Drag mixed-size pages up/down. Check gap size, neighboring motion and the
    floating page's proposed number, with no duplicate labels. Drop and cancel.
 3. In a short window, scroll normally and while dragging. Check click targets
@@ -4001,39 +3998,39 @@ next UI slice until asked to continue.
 
 ### 2026-10-20 — Resume after signing; shortcuts reference in 7G
 
-- Resume from the owner's rebased/signed master with a clean worktree.
-  Leave Windows testing separate; no new hardware result has been reported.
+- Resume from the owner's rebased/signed master with a clean worktree. Leave
+  Windows testing separate; no new hardware result has been reported.
 - TDD red: the F1 route, opening the reference and blocking queued edits all
-  fail before implementation. Add ten checks using existing native widgets
-  and Rust's test harness; no new test framework or dependencies.
-- Add Shortcuts before Undo and F1 in the main editor. Use iced's table in
-  a scrollable themed modal with Context / Shortcut / Action columns and bold
+  fail before implementation. Add ten checks using existing native widgets and
+  Rust's test harness; no new test framework or dependencies.
+- Add Shortcuts before Undo and F1 in the main editor. Use iced's table in a
+  scrollable themed modal with Context / Shortcut / Action columns and bold
   shortcut styling. Keep descriptions wrapped, with a pinned title/Close row.
   Document actual commands/gestures, not nonexistent letter-key tool bindings.
-- Keep help local to its own module. Preserve pending text, formatting,
-  numeric entry, selection and history; unfocus fields while open and restore
-  their focus on Close/Escape. Block pointer input and late edit messages.
-  Keep recovery and analysis completions flowing and preserve close guards.
-  Do not open over another workflow or an annotation/page drag.
+- Keep help local to its own module. Preserve pending text, formatting, numeric
+  entry, selection and history; unfocus fields while open and restore their
+  focus on Close/Escape. Block pointer input and late edit messages. Keep
+  recovery and analysis completions flowing and preserve close guards. Do not
+  open over another workflow or an annotation/page drag.
 - Verify real button routing, backdrop mouse/touch/wheel isolation, scrolling
   and horizontal bounds at 320x480, 640x360 and 1200x800. Inspect light/dark
   software previews at 1x/2x. All 608 native/all-target tests, strict Clippy,
   WASM compilation, formatting and whitespace checks pass; replay stays opt-in.
 - Record the user's request to restyle all remaining buttons as a separate
-  checkpoint, including header/page/navigation/camera/correction actions.
-  No C#, format, camera-calibration, dependency or workflow changes. Leave
-  edits uncommitted and host build outputs untouched.
+  checkpoint, including header/page/navigation/camera/correction actions. No C#,
+  format, camera-calibration, dependency or workflow changes. Leave edits
+  uncommitted and host build outputs untouched.
 
 Manual checkpoint 7G — accepted 2026-10-20:
 
 1. Open Shortcuts with its button and F1. Scroll to the bottom; inspect bold
    shortcut labels and the Context column. Close with Close and Escape.
 2. During inline text editing, change formatting, open/close help, then keep
-   typing. Help must not accept/cancel the draft. Test a pending font-size
-   entry too; Escape closes help before it discards the numeric/text draft.
+   typing. Help must not accept/cancel the draft. Test a pending font-size entry
+   too; Escape closes help before it discards the numeric/text draft.
 3. Try a narrow/short window. Descriptions must wrap, Close stay accessible,
-   background controls stay blocked and the editor stay in place. Browser F1
-   may be reserved; use the button there. Real touch/Windows checks deferred.
+   background controls stay blocked and the editor stay in place. Browser F1 may
+   be reserved; use the button there. Real touch/Windows checks deferred.
 
 User passes the checks and locates the Shortcuts button. Keep its placement.
 Replace the all-platform explanatory note with the compiled Ctrl/Cmd value;
@@ -4041,69 +4038,69 @@ cover note and labels together, including unchanged literal Ctrl geometry.
 
 ### 2026-10-20 — Windows camera cleanup and CI warning follow-up
 
-- Inspect logs_106864594790.zip and the Windows screenshot. User reports
-  cached Linux/Windows checks below three minutes, WASM 24 seconds and macOS
-  just under nine minutes. Windows UI/theme looks good; the selected camera
-  cannot enumerate modes because its helper exits with 0xc0000005.
-- Trace a concrete lifetime hazard in nokhwa-bindings-windows 0.4.6: its
-  device Drop calls MFShutdown/CoUninitialize before the source-reader field
-  releases. This is a plausible cause, not a confirmed Windows crash stack.
-  Microsoft documents COM uninitialization as the final COM call.
+- Inspect logs_106864594790.zip and the Windows screenshot. User reports cached
+  Linux/Windows checks below three minutes, WASM 24 seconds and macOS just under
+  nine minutes. Windows UI/theme looks good; the selected camera cannot
+  enumerate modes because its helper exits with 0xc0000005.
+- Trace a concrete lifetime hazard in nokhwa-bindings-windows 0.4.6: its device
+  Drop calls MFShutdown/CoUninitialize before the source-reader field releases.
+  This is a plausible cause, not a confirmed Windows crash stack. Microsoft
+  documents COM uninitialization as the final COM call.
 - Use the existing low-level adapter with ManuallyDrop for one camera per
-  isolated helper. Defer native object cleanup to process exit, including
-  error paths; keep this intentional workaround out of the long-lived GUI.
-  Preserve exact mode selection, per-frame format/dimension/stride checks,
-  preview exposure behavior, cancellation and parent kill/reap timeouts.
+  isolated helper. Defer native object cleanup to process exit, including error
+  paths; keep this intentional workaround out of the long-lived GUI. Preserve
+  exact mode selection, per-frame format/dimension/stride checks, preview
+  exposure behavior, cancellation and parent kill/reap timeouts.
 - Add native open/enumeration stage messages on the bounded diagnostic pipe.
-  Extend the simulated failed-helper check to retain both stage messages.
-  Extend extracted Windows ZIP checks with a nonexistent camera index,
-  requiring a controlled error catalog without activating a real camera.
-- Gate decoder/warm-up helpers and imports to Linux/Windows or unit tests.
-  Mark the intentionally unreachable macOS camera-entry variant explicitly.
-  This addresses all four own-code warnings. Leave the third-party
-  block 0.1.6 future-compatibility warning visible and documented: cargo tree
-  traces it through wgpu-hal/metal, not our camera code. Do not fork/upgrade
-  the graphics stack merely to hide it.
-- TDD red: the new widget check rejects the old all-platform help note.
-  Share a compiled Ctrl/Cmd constant between note and shortcut labels;
-  preserve literal Ctrl geometry and accepted help/button behavior.
-- Validation: all 608 native/all-target tests, strict Clippy, WASM,
-  formatting and whitespace checks pass. Rerun the extended failed-helper
-  regression separately; both stage messages survive the simulated crash.
-  Windows/macOS targets and PowerShell are unavailable locally; do not
-  install tools. Existing CI must compile those platforms/check packaging.
-  Keep C#, dependency versions, cache keys and workflow files unchanged;
-  leave changes uncommitted and preserve the user's screenshot/log archive.
+  Extend the simulated failed-helper check to retain both stage messages. Extend
+  extracted Windows ZIP checks with a nonexistent camera index, requiring a
+  controlled error catalog without activating a real camera.
+- Gate decoder/warm-up helpers and imports to Linux/Windows or unit tests. Mark
+  the intentionally unreachable macOS camera-entry variant explicitly. This
+  addresses all four own-code warnings. Leave the third-party block 0.1.6
+  future-compatibility warning visible and documented: cargo tree traces it
+  through wgpu-hal/metal, not our camera code. Do not fork/upgrade the graphics
+  stack merely to hide it.
+- TDD red: the new widget check rejects the old all-platform help note. Share a
+  compiled Ctrl/Cmd constant between note and shortcut labels; preserve literal
+  Ctrl geometry and accepted help/button behavior.
+- Validation: all 608 native/all-target tests, strict Clippy, WASM, formatting
+  and whitespace checks pass. Rerun the extended failed-helper regression
+  separately; both stage messages survive the simulated crash. Windows/macOS
+  targets and PowerShell are unavailable locally; do not install tools. Existing
+  CI must compile those platforms/check packaging. Keep C#, dependency versions,
+  cache keys and workflow files unchanged; leave changes uncommitted and
+  preserve the user's screenshot/log archive.
 
 Windows retest after the next CI ZIP:
 
 1. Open Camera, select the real webcam and Refresh cameras. Check modes now
    populate, preview starts and manual capture/Use photo works. Try the
    disconnected virtual camera too; empty modes must remain recoverable.
-2. If it still fails, send the complete error, including the last Camera
-   stage line. That distinguishes device-open, enumeration and later failure
-   instead of attributing every 0xc0000005 to permissions or UI code.
+2. If it still fails, send the complete error, including the last Camera stage
+   line. That distinguishes device-open, enumeration and later failure instead
+   of attributing every 0xc0000005 to permissions or UI code.
 
 ### 2026-10-20 — Remove the redundant help modifier legend
 
-- Remove the Project/history/Geometry explanatory line. The table already
-  shows platform-correct Ctrl/Cmd shortcuts and literal Ctrl geometry keys.
-- TDD red: assert the rendered legend is absent while actual table cells
-  still contain the current platform's Save shortcut and Ctrl+drag. Keep
-  the same check across narrow/short/wide layouts and retain help lifecycle,
-  scrolling, backdrop isolation and rendering coverage.
+- Remove the Project/history/Geometry explanatory line. The table already shows
+  platform-correct Ctrl/Cmd shortcuts and literal Ctrl geometry keys.
+- TDD red: assert the rendered legend is absent while actual table cells still
+  contain the current platform's Save shortcut and Ctrl+drag. Keep the same
+  check across narrow/short/wide layouts and retain help lifecycle, scrolling,
+  backdrop isolation and rendering coverage.
 - Keep all other pending help/camera changes untouched and uncommitted.
-- Validation: all ten help tests, strict Clippy, WASM, formatting and
-  whitespace checks pass. Record Ctrl+. command-palette discovery as a
-  future polish item; do not add the binding yet.
+- Validation: all ten help tests, strict Clippy, WASM, formatting and whitespace
+  checks pass. Record Ctrl+. command-palette discovery as a future polish item;
+  do not add the binding yet.
 
 ### 2026-10-20 — Commit accepted help and camera follow-ups; pause
 
 - User requests a commit and pause. Include 7G's accepted help overlay and
-  platform-correct table without the redundant modifier legend, plus the
-  Windows camera lifetime/diagnostic workaround and CI warning follow-ups.
-- Commit unsigned; exclude the user's camera screenshot and CI log archive.
-  Keep Windows hardware verification open and upstream block warning visible.
+  platform-correct table without the redundant modifier legend, plus the Windows
+  camera lifetime/diagnostic workaround and CI warning follow-ups.
+- Commit unsigned; exclude the user's camera screenshot and CI log archive. Keep
+  Windows hardware verification open and upstream block warning visible.
 - Stop after committing. Resume at 7H1: main-editor header/page/navigation
   button styling. Keep 7H2 camera/correction styling and the Ctrl+. command
   palette separate; do not start those changes in this turn.
@@ -4111,77 +4108,77 @@ Windows retest after the next CI ZIP:
 ### 2026-10-20 — Restyle main-editor actions and simplify camera resolution
 
 - Continue 7H with a small main-editor styling checkpoint. Share native iced
-  action sizing, centered labels, 40-pixel height and six-pixel corners.
-  Use outlined neutral actions, accented Save/Camera and selected formatting
+  action sizing, centered labels, 40-pixel height and six-pixel corners. Use
+  outlined neutral actions, accented Save/Camera and selected formatting
   toggles, and red destructive actions. Preserve labels, guards and routing.
 - Apply this to header/rail/navigation/footer/property controls, help and
-  confirmations. Leave tool icons, swatches, camera/correction styling and
-  the command palette alone. No C#, dependency or document-format changes.
+  confirmations. Leave tool icons, swatches, camera/correction styling and the
+  command palette alone. No C#, dependency or document-format changes.
 - TDD red: native defaults fail equal-corner, centered-label and contrast
-  checks. Reuse iced's palette mixing and Color contrast calculation;
-  retain disabled dimming and readable enabled labels in both themes.
-- User confirms Windows camera works after the prior cleanup workaround.
-  Do not infer SP6 front/rear, sleep, touch or full capture/export acceptance.
-- Collapse camera choices to unique dimensions at the highest advertised
-  rate, preferring MJPG on ties. Keep initial up-to-full-HD resolution and
-  diagnostic format details. Preview and photo-review labels hide FPS and
-  encoding. Keep decoder validation and exact driver requests unchanged.
+  checks. Reuse iced's palette mixing and Color contrast calculation; retain
+  disabled dimming and readable enabled labels in both themes.
+- User confirms Windows camera works after the prior cleanup workaround. Do not
+  infer SP6 front/rear, sleep, touch or full capture/export acceptance.
+- Collapse camera choices to unique dimensions at the highest advertised rate,
+  preferring MJPG on ties. Keep initial up-to-full-HD resolution and diagnostic
+  format details. Preview and photo-review labels hide FPS and encoding. Keep
+  decoder validation and exact driver requests unchanged.
 - TDD red: the catalog check first fails because resolution selection is
-  missing. Add ranking/order/invalid-input coverage, lossless label checks
-  and a session regression for full HD with multiple rates and mode changes.
+  missing. Add ranking/order/invalid-input coverage, lossless label checks and a
+  session regression for full HD with multiple rates and mode changes.
 - Inspect software-rendered wide/narrow workspace snapshots in both themes.
   Catch a dark-theme destructive-label grayscale fallback; correct its palette
   contrast with native color mixing and require a red hue in the regression.
   Test actual button surfaces/corners at 1x/2x alongside existing footer/help
   mouse/touch routing, transaction guards and stable workspace layouts.
-- Validation: all 615 native/all-target tests, strict Clippy, WASM,
-  formatting and whitespace checks pass. Exhaustive camera replay stays
-  opt-in. No driver is opened in these tests; physical checks stay separate.
-- Keep main-editor appearance and simplified camera choices awaiting the
-  user's manual check. Leave changes uncommitted; do not start 7H2 yet.
+- Validation: all 615 native/all-target tests, strict Clippy, WASM, formatting
+  and whitespace checks pass. Exhaustive camera replay stays opt-in. No driver
+  is opened in these tests; physical checks stay separate.
+- Keep main-editor appearance and simplified camera choices awaiting the user's
+  manual check. Leave changes uncommitted; do not start 7H2 yet.
 
 ### 2026-10-20 — Accept 7H1 and fix Linux dark-to-light reset
 
-- User accepts the main-editor button styling and camera resolution list.
-  Keep camera/page-edit layout and control styling for 7H2; standard widgets
-  already inherit the system colors. Do not infer additional hardware tests.
+- User accepts the main-editor button styling and camera resolution list. Keep
+  camera/page-edit layout and control styling for 7H2; standard widgets already
+  inherit the system colors. Do not infer additional hardware tests.
 - Trace the Linux symptom to iced_winit 0.14.1: a portal reset to no preference
-  broadcasts a theme event but returns before updating the default window
-  theme. Explicit Light and Dark work; Dark -> None retains the dark default.
+  broadcasts a theme event but returns before updating the default window theme.
+  Explicit Light and Dark work; Dark -> None retains the dark default.
 - Subscribe through iced's existing system-theme API. Override only Linux's
-  no-preference case with iced's default theme, honoring ICED_THEME; clear
-  the override on other modes. Leave other platforms' native following alone.
-  Add no dependencies, platform polling or custom theme/settings machinery.
+  no-preference case with iced's default theme, honoring ICED_THEME; clear the
+  override on other modes. Leave other platforms' native following alone. Add no
+  dependencies, platform polling or custom theme/settings machinery.
 - Process theme notifications before modal/edit guards, without touching
-  document history, pending text, numeric drafts, focus or input epochs.
-  TDD red: both new regressions receive None instead of the expected Light
-  override. Green: repeated mode changes and help/page/camera guards pass.
-- Validation: all 617 native/all-target tests, strict Clippy, WASM,
-  formatting and whitespace checks pass. Both regressions also pass in a
-  separate process with ICED_THEME=Dracula. Exhaustive replay stays opt-in.
+  document history, pending text, numeric drafts, focus or input epochs. TDD
+  red: both new regressions receive None instead of the expected Light override.
+  Green: repeated mode changes and help/page/camera guards pass.
+- Validation: all 617 native/all-target tests, strict Clippy, WASM, formatting
+  and whitespace checks pass. Both regressions also pass in a separate process
+  with ICED_THEME=Dracula. Exhaustive replay stays opt-in.
 - Await one Linux desktop check: switch light -> dark -> light repeatedly,
-  including with help, camera or page edit open. Keep changes uncommitted;
-  do not start 7H2 before this small follow-up is verified.
+  including with help, camera or page edit open. Keep changes uncommitted; do
+  not start 7H2 before this small follow-up is verified.
 
 ### 2026-10-20 — Accept H1 theme switching; finish with H2
 
 - User confirms Linux theme switching works. Mark that follow-up accepted
-  alongside H1 and the simplified camera resolution picker. User requests H2
-  as today's last slice; do not proceed to the command palette or packaging.
+  alongside H1 and the simplified camera resolution picker. User requests H2 as
+  today's last slice; do not proceed to the command palette or packaging.
 - Reuse H1's centered, 40-pixel action targets and roles for camera/page-edit
-  actions and warning dismissal. Keep the 80-pixel circular Capture button
-  and 96-pixel countdown ring; center Capture independently of Use photo.
-  Change Mirror preview to a touch-sized, accented selected toggle.
+  actions and warning dismissal. Keep the 80-pixel circular Capture button and
+  96-pixel countdown ring; center Capture independently of Use photo. Change
+  Mirror preview to a touch-sized, accented selected toggle.
 - Group camera settings/errors in a bounded scrollable panel, stacking the
-  device/resolution fields in narrow windows. Keep preview separate, Cancel
-  at the upper right and Capture/Use photo reachable below the preview.
+  device/resolution fields in narrow windows. Keep preview separate, Cancel at
+  the upper right and Capture/Use photo reachable below the preview.
 - Group framing, color and tone options plus corrected preview in a themed,
-  scrollable panel. Below 760 px move it beneath the source image; leave
-  Cancel immediately before Accept. Reserve scrollbar space outside labels.
-- Keep correction/camera controllers, crop geometry, decoders, tracking,
-  preview upload, mirroring, exposure and save/history behavior unchanged.
-  Extract only the original canvas/settings view sections to keep functions
-  small. Add no dependencies, icon catalog or custom widgets.
+  scrollable panel. Below 760 px move it beneath the source image; leave Cancel
+  immediately before Accept. Reserve scrollbar space outside labels.
+- Keep correction/camera controllers, crop geometry, decoders, tracking, preview
+  upload, mirroring, exposure and save/history behavior unchanged. Extract only
+  the original canvas/settings view sections to keep functions small. Add no
+  dependencies, icon catalog or custom widgets.
 - TDD red: camera lacks the touch-sized mirror toggle; narrow page editing
   squeezes the source beside a fixed-width sidebar. Green: layout and
   centered-target checks pass across wide/narrow/short viewports.
@@ -4191,72 +4188,72 @@ Windows retest after the next CI ZIP:
   screens in light/dark at 1x/2x; inspect software snapshots. Open no drivers.
 - Validation: all 623 native/all-target tests pass; repeat all 309 GUI tests
   after the final view cleanup. Strict Clippy, WASM, formatting and whitespace
-  checks pass. Exhaustive camera replay remains opt-in. Hardware capture,
-  touch and DPI checks are not inferred from software event/render tests.
+  checks pass. Exhaustive camera replay remains opt-in. Hardware capture, touch
+  and DPI checks are not inferred from software event/render tests.
 - Await the focused H2 manual check, then stop for today. Keep all changes
   uncommitted and preserve the user's already-staged H1 work.
 
 ### 2026-10-20 — Implement the approved adaptive camera layout
 
-- User approves the refined mockups, with status always over the image and
-  a conventional solid/dashed reflected-triangle Mirror icon. Do not
-  regenerate mockups or proceed beyond H2 today.
-- Replace the first H2 camera layout: fit the full rotated preview first;
-  use existing side/bottom letterbox space for a narrow six-action dock,
-  otherwise overlay it at bottom center. Use two rows in small windows.
-  Never reduce image size to create room or follow detected-paper motion.
-- Give every action a 40-pixel target. Keep Capture circular with its
-  countdown inside that footprint; swap to Use photo and Retake in the same
-  slots for review. Retain preview/review mirroring until Use photo.
+- User approves the refined mockups, with status always over the image and a
+  conventional solid/dashed reflected-triangle Mirror icon. Do not regenerate
+  mockups or proceed beyond H2 today.
+- Replace the first H2 camera layout: fit the full rotated preview first; use
+  existing side/bottom letterbox space for a narrow six-action dock, otherwise
+  overlay it at bottom center. Use two rows in small windows. Never reduce image
+  size to create room or follow detected-paper motion.
+- Give every action a 40-pixel target. Keep Capture circular with its countdown
+  inside that footprint; swap to Use photo and Retake in the same slots for
+  review. Retain preview/review mirroring until Use photo.
 - Keep quick camera cycling at the image's upper right. Put named camera,
   resolution and Refresh in a bounded scrollable popover. Block underlying
   actions while open; outside click/tap and Escape close settings first.
   Preserve the frozen/saving guards and close settings on capture.
-- Put status/error text in a translucent rounded lozenge over the image,
-  bottom center or just above the floating dock. Long errors scroll; keep
-  platform permission guidance available in settings. Update camera docs
-  and the shortcut reference for the settings-first Escape behavior.
-- Keep layout, controls and camera-only vector paths together under the
-  camera view. Reuse native iced widgets/shared action styles; add no
-  dependency, custom widget framework, image asset or camera/backend change.
+- Put status/error text in a translucent rounded lozenge over the image, bottom
+  center or just above the floating dock. Long errors scroll; keep platform
+  permission guidance available in settings. Update camera docs and the shortcut
+  reference for the settings-first Escape behavior.
+- Keep layout, controls and camera-only vector paths together under the camera
+  view. Reuse native iced widgets/shared action styles; add no dependency,
+  custom widget framework, image asset or camera/backend change.
 - TDD red: old Capture fails the equal-size regression. Test adaptive image,
   dock and notice bounds, rotation, non-overlapping targets, disabled states,
-  quick switching, popover/backdrop and mouse/touch routing. A held Pause
-  press during auto capture initially triggers Retake; give the review action
-  a distinct native subtree and keep a press-transition regression for both
-  mouse and touch. Test the Mirror glyph's filled/hollow interiors and axis.
+  quick switching, popover/backdrop and mouse/touch routing. A held Pause press
+  during auto capture initially triggers Retake; give the review action a
+  distinct native subtree and keep a press-transition regression for both mouse
+  and touch. Test the Mirror glyph's filled/hollow interiors and axis.
 - Render light/dark, overlay/side/bottom layouts at 1x/2x with software only.
-  Inspect the snapshots; assert translucent notice pixels remain over the
-  image. No physical camera, sleep, touchscreen or Windows check is inferred.
-- Validation: all 629 native/all-target tests, strict Clippy, WASM,
-  formatting and whitespace checks pass. Full recorded replay stays opt-in.
+  Inspect the snapshots; assert translucent notice pixels remain over the image.
+  No physical camera, sleep, touchscreen or Windows check is inferred.
+- Validation: all 629 native/all-target tests, strict Clippy, WASM, formatting
+  and whitespace checks pass. Full recorded replay stays opt-in.
 - Await the focused H2 manual check: resize the camera screen, inspect
-  notices/countdown, settings dismissal/quick switching, capture/review/
-  retake and mirroring; retain the pending page-correction check above.
-  Stop for today. Leave everything uncommitted and the staged H1 work intact.
+  notices/countdown, settings dismissal/quick switching, capture/review/ retake
+  and mirroring; retain the pending page-correction check above. Stop for today.
+  Leave everything uncommitted and the staged H1 work intact.
 
 ### 2026-10-20 — Accept camera layout; refine three glyphs
 
 - User likes the layout. Keep every control position, target size, capture
   behavior and adaptive rule unchanged; limit this follow-up to glyphs.
-- Replace the spoke-like Settings symbol with a connected eight-tooth gear
-  and center hole. Give Retake a back/retry arrow, distinct from Rotate.
+- Replace the spoke-like Settings symbol with a connected eight-tooth gear and
+  center hole. Give Retake a back/retry arrow, distinct from Rotate.
 - Flip Mirror triangles so their tall vertical edges face the center axis.
   Enlarge them within the same glyph/button frame; retain solid/dashed
   treatments and selected/disabled theme colors.
-- TDD red: new inward-edge/height and gear-tooth checks fail; Rotate and
-  Retake render identically. All three regressions pass after the changes.
-- Validation: all 631 native/all-target tests, strict Clippy, WASM,
-  formatting and whitespace checks pass. Inspect actual software-rendered
-  controls in the existing light/dark, 1x/2x camera snapshots. Open no camera.
+- TDD red: new inward-edge/height and gear-tooth checks fail; Rotate and Retake
+  render identically. All three regressions pass after the changes.
+- Validation: all 631 native/all-target tests, strict Clippy, WASM, formatting
+  and whitespace checks pass. Inspect actual software-rendered controls in the
+  existing light/dark, 1x/2x camera snapshots. Open no camera.
 - Record layout acceptance separately from remaining H2 functional/hardware
   checks. Leave pending work uncommitted and staged changes intact; stop.
 
 ### 2026-10-20 — Commit accepted action and camera UI polish
 
-- User accepts the final glyph refinements and requests a commit. Include
-  the staged H1 action styles, resolution picker and Linux theme follow-up,
-  plus H2 camera/page-correction layouts, icons, tests and documentation.
+- User accepts the final glyph refinements and requests a commit. Include the
+  staged H1 action styles, resolution picker and Linux theme follow-up, plus H2
+  camera/page-correction layouts, icons, tests and documentation.
 - Retain the 631-test, strict Clippy, WASM, formatting and whitespace results.
   Do not infer unreported physical touch, SP6, sleep or high-DPI checks.
 - Commit unsigned for the owner's later signing. Exclude ignored mockups,
@@ -4266,9 +4263,9 @@ Windows retest after the next CI ZIP:
 
 - User accepts the redesigned mockup. Replace wide-screen split bars with one
   56-pixel header; keep the narrow two-row tool/options strip stable.
-- Remove the page-number picker. Put page actions in compact icon rows and
-  move earlier/later in the page menu; keep New/Open/Save as in the project
-  menu. Show status in the header and warnings above the editor.
+- Remove the page-number picker. Put page actions in compact icon rows and move
+  earlier/later in the page menu; keep New/Open/Save as in the project menu.
+  Show status in the header and warnings above the editor.
 - Add vector action icons, compact overflow and zoom magnifiers. Keep Reset
   angle with annotation controls. Prevent the page menu from changing rail
   height during a drag; retain the floating-card return animation.
@@ -4278,16 +4275,16 @@ Windows retest after the next CI ZIP:
 
 ### 2026-10-21 — Commit UI checkpoint; implement command palette
 
-- Add the wide-screen "To 0°" label and align its control with To front.
-  Test the alignment and inspect the rendered sidebar. Commit the accepted
-  UI work as `c173f5f`; leave the user's screenshot untracked and do not push.
-- Keep F1 as read-only help. Add a separate searchable command palette to
-  the main editor, available from a header icon, compact More menu and
-  Ctrl+. or Cmd+.. Route commands through existing messages and guards.
+- Add the wide-screen "To 0°" label and align its control with To front. Test
+  the alignment and inspect the rendered sidebar. Commit the accepted UI work as
+  `c173f5f`; leave the user's screenshot untracked and do not push.
+- Keep F1 as read-only help. Add a separate searchable command palette to the
+  main editor, available from a header icon, compact More menu and Ctrl+. or
+  Cmd+.. Route commands through existing messages and guards.
 - Keep disabled actions visible but inert. Support pointer/touch selection,
   arrow navigation, Enter and Escape. Preserve pending text when closing.
-- Let F1 switch directly from the palette to shortcut help, matching the
-  palette footer hint; test the route and modal transition.
+- Let F1 switch directly from the palette to shortcut help, matching the palette
+  footer hint; test the route and modal transition.
 - Test filtering, keyboard routing, mouse/touch dispatch and both theme/window
   layouts. All regular tests, strict Clippy, WASM, formatting and whitespace
   checks pass. Keep manual host verification open; do not infer it from renders.
@@ -4301,8 +4298,8 @@ Windows retest after the next CI ZIP:
   chevron while its menu is open.
 - Validate all native/all-target tests, strict Clippy, WASM compilation,
   formatting and whitespace checks before committing the accepted work.
-- Shift the next implementation checkpoint to Linux delivery and docs;
-  complete the Windows portable and hardware gate with the user's device.
+- Shift the next implementation checkpoint to Linux delivery and docs; complete
+  the Windows portable and hardware gate with the user's device.
 
 ### 2026-10-22 — SP6 touch/sidebar follow-up
 
@@ -4310,26 +4307,49 @@ Windows retest after the next CI ZIP:
   plus SP6 camera discovery, both cameras, resolution choice, front-camera
   mirroring and framing. Save/export, touch gestures and annotations remain
   untested; high-DPI and sleep checks remain open.
-- A quick sidebar tap only shows hover/tooltip, including a gray ring instead
-  of the blue selected-color ring. Treat selection as unverified on SP6 until
-  the touch-release fix is retested on hardware.
+- A quick sidebar tap only shows hover/tooltip, including a gray ring instead of
+  the blue selected-color ring. Treat selection as unverified on SP6 until the
+  touch-release fix is retested on hardware.
 - Long project names overflow the project menu button. Clip the label while
   retaining the chevron and add a render regression check.
 - Forward each touch event's position to sidebar controls in wide and narrow
   layouts. Test stale and unavailable mouse cursors; keep SP6 retest open.
-- Four focused GUI regressions, 32 library tests, strict Clippy, formatting
-  and the all-feature WASM check pass. The container has no default system
-  font, so grouped GUI render tests fail during font shaping; check those in
-  host CI rather than treating that as a touch regression.
+- Four focused GUI regressions, 32 library tests, strict Clippy, formatting and
+  the all-feature WASM check pass. The container has no default system font, so
+  grouped GUI render tests fail during font shaping; check those in host CI
+  rather than treating that as a touch regression.
+
+### 2026-10-22 — Commit touch fixes; prepare Linux archive
+
+- Commit the staged SP6 touch routing, project-label clipping, regressions, plan
+  updates and user's mise scanner entry as `364d103`.
+- Add an independent Linux x64 release artifact with bundled instructions,
+  licenses, sample form and source revision. Keep Windows `rust-dev` separate.
+- Check extracted files, linked libraries and camera-helper startup without a
+  graphical session. Run the same package script locally against an existing
+  debug executable; syntax, extraction and startup checks pass.
+- Document dynamic Linux requirements and retain a real desktop check for file
+  open/save/export, help, diagnostics and camera. CI release build and host
+  interaction remain unverified until the workflow runs.
+
+### 2026-10-22 — Repair pre-job workflow validation
+
+- The pushed Rust workflow failed before allocating any jobs. Its new Linux
+  job used `runner.temp` in job-level `env`, where that context is unavailable.
+- Set `CARGO_TARGET_DIR` from a runner step instead. Add a regression check
+  that fails on the invalid job-level expression; all six cache tests pass.
+- CI remains unverified until this fix is pushed. Do not treat the first failed
+  run as a Linux build or packaging result.
 
 ## References
 
 - [iced 0.14 documentation](https://docs.rs/iced/0.14.0/iced/)
-- [iced 0.14 features and
-  MSRV](https://github.com/iced-rs/iced/blob/0.14.0/Cargo.toml)
+- [iced 0.14 features and MSRV](https://github.com/iced-rs/iced/blob/0.14.0/Cargo.toml)
 - [Hayro PDF renderer](https://github.com/LaurenzV/hayro)
 - Existing behavior: [user guide](../docs/USER_GUIDE.md).
 - Existing checks and fixtures: `../src/FastFill.Checks/`, `../tests/`.
 - Windows camera lifetime investigation:
   [nokhwa bindings source](https://github.com/l1npengtul/nokhwa/blob/senpai/nokhwa-bindings-windows/src/lib.rs),
   [COM shutdown order](https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-couninitialize).
+
+[canny-nms-reference]: https://github.com/opencv/opencv/blob/4.11.0/modules/imgproc/src/canny.cpp#L585

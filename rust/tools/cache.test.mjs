@@ -11,6 +11,7 @@ for (const [job, target] of [
   ["native", "rust/target"],
   ["wasm", "rust/target"],
   ["windows-portable", "${{ runner.temp }}/fastfill-rust-target"],
+  ["linux-portable", "${{ runner.temp }}/fastfill-rust-linux-target"],
 ]) {
   test(`${job}: restore compiled dependencies before Cargo runs`, () => {
     const block = workflow.split(`\n  ${job}:\n`)[1]?.split(/\n  \w/)[0];
@@ -48,4 +49,15 @@ test("CI caches omit debug symbols and incremental compiler state", () => {
   }
   assert.ok(!workflow.includes("CARGO_PROFILE_TEST_DEBUG_ASSERTIONS"),
     "Do not disable test assertions");
+});
+
+test("Linux target path is set after runner assignment", () => {
+  const block = workflow.split("\n  linux-portable:\n")[1]
+    ?.split(/\n  \w/)[0];
+  assert.ok(block, "Find Linux package job");
+  assert.doesNotMatch(block.split("\n    steps:")[0], /\$\{\{\s*runner\./,
+    "Job-level env cannot use runner context");
+  assert.match(block,
+    /echo "CARGO_TARGET_DIR=\$RUNNER_TEMP\/fastfill-rust-linux-target"/,
+    "Configure build output after the runner starts");
 });

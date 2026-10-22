@@ -1,0 +1,21 @@
+FastFill Rust prototype - Linux x64
+
+Extract this archive anywhere. Run ./FastFill-Rust from the extracted folder.
+No Rust toolchain or compilation is needed. This is an experimental build;
+the production C#/WinUI application is unchanged.
+
+Built on Ubuntu 24.04. Unlike the Windows ZIP, this binary is not
+fully static: it needs a compatible glibc-based x86-64 Linux system and a
+working graphical session (X11 or Wayland). Graphics drivers are provided by
+your system. File dialogs use the desktop's XDG portal; install or enable
+xdg-desktop-portal and an appropriate desktop backend if dialogs do not open.
+Camera capture needs a working V4L2 device and permission to access it.
+
+Open an image, PDF or .docscan from inside the app. Save a copy of valuable
+projects while testing. Print sample-form.pdf at actual size for camera and
+form checks. Use F1 or the Shortcuts button for in-app controls. Errors and
+progress appear in the app status area. For startup diagnostics, launch it
+from a terminal and keep the output; no separate log file is required.
+See BUILD.txt for the exact source revision and workflow run.
+
+Documentation: https://github.com/dhanak/fastfill/blob/master/rust/README.md
