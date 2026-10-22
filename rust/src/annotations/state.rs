@@ -127,9 +127,22 @@ impl Annotations {
         let Some(snapshot) = self.undo.pop() else {
             return false;
         };
-        let current = self.snapshot();
+        self.history_bytes -= snapshot.bytes();
+        let current = (Snapshot::bytes_for(&self.content, self.selected.len())
+            <= super::HISTORY_BYTES_LIMIT)
+            .then(|| self.snapshot());
         self.restore(snapshot);
-        self.redo.push(current);
+        if let Some(current) = current {
+            self.history_bytes += current.bytes();
+            self.redo.push(current);
+        } else {
+            self.history_bytes -= self
+                .redo
+                .drain(..)
+                .map(|snapshot| snapshot.bytes())
+                .sum::<usize>();
+        }
+        self.trim_history(0);
         true
     }
 
@@ -140,9 +153,22 @@ impl Annotations {
         let Some(snapshot) = self.redo.pop() else {
             return false;
         };
-        let current = self.snapshot();
+        self.history_bytes -= snapshot.bytes();
+        let current = (Snapshot::bytes_for(&self.content, self.selected.len())
+            <= super::HISTORY_BYTES_LIMIT)
+            .then(|| self.snapshot());
         self.restore(snapshot);
-        self.undo.push(current);
+        if let Some(current) = current {
+            self.history_bytes += current.bytes();
+            self.undo.push(current);
+        } else {
+            self.history_bytes -= self
+                .undo
+                .drain(..)
+                .map(|snapshot| snapshot.bytes())
+                .sum::<usize>();
+        }
+        self.trim_history(0);
         true
     }
 
@@ -156,6 +182,7 @@ impl Annotations {
             return false;
         };
         if self.has_pending_edit()
+            || self.content.len() >= super::MAXIMUM_ANNOTATIONS_PER_PAGE
             || !valid(point)
             || !page.width.is_finite()
             || !page.height.is_finite()
@@ -292,6 +319,12 @@ impl Annotations {
         &mut self,
         updates: Vec<(Option<usize>, OwnedAnnotation)>,
     ) -> bool {
+        if self.content.len()
+            + updates.iter().filter(|(index, _)| index.is_none()).count()
+            > super::MAXIMUM_ANNOTATIONS_PER_PAGE
+        {
+            return false;
+        }
         if !updates.iter().any(|(index, annotation)| {
             index.is_none_or(|index| self.content[index] != *annotation)
         }) {
@@ -324,10 +357,43 @@ impl Annotations {
     }
 
     pub(super) fn record_change(&mut self) {
-        self.undo.push(self.snapshot());
-        self.redo.clear();
+        self.history_bytes -= self
+            .redo
+            .drain(..)
+            .map(|snapshot| snapshot.bytes())
+            .sum::<usize>();
+        if Snapshot::bytes_for(&self.content, self.selected.len())
+            <= super::HISTORY_BYTES_LIMIT
+        {
+            let snapshot = self.snapshot();
+            self.history_bytes += snapshot.bytes();
+            self.undo.push(snapshot);
+            self.trim_history(0);
+        } else {
+            self.undo.clear();
+            self.history_bytes = 0;
+        }
         self.next_revision += 1;
         self.revision = self.next_revision;
+    }
+
+    /// Drop oldest reachable states first; current content is never removed.
+    pub fn trim_history(&mut self, extra_bytes: usize) -> bool {
+        let mut dropped = false;
+        while self.history_bytes.saturating_add(extra_bytes)
+            > super::HISTORY_BYTES_LIMIT
+        {
+            let snapshot = if !self.undo.is_empty() {
+                self.undo.remove(0)
+            } else if !self.redo.is_empty() {
+                self.redo.remove(0)
+            } else {
+                break;
+            };
+            self.history_bytes -= snapshot.bytes();
+            dropped = true;
+        }
+        dropped
     }
 }
 
@@ -339,4 +405,61 @@ fn valid_finished_annotation(annotation: &ShapeAnnotation) -> bool {
         && valid_annotation_size(annotation)
         && bounds.x + bounds.width > 0.0
         && bounds.y + bounds.height > 0.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn history_trimming_drops_oldest_and_keeps_current_state() {
+        let mut annotations = Annotations::default();
+        for _ in 0..3 {
+            annotations.record_change();
+        }
+        let newest = annotations.undo.last().unwrap().bytes();
+        assert!(
+            annotations
+                .trim_history(super::super::HISTORY_BYTES_LIMIT - newest)
+        );
+        assert_eq!(annotations.undo.len(), 1);
+        assert_eq!(annotations.history_bytes, newest);
+        assert!(annotations.undo());
+        assert!(!annotations.undo());
+        assert!(annotations.redo());
+    }
+
+    #[test]
+    fn full_page_rejects_new_annotations_but_allows_existing_edits() {
+        let mut annotations = Annotations::default();
+        let annotation = OwnedAnnotation::Text(super::super::TextAnnotation {
+            id: uuid::Uuid::new_v4(),
+            text: "x".into(),
+            bounds: Rect::new(10.0, 10.0, 20.0, 20.0),
+            format: super::super::TextFormat::default(),
+            rotation: 0.0,
+        });
+        annotations.content = vec![
+            annotation.clone();
+            super::super::MAXIMUM_ANNOTATIONS_PER_PAGE
+        ];
+        let page = Size::new(800.0, 1_100.0);
+        annotations.set_tool(Tool::Text);
+        assert!(!annotations.begin_text(Point::new(20.0, 20.0), page, 1.0));
+        assert!(
+            annotations.begin_text_edit(Point::new(20.0, 20.0), page, 1.0,)
+        );
+        annotations.cancel();
+        annotations.set_tool(Tool::Pen);
+        assert!(!annotations.begin(
+            Pointer::Mouse,
+            Point::new(20.0, 20.0),
+            page
+        ));
+        assert!(!annotations.commit_content(vec![(None, annotation)]));
+        assert_eq!(
+            annotations.len(),
+            super::super::MAXIMUM_ANNOTATIONS_PER_PAGE
+        );
+    }
 }

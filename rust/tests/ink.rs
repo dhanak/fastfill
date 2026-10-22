@@ -1,6 +1,6 @@
 use fastfill_rust::annotations::{
     AnnotationColor, AnnotationGeometry, Annotations, DragModifiers, InkKind,
-    Pointer, Tool,
+    MAXIMUM_INK_POINTS, Pointer, Tool,
 };
 use fastfill_rust::geometry::{Point, Size};
 
@@ -35,6 +35,20 @@ fn pen_collects_distinct_samples_from_its_pointer() {
             Point::new(160.0, 140.0),
         ],
     );
+}
+
+#[test]
+fn pen_samples_stop_at_the_persistable_limit() {
+    let mut annotations = Annotations::default();
+    annotations.set_tool(Tool::Pen);
+    assert!(annotations.begin(TOUCH, Point::new(1.0, 1.0), PAGE));
+    for index in 0..MAXIMUM_INK_POINTS + 5 {
+        let x = f32::from(u16::try_from(index % 700).unwrap()) + 10.0;
+        let y = f32::from(u16::try_from(index / 700).unwrap()) + 10.0;
+        annotations.drag(TOUCH, Point::new(x, y), false);
+    }
+    assert!(annotations.finish(TOUCH, Point::new(20.0, 20.0), false));
+    assert_eq!(ink_points(&annotations).1.len(), MAXIMUM_INK_POINTS);
 }
 
 #[test]

@@ -19,6 +19,7 @@ pub(crate) struct ImportedImage {
 
 pub(crate) async fn pick_image(
     directory: Option<PathBuf>,
+    pixel_budget: u64,
 ) -> Result<Option<ImportedImage>, String> {
     let mut dialog = rfd::AsyncFileDialog::new()
         .set_title("Open image")
@@ -54,7 +55,25 @@ pub(crate) async fn pick_image(
     }
 
     let name = file.file_name();
+    #[cfg(not(target_arch = "wasm32"))]
+    let bytes = {
+        use std::io::Read;
+        let mut reader = std::fs::File::open(file.path())
+            .map_err(|error| format!("Could not read image: {error}"))?
+            .take(MAX_IMAGE_BYTES as u64 + 1);
+        let mut bytes = Vec::new();
+        reader
+            .read_to_end(&mut bytes)
+            .map_err(|error| format!("Could not read image: {error}"))?;
+        bytes
+    };
+    #[cfg(target_arch = "wasm32")]
     let bytes = file.read().await;
+    let info = fastfill_rust::image_input::inspect_image(&bytes)
+        .map_err(|error| error.to_string())?;
+    if u64::from(info.width) * u64::from(info.height) > pixel_budget {
+        return Err("Project images exceed the 200 MP memory limit.".into());
+    }
     ImportedImage::from_bytes(name, bytes, directory).map(Some)
 }
 

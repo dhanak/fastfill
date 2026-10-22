@@ -4,7 +4,8 @@ use super::project::Operation;
 use super::{FastFill, ImagePicker, Message};
 use crate::picker::ImportedImage;
 use fastfill_rust::pdf_import::{
-    MAX_PDF_BYTES, PdfStage, import_pdf_with_progress, validate_pdf_length,
+    MAX_PDF_BYTES, PdfStage, import_pdf_with_progress_limited,
+    validate_pdf_length,
 };
 use iced::Task;
 #[cfg(not(target_arch = "wasm32"))]
@@ -119,7 +120,10 @@ fn begin(state: &mut FastFill) -> Task<Message> {
     };
     state.status = "Selecting a PDF…".into();
     state.status_is_error = false;
-    import_task(id, available, cancel, state.image_directory.clone())
+    let budget = state
+        .pages
+        .remaining_pixel_budget(state.pages.empty_starter());
+    import_task(id, available, budget, cancel, state.image_directory.clone())
 }
 
 fn finish(
@@ -142,8 +146,7 @@ fn finish(
         }
         Ok(Some(_)) => {
             state.status =
-                "PDF batch is empty or exceeds the 20-page project limit."
-                    .into();
+                "PDF batch exceeds the 20-page or 200 MP project limit.".into();
             state.status_is_error = true;
         }
         Ok(None) => {
@@ -160,6 +163,7 @@ fn finish(
 fn import_task(
     id: u64,
     available: usize,
+    pixel_budget: u64,
     cancel: Arc<AtomicBool>,
     directory: Option<PathBuf>,
 ) -> Task<Message> {
@@ -175,6 +179,7 @@ fn import_task(
                     let result = iced::futures::executor::block_on(pick_pdf(
                         directory,
                         available,
+                        pixel_budget,
                         cancel,
                         id,
                         completion.clone(),
@@ -200,7 +205,14 @@ fn import_task(
         Task::batch([
             Task::run(receiver, std::convert::identity),
             Task::perform(
-                pick_pdf(directory, available, cancel, id, sender),
+                pick_pdf(
+                    directory,
+                    available,
+                    pixel_budget,
+                    cancel,
+                    id,
+                    sender,
+                ),
                 move |result| Message::PdfImported(id, result),
             ),
         ])
@@ -210,6 +222,7 @@ fn import_task(
 async fn pick_pdf(
     directory: Option<PathBuf>,
     available: usize,
+    pixel_budget: u64,
     cancel: Arc<AtomicBool>,
     id: u64,
     progress: mpsc::UnboundedSender<Message>,
@@ -251,8 +264,11 @@ async fn pick_pdf(
     if cancel.load(Ordering::Relaxed) {
         return Ok(None);
     }
-    let pages =
-        import_pdf_with_progress(bytes, available, |done, total, stage| {
+    let pages = import_pdf_with_progress_limited(
+        bytes,
+        available,
+        pixel_budget,
+        |done, total, stage| {
             let message = if stage == PdfStage::Ready {
                 Message::PdfProgress(id, done, total)
             } else {
@@ -260,8 +276,9 @@ async fn pick_pdf(
             };
             !cancel.load(Ordering::Relaxed)
                 && progress.unbounded_send(message).is_ok()
-        })
-        .map_err(|error| error.to_string())?;
+        },
+    )
+    .map_err(|error| error.to_string())?;
     let images = pages
         .into_iter()
         .enumerate()

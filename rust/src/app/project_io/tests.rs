@@ -29,6 +29,9 @@ fn fixture() -> (LoadedProject, RgbaImage) {
     for index in 1..4 {
         let mut page = original.clone();
         page.id = uuid::Uuid::new_v4();
+        page.source_asset = format!("page-{index}.png");
+        let source = archive.assets[&original.source_asset].clone();
+        archive.assets.insert(page.source_asset.clone(), source);
         page.rotation_quarter_turns = index;
         page.filter.mode = match index {
             1 => PageFilterMode::Grayscale,
@@ -58,7 +61,7 @@ fn reopen(archive: &LoadedProject) -> OpenedProject {
 }
 
 #[test]
-fn shared_sources_stage_each_correction_without_changing_saved_pixels() {
+fn distinct_sources_stage_each_correction_without_changing_saved_pixels() {
     let (archive, source) = fixture();
     let opened = reopen(&archive);
     assert_eq!(opened.project, archive.project);

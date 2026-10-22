@@ -2,11 +2,12 @@ use super::{FastFill, ImagePicker, Message, PickPurpose};
 use crate::picker::ImportedImage;
 use crate::picker::pick_image;
 use fastfill_rust::annotations::Annotations;
+use fastfill_rust::correction::{PageCorrection, corrected_dimensions};
 use fastfill_rust::geometry::Size;
 use fastfill_rust::image_input::ImageFormatKind;
 use fastfill_rust::project::{
-    CropQuad, PageFilterSettings, ProjectPage, decode_editor_page,
-    editor_page_size,
+    CropQuad, MAXIMUM_PROJECT_PIXELS, PageFilterSettings, ProjectPage,
+    decode_editor_page, editor_page_size,
 };
 use iced::Task;
 use std::collections::BTreeMap;
@@ -149,7 +150,7 @@ impl Pages {
         self.items.len() < MAXIMUM_PAGES
     }
 
-    fn empty_starter(&self) -> bool {
+    pub(super) fn empty_starter(&self) -> bool {
         self.items.len() == 1
             && self.current().image.is_none()
             && self.current().annotations.is_empty()
@@ -159,8 +160,61 @@ impl Pages {
         MAXIMUM_PAGES - self.len() + usize::from(self.empty_starter())
     }
 
+    fn pixel_totals(&self, excluding_current: bool) -> (u64, u64) {
+        self.items
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !excluding_current || *index != self.active)
+            .fold((0, 0), |(source, display), (_, page)| {
+                let metadata = &page.metadata;
+                let width = u32::try_from(metadata.source_pixel_width).unwrap();
+                let height =
+                    u32::try_from(metadata.source_pixel_height).unwrap();
+                let shown = corrected_dimensions(
+                    width,
+                    height,
+                    PageCorrection::from(metadata),
+                )
+                .expect("validated page correction");
+                (
+                    source + u64::from(width) * u64::from(height),
+                    display + u64::from(shown.0) * u64::from(shown.1),
+                )
+            })
+    }
+
+    fn fits_images(
+        &self,
+        images: &[ImportedImage],
+        replacing_current: bool,
+    ) -> bool {
+        let added = images
+            .iter()
+            .map(|image| {
+                u64::from(image.info.width) * u64::from(image.info.height)
+            })
+            .sum::<u64>();
+        added <= self.remaining_pixel_budget(replacing_current)
+    }
+
+    pub(super) fn remaining_pixel_budget(
+        &self,
+        replacing_current: bool,
+    ) -> u64 {
+        let (source, display) = self.pixel_totals(replacing_current);
+        MAXIMUM_PROJECT_PIXELS.saturating_sub(source.max(display))
+    }
+
+    pub(super) fn fits_correction(&self, width: u32, height: u32) -> bool {
+        let (_, display) = self.pixel_totals(true);
+        display + u64::from(width) * u64::from(height) <= MAXIMUM_PROJECT_PIXELS
+    }
+
     pub(super) fn import_images(&mut self, images: &[ImportedImage]) -> bool {
-        if images.is_empty() || images.len() > self.pdf_capacity() {
+        if images.is_empty()
+            || images.len() > self.pdf_capacity()
+            || !self.fits_images(images, self.empty_starter())
+        {
             return false;
         }
         let settings = self.current().annotations.settings();
@@ -182,12 +236,14 @@ impl Pages {
     }
 
     pub(super) fn add_image(&mut self, image: ImportedImage) -> bool {
-        if !self.can_add() {
+        if !self.can_add()
+            || !self
+                .fits_images(std::slice::from_ref(&image), self.empty_starter())
+        {
             return false;
         }
         if self.empty_starter() {
-            self.replace_image(image);
-            return true;
+            return self.replace_image(image);
         }
 
         let settings = self.current().annotations.settings();
@@ -198,11 +254,15 @@ impl Pages {
         true
     }
 
-    pub(super) fn replace_image(&mut self, image: ImportedImage) {
+    pub(super) fn replace_image(&mut self, image: ImportedImage) -> bool {
+        if !self.fits_images(std::slice::from_ref(&image), true) {
+            return false;
+        }
         let settings = self.current().annotations.settings();
         let mut page = EditorPage::from_image(image);
         page.annotations.apply_settings(&settings);
         self.items[self.active] = page;
+        true
     }
 
     pub(super) fn select(&mut self, index: usize) -> bool {
@@ -270,9 +330,13 @@ impl FastFill {
         self.image_picker = ImagePicker::Picking(purpose);
         self.status = "Selecting an image…".into();
         self.status_is_error = false;
-        Task::perform(pick_image(self.image_directory.clone()), move |result| {
-            Message::ImagePicked(purpose, result)
-        })
+        let replacing =
+            purpose == PickPurpose::Replace || self.pages.empty_starter();
+        let budget = self.pages.remaining_pixel_budget(replacing);
+        Task::perform(
+            pick_image(self.image_directory.clone(), budget),
+            move |result| Message::ImagePicked(purpose, result),
+        )
     }
 
     fn image_picked(
@@ -295,10 +359,7 @@ impl FastFill {
                 );
                 let changed = match purpose {
                     PickPurpose::Add => self.pages.add_image(image),
-                    PickPurpose::Replace => {
-                        self.pages.replace_image(image);
-                        true
-                    }
+                    PickPurpose::Replace => self.pages.replace_image(image),
                 };
                 if changed {
                     self.navigation.fit();
@@ -307,7 +368,15 @@ impl FastFill {
                     self.input_epoch = self.input_epoch.wrapping_add(1);
                     self.status_is_error = false;
                 } else {
-                    self.page_limit_error();
+                    self.status = if purpose == PickPurpose::Add
+                        && !self.pages.can_add()
+                    {
+                        "A project may contain at most 20 pages."
+                    } else {
+                        "Project images exceed the 200 MP memory limit."
+                    }
+                    .into();
+                    self.status_is_error = true;
                 }
             }
             Ok(None) => {

@@ -239,6 +239,26 @@ fn page_limit_and_canceled_adds_keep_the_current_document() {
 }
 
 #[test]
+fn project_pixel_limit_rejects_add_and_pdf_batch_without_changes() {
+    let mut pages = Pages::default();
+    let mut large = test_image("large");
+    large.info.width = 10_000;
+    large.info.height = 5_000;
+    assert!(!pages.import_images(&vec![large.clone(); 5]));
+    assert_eq!(pages.len(), 1);
+    assert!(pages.current().image.is_none());
+
+    for _ in 0..4 {
+        assert!(pages.add_image(large.clone()));
+    }
+    assert_eq!(pages.len(), 4);
+    assert!(!pages.add_image(large.clone()));
+    assert_eq!(pages.len(), 4);
+    assert!(pages.replace_image(large));
+    assert_eq!(pages.len(), 4);
+}
+
+#[test]
 fn page_switch_accepts_pending_text_and_cancels_a_shape_draft() {
     let mut state = annotated_image_page();
     let _ = update(&mut state, Message::AddPage);

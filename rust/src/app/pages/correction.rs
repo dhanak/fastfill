@@ -5,7 +5,9 @@ use fastfill_rust::correction::{
     PageCorrection, PageMapping, corrected_dimensions,
 };
 use fastfill_rust::geometry::Size;
-use fastfill_rust::project::{ProjectPage, encode_corrected_editor_page};
+use fastfill_rust::project::{
+    ProjectAnnotation, ProjectPage, encode_corrected_editor_page,
+};
 use iced::widget::image::Handle;
 
 #[derive(Debug)]
@@ -14,19 +16,56 @@ pub(super) struct PageVersion {
     size: Size,
     display: Option<Handle>,
     pixels: Size,
+    retained_bytes: usize,
+}
+
+impl PageVersion {
+    fn new(
+        metadata: ProjectPage,
+        size: Size,
+        display: Option<Handle>,
+        pixels: Size,
+    ) -> Self {
+        let annotation_bytes = metadata.annotations.iter().map(|item| {
+            std::mem::size_of::<ProjectAnnotation>()
+                + match item {
+                    ProjectAnnotation::Freehand { points, .. } => {
+                        points.len()
+                            * std::mem::size_of::<
+                                fastfill_rust::project::NormalizedPoint,
+                            >()
+                    }
+                    ProjectAnnotation::Text {
+                        text, font_family, ..
+                    } => text.len() + font_family.len(),
+                    ProjectAnnotation::Shape { .. } => 0,
+                }
+        });
+        let retained_bytes = std::mem::size_of::<Self>()
+            + metadata.source_asset.len()
+            + annotation_bytes.sum::<usize>()
+            + display.as_ref().map_or(0, |handle| match handle {
+                Handle::Rgba { pixels, .. } => pixels.len(),
+                _ => 0,
+            });
+        Self {
+            metadata,
+            size,
+            display,
+            pixels,
+            retained_bytes,
+        }
+    }
 }
 
 impl EditorPage {
     fn version(&self) -> PageVersion {
-        PageVersion {
-            metadata: self.metadata.clone(),
-            size: self.size,
-            display: self
-                .image
-                .as_ref()
-                .and_then(|image| image.display.clone()),
-            pixels: self.image.as_ref().map_or(self.size, |image| image.size),
-        }
+        PageVersion::new(
+            self.metadata.clone(),
+            self.size,
+            self.image.as_ref().and_then(|image| image.display.clone()),
+            self.image.as_ref().map_or(self.size, |image| image.size),
+        )
     }
 
     pub(in crate::app) fn accept_correction(
@@ -88,14 +127,10 @@ impl EditorPage {
         self.versions.entry(old_context).or_insert(old);
         self.versions.insert(
             context,
-            PageVersion {
-                metadata,
-                size,
-                display: Some(display),
-                pixels,
-            },
+            PageVersion::new(metadata, size, Some(display), pixels),
         );
         self.restore_version()?;
+        self.prune_versions();
         Ok(moved)
     }
 
@@ -134,11 +169,50 @@ impl EditorPage {
             }
             return Err(error);
         }
+        self.prune_versions();
         Ok(changed)
     }
 
     pub(in crate::app) fn prune_versions(&mut self) {
+        loop {
+            self.versions.retain(|context, _| {
+                self.annotations.uses_page_context(*context)
+            });
+            let retained = self
+                .versions
+                .iter()
+                .filter(|(context, _)| {
+                    **context != self.annotations.page_context()
+                })
+                .map(|(_, version)| version.retained_bytes)
+                .sum();
+            if !self.annotations.trim_history(retained) {
+                break;
+            }
+        }
         self.versions
             .retain(|context, _| self.annotations.uses_page_context(*context));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn oversized_old_page_version_prunes_undo_and_its_pixels() {
+        let mut page = EditorPage::default();
+        let staged = page.annotations.prepare_page_change(page.size).unwrap();
+        page.annotations.commit_page_change(staged, 1).unwrap();
+        let mut old = page.version();
+        old.retained_bytes = 65 * 1024 * 1024;
+        page.versions.insert(0, old);
+        page.versions.insert(1, page.version());
+
+        page.prune_versions();
+
+        assert!(!page.annotations.can_undo());
+        assert_eq!(page.versions.len(), 1);
+        assert!(page.versions.contains_key(&1));
     }
 }

@@ -119,22 +119,41 @@ pub fn import_pdf_with_progress(
     available: usize,
     progress: impl FnMut(usize, usize, PdfStage) -> bool,
 ) -> Result<Vec<PdfPageImage>, PdfImportError> {
+    import_pdf_with_progress_limited(
+        bytes,
+        available,
+        MAX_BATCH_PIXELS,
+        progress,
+    )
+}
+
+/// Rasterize within a caller's remaining project pixel budget.
+///
+/// # Errors
+/// Returns the same errors as `import_pdf_with_progress`.
+pub fn import_pdf_with_progress_limited(
+    bytes: Vec<u8>,
+    available: usize,
+    pixel_budget: u64,
+    progress: impl FnMut(usize, usize, PdfStage) -> bool,
+) -> Result<Vec<PdfPageImage>, PdfImportError> {
     validate_pdf_length(bytes.len())?;
     #[cfg(not(target_arch = "wasm32"))]
     {
         // Renderer state is local to this transaction; discard it on panic.
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            render_pdf(bytes, available, progress)
+            render_pdf(bytes, available, pixel_budget, progress)
         }))
         .unwrap_or_else(|_| Err(error("PDF renderer failed; import canceled.")))
     }
     #[cfg(target_arch = "wasm32")]
-    render_pdf(bytes, available, progress)
+    render_pdf(bytes, available, pixel_budget, progress)
 }
 
 fn render_pdf(
     bytes: Vec<u8>,
     available: usize,
+    pixel_budget: u64,
     mut progress: impl FnMut(usize, usize, PdfStage) -> bool,
 ) -> Result<Vec<PdfPageImage>, PdfImportError> {
     report(&mut progress, 0, 0, PdfStage::Parsing)?;
@@ -154,7 +173,7 @@ fn render_pdf(
             available.min(MAX_PAGES)
         )));
     }
-    let sizes = preflight(&pdf)?;
+    let sizes = preflight(&pdf, pixel_budget.min(MAX_BATCH_PIXELS))?;
     report(&mut progress, 0, count, PdfStage::Ready)?;
     let warning = Arc::new(AtomicBool::new(false));
     let flag = Arc::clone(&warning);
@@ -258,7 +277,10 @@ fn report(
     }
 }
 
-fn preflight(pdf: &Pdf) -> Result<Vec<(u32, u32, f32)>, PdfImportError> {
+fn preflight(
+    pdf: &Pdf,
+    pixel_budget: u64,
+) -> Result<Vec<(u32, u32, f32)>, PdfImportError> {
     let mut total_pixels = 0_u64;
     pdf.pages()
         .iter()
@@ -278,10 +300,12 @@ fn preflight(pdf: &Pdf) -> Result<Vec<(u32, u32, f32)>, PdfImportError> {
             }
             let (width, height) = raster_size(width * unit, height * unit)?;
             total_pixels += u64::from(width) * u64::from(height);
-            if total_pixels > MAX_BATCH_PIXELS {
-                return Err(error(
-                    "PDF batch exceeds the 200-megapixel limit.",
-                ));
+            if total_pixels > pixel_budget {
+                return Err(error(if pixel_budget < MAX_BATCH_PIXELS {
+                    "PDF exceeds the remaining project image budget."
+                } else {
+                    "PDF batch exceeds the 200-megapixel limit."
+                }));
             }
             // Missing Contents means blank paper; failed decoding does not.
             if page.raw().get::<Object<'_>>(b"Contents").is_some()

@@ -8,6 +8,7 @@ use std::fmt;
 
 const DEFAULT_FONT_SIZE: f32 = 24.0;
 const MIN_CONTENT_WIDTH: f32 = 48.0;
+pub const MAXIMUM_TEXT_LENGTH: usize = 10_000;
 pub const TEXT_LINE_HEIGHT: f32 = 1.3;
 pub const TEXT_EDITOR_HORIZONTAL_PADDING: f32 = 6.0;
 pub const TEXT_EDITOR_VERTICAL_PADDING: f32 = 4.0;
@@ -392,7 +393,9 @@ impl Annotations {
     }
 
     pub fn begin_text(&mut self, point: Point, page: Size, scale: f32) -> bool {
-        if !self.can_begin_text(point, page, scale) {
+        if self.content.len() >= super::MAXIMUM_ANNOTATIONS_PER_PAGE
+            || !self.can_begin_text(point, page, scale)
+        {
             return false;
         }
         self.selected.clear();
@@ -517,8 +520,12 @@ impl Annotations {
         {
             return;
         }
+        let text = text.into();
+        if text.encode_utf16().count() > MAXIMUM_TEXT_LENGTH {
+            return;
+        }
         if let Some(draft) = &mut self.text_draft {
-            draft.annotation.text = text.into();
+            draft.annotation.text = text;
             draft.annotation.bounds.width = size.width;
             draft.annotation.bounds.height = size.height;
             if let Some(bottom) = draft.bottom_anchor {

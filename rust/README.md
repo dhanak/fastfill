@@ -3,6 +3,15 @@
 Experimental cross-platform rewrite. The production C#/WinUI application is
 unchanged. See [PLAN.md](PLAN.md) for scope, progress, and checkpoint gates.
 
+Projects allow 20 pages, with 50 MP per source image and 200 MP total for both
+source and corrected page images. Adding/importing pages or accepting a
+correction past the project limit leaves the document unchanged. Text boxes
+allow 10,000 UTF-16 units, including pasted text. Each page allows 10,000
+annotations; pen/highlighter strokes retain at most 100,000 samples. Each page
+keeps a 64 MiB undo/redo history budget; oldest steps disappear first when full.
+These budgets bound retained project data, not renderer or temporary preview
+memory.
+
 ## In-app shortcuts
 
 Choose the **?** button in the main header, or press **F1**. On narrow windows,

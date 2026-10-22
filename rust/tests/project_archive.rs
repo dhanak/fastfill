@@ -24,13 +24,10 @@ const PNG_1X1: &[u8] = &[
 
 #[test]
 fn staged_display_reuses_the_validated_pixels_and_preserves_source_bytes() {
-    let mut manifest = valid_manifest();
-    let mut shared = manifest["pages"][0].clone();
-    shared["id"] = json!("39cf856d-dc68-48bf-b98a-f4999aa7796b");
-    shared["annotations"] = json!([]);
-    manifest["pages"].as_array_mut().unwrap().push(shared);
-    let bytes =
-        archive_with_manifest(&manifest, &[("assets/page.png", PNG_1X1)]);
+    let bytes = archive_with_manifest(
+        &valid_manifest(),
+        &[("assets/page.png", PNG_1X1)],
+    );
     let mut decoded = Vec::new();
     let loaded =
         load_archive_with_images(Cursor::new(bytes), |name, pixels| {
@@ -39,6 +36,45 @@ fn staged_display_reuses_the_validated_pixels_and_preserves_source_bytes() {
         .unwrap();
     assert_eq!(decoded, [("page.png".into(), 1, 1)]);
     assert_eq!(loaded.assets["page.png"].bytes, PNG_1X1);
+}
+
+#[test]
+fn rejects_shared_assets_and_enforces_aggregate_pixels_before_decode() {
+    let mut manifest = valid_manifest();
+    let mut second = manifest["pages"][0].clone();
+    second["id"] = json!("39cf856d-dc68-48bf-b98a-f4999aa7796b");
+    second["annotations"] = json!([]);
+    manifest["pages"].as_array_mut().unwrap().push(second);
+    assert_invalid(
+        archive_with_manifest(&manifest, &[]),
+        "image assets must be unique",
+    );
+
+    let pages = manifest["pages"].as_array_mut().unwrap();
+    for (index, page) in pages.iter_mut().enumerate() {
+        page["sourceAsset"] = json!(format!("{index}.png"));
+        page["sourcePixelWidth"] = json!(10_000);
+        page["sourcePixelHeight"] = json!(5_000);
+    }
+    for index in 2..5 {
+        let mut page = pages[0].clone();
+        page["id"] = json!(uuid::Uuid::new_v4());
+        page["sourceAsset"] = json!(format!("{index}.png"));
+        pages.push(page);
+    }
+    assert_invalid(
+        archive_with_manifest(&manifest, &[]),
+        "200-megapixel limit",
+    );
+}
+
+#[test]
+fn non_ascii_four_byte_asset_stem_does_not_panic() {
+    let mut manifest = valid_manifest();
+    manifest["pages"][0]["sourceAsset"] = json!("aaé.png");
+    let bytes =
+        archive_with_manifest(&manifest, &[("assets/aaé.png", PNG_1X1)]);
+    assert!(load_archive(Cursor::new(bytes)).is_ok());
 }
 
 #[test]

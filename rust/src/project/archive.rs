@@ -127,9 +127,6 @@ where
 
     let mut assets = BTreeMap::new();
     for page in &project.pages {
-        if assets.contains_key(&page.source_asset) {
-            continue;
-        }
         let archive_name = format!("assets/{}", page.source_asset);
         let stored_name = entries.get(&archive_name).ok_or_else(|| {
             invalid(format!("Page asset is missing: {}", page.source_asset))

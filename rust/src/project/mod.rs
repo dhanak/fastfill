@@ -21,3 +21,4 @@ pub use model::{
 #[cfg(not(target_arch = "wasm32"))]
 pub use save::save_archive_file;
 pub use save::{ProjectSaveError, save_archive};
+pub use validate::MAXIMUM_PROJECT_PIXELS;

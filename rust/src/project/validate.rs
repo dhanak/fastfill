@@ -3,15 +3,16 @@ use super::model::{
     AffineTransform, NormalizedPoint, NormalizedRect, Project,
     ProjectAnnotation, ProjectPage, ProjectShapeKind,
 };
+use crate::annotations::{
+    MAXIMUM_ANNOTATIONS_PER_PAGE, MAXIMUM_INK_POINTS, MAXIMUM_TEXT_LENGTH,
+};
 use crate::correction::{PageCorrection, corrected_dimensions};
 use std::collections::HashSet;
 
 pub(super) const MAXIMUM_IMAGE_BYTES: u64 = 100 * 1024 * 1024;
 pub(super) const MAXIMUM_IMAGE_PIXELS: i64 = 50_000_000;
+pub const MAXIMUM_PROJECT_PIXELS: u64 = 200_000_000;
 const MAXIMUM_PAGES: usize = 20;
-const MAXIMUM_ANNOTATIONS_PER_PAGE: usize = 10_000;
-const MAXIMUM_INK_POINTS: usize = 100_000;
-const MAXIMUM_TEXT_LENGTH: usize = 10_000;
 
 pub(super) fn validate_project(
     project: &Project,
@@ -31,14 +32,34 @@ pub(super) fn validate_project(
     }
 
     let mut page_ids = HashSet::new();
+    let mut asset_names = HashSet::new();
+    let mut source_pixels = 0_u64;
+    let mut display_pixels = 0_u64;
     for page in &project.pages {
         if !page_ids.insert(page.id) {
             return invalid("Page IDs must be unique.");
+        }
+        if !asset_names.insert(&page.source_asset) {
+            return invalid("Page image assets must be unique.");
         }
         if project.schema_version == 1 && page.brightness != 0 {
             return invalid("Brightness requires schema-v2 or newer.");
         }
         validate_page(page)?;
+        source_pixels += u64::try_from(page.source_pixel_width).unwrap()
+            * u64::try_from(page.source_pixel_height).unwrap();
+        let (width, height) = corrected_dimensions(
+            u32::try_from(page.source_pixel_width).unwrap(),
+            u32::try_from(page.source_pixel_height).unwrap(),
+            PageCorrection::from(page),
+        )
+        .map_err(|error| ProjectLoadError::Invalid(error.to_string()))?;
+        display_pixels += u64::from(width) * u64::from(height);
+        if source_pixels > MAXIMUM_PROJECT_PIXELS
+            || display_pixels > MAXIMUM_PROJECT_PIXELS
+        {
+            return invalid("Project images exceed the 200-megapixel limit.");
+        }
     }
     Ok(())
 }
@@ -321,10 +342,11 @@ pub(super) fn validate_asset_name(name: &str) -> Result<(), ProjectLoadError> {
         .split_once('.')
         .map_or(name, |(stem, _)| stem)
         .to_ascii_uppercase();
+    let bytes = stem.as_bytes();
     if matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        || stem.len() == 4
-            && matches!(&stem[..3], "COM" | "LPT")
-            && matches!(stem.as_bytes()[3], b'1'..=b'9')
+        || bytes.len() == 4
+            && (bytes.starts_with(b"COM") || bytes.starts_with(b"LPT"))
+            && matches!(bytes[3], b'1'..=b'9')
     {
         return invalid("Page asset name is invalid.");
     }

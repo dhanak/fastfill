@@ -1105,15 +1105,16 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   open and front/rear camera preview already passed.
 - [x] Complete 7J's Linux desktop checkpoint. Keep macOS compatibility and WASM
   compilation checked; GitHub release publication remains separate.
-- [ ] Confirm the tested Linux archive appears beside the Windows ZIP on the
-  `rust-dev` prerelease after the next `master` CI run. Both packages must pass
-  before the single publication job runs.
+- [x] Confirm the tested Linux archive appears beside the Windows ZIP on the
+  `rust-dev` prerelease. User confirms the new CI chain is green and both builds
+  were released together on 2026-10-22.
 - [x] Check the full-release browser harness before profiling. User reports
   desktop and mobile LAN builds work well, including touch, pinch, zoom, drag
   and annotation editing. Defer timed profiling unless lag recurs; memory and
   latency remain part of the wider release gate below.
-- [ ] Run automated integration/regression checks and a focused fresh review
-  after delivery work, without treating software checks as hardware tests.
+- [x] Run automated integration/regression checks and a focused fresh review
+  after delivery work. Native, WASM, Node, formatting and strict Clippy checks
+  pass; software checks do not replace the open hardware tests.
 - [ ] User release gate: a 20-page project, repeated scans, save/reopen/export,
   Surface touch at 150%/200% scaling, plus memory and latency checks.
 - [ ] Decide whether to replace the C# app; no automatic migration/removal.
@@ -4385,6 +4386,23 @@ Windows retest after the next CI ZIP:
 - Do not claim timed profiling. Defer browser performance instrumentation until
   a release-mode slowdown is reproduced; retain the broader release latency and
   memory gate.
+
+### 2026-10-22 — Confirm shared development release
+
+- User confirms the new CI chain is green and the Windows and Linux builds
+  appear together in the `rust-dev` prerelease.
+- Automated regression checks and focused review passed. Keep SP6 save/export
+  and the broader physical release gate open.
+
+### 2026-10-22 — Harden review outliers
+
+- Reject duplicate page image assets and cap total source/corrected page pixels
+  at 200 MP before loading or adding pages. Preflight image and PDF imports.
+- Bound text, annotations, ink samples, native image reads, and per-page undo
+  history. Count retained page-correction images in the history budget.
+- Fix Unicode asset-name validation and initialize headless font fallbacks in
+  the isolated render test. Native full/reduced-feature tests, Clippy, and WASM
+  compilation pass. Keep SP6 physical validation and the user manual open.
 
 ## References
 

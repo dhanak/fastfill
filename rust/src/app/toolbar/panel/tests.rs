@@ -380,6 +380,10 @@ fn horizontal_tracks_do_not_cover_the_button_targets() {
 
 #[test]
 fn workspace_previews_render_in_both_layouts_and_themes() {
+    // Headless tests must install font fallbacks independently of test order.
+    let _ = crate::appearance::text_font(
+        fastfill_rust::annotations::TextFormat::default(),
+    );
     let mut state = rendered_page();
     for theme in [Theme::Light, Theme::Dark] {
         for width in [400, 640, 1_200] {

@@ -1,10 +1,26 @@
 use fastfill_rust::annotations::{
-    AnnotationColor, AnnotationRef, Annotations, Pointer, TextAnnotation,
-    TextEditHit, TextFormat, TextTypeface, Tool,
+    AnnotationColor, AnnotationRef, Annotations, MAXIMUM_TEXT_LENGTH, Pointer,
+    TextAnnotation, TextEditHit, TextFormat, TextTypeface, Tool,
 };
 use fastfill_rust::geometry::{Point, Rect, Size};
 
 const PAGE: Size = Size::new(800.0, 1_100.0);
+
+#[test]
+fn text_draft_rejects_overlong_unicode_without_losing_prior_content() {
+    let mut annotations = Annotations::default();
+    annotations.set_tool(Tool::Text);
+    assert!(annotations.begin_text(Point::new(100.0, 100.0), PAGE, 1.0));
+    let size = Size::new(100.0, 31.2);
+    annotations.update_text("safe", size);
+    annotations.update_text("🙂".repeat(MAXIMUM_TEXT_LENGTH / 2 + 1), size);
+    assert_eq!(annotations.text_preview().unwrap().text, "safe");
+    annotations.update_text("x".repeat(MAXIMUM_TEXT_LENGTH), size);
+    assert_eq!(
+        annotations.text_preview().unwrap().text.len(),
+        MAXIMUM_TEXT_LENGTH
+    );
+}
 
 #[test]
 fn plain_text_stays_pending_until_non_empty_acceptance() {

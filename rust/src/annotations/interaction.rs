@@ -292,6 +292,7 @@ impl Draft {
                 draft.end = point;
                 draft.square = square;
                 if matches!(draft.kind, CreationKind::Ink(_))
+                    && draft.points.len() < super::MAXIMUM_INK_POINTS
                     && draft
                         .points
                         .last()

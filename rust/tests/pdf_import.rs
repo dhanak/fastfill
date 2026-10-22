@@ -1,8 +1,8 @@
 #![cfg(feature = "pdf-import")]
 
 use fastfill_rust::pdf_import::{
-    MAX_PDF_BYTES, PdfStage, import_pdf, import_pdf_with_progress, raster_size,
-    validate_pdf_length,
+    MAX_PDF_BYTES, PdfStage, import_pdf, import_pdf_with_progress,
+    import_pdf_with_progress_limited, raster_size, validate_pdf_length,
 };
 use std::fmt::Write;
 
@@ -70,6 +70,18 @@ fn rejects_corrupt_empty_and_over_capacity_documents() {
     let error = import_pdf(pdf(&pages), 20, |_, _| true).unwrap_err();
     assert!(error.to_string().contains("room"));
     assert!(import_pdf(pdf(&pages[..1]), 0, |_, _| true).is_err());
+}
+
+#[test]
+fn remaining_project_budget_is_checked_before_rasterization() {
+    let error = import_pdf_with_progress_limited(
+        pdf(&[(72.0, 72.0, "", "")]),
+        20,
+        89_999,
+        |_, _, _| true,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("remaining project image budget"));
 }
 
 #[test]

@@ -11,6 +11,7 @@ use super::{FastFill, ImagePicker, Message};
 use fastfill_rust::correction::{PageCorrection, corrected_dimensions};
 use fastfill_rust::project::{CropQuad, NormalizedPoint, PageFilterMode};
 use iced::Task;
+use iced::widget::image::Handle;
 use preview::{Input, Original, Preview};
 use std::sync::Arc;
 
@@ -382,6 +383,13 @@ fn accept(state: &mut FastFill) {
         return;
     };
     if state.pages.current().metadata.id != draft.page {
+        return;
+    }
+    if let Handle::Rgba { width, height, .. } = &preview.handle
+        && !state.pages.fits_correction(*width, *height)
+    {
+        state.page_editor.draft.as_mut().unwrap().error =
+            Some("Project images exceed the 200 MP memory limit.".into());
         return;
     }
     let old_size = state.pages.current().size;

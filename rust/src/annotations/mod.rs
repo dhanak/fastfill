@@ -23,9 +23,12 @@ pub use page::PageChange;
 use text::TextDraft;
 use text::TextMoveDraft;
 pub use text::{
-    TEXT_EDITOR_HORIZONTAL_PADDING, TEXT_EDITOR_VERTICAL_PADDING,
-    TEXT_LINE_HEIGHT, TextAnnotation, TextEditHit, TextFormat, TextTypeface,
+    MAXIMUM_TEXT_LENGTH, TEXT_EDITOR_HORIZONTAL_PADDING,
+    TEXT_EDITOR_VERTICAL_PADDING, TEXT_LINE_HEIGHT, TextAnnotation,
+    TextEditHit, TextFormat, TextTypeface,
 };
+pub const MAXIMUM_ANNOTATIONS_PER_PAGE: usize = 10_000;
+pub const MAXIMUM_INK_POINTS: usize = 100_000;
 pub use tool::Tool;
 use tool::{CreationKind, ToolStyles};
 
@@ -187,6 +190,30 @@ struct Snapshot {
     selected: Vec<uuid::Uuid>,
 }
 
+pub(crate) const HISTORY_BYTES_LIMIT: usize = 64 * 1024 * 1024;
+
+impl Snapshot {
+    fn bytes_for(content: &[OwnedAnnotation], selected: usize) -> usize {
+        let payload = content.iter().map(|annotation| match annotation {
+            OwnedAnnotation::Shape(shape) => match &shape.geometry {
+                AnnotationGeometry::Ink { points, .. } => {
+                    points.len() * std::mem::size_of::<crate::geometry::Point>()
+                }
+                _ => 0,
+            },
+            OwnedAnnotation::Text(text) => text.text.len(),
+        });
+        std::mem::size_of::<Self>()
+            + std::mem::size_of_val(content)
+            + selected * std::mem::size_of::<uuid::Uuid>()
+            + payload.sum::<usize>()
+    }
+
+    fn bytes(&self) -> usize {
+        Self::bytes_for(&self.content, self.selected.len())
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Annotations {
     revision: u64,
@@ -201,6 +228,7 @@ pub struct Annotations {
     selected: Vec<uuid::Uuid>,
     undo: Vec<Snapshot>,
     redo: Vec<Snapshot>,
+    history_bytes: usize,
 }
 
 #[derive(Clone, Debug)]

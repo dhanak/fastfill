@@ -130,7 +130,18 @@ impl FastFill {
 
     fn edit_text(&mut self, action: text_editor::Action) {
         self.finish_font_size_input();
+        let before = self.text_content.text();
+        let cursor = self.text_content.cursor();
         self.text_content.perform(action);
+        if self.text_content.text().encode_utf16().count()
+            > fastfill_rust::annotations::MAXIMUM_TEXT_LENGTH
+        {
+            self.text_content = text_editor::Content::with_text(&before);
+            self.text_content.move_to(cursor);
+            self.status = "Text box limit is 10,000 characters.".into();
+            self.status_is_error = true;
+            return;
+        }
         self.sync_text();
     }
 

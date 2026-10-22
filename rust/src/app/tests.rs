@@ -1291,6 +1291,20 @@ pub(super) fn paste_text(state: &mut FastFill, text: &str) {
     let _ = update(state, Message::TextAction(action));
 }
 
+#[test]
+fn paste_over_text_limit_keeps_editable_text_and_draft_in_sync() {
+    let mut state = FastFill::default();
+    let _ = update(&mut state, Message::SetTool(Tool::Text));
+    let _ = update(
+        &mut state,
+        Message::DrawPressed(Pointer::Mouse, PagePoint::new(100.0, 100.0), 1.0),
+    );
+    paste_text(&mut state, "safe");
+    paste_text(&mut state, &"🙂".repeat(5_001));
+    assert_eq!(state.text_content.text(), "safe");
+    assert_eq!(state.annotations().text_preview().unwrap().text, "safe");
+}
+
 fn dark_pixel_bounds(pixels: &[u8]) -> Option<(usize, usize, usize, usize)> {
     let mut bounds: Option<(usize, usize, usize, usize)> = None;
     for (index, pixel) in pixels.as_chunks::<4>().0.iter().enumerate() {
