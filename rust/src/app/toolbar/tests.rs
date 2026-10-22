@@ -199,6 +199,42 @@ fn icon_and_color_targets_route_mouse_and_touch_to_existing_commands() {
 }
 
 #[test]
+fn narrow_toolbar_tap_works_without_a_mouse_cursor() {
+    let renderer = renderer();
+    let state = FastFill::default();
+    let mut element = tools(&state);
+    let (mut tree, node) = lay_out(&mut element, &renderer);
+    let row = Layout::new(&node).children().next().unwrap();
+    let position = row.children().next().unwrap().bounds().center();
+    let mut messages = Vec::new();
+    for event in [
+        touch::Event::FingerPressed {
+            id: touch::Finger(1),
+            position,
+        },
+        touch::Event::FingerLifted {
+            id: touch::Finger(1),
+            position,
+        },
+    ] {
+        element.as_widget_mut().update(
+            &mut tree,
+            &Event::Touch(event),
+            Layout::new(&node),
+            mouse::Cursor::Unavailable,
+            &renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut Shell::new(&mut messages),
+            &node.bounds(),
+        );
+    }
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::SetTool(Tool::Navigate)]
+    ));
+}
+
+#[test]
 fn text_icon_has_distinct_uppercase_and_lowercase_letter_regions() {
     for theme in [Theme::Light, Theme::Dark] {
         for (scale, dpi) in [(1, 1.0), (2, 2.0)] {

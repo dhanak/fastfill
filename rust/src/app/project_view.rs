@@ -3,7 +3,7 @@
 use super::{FastFill, ImagePicker, Message};
 use crate::appearance::{self, primary_action};
 use crate::icons::{self, Glyph};
-use iced::widget::{button, row, text};
+use iced::widget::{button, container, row, text};
 use iced::{Element, Length};
 
 pub(super) fn enabled(state: &FastFill) -> bool {
@@ -15,7 +15,11 @@ pub(super) fn enabled(state: &FastFill) -> bool {
 }
 
 pub(super) fn menu(state: &FastFill, width: f32) -> Element<'static, Message> {
+    const PADDING_X: f32 = 10.0;
+    const GAP: f32 = 4.0;
     let available = enabled(state);
+    let label_width =
+        (width - 2.0 * PADDING_X - GAP - appearance::TOOL_ICON_SIZE).max(0.0);
     let name = format!(
         "{}{}{}",
         if width >= 220.0 { "FastFill · " } else { "" },
@@ -36,10 +40,13 @@ pub(super) fn menu(state: &FastFill, width: f32) -> Element<'static, Message> {
     );
     button(
         row![
-            text(name)
-                .size(14)
-                .width(iced::Fill)
-                .wrapping(iced::advanced::text::Wrapping::None),
+            container(
+                text(name)
+                    .size(14)
+                    .wrapping(iced::advanced::text::Wrapping::None),
+            )
+            .width(label_width)
+            .clip(true),
             icons::view::<Message>(
                 if state.open_menu == Some(super::menu::Kind::Project) {
                     Glyph::ChevronUp
@@ -50,12 +57,13 @@ pub(super) fn menu(state: &FastFill, width: f32) -> Element<'static, Message> {
                 available,
             ),
         ]
-        .spacing(4)
-        .align_y(iced::Alignment::Center),
+        .spacing(GAP)
+        .align_y(iced::Alignment::Center)
+        .width(iced::Fill),
     )
     .width(width)
     .height(appearance::CONTROL_HEIGHT)
-    .padding([8, 10])
+    .padding([8.0, PADDING_X])
     .on_press_maybe(
         available.then_some(Message::ToggleMenu(super::menu::Kind::Project)),
     )
@@ -221,5 +229,40 @@ mod tests {
         assert_ne!(render(&state), closed);
         state.open_menu = None;
         assert_eq!(render(&state), closed);
+    }
+
+    #[test]
+    fn long_project_name_stays_inside_its_menu_button() {
+        let mut state = FastFill::default();
+        let render = |state: &FastFill| {
+            render_themed_element(
+                menu(state, 180.0),
+                iced::Size::new(500, 40),
+                1,
+                1.0,
+                &Theme::Dark,
+                mouse::Cursor::Unavailable,
+            )
+        };
+        let short = render(&state);
+        state.project.name = "A very long project filename".repeat(8);
+        let long = render(&state);
+        let (short_rows, _) = short.as_chunks::<{ 500 * 4 }>();
+        let (long_rows, _) = long.as_chunks::<{ 500 * 4 }>();
+        assert!(
+            short_rows
+                .iter()
+                .zip(long_rows)
+                .any(|(short, long)| short[..180 * 4] != long[..180 * 4])
+        );
+        for (y, (short, long)) in short_rows.iter().zip(long_rows).enumerate() {
+            let (short_pixels, _) = short[185 * 4..].as_chunks::<4>();
+            let (long_pixels, _) = long[185 * 4..].as_chunks::<4>();
+            let mismatch = short_pixels
+                .iter()
+                .zip(long_pixels)
+                .position(|(a, b)| a != b);
+            assert_eq!(mismatch, None, "label overflow at row {y}");
+        }
     }
 }

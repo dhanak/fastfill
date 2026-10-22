@@ -24,6 +24,7 @@ mod stroke_controls;
 mod text;
 mod text_controls;
 mod toolbar;
+mod touch_cursor;
 mod view;
 
 #[cfg(test)]

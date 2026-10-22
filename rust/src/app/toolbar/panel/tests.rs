@@ -274,12 +274,17 @@ fn panel_grid_and_footer_route_mouse_and_touch_to_existing_commands() {
                 ]
             };
             let mut messages = Vec::new();
-            for event in events {
+            for (index, event) in events.into_iter().enumerate() {
+                let cursor = if touch && index == 1 {
+                    mouse::Cursor::Available(iced::Point::new(-10.0, -10.0))
+                } else {
+                    mouse::Cursor::Available(position)
+                };
                 element.as_widget_mut().update(
                     &mut tree,
                     &event,
                     Layout::new(&node),
-                    mouse::Cursor::Available(position),
+                    cursor,
                     &renderer,
                     &mut iced::advanced::clipboard::Null,
                     &mut Shell::new(&mut messages),
@@ -298,6 +303,62 @@ fn panel_grid_and_footer_route_mouse_and_touch_to_existing_commands() {
             }
         }
     }
+}
+
+#[test]
+fn touch_color_tap_uses_release_position_even_with_stale_mouse_cursor() {
+    let renderer = renderer();
+    let mut state = annotated_page();
+    let _ = update(&mut state, Message::SetTool(Tool::Line));
+    let mut element = view(&state);
+    let (mut tree, node) = lay_out(
+        &mut element,
+        &renderer,
+        iced::Size::new(appearance::TOOLS_PANEL_WIDTH, 700.0),
+    );
+    let column = Layout::new(&node).children().next().unwrap();
+    let scroll = column.children().next().unwrap();
+    let content = scroll.children().next().unwrap();
+    let properties = content.children().nth(3).unwrap();
+    let position = tool_targets(properties)[2].center();
+    let mut messages = Vec::new();
+    for (event, cursor) in [
+        (
+            touch::Event::FingerPressed {
+                id: touch::Finger(1),
+                position,
+            },
+            mouse::Cursor::Unavailable,
+        ),
+        (
+            touch::Event::FingerLifted {
+                id: touch::Finger(1),
+                position,
+            },
+            mouse::Cursor::Unavailable,
+        ),
+    ] {
+        element.as_widget_mut().update(
+            &mut tree,
+            &Event::Touch(event),
+            Layout::new(&node),
+            cursor,
+            &renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut Shell::new(&mut messages),
+            &node.bounds(),
+        );
+    }
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::SetColor(AnnotationColor::Red)]
+    ));
+    drop(element);
+    let _ = update(&mut state, messages.remove(0));
+    assert_eq!(
+        state.annotations().current_style().unwrap().color,
+        AnnotationColor::Red,
+    );
 }
 
 #[test]

@@ -1,6 +1,7 @@
 [tools]
 rust = "1.99.0"
 "cargo:trunk" = "0.21.14"
+osv-scanner = "latest"
 
 [tasks.web]
 description = "Serve WASM prototype on LAN port 24800"

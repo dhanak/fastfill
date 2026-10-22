@@ -1,7 +1,9 @@
 //! Wide-window layout; reuse toolbar controls and existing command guards.
 
 use super::{COLORS, actions, color_button, enabled, icon_button, tool_button};
-use crate::app::{FastFill, Message, snap, stroke_controls, text_controls};
+use crate::app::{
+    FastFill, Message, snap, stroke_controls, text_controls, touch_cursor,
+};
 use crate::appearance::{
     self, CONTROL_GAP, CONTROL_HEIGHT, TOOLS_PANEL_PADDING,
 };
@@ -84,22 +86,24 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
     ]
     .spacing(CONTROL_GAP)
     .padding(TOOLS_PANEL_PADDING);
-    container(column![
-        scrollable(content)
-            .direction(scrollable::Direction::Vertical(
-                // Overlay the track in padding, never in the tool grid.
-                scrollable::Scrollbar::new()
-                    .width(6)
-                    .scroller_width(6)
-                    .margin(2),
-            ))
-            .height(Fill),
-        footer,
-    ])
-    .width(appearance::TOOLS_PANEL_WIDTH)
-    .height(Fill)
-    .style(container::bordered_box)
-    .into()
+    touch_cursor::wrap(
+        container(column![
+            scrollable(content)
+                .direction(scrollable::Direction::Vertical(
+                    // Overlay the track in padding, never in the tool grid.
+                    scrollable::Scrollbar::new()
+                        .width(6)
+                        .scroller_width(6)
+                        .margin(2),
+                ))
+                .height(Fill),
+            footer,
+        ])
+        .width(appearance::TOOLS_PANEL_WIDTH)
+        .height(Fill)
+        .style(container::bordered_box)
+        .into(),
+    )
 }
 
 pub(super) fn properties(

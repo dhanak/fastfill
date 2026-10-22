@@ -406,8 +406,9 @@ See [IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API).
 - User checkpoints: lab parity first, then laptop camera, then SP6 cameras,
   permissions, orientation, countdown, cancellation, and suspend/resume.
 
-Accepted on available laptop hardware. Physical sleep testing and actual
-Windows/SP6 front/rear calibration remain deferred; do not mark them passed.
+Accepted on laptop hardware. SP6 front/rear preview, resolution selection,
+front-camera mirroring and framing also passed on 2026-10-22. Physical sleep,
+full capture/export and touch/DPI calibration remain open.
 
 #### 6A. Correction geometry and offline preview — accepted
 
@@ -674,8 +675,9 @@ Keep follow-ups small and manually testable:
   and actual SP6 front/rear camera calibration. Browser/macOS capture
   remains outside these native Linux/Windows checkpoints.
 
-6G3a, 6G3b and 6G3c are manually accepted. Physical sleep testing and actual
-SP6 hardware calibration remain deferred, separate from laptop acceptance.
+6G3a, 6G3b and 6G3c are manually accepted. SP6 front/rear preview, resolution
+selection, mirroring and framing passed on 2026-10-22. Physical sleep and full
+SP6 capture/export remain separate checks.
 
 6G3a implementation checklist:
 
@@ -754,9 +756,14 @@ SP6 hardware calibration remain deferred, separate from laptop acceptance.
       User confirms working camera on 2026-10-20, with a populated resolution
       picker and live preview. Keep SP6 front/rear, sleep and touch checks
       separate; do not infer those from this result.
-- [ ] User checkpoint: download/extract on Windows without Rust installed;
-      launch, open/save/export a project and try the SP6 cameras when available.
-      Keep prior physical sleep/touch/DPI calibration deferrals explicit.
+- [x] Confirm SP6 front/rear cameras, resolution choice, front-camera preview
+      mirroring and framing. User reports all four working on 2026-10-22.
+      This does not cover suspend/resume or the full capture/export gate.
+- [x] Confirm the Windows ZIP downloads, extracts and launches without a
+      local Rust toolchain; the user's legacy SP6 project opens. Save/export
+      still need a physical Windows check.
+- [ ] User checkpoint: save and export a project on SP6; check the output.
+      Physical sleep, touch gestures and high-DPI calibration remain separate.
 
 #### 7B. Font-size spinner — manually accepted
 
@@ -1083,9 +1090,8 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
       Keep physical touch, high-DPI and sleep checks separate.
 - [x] Keep the Rust testing ZIP, prerelease and assets separate from C#
       release names and workflows. Do not replace the C# app yet.
-- [ ] Complete 7A's end-to-end portable Windows check: extract and run
-      without Rust, then open/save/export a real project and test available
-      cameras. Repeat on SP6 when available.
+- [ ] Complete 7A's remaining SP6 save/export check; ZIP launch, legacy
+      project open and front/rear camera preview already passed.
 - [ ] Document Linux runtime dependencies and a distributable package;
       verify file opening, diagnostics, help and user documentation in the
       shipped builds. Keep macOS compatibility and WASM compilation checked.
@@ -4297,6 +4303,24 @@ Windows retest after the next CI ZIP:
   formatting and whitespace checks before committing the accepted work.
 - Shift the next implementation checkpoint to Linux delivery and docs;
   complete the Windows portable and hardware gate with the user's device.
+
+### 2026-10-22 — SP6 touch/sidebar follow-up
+
+- User confirms Windows ZIP download/extract/launch and legacy-project open,
+  plus SP6 camera discovery, both cameras, resolution choice, front-camera
+  mirroring and framing. Save/export, touch gestures and annotations remain
+  untested; high-DPI and sleep checks remain open.
+- A quick sidebar tap only shows hover/tooltip, including a gray ring instead
+  of the blue selected-color ring. Treat selection as unverified on SP6 until
+  the touch-release fix is retested on hardware.
+- Long project names overflow the project menu button. Clip the label while
+  retaining the chevron and add a render regression check.
+- Forward each touch event's position to sidebar controls in wide and narrow
+  layouts. Test stale and unavailable mouse cursors; keep SP6 retest open.
+- Four focused GUI regressions, 32 library tests, strict Clippy, formatting
+  and the all-feature WASM check pass. The container has no default system
+  font, so grouped GUI render tests fail during font shaping; check those in
+  host CI rather than treating that as a touch regression.
 
 ## References
 

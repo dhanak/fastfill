@@ -150,22 +150,24 @@ fn options(state: &FastFill) -> Element<'_, Message> {
 }
 
 fn horizontal(content: Row<'_, Message>) -> Element<'_, Message> {
-    // Always leave eight pixels for a track, avoiding layout/target shifts.
-    scrollable(
-        content
-            .align_y(iced::Alignment::Center)
-            .height(TOOLBAR_ROW_HEIGHT - 8.0)
-            .padding(TOOLBAR_PADDING)
-            .spacing(CONTROL_GAP),
+    super::touch_cursor::wrap(
+        // Always leave eight pixels for a track, avoiding target shifts.
+        scrollable(
+            content
+                .align_y(iced::Alignment::Center)
+                .height(TOOLBAR_ROW_HEIGHT - 8.0)
+                .padding(TOOLBAR_PADDING)
+                .spacing(CONTROL_GAP),
+        )
+        .direction(scrollable::Direction::Horizontal(
+            scrollable::Scrollbar::new()
+                .width(6)
+                .scroller_width(6)
+                .spacing(2),
+        ))
+        .height(TOOLBAR_ROW_HEIGHT)
+        .into(),
     )
-    .direction(scrollable::Direction::Horizontal(
-        scrollable::Scrollbar::new()
-            .width(6)
-            .scroller_width(6)
-            .spacing(2),
-    ))
-    .height(TOOLBAR_ROW_HEIGHT)
-    .into()
 }
 
 fn tool_button(
