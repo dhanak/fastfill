@@ -935,9 +935,10 @@ Available annotation tools:
 Tools use monochrome vector icons in equal 40-pixel touch targets. The active
 tool's name stays beside the buttons; Text uses Aa. Hover for labels. Selected
 tools, the magnet (Smart snap), and bucket (Fill) share the same highlight.
-Sidebar taps use contact positions; duplicate compatibility mouse events are
-ignored briefly, and hover hints return when the mouse is used again. Icons come
-from Lucide (pinned to commit `20aef31d`); its license is kept in
+Sidebar taps click on release at the contact position; finger drags scroll after
+a small movement threshold. Duplicate compatibility mouse events are ignored
+briefly, and hover hints return when the mouse is used again. Icons come from
+Lucide (pinned to commit `20aef31d`); its license is kept in
 `assets/icons/lucide/LICENSE` and included with the Windows portable build.
 Options appear only when applicable. The tool/options rows scroll horizontally
 in narrower windows; the page view keeps its size when switching tools.

@@ -1117,10 +1117,10 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   pass; software checks do not replace the open hardware tests.
 - [ ] User release gate: a 20-page project, repeated scans, save/reopen/export,
   Surface touch at 150%/200% scaling, plus memory and latency checks.
-- [ ] Retest sidebar touch on SP6: user reports first tap works, later tool,
-  color and footer taps only hover or press. A compatibility-mouse filter and
-  regression test are in place; physical confirmation remains open. Canvas
-  gestures and annotation transforms already work.
+- [x] Retest sidebar touch on SP6. User confirms touch now works after routing
+  short taps as clicks and preserving finger drags for scrolling. Automated
+  regressions cover consecutive taps and drag cancellation; keep the separate
+  high-DPI and sleep checks open.
 - [ ] Decide whether to replace the C# app; no automatic migration/removal.
 
 #### Rust promotion work — defer until the replacement decision
