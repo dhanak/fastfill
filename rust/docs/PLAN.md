@@ -1121,6 +1121,16 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   short taps as clicks and preserving finger drags for scrolling. Automated
   regressions cover consecutive taps and drag cancellation; keep the separate
   high-DPI and sleep checks open.
+- [x] Add a universal macOS development archive to the shared `rust-dev`
+  pipeline, with ad-hoc signing and extracted-app smoke checks. The macOS job
+  now gates publication; its CI run and physical launch remain unverified.
+- [x] Add a deployable browser tarball to the same development release. Build
+  optimized WASM with relative asset URLs and check the extracted archive. Its
+  CI run and published browser check remain unverified.
+- [ ] Validate the published macOS archive on a real Mac: Gatekeeper approval,
+  launch, open/save/export, and display scaling. Camera capture is unsupported.
+- [ ] Validate the published browser archive on a static server at the site root
+  and under a subpath, including open/save/export on desktop and mobile.
 - [ ] Decide whether to replace the C# app; no automatic migration/removal.
 
 #### Rust promotion work — defer until the replacement decision
@@ -1128,11 +1138,10 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 - [ ] Make the Rust app the primary FastFill build and download. Remove the
   prototype suffix from app and package names; preserve `.docscan` compatibility
   and existing user recovery paths.
-- [ ] Add an automatic macOS package and release asset, with an extracted-app
-  smoke test. Choose supported architectures and signing/notarization policy
-  before publishing it as a user-facing download.
-- [ ] Build and publish the full-release WASM web bundle as a release asset,
-  with a smoke test of the packaged files. Decide on hosting separately.
+- [ ] Decide whether to replace macOS ad-hoc signing with Developer ID and
+  notarization before promoting it as a primary download.
+- [ ] Publish the tested browser archive with tagged Rust releases. Decide on
+  hosting separately.
 - [ ] Add tagged-version releases for the Rust app, like the C# workflow. Gate
   publication on the relevant tests and package checks; keep development and
   versioned releases distinct.

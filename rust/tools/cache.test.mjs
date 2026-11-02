@@ -9,11 +9,12 @@ const workflow = readFileSync(new URL(
 
 for (const [job, target] of [
   ["test-native", "rust/target"],
-  ["check-wasm", "rust/target"],
+  ["package-web", "${{ runner.temp }}/fastfill-rust-web-target"],
   ["package-windows", "${{ runner.temp }}/fastfill-rust-target"],
   ["package-linux", "${{ runner.temp }}/fastfill-rust-linux-target"],
+  ["package-macos", "${{ runner.temp }}/fastfill-rust-macos-target"],
 ]) {
-  test(`${job}: restore compiled dependencies before Cargo runs`, () => {
+  test(`${job}: restore compiled dependencies before build`, () => {
     const block = workflow.split(`\n  ${job}:\n`)[1]?.split(/\n  \w/)[0];
     assert.ok(block, `Find job ${job}`);
     const cache = block.match(
@@ -36,8 +37,10 @@ for (const [job, target] of [
     if (job !== "package-windows") {
       assert.ok(prefix.includes("${{ runner.os }}-${{ runner.arch }}"));
     }
-    assert.ok(block.indexOf(cache[0]) < block.indexOf("cargo +1.99.0"),
-      "Restore before the first Cargo command");
+    const build = job === "package-web"
+      ? '"$RUNNER_TEMP/trunk" build' : "cargo +1.99.0";
+    assert.ok(block.indexOf(build) > block.indexOf(cache[0]),
+      "Restore before the build command");
   });
 }
 
@@ -60,4 +63,24 @@ test("Linux target path is set after runner assignment", () => {
   assert.match(block,
     /echo "CARGO_TARGET_DIR=\$RUNNER_TEMP\/fastfill-rust-linux-target"/,
     "Configure build output after the runner starts");
+});
+
+test("macOS target path is set after runner assignment", () => {
+  const block = workflow.split("\n  package-macos:\n")[1]
+    ?.split(/\n  \w/)[0];
+  assert.ok(block, "Find macOS package job");
+  assert.doesNotMatch(block.split("\n    steps:")[0], /\$\{\{\s*runner\./,
+    "Job-level env cannot use runner context");
+  assert.match(block,
+    /echo "CARGO_TARGET_DIR=\$RUNNER_TEMP\/fastfill-rust-macos-target"/);
+});
+
+test("browser target path is set after runner assignment", () => {
+  const block = workflow.split("\n  package-web:\n")[1]
+    ?.split(/\n  \w/)[0];
+  assert.ok(block, "Find browser package job");
+  assert.doesNotMatch(block.split("\n    steps:")[0], /\$\{\{\s*runner\./,
+    "Job-level env cannot use runner context");
+  assert.match(block,
+    /echo "CARGO_TARGET_DIR=\$RUNNER_TEMP\/fastfill-rust-web-target"/);
 });

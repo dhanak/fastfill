@@ -93,13 +93,15 @@ diagnostics. Device/touch checks still need real hardware.
 The Rust icon's editable source is `assets/AppIcon.svg`; the generated PNG and
 ICO are embedded in the window and Windows executable respectively.
 
-On `master`, Windows/Linux tests, WASM checks and both portable packages must
-succeed before the public [`rust-dev` prerelease][rust-dev] is updated with the
-Windows ZIP and Linux archive together. macOS runs the same native tests
-independently on `macos-15-intel`; its failures remain visible but runner delays
-do not block publication. No GitHub sign-in is needed for the release. Other
-branches and PRs produce 14-day Actions artifacts (sign-in required), not a
-public release. `workflow_dispatch` can rebuild them without source changes.
+On `master`, Windows/Linux tests and all four packages must succeed before the
+public [`rust-dev` prerelease][rust-dev] is updated with Windows, Linux, macOS,
+and browser archives together. The macOS Intel runner tests the app,
+cross-builds Apple Silicon, then packages one universal, ad-hoc-signed `.app`
+bundle. The browser job builds optimized WASM and checks extracted site assets.
+macOS runner delays now delay the shared release. No GitHub sign-in is needed
+for the release. Other branches and PRs produce 14-day Actions artifacts
+(sign-in required), not a public release. `workflow_dispatch` can rebuild them
+without source changes.
 
 These names and assets are separate from C#'s `dev`, version releases and
 `FastFill-portable.zip`. The C# app, file associations and workflow stay
@@ -122,6 +124,36 @@ bundled `README.txt` for launch and diagnostics. Open images, PDFs and
 `.docscan` projects from inside the app. Check Save, Export PDF, F1 help and
 camera behavior on a real Linux desktop before treating the archive as verified.
 Keep existing projects backed up during prototype testing.
+
+## macOS testing without a compiler
+
+The `package-macos` CI job builds Intel and Apple Silicon binaries, merges them
+into `FastFill-Rust.app`, signs the complete bundle ad hoc, and publishes
+`FastFill-Rust-macos-universal.zip`. It verifies both slices and the signature
+after extracting the ZIP, then checks command-line startup without opening a
+GUI. CI cannot test Gatekeeper or interactive editing.
+
+Ad-hoc signing seals the bundle but does not establish a Developer ID or permit
+notarization. macOS may block the downloaded app. Follow the bundled
+`README.txt` and approve it through System Settings > Privacy & Security only if
+you trust the download; do not disable Gatekeeper globally. Camera capture
+remains unsupported on macOS. Test launch, file dialogs, open/save/export and
+display scaling on a real Mac before treating the archive as verified.
+
+## Browser archive
+
+The `package-web` CI job uses pinned Trunk to build a release-mode static site.
+It emits relative asset URLs so one archive can be extracted at a site's root or
+under a subpath. CI extracts the tarball and checks HTML, JS, WASM, and snippet
+references. See [browser deployment](WEB.md) for server setup. A real browser
+check after publication is still needed.
+
+Rebuild the deployable site locally from `rust/`:
+
+```sh
+mise exec -- trunk build --release --locked --all-features \
+  --public-url ./ --dist /tmp/fastfill-web-dist
+```
 
 ## Build and develop locally
 
@@ -158,12 +190,13 @@ node tools/publish-dev.test.mjs
 ```
 
 CI caches downloaded crates and compiled dependencies separately for each native
-OS/architecture, WASM checks and the static-CRT Windows release. Keys include
-the pinned Rust version and Cargo manifest/lockfile hashes; dependency changes
-can restore the preceding compatible cache, letting Cargo rebuild only what
-changed. Source-only edits reuse dependencies. The first successful run
-populates each cache; later runs show a restore in the corresponding `Cache ...`
-step. Tests still run on cache hits.
+OS/architecture and platform package. The browser job also caches Trunk's
+downloaded tools. Keys include the pinned Rust version and Cargo
+manifest/lockfile hashes; dependency changes can restore the preceding
+compatible cache, letting Cargo rebuild only what changed. Source-only edits
+reuse dependencies. The first successful run populates each cache; later runs
+show a restore in the corresponding `Cache ...` step. Tests still run on cache
+hits.
 
 CI disables debug symbols and incremental compiler state to keep archives small.
 Optimization and debug assertions are unchanged; local development retains debug

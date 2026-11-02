@@ -3,12 +3,13 @@
 [![Build status][build-badge]][build]
 [![Development downloads][download-badge]][downloads]
 [![Windows 10/11 x64][windows-badge]][windows]
-[![Linux x64][linux-badge]][linux] [![MIT license][license-badge]][license]
+[![Linux x64][linux-badge]][linux] [![macOS universal][macos-badge]][macos]
+[![MIT license][license-badge]][license]
 
 FastFill scans, corrects, annotates, and exports documents. This cross-platform
 app supports touch and mouse, keeps editable `.docscan` projects, and runs on
-Windows and Linux. A browser build is available for local testing. These are
-development builds; the existing C# release remains separate.
+Windows, Linux, and macOS. A deployable browser build is also available. These
+are development builds; the existing C# release remains separate.
 
 [![FastFill editor with a sample form][editor-shot]][editor-shot]
 
@@ -16,17 +17,21 @@ development builds; the existing C# release remains separate.
 
 No installer, Rust toolchain, or .NET runtime is needed.
 
-| Platform          | Download                  | Run after extraction              |
-| ----------------- | ------------------------- | --------------------------------- |
-| Windows 10/11 x64 | [Portable ZIP][windows]   | `FastFill-Rust\FastFill-Rust.exe` |
-| Linux x64         | [Portable archive][linux] | `FastFill-Rust/FastFill-Rust`     |
+| Platform        | Download        | Run                               |
+| --------------- | --------------- | --------------------------------- |
+| Windows 10/11   | [ZIP][windows]  | `FastFill-Rust\FastFill-Rust.exe` |
+| Linux x64       | [tar.gz][linux] | `FastFill-Rust/FastFill-Rust`     |
+| macOS universal | [ZIP][macos]    | `FastFill-Rust/FastFill-Rust.app` |
+| Browser         | [tar.gz][web]   | Extract into an empty web root    |
 
 Keep the extracted files together. The public Windows build uses the existing
 FastFill self-signed certificate; Windows may still warn or block it. Run only
 downloads you trust. The Linux build needs a compatible glibc-based system, a
 graphical session, and an XDG desktop portal for file dialogs. See the bundled
-`README.txt` for platform diagnostics. Both archives and their source revision
-appear on the [development release page][downloads].
+`README.txt` for platform diagnostics. The macOS app is ad-hoc signed, not
+notarized, so Gatekeeper may require manual approval. The browser archive
+contains a static site; see its [deployment guide][web-guide]. All four archives
+and their source revision appear on the [development release page][downloads].
 
 ## ⭐ Features
 
@@ -76,7 +81,11 @@ FastFill is available under the [MIT License][license].
 [license-badge]: https://img.shields.io/badge/license-MIT-green
 [linux]: https://github.com/dhanak/fastfill/releases/download/rust-dev/FastFill-Rust-linux-x64.tar.gz
 [linux-badge]: https://img.shields.io/badge/Linux-x64-2DA44E
+[macos]: https://github.com/dhanak/fastfill/releases/download/rust-dev/FastFill-Rust-macos-universal.zip
+[macos-badge]: https://img.shields.io/badge/macOS-universal-6E5494
 [manual]: docs/MANUAL.md
 [plan]: docs/PLAN.md
+[web]: https://github.com/dhanak/fastfill/releases/download/rust-dev/FastFill-Rust-web.tar.gz
+[web-guide]: docs/WEB.md
 [windows]: https://github.com/dhanak/fastfill/releases/download/rust-dev/FastFill-Rust-windows-x64.zip
 [windows-badge]: https://img.shields.io/badge/Windows_10%2F11-x64-0078D4

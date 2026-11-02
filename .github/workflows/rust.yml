@@ -43,7 +43,7 @@ jobs:
     defaults:
       run:
         working-directory: rust
-    steps: &native-tests
+    steps:
       - uses: actions/checkout@v7
       - name: Install Rust
         run: >-
@@ -83,44 +83,61 @@ jobs:
         if: runner.os == 'Linux'
         run: node tools/cache.test.mjs
 
-  # Validate macOS without gating Windows publication on its runner capacity.
-  test-macos:
-    name: Native tests (macOS Intel, independent)
-    runs-on: macos-15-intel
-    defaults:
-      run:
-        working-directory: rust
-    steps: *native-tests
-
-  check-wasm:
-    name: WASM compatibility
+  package-web:
+    name: Browser static archive
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: rust
+    env:
+      RUSTUP_TOOLCHAIN: 1.99.0
+      NO_COLOR: "true"
     steps:
       - uses: actions/checkout@v7
+      - name: Configure output
+        run: >-
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/fastfill-rust-web-target"
+          >> "$GITHUB_ENV"
       - name: Install Rust and WASM target
         run: |
           rustup toolchain install 1.99.0 --profile minimal
           rustup target add --toolchain 1.99.0 wasm32-unknown-unknown
-      - name: Cache WASM dependencies and compiled metadata
+      - name: Cache browser dependencies and compiled outputs
         uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            rust/target
+            ~/.cache/trunk
+            ${{ runner.temp }}/fastfill-rust-web-target
           key: >-
-            wasm-${{ runner.os }}-${{ runner.arch }}-rust199-lean-v1-${{
+            web-${{ runner.os }}-${{ runner.arch }}-rust199-trunk02114-v1-${{
             hashFiles('rust/Cargo.toml', 'rust/Cargo.lock') }}
           restore-keys: |
-            wasm-${{ runner.os }}-${{ runner.arch }}-rust199-lean-v1-
-      - name: Check WASM GUI, PDF import, and PDF probe
+            web-${{ runner.os }}-${{ runner.arch }}-rust199-trunk02114-v1-
+      - name: Fetch pinned Trunk binary
+        run: |
+          archive="$RUNNER_TEMP/trunk.tar.gz"
+          url=https://github.com/trunk-rs/trunk/releases/download/v0.21.14
+          curl --fail --location --silent --show-error \
+            "$url/trunk-x86_64-unknown-linux-gnu.tar.gz" -o "$archive"
+          printf '%s  %s\n' \
+            f2b4680cd239693a646a2795e4633c625328d7b2a044fbe749fa3a2fe9e7036b \
+            "$archive" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP" trunk
+      - name: Build optimized browser app
         run: >-
-          cargo +1.99.0 check
-          --all-features
-          --target wasm32-unknown-unknown
+          "$RUNNER_TEMP/trunk" build --release --locked --all-features
+          --public-url ./ --dist "$RUNNER_TEMP/fastfill-rust-web-dist"
+      - name: Package and smoke-test extracted browser app
+        run: node tools/package-web.mjs
+      - name: Upload deployable browser archive
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ runner.temp }}/FastFill-Rust-web.tar.gz
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
 
   package-windows:
     name: Windows portable archive
@@ -255,13 +272,66 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # Publish only after both platform archives and shared checks pass.
+  package-macos:
+    name: macOS universal archive
+    runs-on: macos-15-intel
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure output
+        run: >-
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/fastfill-rust-macos-target"
+          >> "$GITHUB_ENV"
+      - name: Install Rust and both macOS targets
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal \
+            --component clippy,rustfmt
+          rustup target add --toolchain 1.99.0 \
+            x86_64-apple-darwin aarch64-apple-darwin
+      - name: Cache macOS dependencies and compiled outputs
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ runner.temp }}/fastfill-rust-macos-target
+          key: >-
+            macos-${{ runner.os }}-${{ runner.arch }}-rust199-v1-${{
+            hashFiles('rust/Cargo.toml', 'rust/Cargo.lock') }}
+          restore-keys: |
+            macos-${{ runner.os }}-${{ runner.arch }}-rust199-v1-
+      - name: Check formatting
+        run: cargo +1.99.0 fmt --check
+      - name: Test platform-independent logic
+        run: cargo +1.99.0 test --no-default-features
+      - name: Test application state and GUI input
+        run: cargo +1.99.0 test --all-features --all-targets
+      - name: Build Intel and Apple Silicon apps
+        run: |
+          cargo +1.99.0 build --locked --release --all-features \
+            --target x86_64-apple-darwin --bin fastfill-rust
+          cargo +1.99.0 build --locked --release --all-features \
+            --target aarch64-apple-darwin --bin fastfill-rust
+      - name: Package and smoke-test extracted macOS app
+        run: bash ./tools/package-macos.sh
+      - name: Upload portable macOS ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ runner.temp }}/FastFill-Rust-macos-universal.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+  # Publish only after all platform archives and shared checks pass.
   publish-dev:
     name: Publish rust-dev
     if: >-
       github.event_name != 'pull_request' &&
       github.ref == 'refs/heads/master'
-    needs: [test-native, check-wasm, package-windows, package-linux]
+    needs: [test-native, package-web, package-windows, package-linux,
+            package-macos]
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -277,6 +347,16 @@ jobs:
         with:
           name: FastFill-Rust-linux-x64.tar.gz
           skip-decompress: true
+      - name: Download tested macOS ZIP
+        uses: actions/download-artifact@v8
+        with:
+          name: FastFill-Rust-macos-universal.zip
+          skip-decompress: true
+      - name: Download tested browser archive
+        uses: actions/download-artifact@v8
+        with:
+          name: FastFill-Rust-web.tar.gz
+          skip-decompress: true
       - name: Publish Rust development build
         env:
           GH_REPO: ${{ github.repository }}
@@ -284,7 +364,9 @@ jobs:
         run: |
           windows=FastFill-Rust-windows-x64.zip
           linux=FastFill-Rust-linux-x64.tar.gz
-          for archive in "$windows" "$linux"; do
+          macos=FastFill-Rust-macos-universal.zip
+          web=FastFill-Rust-web.tar.gz
+          for archive in "$windows" "$linux" "$macos" "$web"; do
             test -s "$archive" || {
               echo "::error::Missing or empty archive: $archive" >&2
               exit 1
@@ -293,14 +375,16 @@ jobs:
           title="FastFill Rust development build"
           notes="Experimental Rust prototype at ${GITHUB_SHA}."
           if gh release view rust-dev >/dev/null 2>&1; then
-            gh release upload rust-dev "$windows" "$linux" --clobber
+            gh release upload rust-dev "$windows" "$linux" \
+              "$macos" "$web" --clobber
             gh api --method PATCH \
               "repos/${GITHUB_REPOSITORY}/git/refs/tags/rust-dev" \
               -f "sha=${GITHUB_SHA}" -F force=true >/dev/null
             gh release edit rust-dev --prerelease --latest=false \
               --title "$title" --notes "$notes"
           else
-            gh release create rust-dev "$windows" "$linux" --prerelease \
-              --latest=false --target "${GITHUB_SHA}" \
+            gh release create rust-dev \
+              "$windows" "$linux" "$macos" "$web" \
+              --prerelease --latest=false --target "${GITHUB_SHA}" \
               --title "$title" --notes "$notes"
           fi
