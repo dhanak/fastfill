@@ -20,6 +20,12 @@ function checkSite(root) {
   assert.ok(iconPath.startsWith(`${resolve(root)}${sep}`),
     "Favicon URL escapes web root");
   assert.ok(statSync(iconPath).isFile(), "Missing favicon asset");
+  for (const name of ["x", "rotate-cw",
+    "triangles-centerline-dashed-vertical", "camera", "pause", "play",
+    "undo-2", "settings", "switch-camera", "check"]) {
+    assert.ok(statSync(join(root, "icons", `${name}.svg`)).isFile(),
+      `Missing camera icon: ${name}`);
+  }
   const refs = [...html.matchAll(/['"]([^'"<>]+\.(?:js|mjs|wasm))['"]/g)]
     .map((match) => match[1]);
   assert.ok(refs.some((ref) => ref.endsWith(".js")), "Missing JS");

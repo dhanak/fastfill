@@ -26,9 +26,14 @@ No rewrite or application server is needed for the editor's main page.
 
 The `master` workflow deploys the tested browser archive to GitHub Pages after
 native tests and the browser package check pass. If `dev.vidga.hu` is the
-account's Pages domain, the project site is at
-`https://dev.vidga.hu/fastfill/`. Keep the repository's custom-domain setting
-empty so the account domain applies to the project site.
+account's Pages domain, the project site is at `https://dev.vidga.hu/fastfill/`.
+Keep the repository's custom-domain setting empty so the account domain applies
+to the project site.
 
-The browser build has no camera capture. Open and save projects with the app's
-file controls. Back up important `.docscan` files outside the browser.
+Camera capture needs HTTPS or localhost and browser permission. Use Camera in
+the page rail. The floating controls match the desktop camera layout; browser
+resolution is automatic. Hold the document steady for automatic capture, or use
+manual Capture at any time. Review the photo, then choose Use photo. Automatic
+capture suggests its detected frame in the page editor. Open and save projects
+with the app's file controls. Back up important `.docscan` files outside the
+browser.

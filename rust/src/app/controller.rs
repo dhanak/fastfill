@@ -270,6 +270,10 @@ pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
     if let Some(task) = super::camera::update(state, &message) {
         return task;
     }
+    #[cfg(target_arch = "wasm32")]
+    if let Some(task) = super::web_camera::update(state, &message) {
+        return task;
+    }
     if super::snap::update(state, &message) {
         return super::snap::synchronize(state);
     }

@@ -4447,6 +4447,33 @@ Windows retest after the next CI ZIP:
   manuals, the plan and package notes under `rust/docs/`.
 - Keep the separate physical SP6 save/export, touch, DPI and sleep checks open.
 
+### 2026-11-02 — Browser camera manual capture
+
+- Add a browser camera dialog with device selection, live preview, preview-only
+  mirroring, manual capture, retake and cancellation. Release media tracks on
+  capture, switch and close. Require HTTPS or localhost and camera permission.
+- Validate the confirmed PNG with the existing image limits, add it as a page,
+  and open the page editor. Leave automatic capture for a later slice.
+- Browser capture and native-style controls were manually confirmed in Firefox
+  and Chromium. Mobile controls still need a browser check.
+- Match the native floating camera dock and Lucide icons, add Rotate and
+  Pause/Resume, and keep camera selection in Settings with a corner switch.
+- Show F11 in browser help and use the bundled font for help shortcuts.
+- Node camera checks and strict all-feature WASM Clippy pass. Trunk is not
+  installed in this container, so archive and physical camera checks remain.
+
+### 2026-11-02 — Browser camera automatic capture
+
+- Reuse the Rust document detector, four-frame stabilizer, and one-second gate
+  on 640-pixel browser samples. Keep manual Capture available immediately.
+- Draw the stabilized green outline and progress ring over the live preview.
+  Freeze the exact analyzed full-resolution frame on automatic capture and
+  suggest that frame's unsmoothed corners in the page editor.
+- Reset tracking on pause, camera switch, rotation, mirroring, tab hiding, and
+  stale/slow analysis. Analyze one frame at a time; skip queued frames.
+- Automatic capture and the detected frame on the review photo were manually
+  confirmed in Firefox and Chromium. Mobile camera calibration remains open.
+
 ## References
 
 - [iced 0.14 documentation](https://docs.rs/iced/0.14.0/iced/)

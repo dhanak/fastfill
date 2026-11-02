@@ -26,6 +26,8 @@ mod text_controls;
 mod toolbar;
 mod touch_cursor;
 mod view;
+#[cfg(target_arch = "wasm32")]
+mod web_camera;
 
 #[cfg(test)]
 use crate::page_canvas::CanvasState;
@@ -93,6 +95,8 @@ struct FastFill {
     smart_snap: snap::SmartSnap,
     #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
     camera: camera::CameraScreen,
+    #[cfg(target_arch = "wasm32")]
+    browser_camera: Option<u64>,
     #[cfg(not(target_arch = "wasm32"))]
     recovery: recovery::Recovery,
     #[cfg(not(target_arch = "wasm32"))]
@@ -132,6 +136,8 @@ pub(crate) enum Message {
     SystemThemeChanged(iced::theme::Mode),
     #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
     Camera(camera::Event),
+    #[cfg(target_arch = "wasm32")]
+    BrowserCamera(web_camera::Event),
     PageEdit(page_edit::Event),
     SmartSnap(snap::Event),
     ViewportResized,
@@ -386,6 +392,13 @@ fn app_event(
     }
 }
 
+#[cfg_attr(
+    target_arch = "wasm32",
+    expect(
+        clippy::needless_pass_by_value,
+        reason = "Native startup owns the path"
+    )
+)]
 fn boot(
     startup_path: Option<std::path::PathBuf>,
 ) -> (FastFill, iced::Task<Message>) {

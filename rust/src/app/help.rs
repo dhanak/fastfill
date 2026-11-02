@@ -3,10 +3,12 @@
 use super::{FastFill, ImagePicker, Message, TEXT_EDITOR_ID};
 use crate::appearance::{self, action_button};
 use fastfill_rust::annotations::DragModifiers;
+#[cfg(not(target_arch = "wasm32"))]
+use iced::font;
 use iced::widget::{
     column, container, mouse_area, opaque, row, scrollable, table, text,
 };
-use iced::{Element, Fill, FillPortion, Font, Task, font};
+use iced::{Element, Fill, FillPortion, Font, Task};
 
 const COMMAND: &str = if cfg!(target_os = "macos") {
     "Cmd"
@@ -17,6 +19,10 @@ const COMMAND: &str = if cfg!(target_os = "macos") {
 pub(super) fn can_open(state: &FastFill) -> bool {
     #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
     if state.camera.is_open() {
+        return false;
+    }
+    #[cfg(target_arch = "wasm32")]
+    if state.browser_camera.is_some() {
         return false;
     }
     !state.show_shortcuts
@@ -88,6 +94,10 @@ pub(super) fn view(state: &FastFill) -> Option<Element<'static, Message>> {
     if !state.show_shortcuts {
         return None;
     }
+    // Web embeds regular Fira Sans, but has no generic bold font to draw.
+    #[cfg(target_arch = "wasm32")]
+    let bold = Font::with_name("Fira Sans");
+    #[cfg(not(target_arch = "wasm32"))]
     let bold = Font {
         weight: font::Weight::Bold,
         ..Font::DEFAULT
@@ -107,12 +117,13 @@ pub(super) fn view(state: &FastFill) -> Option<Element<'static, Message>> {
             })
             .width(FillPortion(5)),
         ],
-        ENTRIES.iter().copied().filter(|entry| {
-            entry.0 != "Camera"
-                || cfg!(all(
-                    feature = "native-camera",
-                    not(target_arch = "wasm32")
-                ))
+        ENTRIES.iter().copied().filter(|entry| match entry.0 {
+            "Browser" => cfg!(target_arch = "wasm32"),
+            "Camera" => cfg!(all(
+                feature = "native-camera",
+                not(target_arch = "wasm32")
+            )),
+            _ => true,
         }),
     )
     .padding_x(8)
@@ -161,6 +172,7 @@ type Entry = (&'static str, &'static str, &'static str);
 // Describe implemented input only; tool names are not letter-key shortcuts.
 const ENTRIES: &[Entry] = &[
     ("Help", "F1 / Escape", "Open help / close help."),
+    ("Browser", "F11", "Toggle browser full screen."),
     ("Commands", "Mod+.", "Search and run available commands."),
     (
         "Project",

@@ -927,6 +927,7 @@ dependencies = [
  "iced",
  "iced_runtime",
  "image",
+ "js-sys",
  "krilla",
  "nokhwa",
  "nokhwa-bindings-windows",
@@ -938,6 +939,7 @@ dependencies = [
  "time",
  "uuid",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "zip",
 ]
 

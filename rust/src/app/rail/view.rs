@@ -44,6 +44,15 @@ pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
         crate::app::camera::can_open(state)
             .then_some(Message::Camera(crate::app::camera::Event::Begin)),
     ));
+    #[cfg(target_arch = "wasm32")]
+    let first = first.push(super::super::toolbar::icon_button(
+        Glyph::Camera,
+        "Camera",
+        false,
+        crate::app::web_camera::can_open(state).then_some(
+            Message::BrowserCamera(crate::app::web_camera::Event::Begin),
+        ),
+    ));
     let first = first.spacing(8);
     let second = row![
         super::super::toolbar::icon_button(

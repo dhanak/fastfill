@@ -20,7 +20,7 @@ pub(crate) enum Glyph {
     Search,
     AddImage,
     ImportPdf,
-    #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+    #[cfg(any(feature = "native-camera", target_arch = "wasm32"))]
     Camera,
     #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
     CameraSwitch,
@@ -144,7 +144,7 @@ fn source(glyph: Glyph) -> &'static [u8] {
         Glyph::ImportPdf => {
             include_bytes!("../assets/icons/lucide/file-up.svg")
         }
-        #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
+        #[cfg(any(feature = "native-camera", target_arch = "wasm32"))]
         Glyph::Camera => include_bytes!("../assets/icons/lucide/camera.svg"),
         #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
         Glyph::CameraSwitch => {

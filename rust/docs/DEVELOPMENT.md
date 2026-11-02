@@ -54,10 +54,10 @@ Open and (on desktop) Save as. Undo, Redo, zoom out/in, 1:1, Fit, Save, Export
 PDF, Commands and Shortcuts follow it; narrow windows move less-used commands
 into the menu button. Status appears in the header; errors and progress appear
 over the editor without shifting the page. The page rail has icon buttons for
-Add image, Import PDF, Camera (supported native builds), Replace image, Edit
-page and Delete page; hover for labels. Replace image uses an image-up glyph.
-Its menu button moves the current page earlier or later. Choose pages from
-thumbnails; there is no page-number dropdown.
+Add image, Import PDF, Camera (supported native and browser builds), Replace
+image, Edit page and Delete page; hover for labels. Replace image uses an
+image-up glyph. Its menu button moves the current page earlier or later. Choose
+pages from thumbnails; there is no page-number dropdown.
 
 Colors follow the system appearance. On Linux, removing a dark preference
 restores the default light theme; the `ICED_THEME` override still takes
@@ -148,12 +148,24 @@ under a subpath. CI extracts the tarball and checks HTML, JS, WASM, and snippet
 references. See [browser deployment](WEB.md) for server setup. A real browser
 check after publication is still needed.
 
+Browser camera analysis samples one frame at a time at a 640-pixel longest edge.
+The existing Rust detector and steadiness gate run on that sample. If capture
+triggers, the browser encodes the matching full-resolution frame and passes its
+raw detected corners to the page editor. Manual Capture works even when analysis
+is slow or fails. The analysis call runs on the browser UI thread, so check
+preview responsiveness on a physical device.
+
 Rebuild the deployable site locally from `rust/`:
 
 ```sh
 mise exec -- trunk build --release --locked --all-features \
   --public-url ./ --dist /tmp/fastfill-web-dist
 ```
+
+The `mise run web` development task disables incremental Rust compilation for
+WASM. It keeps cached dependencies while avoiding stale object files that can
+make `rust-lld` report missing internal symbols after repeated edits. If you run
+Trunk directly, set `CARGO_INCREMENTAL=0` for the same behavior.
 
 ## Build and develop locally
 
@@ -175,11 +187,12 @@ macOS may report future incompatibility in upstream `block 0.1.6`, pulled in by
 iced's wgpu/Metal renderer. It does not fail the pinned compiler's build; fixing
 it needs an upstream renderer dependency update, not a warning filter.
 
-The small browser download adapter also has a dependency-free check (Node.js
+The browser download and camera adapters have dependency-free checks (Node.js
 18+; run in CI):
 
 ```sh
 node web/download.test.mjs
+node --test web/camera.test.mjs
 ```
 
 On Linux/macOS, check publication gates and release creation/update/failure

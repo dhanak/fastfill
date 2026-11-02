@@ -364,6 +364,10 @@ fn table_wraps_without_horizontal_overflow_and_scrolls_in_small_windows() {
             before.texts.iter().any(|t| t.0 == "Camera"),
             cfg!(all(feature = "native-camera", not(target_arch = "wasm32"))),
         );
+        assert_eq!(
+            before.texts.iter().any(|t| t.0 == "F11"),
+            cfg!(target_arch = "wasm32"),
+        );
         let (messages, captured) = dispatch(
             &mut element,
             &mut tree,

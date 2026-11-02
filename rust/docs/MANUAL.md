@@ -3,7 +3,7 @@
 FastFill turns scanned images, PDFs, and camera photos into annotated pages.
 Save an editable `.docscan` project; export a PDF when the document is ready to
 share. This guide covers the desktop app and browser build. Camera capture is
-available in supported Windows and Linux desktop builds, not in the browser.
+available in supported Windows and Linux desktop builds and the browser.
 
 ## Start and organize a project
 
@@ -76,12 +76,13 @@ after Accept; Undo can restore the prior page state.
 
 ## Capture from a camera
 
-On supported Windows/Linux desktop builds, choose **Camera** in the rail. The
-live view uses a small floating control dock: Cancel, Rotate, Mirror, Capture,
+Choose **Camera** in the rail. On Windows/Linux desktop and in the browser, the
+live view uses a floating control dock: Cancel, Rotate, Mirror, Capture,
 Pause/Resume, and Settings. A separate corner button switches cameras. Settings
-lets you choose the camera and resolution or refresh the device list.
-Front-facing cameras are mirrored in the preview by default to help aim the
-paper; the image is unmirrored when you choose **Use photo**.
+lets you choose the camera or refresh the device list. Native builds also let
+you choose the resolution; the browser picks it automatically. Front-facing
+cameras are mirrored in the preview by default to help aim the paper; the image
+is unmirrored when you choose **Use photo**.
 
 ![Camera controls around an illustrative preview frame](screenshots/camera.png)
 
@@ -94,6 +95,12 @@ capture, review the photo: **Retake** restarts the preview; **Use photo** sends
 it to the page editor for framing and correction. Cancel there cancels the
 correction, not the already accepted photo. If preview pauses after sleep or a
 camera interruption, use Resume preview; the steadiness countdown starts over.
+
+In the browser, allow camera access when prompted. Automatic capture uses the
+same one-second steadiness check, shows the detected frame on the review photo,
+and suggests it in the page editor. Manual Capture remains available at any
+time; use **Auto frame** in the page editor if that photo needs a framing
+suggestion. The browser needs HTTPS or localhost for camera access.
 
 ## Save, export, and recover
 
@@ -117,4 +124,5 @@ Open **Commands** (magnifying glass) or press **Ctrl+.** (Cmd+. on macOS).
 Search, use arrow keys to choose a result, then Enter; Escape closes it. Press
 **F1** or the **Shortcuts** button for the full mouse, touch, keyboard, and
 platform-specific modifier reference. F1 also works while Commands is open. The
-browser or operating system may intercept F1; use the button in that case.
+browser or operating system may intercept F1; use the button in that case. In
+the browser build, **F11** toggles browser full screen.
