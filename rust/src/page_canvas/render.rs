@@ -17,7 +17,7 @@ use iced::advanced::text::{self, Paragraph as _, Text as ParagraphText};
 use iced::widget::canvas;
 use iced::{Color, Pixels, Point, Rectangle, Size, Vector, alignment};
 
-pub(super) fn draw_annotation(
+pub(crate) fn draw_annotation(
     frame: &mut canvas::Frame,
     view: PageView,
     annotation: AnnotationRef<'_>,

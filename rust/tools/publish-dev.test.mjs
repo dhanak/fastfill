@@ -34,6 +34,7 @@ test("browser archive has web-root files and relative assets", () => {
     const dist = join(directory, "fastfill-rust-web-dist");
     mkdirSync(dist);
     writeFileSync(join(dist, "index.html"), `
+<link rel="icon" href="./AppIcon.png">
 <script type="module">
 import init from './app.js';
 await init({ module_or_path: './app.wasm' });
@@ -41,6 +42,7 @@ await init({ module_or_path: './app.wasm' });
     writeFileSync(join(dist, "app.js"), "export default () => {};\n");
     writeFileSync(join(dist, "app.wasm"),
       Buffer.from([0, 97, 115, 109, 1, 0, 0, 0]));
+    writeFileSync(join(dist, "AppIcon.png"), "favicon");
     const run = () => spawnSync(process.execPath, [webPackage], {
       env: { ...process.env, RUNNER_TEMP: directory },
       encoding: "utf8",
@@ -52,10 +54,15 @@ await init({ module_or_path: './app.wasm' });
     });
     assert.equal(contents.status, 0);
     assert.match(contents.stdout, /\.\/index\.html/);
+    assert.match(contents.stdout, /\.\/AppIcon\.png/);
     assert.doesNotMatch(contents.stdout, /dist\/index\.html/);
     writeFileSync(join(dist, "index.html"),
-      `<script>import init from '/app.js';</script>`);
+      `<link rel="icon" href="./AppIcon.png">
+<script>import init from '/app.js';</script>`);
     assert.notEqual(run().status, 0, "Reject root-bound asset URLs");
+    writeFileSync(join(dist, "index.html"),
+      `<script>import init from './app.js';</script>`);
+    assert.notEqual(run().status, 0, "Reject missing favicon");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

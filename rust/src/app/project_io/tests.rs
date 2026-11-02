@@ -60,6 +60,21 @@ fn reopen(archive: &LoadedProject) -> OpenedProject {
         .unwrap()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn path_open_uses_the_project_loader_and_tracks_the_file() {
+    let (archive, _) = fixture();
+    let path = std::env::temp_dir()
+        .join(format!("fastfill-cli-{}.DOCSCAN", uuid::Uuid::new_v4()));
+    fastfill_rust::project::save_archive_file(&archive, &path).unwrap();
+    let opened = open_project_path(path.clone()).unwrap();
+    assert_eq!(opened.project, archive.project);
+    assert_eq!(opened.path, Some(path.clone()));
+    assert_eq!(opened.name, path.file_name().unwrap().to_string_lossy());
+    std::fs::remove_file(&path).unwrap();
+    assert!(open_project_path(path).is_err());
+}
+
 #[test]
 fn distinct_sources_stage_each_correction_without_changing_saved_pixels() {
     let (archive, source) = fixture();

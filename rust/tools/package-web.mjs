@@ -13,6 +13,13 @@ const archive = join(temp, "FastFill-Rust-web.tar.gz");
 
 function checkSite(root) {
   const html = readFileSync(join(root, "index.html"), "utf8");
+  const icon = html.match(/<link\b[^>]*\brel="icon"[^>]*\bhref="([^"]+)"/);
+  assert.ok(icon, "Missing favicon");
+  assert.ok(icon[1].startsWith("./"), "Favicon URL is not relative");
+  const iconPath = resolve(root, icon[1]);
+  assert.ok(iconPath.startsWith(`${resolve(root)}${sep}`),
+    "Favicon URL escapes web root");
+  assert.ok(statSync(iconPath).isFile(), "Missing favicon asset");
   const refs = [...html.matchAll(/['"]([^'"<>]+\.(?:js|mjs|wasm))['"]/g)]
     .map((match) => match[1]);
   assert.ok(refs.some((ref) => ref.endsWith(".js")), "Missing JS");

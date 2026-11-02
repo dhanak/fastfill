@@ -1115,6 +1115,9 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
 - [x] Run automated integration/regression checks and a focused fresh review
   after delivery work. Native, WASM, Node, formatting and strict Clippy checks
   pass; software checks do not replace the open hardware tests.
+- [x] Open a `.docscan` project passed to the native app as a CLI argument,
+  matching the C# launch behavior while preserving deferred recovery data. Linux
+  manual launch confirmed on 2026-11-02.
 - [ ] User release gate: a 20-page project, repeated scans, save/reopen/export,
   Surface touch at 150%/200% scaling, plus memory and latency checks.
 - [x] Retest sidebar touch on SP6. User confirms touch now works after routing

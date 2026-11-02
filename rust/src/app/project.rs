@@ -110,6 +110,21 @@ impl ProjectSession {
 }
 
 impl FastFill {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn open_startup_path(&mut self, path: PathBuf) -> Task<Message> {
+        let id = self.project.request_id();
+        self.project.operation = Operation::Opening(id);
+        self.status = "Opening project…".into();
+        self.status_is_error = false;
+        Task::perform(
+            async move {
+                super::project_io::open_project_path(path)
+                    .map(|opened| Some(Arc::new(opened)))
+            },
+            move |result| Message::ProjectOpened(id, result),
+        )
+    }
+
     pub(super) fn project_snapshot(&self) -> Result<SaveSnapshot, String> {
         let mut project = self.project.header.clone();
         project.updated_utc = OffsetDateTime::now_utc();

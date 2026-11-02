@@ -6,6 +6,8 @@ use super::{FastFill, ImagePicker, Message, Rail};
 use crate::app::pages::EditorPage;
 use crate::appearance::{self, accent};
 use crate::icons::Glyph;
+use crate::page_canvas::draw_annotation;
+use fastfill_rust::geometry::{Rect as PageRect, fit_contain};
 use iced::widget::{Row, Space, canvas, column, container, row, text};
 use iced::{Color, Element, Fill, Point, Rectangle, Renderer, Size, Theme};
 use iced::{Vector, mouse};
@@ -87,6 +89,9 @@ pub(in crate::app) fn view(state: &FastFill) -> Element<'_, Message> {
                 iced::widget::stack![
                     iced::widget::Space::new().width(Fill).height(Fill),
                     canvas(Rail { app: state }).width(Fill).height(Fill),
+                    canvas(AnnotationsLayer { app: state })
+                        .width(Fill)
+                        .height(Fill),
                 ]
                 .width(Fill)
                 .height(Fill)
@@ -263,17 +268,86 @@ fn draw_card(
     });
 }
 
+fn draw_card_annotations(
+    frame: &mut canvas::Frame,
+    page: &EditorPage,
+    card: Rectangle,
+) {
+    let paper = paper_bounds(card, page_size(page));
+    let Some(view) = fit_contain(
+        page.size,
+        PageRect::new(paper.x, paper.y, paper.width, paper.height),
+    ) else {
+        return;
+    };
+    let scale = view.page_rect().width / page.size.width;
+    // One preview layer keeps thumbnails cheap; text can cover later paths.
+    for annotation in page.annotations.ordered_annotations() {
+        draw_annotation(frame, view, annotation, scale);
+    }
+}
+
+pub(super) struct AnnotationsLayer<'a> {
+    pub(super) app: &'a FastFill,
+}
+
+impl canvas::Program<Message> for AnnotationsLayer<'_> {
+    type State = ();
+
+    fn draw(
+        &self,
+        (): &(),
+        renderer: &Renderer,
+        _theme: &Theme,
+        bounds: Rectangle,
+        _: mouse::Cursor,
+    ) -> Vec<canvas::Geometry> {
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        let rail = Rail { app: self.app };
+        let layout = rail.layout(bounds);
+        let motion = self.app.rail_motion.borrow();
+        for (index, page) in self.app.pages.iter().enumerate() {
+            if motion
+                .ghost
+                .as_ref()
+                .is_some_and(|ghost| ghost.id == page.metadata.id)
+                || layout.visible_slot(index).is_none()
+            {
+                continue;
+            }
+            let mut card = rail.card_bounds(index, bounds);
+            let target = layout.top(index);
+            card.y += motion.card_y(page.metadata.id, target) - target;
+            card.x -= bounds.x;
+            card.y -= bounds.y;
+            if card.y + card.height >= 0.0 && card.y <= bounds.height {
+                draw_card_annotations(&mut frame, page, card);
+            }
+        }
+        vec![frame.into_geometry()]
+    }
+}
+
 pub(in crate::app) fn overlay(app: &FastFill) -> Option<Element<'_, Message>> {
     if !app.dragged_page.is_some_and(|drag| drag.moving)
         && app.rail_motion.borrow().ghost.is_none()
     {
         return None;
     }
-    Some(canvas(Floating { app }).width(Fill).height(Fill).into())
+    Some(
+        iced::widget::stack![
+            canvas(Floating { app, ink: false })
+                .width(Fill)
+                .height(Fill),
+            canvas(Floating { app, ink: true }).width(Fill).height(Fill),
+        ]
+        .into(),
+    )
 }
 
 struct Floating<'a> {
     app: &'a FastFill,
+    ink: bool,
 }
 
 impl canvas::Program<Message> for Floating<'_> {
@@ -318,15 +392,12 @@ impl canvas::Program<Message> for Floating<'_> {
                 .dragged_page
                 .filter(|drag| drag.moving && drag.source == index)
                 .map_or(index + 1, |drag| drag.target + 1);
-            draw_card(
-                &mut frame,
-                page,
-                number,
-                Rectangle::new(position, size),
-                true,
-                theme,
-                0.82,
-            );
+            let card = Rectangle::new(position, size);
+            if self.ink {
+                draw_card_annotations(&mut frame, page, card);
+            } else {
+                draw_card(&mut frame, page, number, card, true, theme, 0.82);
+            }
         }
         vec![frame.into_geometry()]
     }

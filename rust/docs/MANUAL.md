@@ -10,12 +10,14 @@ available in supported Windows and Linux desktop builds, not in the browser.
 The desktop window opens maximized; restore or resize it as needed.
 
 Open the project-name menu at top left for **New project** or **Open project**.
-Use **Add image** or **Import PDF** in the Pages rail to add pages. **Replace
-image** changes the selected page's source; FastFill asks before replacing a
-page with annotations. Click a thumbnail to switch pages. Drag a thumbnail to
-reorder; drop outside the rail or press Escape to cancel. The page menu also
-moves the current page one place earlier or later. **Delete page** asks for
-confirmation.
+On desktop, you can also launch FastFill with a `.docscan` file path to open it
+directly. Quote paths containing spaces when using a shell. Use **Add image** or
+**Import PDF** in the Pages rail to add pages. **Replace image** changes the
+selected page's source; FastFill asks before replacing a page with annotations.
+Thumbnails show committed annotations. Click one to switch pages. Drag a
+thumbnail to reorder; drop outside the rail or press Escape to cancel. The page
+menu also moves the current page one place earlier or later. **Delete page**
+asks for confirmation.
 
 ![Main window with the Text tool active beside a sample form](screenshots/workspace.png)
 

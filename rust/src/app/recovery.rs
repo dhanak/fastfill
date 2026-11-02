@@ -170,6 +170,7 @@ pub(super) fn update(
 }
 
 fn receive(state: &mut FastFill, event: &Event) -> Task<Message> {
+    let startup_ready = matches!(event, Event::Ready(..) | Event::Failed(..));
     match event {
         Event::Ready(sender, candidate) => {
             state.recovery.sender = Some(sender.clone());
@@ -248,6 +249,15 @@ fn receive(state: &mut FastFill, event: &Event) -> Task<Message> {
                 "Automatic recovery unavailable: {error}. Save explicitly."
             ));
         }
+    }
+    if startup_ready && let Some(path) = state.startup_path.take() {
+        if state.recovery.candidate.is_some() {
+            // The explicit file wins; keep the old recovery for a later launch.
+            state.recovery.send(Command::Defer);
+            state.recovery.candidate = None;
+        }
+        state.project.operation = Operation::Idle;
+        return state.open_startup_path(path);
     }
     Task::none()
 }

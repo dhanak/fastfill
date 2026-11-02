@@ -365,3 +365,32 @@ fn worker_ticks_are_not_starved_by_other_commands() {
     std::fs::remove_dir_all(directory).unwrap();
     assert!(ticked, "commands must not reset the recovery deadline");
 }
+
+#[test]
+fn explicit_startup_project_defers_recovery_and_starts_opening() {
+    let path = std::path::PathBuf::from("chosen.docscan");
+    let mut state = FastFill {
+        startup_path: Some(path),
+        ..FastFill::default()
+    };
+    state.project.operation = Operation::Recovering;
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let candidate = super::store::Candidate {
+        id: uuid::Uuid::new_v4(),
+        modified: std::time::SystemTime::now(),
+    };
+    let _ = super::receive(&mut state, &Event::Ready(sender, Some(candidate)));
+    assert!(matches!(state.project.operation, Operation::Opening(_)));
+    assert!(state.startup_path.is_none());
+    assert!(state.recovery.candidate.is_none());
+    assert!(matches!(receiver.try_recv(), Ok(Command::Defer)));
+
+    let mut failed = FastFill {
+        startup_path: Some("chosen.docscan".into()),
+        ..FastFill::default()
+    };
+    failed.project.operation = Operation::Recovering;
+    let _ = super::receive(&mut failed, &Event::Failed("blocked".into()));
+    assert!(matches!(failed.project.operation, Operation::Opening(_)));
+    assert!(failed.recovery.error.is_some());
+}

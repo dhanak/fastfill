@@ -93,12 +93,7 @@ pub(super) async fn open_project(
         return Ok(None);
     };
     #[cfg(not(target_arch = "wasm32"))]
-    let opened = decode_project(
-        std::fs::File::open(file.path())
-            .map_err(|error| format!("Could not read project: {error}"))?,
-        Some(file.path().to_path_buf()),
-        file.file_name(),
-    )?;
+    let opened = open_project_path(file.path().to_path_buf())?;
     #[cfg(target_arch = "wasm32")]
     let opened = {
         // Check browser file size before its read allocates the whole ZIP.
@@ -108,6 +103,37 @@ pub(super) async fn open_project(
         decode_project(Cursor::new(file.read().await), None, file.file_name())?
     };
     Ok(Some(Arc::new(opened)))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(super) fn open_project_path(
+    path: PathBuf,
+) -> Result<OpenedProject, String> {
+    if !path
+        .extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("docscan"))
+    {
+        return Err("FastFill can only open .docscan projects.".into());
+    }
+    let path = if path.is_absolute() {
+        path
+    } else {
+        std::env::current_dir()
+            .map_err(|error| format!("Could not locate project: {error}"))?
+            .join(path)
+    };
+    let name = path
+        .file_name()
+        .ok_or("Project filename is missing.")?
+        .to_string_lossy()
+        .into_owned();
+    decode_project(
+        std::fs::File::open(&path)
+            .map_err(|error| format!("Could not read project: {error}"))?,
+        Some(path),
+        name,
+    )
 }
 
 pub(super) fn decode_project(

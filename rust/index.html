@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>FastFill Rust prototype</title>
+    <link data-trunk rel="icon" type="image/png" href="assets/AppIcon.png">
     <style>
       html,
       body {
@@ -17,6 +18,14 @@
         touch-action: none;
       }
     </style>
+    <script>
+      // Winit prevents default on canvas keydown; leave F11 to the browser.
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "F11") {
+          event.stopPropagation();
+        }
+      }, true);
+    </script>
     <link data-trunk rel="rust" data-bin="fastfill-rust">
   </head>
   <body></body>

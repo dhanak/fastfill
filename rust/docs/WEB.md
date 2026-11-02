@@ -2,7 +2,7 @@
 
 This archive contains a complete static site. It needs a web server, not a Rust
 toolchain or application backend. Projects and exports stay in the browser until
-you download them.
+you download them. The browser needs WebGPU or WebGL2.
 
 ## Install
 

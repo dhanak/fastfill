@@ -95,6 +95,8 @@ struct FastFill {
     camera: camera::CameraScreen,
     #[cfg(not(target_arch = "wasm32"))]
     recovery: recovery::Recovery,
+    #[cfg(not(target_arch = "wasm32"))]
+    startup_path: Option<std::path::PathBuf>,
 }
 
 impl FastFill {
@@ -224,7 +226,7 @@ pub(crate) enum Message {
     },
 }
 
-pub(crate) fn run() -> iced::Result {
+pub(crate) fn run(startup_path: Option<std::path::PathBuf>) -> iced::Result {
     let window = iced::window::Settings {
         maximized: true,
         ..iced::window::Settings::default()
@@ -234,7 +236,7 @@ pub(crate) fn run() -> iced::Result {
         icon: Some(window_icon()),
         ..window
     };
-    iced::application(boot, update, view)
+    iced::application(move || boot(startup_path.clone()), update, view)
         .window(window)
         .title(|state: &FastFill| {
             format!(
@@ -384,16 +386,22 @@ fn app_event(
     }
 }
 
-fn boot() -> (FastFill, iced::Task<Message>) {
+fn boot(
+    startup_path: Option<std::path::PathBuf>,
+) -> (FastFill, iced::Task<Message>) {
     let state = FastFill::default();
     #[cfg(not(target_arch = "wasm32"))]
     {
         let mut state = state;
+        state.startup_path = startup_path;
         state.project.operation = project::Operation::Recovering;
         (state, recovery::start())
     }
     #[cfg(target_arch = "wasm32")]
-    (state, iced::Task::none())
+    {
+        let _ = startup_path;
+        (state, iced::Task::none())
+    }
 }
 
 fn page_size(state: &FastFill) -> PageSize {

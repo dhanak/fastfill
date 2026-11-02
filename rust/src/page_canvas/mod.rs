@@ -11,7 +11,8 @@ mod program;
 mod render;
 mod selection;
 
-use render::{draw_annotation, draw_text_underline};
+pub(crate) use render::draw_annotation;
+use render::draw_text_underline;
 use selection::{
     draw_group_member, draw_group_selection, draw_marquee, draw_selection,
     draw_text_group_member, draw_text_selection,

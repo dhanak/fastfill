@@ -56,6 +56,48 @@ fn compact_page_actions_route_mouse_and_touch() {
 }
 
 #[test]
+fn thumbnail_overlay_keeps_page_selection_clickable() {
+    use crate::app::tests::click_element;
+    use iced::advanced::renderer::Headless;
+    use iced::advanced::{layout, widget};
+
+    let mut state = three_pages();
+    state.page_scroll = 0.0;
+    let renderer =
+        iced::futures::executor::block_on(<Renderer as Headless>::new(
+            iced::Font::with_name("Fira Sans"),
+            iced::Pixels(16.0),
+            Some("tiny-skia"),
+        ))
+        .unwrap();
+    let size = Size::new(164.0, 600.0);
+    for touch in [false, true] {
+        let mut element = super::super::view::view(&state);
+        let mut tree = widget::Tree::new(element.as_widget());
+        let node = element.as_widget_mut().layout(
+            &mut tree,
+            &renderer,
+            &layout::Limits::new(size, size),
+        );
+        let messages = click_element(
+            &mut element,
+            &mut tree,
+            &node,
+            &renderer,
+            Point::new(80.0, 220.0),
+            touch,
+        );
+        assert!(
+            messages.iter().any(|message| matches!(
+                message,
+                Message::PageRail(super::super::Event::Start { index: 0, .. })
+            )),
+            "touch={touch}: {messages:?}"
+        );
+    }
+}
+
+#[test]
 fn page_menu_keeps_both_move_directions_reachable() {
     use crate::app::tests::click_element;
     use iced::Renderer;
@@ -120,7 +162,7 @@ fn portrait_landscape_and_blank_previews_fill_the_space_after_the_number() {
 }
 
 #[test]
-fn thumbnail_cards_ignore_asset_names_and_annotation_counts() {
+fn thumbnail_cards_show_annotations_but_ignore_asset_names() {
     let _ = crate::appearance::text_font(
         fastfill_rust::annotations::TextFormat::default(),
     );
@@ -131,7 +173,13 @@ fn thumbnail_cards_ignore_asset_names_and_annotation_counts() {
         for (scale, dpi) in [(1, 1.0), (2, 2.0)] {
             let render = |app: &FastFill| {
                 render_themed_element(
-                    canvas(Rail { app }).width(148).height(164).into(),
+                    iced::widget::stack![
+                        canvas(Rail { app }).width(148).height(164),
+                        canvas(super::super::view::AnnotationsLayer { app })
+                            .width(148)
+                            .height(164),
+                    ]
+                    .into(),
                     Size::new(148, 164),
                     scale,
                     dpi,
@@ -157,12 +205,74 @@ fn thumbnail_cards_ignore_asset_names_and_annotation_counts() {
                 fastfill_rust::geometry::Point::new(50.0, 70.0),
                 false,
             ));
-            assert!(before == render(&app), "metadata changed the page card");
+            assert!(before != render(&app), "annotation is absent");
             let scale = usize::try_from(scale).unwrap();
             let offset = (130 * scale * 148 * scale + 80 * scale) * 4;
             assert_eq!(&before[offset..offset + 4], [255, 255, 255, 255]);
         }
     }
+}
+
+#[test]
+fn thumbnail_annotations_include_text_and_shapes() {
+    use fastfill_rust::annotations::{
+        AnnotationColor, Pointer, TextFormat, Tool,
+    };
+
+    let mut app = three_pages();
+    app.pages.select(0);
+    app.page_scroll = 0.0;
+    let page = PageSize::new(612.0, 918.0);
+    let annotations = app.annotations_mut();
+    annotations.set_tool(Tool::Text);
+    assert!(annotations.begin_text(
+        fastfill_rust::geometry::Point::new(120.0, 200.0),
+        page,
+        1.0,
+    ));
+    annotations.set_text_format(TextFormat {
+        font_size: 96.0,
+        color: AnnotationColor::Red,
+        ..TextFormat::default()
+    });
+    annotations.update_text("TEST", PageSize::new(300.0, 130.0));
+    assert!(annotations.accept_text());
+    annotations.set_tool(Tool::Rectangle);
+    annotations.clear_selection();
+    annotations.set_color(AnnotationColor::Yellow);
+    annotations.set_filled(true);
+    assert!(annotations.begin(
+        Pointer::Mouse,
+        fastfill_rust::geometry::Point::new(100.0, 180.0),
+        page,
+    ));
+    assert!(annotations.finish(
+        Pointer::Mouse,
+        fastfill_rust::geometry::Point::new(500.0, 340.0),
+        false,
+    ));
+    let render = |app: &FastFill| {
+        render_themed_element(
+            iced::widget::stack![
+                canvas(Rail { app }).width(148).height(164),
+                canvas(super::super::view::AnnotationsLayer { app })
+                    .width(148)
+                    .height(164),
+            ]
+            .into(),
+            Size::new(148, 164),
+            1,
+            1.0,
+            &Theme::Light,
+            mouse::Cursor::Unavailable,
+        )
+    };
+    let visible = render(&app);
+    let red = |pixel: &[u8]| pixel[0] > 150 && pixel[1] < 100;
+    let yellow =
+        |pixel: &[u8]| pixel[0] > 200 && pixel[1] > 140 && pixel[2] < 80;
+    assert!(visible.as_chunks::<4>().0.iter().any(|pixel| red(pixel)));
+    assert!(visible.as_chunks::<4>().0.iter().any(|pixel| yellow(pixel)));
 }
 
 #[test]
