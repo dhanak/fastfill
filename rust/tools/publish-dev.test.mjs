@@ -88,8 +88,20 @@ test("CI jobs are grouped as checks, packages, then publication", () => {
   assert.deepEqual(jobs, [
     "test-native", "package-web",
     "package-windows", "package-linux", "package-macos",
-    "publish-dev",
+    "publish-dev", "deploy-pages",
   ]);
+});
+
+test("Pages deploys the tested browser archive from master", () => {
+  const pages = workflow.split("\n  deploy-pages:\n")[1];
+  assert.ok(pages, "Find the Pages job");
+  assert.match(pages, /github\.ref == 'refs\/heads\/master'/);
+  assert.match(pages, /needs: \[test-native, package-web\]/);
+  assert.match(pages, /name: FastFill-Rust-web\.tar\.gz/);
+  assert.match(pages, /skip-decompress: true/);
+  assert.match(pages, /tar -xzf FastFill-Rust-web\.tar\.gz -C site/);
+  assert.match(pages, /path: site/);
+  assert.match(pages, /actions\/deploy-pages@v4/);
 });
 
 test("Publication waits for all four tested packages", () => {

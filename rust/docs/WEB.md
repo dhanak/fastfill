@@ -22,5 +22,13 @@ For nginx, load its usual `mime.types` and ensure `.wasm` is served as
 `application/wasm` and `.js`/`.mjs` as JavaScript. Use HTTPS for remote access.
 No rewrite or application server is needed for the editor's main page.
 
+## GitHub Pages
+
+The `master` workflow deploys the tested browser archive to GitHub Pages after
+native tests and the browser package check pass. If `dev.vidga.hu` is the
+account's Pages domain, the project site is at
+`https://dev.vidga.hu/fastfill/`. Keep the repository's custom-domain setting
+empty so the account domain applies to the project site.
+
 The browser build has no camera capture. Open and save projects with the app's
 file controls. Back up important `.docscan` files outside the browser.

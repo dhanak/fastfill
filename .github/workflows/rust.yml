@@ -388,3 +388,36 @@ jobs:
               --prerelease --latest=false --target "${GITHUB_SHA}" \
               --title "$title" --notes "$notes"
           fi
+
+  deploy-pages:
+    name: Publish browser site
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/master'
+    needs: [test-native, package-web]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download tested browser archive
+        uses: actions/download-artifact@v8
+        with:
+          name: FastFill-Rust-web.tar.gz
+          skip-decompress: true
+      - name: Extract browser site
+        run: |
+          mkdir site
+          tar -xzf FastFill-Rust-web.tar.gz -C site
+          test -s site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+      - name: Deploy browser site
+        id: deployment
+        uses: actions/deploy-pages@v4
