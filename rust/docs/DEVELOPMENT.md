@@ -47,6 +47,10 @@ In the main editor, **Ctrl+A** (or **Cmd+A** on macOS) selects all annotations
 on the current page. Focused text and search fields keep their normal Select All
 behavior.
 
+Ctrl/Cmd+B, I and U toggle bold, italic and underline for active text edits and
+selected text annotations. The annotation editor consumes these keys before text
+insertion; global handling skips captured events to prevent double toggles.
+
 Resizing the window accepts active annotation text, then cancels unfinished
 pointer gestures. In browsers, Ctrl/Cmd combinations never insert their command
 letter into the annotation editor. Copy/cut/paste use the browser clipboard API

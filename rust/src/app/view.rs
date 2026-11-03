@@ -400,6 +400,12 @@ fn inline_text_style(
 fn text_key_binding(
     key: text_editor::KeyPress,
 ) -> Option<text_editor::Binding<Message>> {
+    if matches!(key.status, text_editor::Status::Focused { .. })
+        && let Some(message) =
+            super::controller::text_format_shortcut(&key.key, key.modifiers)
+    {
+        return Some(text_editor::Binding::Custom(message));
+    }
     if accepts_text(&key.key, key.modifiers) {
         return Some(text_editor::Binding::Custom(Message::AcceptText));
     }
@@ -456,9 +462,63 @@ fn accepts_text(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{accepts_text, browser_key_binding};
+    use super::{accepts_text, browser_key_binding, text_key_binding};
+    use crate::app::{Message, controller};
     use iced::keyboard;
     use iced::widget::text_editor::{Binding, KeyPress, Status};
+
+    #[test]
+    fn formatting_keys_are_captured_once_without_inserting_letters() {
+        use keyboard::{Key, Modifiers, key};
+        for (letter, expected) in [
+            ("b", Message::ToggleTextBold),
+            ("I", Message::ToggleTextItalic),
+            ("u", Message::ToggleTextUnderline),
+        ] {
+            let event = KeyPress {
+                key: Key::Character(letter.into()),
+                modified_key: Key::Character(letter.into()),
+                physical_key: key::Physical::Code(key::Code::KeyB),
+                modifiers: Modifiers::COMMAND,
+                text: Some(letter.into()),
+                status: Status::Focused { is_hovered: false },
+            };
+            let Some(Binding::Custom(message)) =
+                text_key_binding(event.clone())
+            else {
+                panic!("formatting must consume the key without typing");
+            };
+            assert_eq!(
+                std::mem::discriminant(&message),
+                std::mem::discriminant(&expected)
+            );
+            assert!(
+                controller::shortcut_message(
+                    event.key.clone(),
+                    event.modifiers,
+                    iced::event::Status::Captured
+                )
+                .is_none()
+            );
+            let mut plain = event.clone();
+            plain.modifiers = Modifiers::empty();
+            assert!(matches!(
+                text_key_binding(plain),
+                Some(Binding::Insert(_))
+            ));
+            let mut altgr = event.clone();
+            altgr.modifiers |= Modifiers::ALT;
+            assert!(!matches!(
+                text_key_binding(altgr),
+                Some(Binding::Custom(_))
+            ));
+            let inactive = KeyPress {
+                status: Status::Active,
+                ..event
+            };
+            assert!(text_key_binding(inactive).is_none());
+        }
+    }
 
     #[test]
     fn browser_command_letters_do_not_type_but_clipboard_and_altgr_work() {

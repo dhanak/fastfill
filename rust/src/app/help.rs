@@ -280,6 +280,11 @@ const ENTRIES: &[Entry] = &[
         "Select all / copy / cut / paste.",
     ),
     (
+        "Text formatting",
+        "Mod+B / Mod+I / Mod+U",
+        "Toggle bold / italic / underline while editing or with text selected.",
+    ),
+    (
         "Font size",
         "Wheel / − / +",
         "Step by 1 pt; range 6–144 pt.",

@@ -11,6 +11,11 @@ pub(super) fn shortcut_message(
     status: iced::event::Status,
 ) -> Option<Message> {
     let command = super::command::pressed(modifiers) && !modifiers.alt();
+    if status == iced::event::Status::Ignored
+        && let Some(message) = text_format_shortcut(&key, modifiers)
+    {
+        return Some(message);
+    }
     // Focused text fields own Delete; Escape still cancels their numeric draft.
     if status == iced::event::Status::Captured
         && key == keyboard::Key::Named(keyboard::key::Named::Delete)
@@ -75,6 +80,23 @@ pub(super) fn shortcut_message(
         }
         keyboard::Key::Named(keyboard::key::Named::Escape) => {
             Some(Message::CancelInteraction)
+        }
+        _ => None,
+    }
+}
+
+pub(super) fn text_format_shortcut(
+    key: &keyboard::Key,
+    modifiers: keyboard::Modifiers,
+) -> Option<Message> {
+    if !super::command::pressed(modifiers) || modifiers.alt() {
+        return None;
+    }
+    match key.as_ref() {
+        keyboard::Key::Character("b" | "B") => Some(Message::ToggleTextBold),
+        keyboard::Key::Character("i" | "I") => Some(Message::ToggleTextItalic),
+        keyboard::Key::Character("u" | "U") => {
+            Some(Message::ToggleTextUnderline)
         }
         _ => None,
     }

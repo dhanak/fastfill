@@ -36,6 +36,9 @@ filled. Text has font, size, bold, italic, and underline controls. Changing a
 property with an annotation selected edits that annotation; without a selection
 it sets the next annotation's default. Switching tools clears selection.
 
+While editing text or with text annotations selected, **Ctrl+B**, **Ctrl+I** and
+**Ctrl+U** toggle bold, italic and underline (use Cmd on macOS).
+
 With **Select**, click an annotation to select it. Drag a selected annotation or
 its visible handles to move or resize it; use the rotation knob where available.
 Drag from empty space or an unselected object for a marquee. **Ctrl+click** adds

@@ -19,6 +19,61 @@ fn with_text() -> FastFill {
 }
 
 #[test]
+fn formatting_shortcuts_edit_selected_text_or_its_draft_and_preserve_content() {
+    use iced::{
+        event::Status,
+        keyboard::{Key, Modifiers},
+    };
+    for editing in [false, true] {
+        let mut state = with_text();
+        let original = state.annotations().texts().next().unwrap().clone();
+        if editing {
+            let _ = update(
+                &mut state,
+                Message::DrawPressed(
+                    Pointer::Mouse,
+                    PagePoint::new(100.0, 200.0),
+                    1.0,
+                ),
+            );
+        } else {
+            let _ = update(&mut state, Message::SetTool(Tool::Select));
+            let _ = update(&mut state, Message::SelectAll);
+        }
+        let content = state.text_content.text();
+        let cursor = state.text_content.cursor();
+        let identity = state.pages.identity();
+        for letter in ["b", "i", "u"] {
+            let message = controller::shortcut_message(
+                Key::Character(letter.into()),
+                Modifiers::COMMAND,
+                Status::Ignored,
+            )
+            .unwrap();
+            let _ = update(&mut state, message);
+            assert_eq!(state.text_content.text(), content);
+            assert_eq!(state.text_content.cursor(), cursor);
+        }
+        let format = state.annotations().current_text_format().unwrap();
+        assert!(format.bold && format.italic && format.underline);
+        assert_eq!(
+            state.annotations().texts().next().unwrap().text,
+            original.text
+        );
+        assert_eq!(state.annotations().has_text_edit(), editing);
+        if editing {
+            assert_eq!(state.pages.identity(), identity);
+            let _ = update(&mut state, Message::CancelInteraction);
+        } else {
+            for _ in 0..3 {
+                let _ = update(&mut state, Message::Undo);
+            }
+        }
+        assert_eq!(state.annotations().texts().next().unwrap(), &original);
+    }
+}
+
+#[test]
 fn font_size_wheel_steps_and_stops_at_limits() {
     let up = mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 };
     let down = mouse::ScrollDelta::Pixels { x: 0.0, y: -1.0 };

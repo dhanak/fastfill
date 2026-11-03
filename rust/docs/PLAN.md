@@ -4542,6 +4542,19 @@ Windows retest after the next CI ZIP:
   Cmd-key validation separate from the confirmed browser-host checks.
 - Manual checks pending: edge-sliver thinning; thick small Check/Cross marks.
 
+### 2026-11-03 — Text formatting shortcuts
+
+- Add Ctrl/Cmd+B, I and U for bold, italic and underline in active text edits
+  and selected text annotations. Reuse button behavior, including grouped text,
+  pending-format cancellation and undo.
+- Consume formatting keys in the annotation editor without inserting letters;
+  skip captured global events so each press toggles once. Preserve plain typing,
+  AltGr and modal input; respect events captured by other fields.
+- Add the shortcuts to help and the manual. Cover key capture, text/caret
+  preservation, draft cancellation and selected-text undo with regressions.
+- Formatting and browser-key regression tests and native/WASM strict Clippy
+  pass. Interactive shortcut checks remain pending.
+
 ## References
 
 - [iced 0.14 documentation](https://docs.rs/iced/0.14.0/iced/)
