@@ -1,0 +1,636 @@
+use super::{FastFill, ImagePicker, Message, PickPurpose};
+use crate::picker::ImportedImage;
+use crate::picker::pick_image;
+use fastfill::annotations::Annotations;
+use fastfill::correction::{PageCorrection, corrected_dimensions};
+use fastfill::geometry::Size;
+use fastfill::image_input::ImageFormatKind;
+use fastfill::project::{
+    CropQuad, MAXIMUM_ARCHIVE_CONTENT_BYTES, MAXIMUM_MANIFEST_BYTES,
+    MAXIMUM_PROJECT_PIXELS, PageFilterSettings, Project, ProjectPage,
+    decode_editor_page, editor_page_size, manifest_size,
+};
+use iced::Task;
+use std::collections::BTreeMap;
+use uuid::Uuid;
+
+mod correction;
+
+pub(super) const MAXIMUM_PAGES: usize = 20;
+
+#[cfg(test)]
+mod tests;
+
+#[derive(Debug)]
+pub(super) struct EditorPage {
+    pub(super) image: Option<ImportedImage>,
+    pub(super) annotations: Annotations,
+    pub(super) metadata: ProjectPage,
+    pub(super) size: Size,
+    versions: BTreeMap<u64, correction::PageVersion>,
+    asset_bytes: std::cell::OnceCell<u64>,
+}
+
+impl Default for EditorPage {
+    fn default() -> Self {
+        Self {
+            image: None,
+            annotations: Annotations::default(),
+            metadata: page_metadata(794, 1_123, "png"),
+            size: super::DEFAULT_PAGE,
+            versions: BTreeMap::new(),
+            asset_bytes: std::cell::OnceCell::new(),
+        }
+    }
+}
+
+impl EditorPage {
+    fn from_image(image: ImportedImage) -> Self {
+        let extension = match image.info.format {
+            ImageFormatKind::Png => "png",
+            ImageFormatKind::Jpeg => "jpg",
+        };
+        let metadata =
+            page_metadata(image.info.width, image.info.height, extension);
+        let size = editor_page_size(&metadata).expect("validated image size");
+        Self {
+            image: Some(image),
+            annotations: Annotations::default(),
+            metadata,
+            size,
+            versions: BTreeMap::new(),
+            asset_bytes: std::cell::OnceCell::new(),
+        }
+    }
+
+    fn encoded_bytes(&self) -> u64 {
+        *self.asset_bytes.get_or_init(|| {
+            if let Some(image) = &self.image
+                && let iced::widget::image::Handle::Bytes(_, bytes) =
+                    &image.handle
+            {
+                return bytes.len() as u64;
+            }
+            super::project_io::encode_page_image(
+                &self.metadata,
+                self.image.as_ref().map(|image| &image.handle),
+            )
+            .map_or(u64::MAX, |bytes| bytes.len() as u64)
+        })
+    }
+}
+
+fn page_metadata(width: u32, height: u32, extension: &str) -> ProjectPage {
+    let id = Uuid::new_v4();
+    ProjectPage {
+        id,
+        source_asset: format!("{id}.{extension}"),
+        source_pixel_width: i32::try_from(width).expect("bounded image width"),
+        source_pixel_height: i32::try_from(height)
+            .expect("bounded image height"),
+        crop: CropQuad::default(),
+        rotation_quarter_turns: 0,
+        filter: PageFilterSettings::default(),
+        brightness: 0,
+        annotations: Vec::new(),
+    }
+}
+
+fn display_pixels(metadata: &ProjectPage) -> u64 {
+    let width = u32::try_from(metadata.source_pixel_width).unwrap();
+    let height = u32::try_from(metadata.source_pixel_height).unwrap();
+    let shown =
+        corrected_dimensions(width, height, PageCorrection::from(metadata))
+            .expect("validated page correction");
+    u64::from(shown.0) * u64::from(shown.1)
+}
+
+#[derive(Debug)]
+pub(super) struct Pages {
+    items: Vec<EditorPage>,
+    active: usize,
+    header_bytes: u64,
+    import_error: &'static str,
+}
+
+impl Default for Pages {
+    fn default() -> Self {
+        Self {
+            items: vec![EditorPage::default()],
+            active: 0,
+            // Controller supplies the actual header before processing input.
+            header_bytes: 512,
+            import_error: "Project limits exceeded.",
+        }
+    }
+}
+
+impl Pages {
+    pub(super) fn identity(&self) -> Vec<(Uuid, u64)> {
+        self.items
+            .iter()
+            .map(|page| (page.metadata.id, page.annotations.revision()))
+            .collect()
+    }
+
+    pub(super) fn from_opened(
+        opened: &super::project_io::OpenedProject,
+    ) -> Result<Self, String> {
+        if opened.project.pages.len() != opened.images.len() {
+            return Err("Page image count does not match the document.".into());
+        }
+        let items = opened
+            .project
+            .pages
+            .iter()
+            .zip(&opened.images)
+            .map(|(metadata, image)| {
+                Ok(EditorPage {
+                    image: Some(image.clone()),
+                    annotations: decode_editor_page(metadata)
+                        .map_err(|error| error.to_string())?,
+                    size: editor_page_size(metadata)
+                        .map_err(|error| error.to_string())?,
+                    metadata: metadata.clone(),
+                    versions: BTreeMap::new(),
+                    asset_bytes: std::cell::OnceCell::new(),
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        if items.is_empty() {
+            return Ok(Self::default());
+        }
+        Ok(Self {
+            items,
+            ..Self::default()
+        })
+    }
+    pub(super) fn iter(&self) -> impl Iterator<Item = &EditorPage> {
+        self.items.iter()
+    }
+    pub(super) fn current(&self) -> &EditorPage {
+        &self.items[self.active]
+    }
+
+    pub(super) fn current_mut(&mut self) -> &mut EditorPage {
+        &mut self.items[self.active]
+    }
+
+    pub(super) fn len(&self) -> usize {
+        self.items.len()
+    }
+
+    pub(super) const fn active_index(&self) -> usize {
+        self.active
+    }
+
+    pub(super) fn can_add(&self) -> bool {
+        self.items.len() < MAXIMUM_PAGES
+    }
+
+    pub(super) fn empty_starter(&self) -> bool {
+        self.items.len() == 1
+            && self.current().image.is_none()
+            && self.current().annotations.is_empty()
+    }
+
+    pub(super) fn pdf_capacity(&self) -> usize {
+        MAXIMUM_PAGES - self.len() + usize::from(self.empty_starter())
+    }
+
+    fn pixel_totals(&self, excluding_current: bool) -> (u64, u64) {
+        self.items
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !excluding_current || *index != self.active)
+            .fold((0, 0), |(source, display), (_, page)| {
+                let metadata = &page.metadata;
+                let width = u32::try_from(metadata.source_pixel_width).unwrap();
+                let height =
+                    u32::try_from(metadata.source_pixel_height).unwrap();
+                (
+                    source + u64::from(width) * u64::from(height),
+                    display + page.reserved_pixels(),
+                )
+            })
+    }
+
+    fn check_images(
+        &self,
+        pages: &[EditorPage],
+        replacing_current: bool,
+    ) -> Result<(), &'static str> {
+        let added = pages
+            .iter()
+            .map(|page| {
+                let image = page.image.as_ref().unwrap();
+                u64::from(image.info.width) * u64::from(image.info.height)
+            })
+            .sum::<u64>();
+        if added > self.remaining_pixel_budget(replacing_current) {
+            return Err("Project images exceed the 200 MP memory limit.");
+        }
+        let kept = self
+            .items
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !replacing_current || *i != self.active)
+            .map(|(_, page)| page);
+        let mut manifest = self.header_bytes;
+        let mut assets = 0_u64;
+        for page in kept.chain(pages) {
+            let bytes = if page.annotations.reserved_storage_bytes() == 0 {
+                serde_json::to_vec(&page.metadata)
+                    .map_err(|_| "Could not measure project metadata.")?
+                    .len() as u64
+            } else {
+                page.annotations.reserved_storage_bytes()
+            };
+            // Reserve one comma per page, including the first, conservatively.
+            manifest = manifest.saturating_add(bytes + 1);
+            assets = assets.saturating_add(page.encoded_bytes());
+        }
+        if manifest > MAXIMUM_MANIFEST_BYTES {
+            return Err("Project manifest exceeds the 5 MiB limit.");
+        }
+        if manifest.saturating_add(assets) > MAXIMUM_ARCHIVE_CONTENT_BYTES {
+            return Err(
+                "Project images and metadata exceed the 600 MiB storage limit.",
+            );
+        }
+        Ok(())
+    }
+
+    pub(super) fn import_error(&self) -> &'static str {
+        self.import_error
+    }
+
+    pub(super) fn check_header(
+        &self,
+        header: &Project,
+    ) -> Result<(), &'static str> {
+        let manifest = manifest_size(header)
+            .map_err(|_| "Could not measure project metadata.")?
+            + 32
+            + self
+                .items
+                .iter()
+                .map(|page| page.annotations.reserved_storage_bytes() + 1)
+                .sum::<u64>();
+        if manifest > MAXIMUM_MANIFEST_BYTES {
+            return Err("Project manifest exceeds the 5 MiB limit.");
+        }
+        let assets = self.items.iter().fold(0_u64, |total, page| {
+            total.saturating_add(page.encoded_bytes())
+        });
+        if manifest.saturating_add(assets) > MAXIMUM_ARCHIVE_CONTENT_BYTES {
+            return Err("Project exceeds the 600 MiB storage limit.");
+        }
+        Ok(())
+    }
+
+    pub(super) fn synchronize_storage(
+        &mut self,
+        header: &Project,
+    ) -> Result<(), String> {
+        // Save updates the timestamp; reserve its maximum fractional precision.
+        self.header_bytes = manifest_size(header)
+            .map_err(|error| error.to_string())?
+            .saturating_add(32);
+        for page in &mut self.items {
+            page.annotations
+                .set_storage_budget(&page.metadata, MAXIMUM_MANIFEST_BYTES)
+                .map_err(|error| error.to_string())?;
+        }
+        let reserved: u64 = self
+            .items
+            .iter()
+            .map(|page| page.annotations.reserved_storage_bytes() + 1)
+            .sum();
+        let assets = self.items.iter().fold(0_u64, |total, page| {
+            total.saturating_add(page.encoded_bytes())
+        });
+        let available = MAXIMUM_MANIFEST_BYTES
+            .min(MAXIMUM_ARCHIVE_CONTENT_BYTES.saturating_sub(assets))
+            .saturating_sub(self.header_bytes);
+        for page in &mut self.items {
+            let other = reserved - page.annotations.reserved_storage_bytes();
+            page.annotations
+                .set_storage_budget(
+                    &page.metadata,
+                    available.saturating_sub(other),
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn take_storage_rejection(&mut self) -> bool {
+        // Visit every page even if an earlier page reports a rejection.
+        let mut rejected = false;
+        for page in &mut self.items {
+            rejected |= page.annotations.take_storage_rejection();
+        }
+        rejected
+    }
+
+    pub(super) fn remaining_pixel_budget(
+        &self,
+        replacing_current: bool,
+    ) -> u64 {
+        let (source, display) = self.pixel_totals(replacing_current);
+        MAXIMUM_PROJECT_PIXELS.saturating_sub(source.max(display))
+    }
+
+    pub(super) fn fits_correction(&self, width: u32, height: u32) -> bool {
+        let (_, display) = self.pixel_totals(true);
+        let reserved = self.current().reserved_pixels();
+        display + reserved.max(u64::from(width) * u64::from(height))
+            <= MAXIMUM_PROJECT_PIXELS
+    }
+
+    pub(super) fn import_images(&mut self, images: &[ImportedImage]) -> bool {
+        if images.is_empty() || images.len() > self.pdf_capacity() {
+            self.import_error = "A project may contain at most 20 pages.";
+            return false;
+        }
+        let settings = self.current().annotations.settings();
+        let pages = images.iter().cloned().map(|image| {
+            let mut page = EditorPage::from_image(image);
+            page.annotations.apply_settings(&settings);
+            page
+        });
+        // Stage before changing the document; preserve every existing page.
+        let pages = pages.collect::<Vec<_>>();
+        if let Err(error) = self.check_images(&pages, self.empty_starter()) {
+            self.import_error = error;
+            return false;
+        }
+        if self.empty_starter() {
+            self.items = pages;
+            self.active = 0;
+        } else {
+            self.active += 1;
+            self.items.splice(self.active..self.active, pages);
+        }
+        true
+    }
+
+    pub(super) fn add_image(&mut self, image: ImportedImage) -> bool {
+        if !self.can_add() {
+            self.import_error = "A project may contain at most 20 pages.";
+            return false;
+        }
+        if self.empty_starter() {
+            return self.replace_image(image);
+        }
+
+        let settings = self.current().annotations.settings();
+        let mut page = EditorPage::from_image(image);
+        page.annotations.apply_settings(&settings);
+        if let Err(error) =
+            self.check_images(std::slice::from_ref(&page), false)
+        {
+            self.import_error = error;
+            return false;
+        }
+        self.active += 1;
+        self.items.insert(self.active, page);
+        true
+    }
+
+    pub(super) fn replace_image(&mut self, image: ImportedImage) -> bool {
+        let settings = self.current().annotations.settings();
+        let mut page = EditorPage::from_image(image);
+        page.annotations.apply_settings(&settings);
+        if let Err(error) = self.check_images(std::slice::from_ref(&page), true)
+        {
+            self.import_error = error;
+            return false;
+        }
+        self.items[self.active] = page;
+        true
+    }
+
+    pub(super) fn select(&mut self, index: usize) -> bool {
+        if index >= self.items.len() || index == self.active {
+            return false;
+        }
+        let settings = self.current().annotations.settings();
+        self.active = index;
+        self.current_mut().annotations.apply_settings(&settings);
+        true
+    }
+
+    pub(super) fn move_active_to(&mut self, index: usize) -> bool {
+        if index >= self.items.len() || index == self.active {
+            return false;
+        }
+        let page = self.items.remove(self.active);
+        self.items.insert(index, page);
+        self.active = index;
+        true
+    }
+
+    pub(super) fn delete_active(&mut self) {
+        let settings = self.current().annotations.settings();
+        if self.items.len() == 1 {
+            self.items[0] = EditorPage::default();
+        } else {
+            self.items.remove(self.active);
+            self.active = self.active.min(self.items.len() - 1);
+        }
+        self.current_mut().annotations.apply_settings(&settings);
+    }
+
+    #[cfg(test)]
+    pub(super) fn names(&self) -> Vec<&str> {
+        self.items
+            .iter()
+            .filter_map(|page| {
+                page.image.as_ref().map(|image| image.name.as_str())
+            })
+            .collect()
+    }
+}
+
+impl FastFill {
+    fn add_page(&mut self) -> Task<Message> {
+        self.accept_text();
+        self.cancel_interaction();
+        if self.pages.len() == 1
+            && self.image().is_none()
+            && !self.annotations().is_empty()
+        {
+            self.image_picker = ImagePicker::ConfirmReplace;
+        } else if self.pages.can_add() {
+            return self.pick_image(PickPurpose::Add);
+        } else {
+            self.page_limit_error();
+        }
+        Task::none()
+    }
+
+    fn pick_image(&mut self, purpose: PickPurpose) -> Task<Message> {
+        self.accept_text();
+        self.cancel_interaction();
+        self.image_picker = ImagePicker::Picking(purpose);
+        self.status = "Selecting an image…".into();
+        self.status_is_error = false;
+        let replacing =
+            purpose == PickPurpose::Replace || self.pages.empty_starter();
+        let budget = self.pages.remaining_pixel_budget(replacing);
+        Task::perform(
+            pick_image(self.image_directory.clone(), budget),
+            move |result| Message::ImagePicked(purpose, result),
+        )
+    }
+
+    fn image_picked(
+        &mut self,
+        purpose: PickPurpose,
+        result: Result<Option<ImportedImage>, String>,
+    ) {
+        if self.image_picker != ImagePicker::Picking(purpose) {
+            return;
+        }
+        self.image_picker = ImagePicker::Idle;
+        match result {
+            Ok(Some(image)) => {
+                if let Some(directory) = &image.directory {
+                    self.image_directory = Some(directory.clone());
+                }
+                self.status = format!(
+                    "Opened {} ({} × {} px)",
+                    image.name, image.size.width, image.size.height,
+                );
+                let changed = match purpose {
+                    PickPurpose::Add => self.pages.add_image(image),
+                    PickPurpose::Replace => self.pages.replace_image(image),
+                };
+                if changed {
+                    self.navigation.fit();
+                    self.page_scroll =
+                        super::rail::page_top(self, self.pages.active_index());
+                    self.input_epoch = self.input_epoch.wrapping_add(1);
+                    self.status_is_error = false;
+                } else {
+                    self.status = self.pages.import_error().into();
+                    self.status_is_error = true;
+                }
+            }
+            Ok(None) => {
+                self.status = "Open canceled.".into();
+                self.status_is_error = false;
+            }
+            Err(error) => {
+                self.status = error;
+                self.status_is_error = true;
+            }
+        }
+    }
+
+    fn page_limit_error(&mut self) {
+        self.status = "A project may contain at most 20 pages.".into();
+        self.status_is_error = true;
+    }
+
+    pub(super) fn select_page(&mut self, index: usize) {
+        if index < self.pages.len() && index != self.pages.active_index() {
+            self.accept_text();
+            self.cancel_interaction();
+            self.pages.select(index);
+            self.navigation.fit();
+            self.status = format!("Selected page {}.", index + 1);
+            self.status_is_error = false;
+        }
+    }
+
+    pub(super) fn move_page(&mut self, target: usize) {
+        if target < self.pages.len() && target != self.pages.active_index() {
+            self.accept_text();
+            self.cancel_interaction();
+            self.pages.move_active_to(target);
+            self.page_scroll = super::rail::page_top(self, target);
+            self.status = format!("Page moved to position {}.", target + 1);
+            self.status_is_error = false;
+        }
+    }
+}
+
+pub(super) fn update(
+    state: &mut FastFill,
+    message: &Message,
+) -> Option<Task<Message>> {
+    if let Message::ImagePicked(purpose, result) = message {
+        state.image_picked(*purpose, result.clone());
+        return Some(Task::none());
+    }
+    if state.image_picker != ImagePicker::Idle || state.confirm_delete_page {
+        match message {
+            Message::ConfirmReplacePage
+                if state.image_picker == ImagePicker::ConfirmReplace =>
+            {
+                return Some(state.pick_image(PickPurpose::Replace));
+            }
+            Message::ConfirmDeletePage if state.confirm_delete_page => {
+                state.pages.delete_active();
+                state.confirm_delete_page = false;
+                state.navigation.fit();
+                state.page_scroll =
+                    super::rail::page_top(state, state.pages.active_index());
+                state.cancel_interaction();
+                state.status = "Page deleted.".into();
+                state.status_is_error = false;
+            }
+            Message::KeepPage | Message::CancelInteraction
+                if !matches!(state.image_picker, ImagePicker::Picking(_)) =>
+            {
+                state.image_picker = ImagePicker::Idle;
+                state.confirm_delete_page = false;
+            }
+            Message::FocusLost => {
+                state.cancel_interaction();
+                state.modifiers = super::DragModifiers::default();
+            }
+            _ => {}
+        }
+        return Some(Task::none());
+    }
+    // Annotation confirmation owns input until dismissed.
+    if state.confirm_delete_all {
+        return None;
+    }
+    match message {
+        Message::AddPage => return Some(state.add_page()),
+        Message::AskReplacePage => {
+            state.accept_text();
+            state.cancel_interaction();
+            if state.annotations().is_empty() {
+                return Some(state.pick_image(PickPurpose::Replace));
+            }
+            state.image_picker = ImagePicker::ConfirmReplace;
+        }
+        #[cfg(test)]
+        Message::SelectPage(index) => state.select_page(*index),
+        Message::MovePageLeft => {
+            if let Some(index) = state.pages.active_index().checked_sub(1) {
+                state.move_page(index);
+            }
+        }
+        Message::MovePageRight => {
+            state.move_page(state.pages.active_index() + 1);
+        }
+        Message::PageRail(event) => super::rail::update(state, event),
+        Message::AskDeletePage => {
+            state.accept_text();
+            state.cancel_interaction();
+            state.confirm_delete_page = true;
+        }
+        Message::KeepPage
+        | Message::ConfirmDeletePage
+        | Message::ConfirmReplacePage => {}
+        _ => return None,
+    }
+    Some(Task::none())
+}

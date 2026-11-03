@@ -1,0 +1,17 @@
+FastFill - Linux x64
+
+Extract this archive anywhere. Run ./FastFill from the extracted folder.
+No compiler or installer is needed.
+
+Built on Ubuntu 24.04. The executable needs compatible glibc libraries, an
+X11/Wayland session and working graphics drivers. File dialogs use the
+system's XDG desktop portal and its desktop backend. Camera capture needs
+a working V4L2 device and permission to access it.
+
+Open images, PDFs and .docscan projects in the app, or pass a .docscan path
+on the command line. Print sample-form.pdf at actual size for camera/form
+checks. F1 opens shortcuts. Launch from a terminal for startup diagnostics.
+See BUILD.txt for the exact source revision and workflow run.
+
+Documentation: https://github.com/dhanak/fastfill/blob/master/README.md
+Downloads: https://github.com/dhanak/fastfill/releases

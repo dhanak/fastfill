@@ -1,12 +1,10 @@
 artifacts/*
 !artifacts/.gitkeep
-bin/
-obj/
-.vs/
-*.user
-*.suo
+target/
+dist/
+/.ruff_cache/
+/.venv/
+mise.codex.toml
 *.pfx
 *.cer
-AppPackages/
-TestResults/
 

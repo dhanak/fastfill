@@ -1,140 +1,246 @@
 # FastFill development guide
 
-[← Back to README](../README.md)
+[← README](../README.md) · [User manual](MANUAL.md) · [Project plan](PLAN.md)
 
-The WinUI shell lives in `FastFill.App`. Detection, correction, project I/O,
-annotation rendering, and PDF output live in `FastFill.Core`, allowing most
-iterations to run in the Linux container without Surface hardware.
+Run commands from the repository root. The application, library, tests and
+packaging scripts belong to one Cargo package, `fastfill`.
 
-## Fast Linux loop
+## Setup and routine checks
 
-Enable the repository hooks once after cloning:
+Install the tools configured in `mise.toml`, then enable repository hooks:
 
 ```sh
+mise install
 git config core.hooksPath .githooks
+mise exec -- rustup target add wasm32-unknown-unknown
 ```
 
-The pre-push hook rejects unsigned commits newly introduced to a remote.
+Rust 1.99.0 is pinned. Node.js 18+ runs dependency-free browser and release
+tests. The pre-push hook rejects unsigned commits; repository owners sign their
+commits before pushing.
 
 ```sh
 make check
-make preview
-make clean
+mise exec -- cargo check --target wasm32-unknown-unknown
+mise exec -- osv-scanner scan source .
 ```
 
-`make check` builds the pinned .NET 10 container, runs framework-free checks,
-replays the 224-frame camera regression, and compares the rendered page with
-`tests/goldens/annotated-page.png`. Preview outputs land in
-`artifacts/preview/`.
+`make check` runs formatting, strict Clippy, all-feature tests and the Node
+adapter/release checks. `make check-core` runs library checks without the GUI or
+camera dependencies. `make check-container` runs the same core checks in the
+pinned compiler container. `make fmt` uses rustfmt and mdformat.
 
-`make clean` removes generated `bin/` and `obj/` directories below `src/`, plus
-disposable check, preview, and scan-analysis outputs below `artifacts/`. It
-preserves captures, test assets, documentation, `artifacts/signing/`, and
-`artifacts/.gitkeep`.
+Agent builds must follow [build isolation](../AGENTS.md). Do not share an agent
+target directory with the host developer or run `cargo clean` as a routine fix.
+Developer dependency caches stay in `target/`; WASM output goes to `dist/`. Both
+are ignored by Git and excluded from the Docker context.
 
-The check covers document detection, perspective correction, filters,
-recorded-sequence auto-capture stability, hit testing, annotation geometry and
-ordering, undo/redo, hostile archive rejection, `.docscan` round trips,
-annotation rendering, and multi-page PDF export.
-
-Regenerate the printable camera and annotation sample form with:
+## Run locally
 
 ```sh
-make sample-form
+mise exec -- cargo run
+mise exec -- cargo run -- path/to/project.docscan
+mise exec -- cargo run --release
 ```
 
-The PDF is written to `docs/samples/fastfill-camera-sample-form.pdf`.
+Debug builds optimize application pixel loops at level 1 and dependencies at
+level 2, keeping assertions and debug symbols. Assess performance with a release
+build. Native startup accepts one `.docscan` argument and keeps any deferred
+recovery separate from the explicitly opened file.
 
-## Interactive detection labs
-
-Test production smart-snap and auto-framing logic on Linux:
+For a browser development server on LAN port 24800:
 
 ```sh
-make lab
+mise run web
 ```
 
-Open `http://localhost:5077` and choose a lab. Snap Lab tests text-line,
-checkbox, and cross-box placement. Frame Lab tests document framing,
-stabilization, and auto-capture timing. Repeating one camera frame is useful for
-watching consensus and countdown state advance without hardware.
-
-The cached checks image is rebuilt first. Press `Ctrl+C` once to stop and remove
-the lab container. PDFs must first be imported and saved as `.docscan` for Snap
-Lab because Linux has no native Windows PDF renderer.
-
-Calibrate detection against captured camera samples without changing the test
-suite:
+Refresh the browser after a rebuild; automatic reload is disabled for remote
+devices. The task sets `CARGO_INCREMENTAL=0` to avoid stale WASM objects while
+retaining compiled dependencies. For a deployable build:
 
 ```sh
-docker run --rm \
-  -v "$PWD/captures:/samples:ro" \
-  fastfill-checks --detect /samples/frame.jpg
+mise exec -- trunk build --release --locked --all-features \
+  --public-url ./ --dist /tmp/fastfill-web-dist
 ```
 
-## Golden preview
+Relative URLs support both site-root and subpath hosting. See [WEB.md](WEB.md)
+for nginx and GitHub Pages. Camera and clipboard access require HTTPS or
+localhost. Camera analysis, PDF rasterization and page correction run on the
+browser UI thread; their native equivalents use background workers. Timed
+browser profiling is deferred unless noticeable lag returns.
 
-When an intentional renderer change alters the preview:
+## Source layout and project limits
+
+- `src/annotations/`: geometry, selection, editing, formatting and history.
+- `src/app/`: controller, UI, page versions, file workflows and recovery.
+- `src/camera/`: supervised native capture and device catalogs.
+- `src/project/`: bounded archive I/O and legacy schema conversion.
+- `src/page_canvas/`: common display/PDF drawing and pointer routing.
+- `web/`: browser camera, clipboard and download adapters.
+- `tests/samples/`, `tests/goldens/`, `docs/samples/`: shared fixtures.
+
+Projects allow 20 pages, 50 MP per source image and 200 MP each across source
+and corrected page images. Admission reserves the largest display size in each
+page's retained history. Encoded images are limited to 100 MiB each; images plus
+metadata to 600 MiB. Compact JSON manifests have a 5 MiB budget. Edits and
+imports are checked before commit, including normalized image bytes and retained
+undo/redo metadata capacity.
+
+Each page allows 10,000 annotations; each text box 10,000 UTF-16 units,
+including paste; each ink stroke 100,000 samples. Each page keeps a 64 MiB
+undo/redo budget and drops oldest states first. These limits bound retained
+project data, not every renderer allocation or temporary worker buffer.
+
+Schema-v1 documents still load. Brightness uses schema-v2; unchanged legacy
+annotation metadata survives a save. Unsupported font families and affine
+shear/scaling are rejected rather than silently distorted. Soft-wrap fitting
+hints load, but text editing uses natural width and explicit newlines.
+
+Native recovery uses the existing per-user FastFill paths on each platform. Set
+`FASTFILL_RECOVERY_DIR` to an absolute test directory to isolate recovery tests.
+Browser recovery is not implemented; save downloaded copies explicitly. See the
+user manual for editing, cancellation and privacy behavior.
+
+## Diagnostics and fixtures
+
+Keep original captures under `artifacts/reviews/`; they are local data, not
+source-controlled build output. Choose fresh output filenames for diagnostics.
+The examples refuse existing outputs and do not modify their inputs.
 
 ```sh
-make update-goldens
+mkdir -p artifacts/previews
+mise exec -- cargo run --no-default-features --example correct_page -- \
+  tests/samples/sample-form.png artifacts/previews/corrected.png \
+  examples/correction.json
+mise exec -- cargo run --no-default-features --example form_probe -- \
+  tests/samples/sample-form.png artifacts/previews/form-candidates.png
+mise exec -- cargo run --no-default-features --example frame_probe -- \
+  photo.jpg artifacts/previews/frame.png
+mise exec -- cargo run --no-default-features --example frame_replay -- \
+  artifacts/reviews/cam/frames artifacts/previews/replay
+mise exec -- cargo run --no-default-features --example project_timing -- \
+  form.docscan
 ```
 
-Linux cannot execute WinUI's Windows-only XAML compiler. GitHub Actions runs the
-same checks on Windows and compiles the complete WinUI application.
+Correction settings use normalized convex crop corners, quarter-turn rotation,
+filter modes 0–3 (Original, Enhanced color, Grayscale, B&W), and brightness/
+contrast from −100 to +100. See `examples/filter.json` and
+`examples/brightness.json`. Geometry precedes filtering. Brightness and contrast
+share one clamped lookup after filtering; originals stay intact.
 
-Known limitation: CI does not currently run the Linux-only pixel-exact rendering
-golden. Run `make check` locally before merging rendering changes or preparing a
-release.
+Form diagnostics mark checkboxes and solid/dotted/dashed rules, including
+individual table cells and full rows. They are not OCR. Framing diagnostics show
+accepted and rejected candidates with normalized corners and heuristic scores.
+Sharp background edges can mislead framing; manual review remains necessary.
+Camera analysis uses a 640-pixel edge, detailed framing 1280 pixels, and
+form/corner analysis 1600 pixels. Keep real-hardware calibration intact.
 
-## Windows development
+The replay viewer opens directly from its generated `index.html`. Normal tests
+skip the expensive 224-frame recording; run it explicitly when needed:
 
-Requirements: Windows 10 or 11, Visual Studio with WinUI/C# workloads, and .NET
-10\.
+```sh
+mise exec -- cargo test --no-default-features --test document_detection \
+  recorded_laptop_sequence -- --ignored --nocapture
+```
+
+Regenerate the printable sample form with `make sample-form`. The Python
+generator uses `uv` script metadata; it needs no workspace virtual environment.
+`node tools/source-size.mjs` reports indicative production source size.
+
+## Native camera diagnostics
+
+With other camera apps closed:
+
+```sh
+mise exec -- cargo run --no-default-features --features native-camera \
+  --example camera_probe -- list
+mise exec -- cargo run --no-default-features --features native-camera \
+  --example camera_probe -- formats 0
+mise exec -- cargo run --no-default-features --features native-camera \
+  --example camera_probe -- capture 0 camera-test.png
+```
+
+The default probe request is exactly 640×480, 30 FPS, MJPG. Supply an advertised
+mode as `WIDTH HEIGHT FPS ENCODING` after the output filename when needed.
+Supported encodings: MJPG, YUYV, NV12, RGB3, BGR3, GREY. The probe allows a
+two-second exposure warm-up; the live UI has no forced capture delay. Requests
+run in supervised child processes. No automated test opens a camera.
+
+Linux uses V4L2 through rscam without libv4l2 or Clang. Windows uses Media
+Foundation. macOS capture is deferred; browser capture uses browser APIs. For
+SP6 touch diagnostics, launch the app from PowerShell with an opt-in log:
 
 ```powershell
-dotnet restore FastFill.slnx
-dotnet run --project src/FastFill.Checks -c Release
-dotnet build src/FastFill.App -c Debug -p:Platform=x64
+$env:FASTFILL_TOUCH_LOG = Join-Path $env:TEMP 'FastFill-touch.log'
+.\FastFill.exe
 ```
 
-Run `FastFill.App` from Visual Studio for camera and interactive UI work. Use
-JPEG or PNG import for deterministic editor iteration; it follows the same
-review, correction, annotation, project, and export paths as camera capture.
+The log records pointer routing, not typed text. Remove the variable afterward.
 
-## CI and portable releases
+## CI, signing and releases
 
-The `Windows` workflow checks and publishes FastFill as an unpackaged,
-self-contained x64 folder. Successful `master` builds replace the public `dev`
-prerelease and include `FastFill.cer` in the portable archive. Pull request
-builds create a private workflow artifact but do not publish a release. Pushing
-a version tag such as `v0.2.0` creates a permanent release with the same name
-and signed `FastFill-portable.zip` asset.
+The [FastFill workflow](../.github/workflows/build.yml) runs from the root.
 
-The separate `Rust prototype` workflow also builds an optimized, unsigned
-Windows x64 test ZIP. Successful `master` checks update the public `rust-dev`
-prerelease without changing C# release assets or tags. Its test machines need no
-compiler or Rust dependencies; see the [prototype guide][rust-guide] for direct
-downloads, archive contents, startup checks and known limits. Windows/Linux
-tests, WASM checks and packaging gate Rust publication; the independent macOS
-compatibility check does not block the Windows download. An independent Linux
-job builds an x64 test archive and checks it after extraction without a
-graphical session. It is an Actions artifact, not a release asset; desktop file
-dialogs, graphics, help and output still need a physical Linux check. Its first
-release build does not block `rust-dev`.
+| Event                       | Publication                         | GitHub Pages      |
+| --------------------------- | ----------------------------------- | ----------------- |
+| Pull request / other branch | Checked Actions artifacts           | No                |
+| Successful `master` build   | Update the shared `dev` prerelease  | No                |
+| Version tag `v…`            | Publish all four versioned archives | After publication |
 
-## Minimal SP6 release gate
+Windows/Linux native tests and all four platform packages gate publication.
+macOS tests on Intel, cross-builds both architectures and ad-hoc signs the
+universal app. Windows release builds statically link the C runtime and are
+signed/timestamped on `master` and version tags. Browser archives contain a
+complete static site. Packages are extracted and smoke-tested in CI; these
+checks do not replace the pending physical Mac/SP6 tests in [PLAN.md](PLAN.md).
 
-Use the Surface only before a release candidate. One short pass:
+The Windows signing secrets remain `FASTFILL_CERTIFICATE_BASE64` and
+`FASTFILL_CERTIFICATE_PASSWORD`. The public signer certificate is exported as
+`FastFill.cer` and included in signed ZIPs. No certificate rotation is needed.
+See the [README](../README.md) for certificate trust instructions. Never commit
+private signing material. macOS uses ad-hoc signing, not Developer ID or
+notarization.
 
-1. Test both cameras, permission denial, rotation, suspend/resume, and automatic
-   capture under bright, dim, and glare-heavy light.
-2. Drag crop handles and every annotation tool using touch and Surface Pen.
-   Verify controls at 150% and 200% display scaling.
-3. Import a multi-page PDF, export it, reopen a `.docscan`, share to Mail, and
-   save to a USB drive.
-4. Check memory, thermal behavior, and capture latency over 20 repeated scans.
+Development releases advance the `dev` tag only after all uploads succeed.
+Version tags never move. Rerunning a version workflow replaces that version's
+assets. Versions with a prerelease suffix do not become GitHub's latest release;
+stable versions do. Tag versions must match the package version in `Cargo.toml`.
 
-Keep calibration thresholds in `AutoCaptureGate` and capture throttling in
-`CameraFrameSource`; both require final real-device calibration.
+To release, update `Cargo.toml` and its package entry in `Cargo.lock`, commit
+and sign the change, then create and push the matching signed tag. For example,
+with the current package version:
 
-[rust-guide]: ../rust/README.md
+```sh
+git tag -s v1.0.0-alpha.1 -m "FastFill 1.0.0-alpha.1"
+git push origin v1.0.0-alpha.1
+```
+
+GitHub Pages uses the existing `github-pages` environment and account domain.
+Its environment rules must allow version tags (`v*`), not only the master
+branch. Keep Pages configured for GitHub Actions and leave the repository's
+custom-domain override empty when inheriting the account domain. Update branch
+protection if required checks still name a retired workflow.
+
+After the first root-layout build, update any local launch shortcuts or file
+associations to the new executable path. Existing certificate trust and native
+recovery paths remain valid. Old host build output is deliberately untouched:
+move the previous application target directory to root `target/` only if that
+destination does not exist, and move any local mise overrides separately. Remove
+stale browser output when it is no longer needed.
+
+After verifying the replacement downloads, remove the retired development
+prerelease and obsolete portable assets from the shared `dev` release if
+desired. Historical version releases can stay available.
+
+Release automation and cache tests require no GitHub access:
+
+```sh
+node tools/publish-release.test.mjs
+node tools/cache.test.mjs
+```
+
+Caches include crate downloads and compiled outputs per platform. Keys include
+the compiler version and manifest/lockfile hashes. Compatible restore prefixes
+allow dependency reuse, and tests always run after a cache hit. Source moves or
+toolchain changes can require rebuilding. CI omits debug symbols and incremental
+state from caches; it keeps optimization and test assertions.

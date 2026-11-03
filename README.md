@@ -1,89 +1,117 @@
 # 📄 FastFill
 
-[![Windows build][build-badge]][build]
-[![Portable development build][download-badge]][download]
-[![Windows 10/11 x64][windows-badge]][release]
+[![Build status][build-badge]][build]
+[![Development downloads][download-badge]][downloads]
+[![Windows 10/11 x64][windows-badge]][windows]
+[![Linux x64][linux-badge]][linux] [![macOS universal][macos-badge]][macos]
 [![MIT license][license-badge]][license]
 
-FastFill scans, corrects, annotates, and exports documents on Windows 10 and 11.
-It works well with touchscreens and mice. Files stay local unless you explicitly
-export or share them.
+FastFill scans, corrects, annotates and exports documents. It supports touch and
+mouse, keeps editable `.docscan` projects, and runs on Windows, Linux, macOS and
+in a browser. Documents stay local unless you explicitly share them.
 
-[![FastFill editor][shot-editor]][shot-editor]
+**[Try FastFill in your browser][browser-demo]** without installing anything.
+
+[![FastFill editor with a sample form][editor-shot]][editor-shot]
 
 ## 🚀 Download and run
 
-FastFill requires Windows 10 version 1809 or later on an x64 computer. It needs
-no installer, developer license, .NET runtime, or separate Windows App SDK
-runtime.
+No installer, compiler or managed runtime is needed.
 
-1. [Download the latest portable release][release].
-2. Extract the ZIP anywhere and keep all extracted files together.
-3. Run `FastFill\FastFill.exe`.
+| Platform                    | Download        | Run                            |
+| --------------------------- | --------------- | ------------------------------ |
+| Windows 10/11 x64           | [ZIP][windows]  | `FastFill\FastFill.exe`        |
+| Linux x64                   | [tar.gz][linux] | `FastFill/FastFill`            |
+| macOS Intel / Apple Silicon | [ZIP][macos]    | `FastFill/FastFill.app`        |
+| Browser                     | [tar.gz][web]   | Extract into an empty web root |
 
-Windows may show an unrecognized-app warning because development releases use a
-self-signed certificate. Select **More info**, then **Run anyway**, or follow
-the trust instructions in the [user manual][manual].
+The table links to the latest successful `master` build on the
+[development release][downloads]. [Tagged releases][releases] provide fixed
+versions; alpha/beta versions are marked as prereleases.
+
+Keep extracted files together. Linux needs a compatible glibc-based system, a
+graphical session and an XDG desktop portal for file dialogs. The macOS app is
+ad-hoc signed, not notarized; Gatekeeper may require approval in System Settings
+→ Privacy & Security. Camera capture is available on Windows, Linux and in the
+browser; macOS camera support is pending. See each package's `README.txt` for
+platform details and the [browser deployment guide][web-guide] for static
+hosting.
+
+## 🔏 Windows signing
+
+Public Windows packages are signed with FastFill's persistent self-signed
+certificate and include `FastFill.cer`. To trust it for your Windows account:
+
+1. Open the bundled `FastFill.cer` and choose **Install Certificate**.
+2. Select **Current User**.
+3. Choose **Trusted Root Certification Authorities** as the destination.
+4. Finish the import, then run `FastFill.exe`.
+
+Only trust a certificate from a download you trust. Certificate trust does not
+create public SmartScreen reputation or guarantee Smart App Control approval.
+Existing installations of the same certificate remain valid. Pull-request and
+other-branch CI packages are unsigned.
 
 ## ⭐ Features
 
-- Front or rear camera capture with stabilized live framing, automatic capture,
-  and a visible countdown. Manual capture remains available.
-- Perspective correction, corner snapping, rotation, contrast, enhanced color,
-  grayscale, and black-and-white filters.
-- JPEG, PNG, and multi-page PDF import.
-- Inline text, pen, highlighter, lines, arrows, boxes, ovals, checkmarks, X
-  marks, filled shapes, and smart form snapping.
-- Editable annotations with multi-selection, resizing, rotation, colors, layers,
-  undo, and redo.
-- Touch pan, pinch zoom, mouse navigation, and full-view or 1:1 controls.
-- Up to 20 reorderable pages in an editable `.docscan` project.
-- Flattened 300-DPI PDF export and the Windows share sheet.
+- Camera capture with live framing, automatic capture and a manual shutter.
+- Perspective correction, rotation, brightness, contrast and color filters.
+- JPEG, PNG and multipage PDF import, with reorderable annotated thumbnails.
+- Text, pen, highlighter, shapes, arrows, checkmarks, X marks and smart
+  snapping.
+- Multi-selection, resizing, rotation, layers, undo and redo.
+- Touch pan/pinch zoom, mouse navigation and a searchable command palette.
+- Up to 20 pages per editable `.docscan` project, legacy-project loading and PDF
+  export. Native desktop builds also provide automatic recovery.
 
-## ⚡️ Quick start
+## ⚡ Quick start
 
-1. Choose **New camera scan** or **Import image / PDF**.
-2. Correct page boundaries, rotation, color, and contrast.
-3. Add text, marks, shapes, or ink.
-4. Save the editable `.docscan` project.
-5. Export a PDF or send it through the Windows share sheet.
+1. Choose **Add image**, **Import PDF** or **Camera** where supported.
+2. Use **Edit page** to frame the page and adjust its appearance.
+3. Add text, marks, shapes or ink with the Tools panel.
+4. Save an editable `.docscan` project, then export a PDF to share.
 
-See the [complete user manual][manual] for every screen, tool, gesture,
-modifier, project action, file format, and privacy detail. For a guided camera
-and annotation demo, print the [A4 sample form][sample] at 100% / actual size.
+The [complete manual][manual] covers tools, gestures, shortcuts, saving and
+recovery. Press **F1** for shortcuts or **Ctrl+.** (Cmd+. on macOS) to find
+commands. Print the [sample form][sample] at actual size to try camera framing
+and form snapping.
 
 ## ♿ Accessibility scope
 
-FastFill's document workflow is designed for touch, pen, and mouse. Standard
-controls support keyboard navigation, but canvas editing currently requires a
-pointing device and is not yet optimized for screen readers.
+Touch and mouse editing are supported. Standard controls offer keyboard
+navigation, but canvas editing requires a pointing device and is not yet
+optimized for screen readers.
 
 ## 🧑‍💻 Development
 
-Core document processing and framework-free checks run on Linux; the WinUI shell
-builds on Windows and in GitHub Actions. See the [development
-guide][development] for setup, checks, interactive detection labs, CI releases,
-and the Surface Pro 6 release gate.
-
-The experimental cross-platform Rust rewrite has a separate
-[Windows testing ZIP][rust-download] and [prototype guide][rust-guide].
-The C# application remains the main release.
+See the [development guide][development] for builds, tests, diagnostics, signing
+and releases. The [project plan][plan] records remaining Mac and Surface Pro 6
+validation, including display scaling and physical sleep tests.
 
 ## ©️ License
 
-FastFill is available under the [MIT License][license].
+FastFill uses the [MIT License][license]. Bundled icons and browser fonts retain
+their own notices; see [font licensing][fonts].
 
-[build-badge]: https://github.com/dhanak/fastfill/actions/workflows/windows.yml/badge.svg
-[build]: https://github.com/dhanak/fastfill/actions/workflows/windows.yml
+[browser-demo]: https://dev.vidga.hu/fastfill/
+[build]: https://github.com/dhanak/fastfill/actions/workflows/build.yml
+[build-badge]: https://github.com/dhanak/fastfill/actions/workflows/build.yml/badge.svg
 [development]: docs/DEVELOPMENT.md
-[download-badge]: https://img.shields.io/badge/download-portable_dev-0078D4
-[download]: https://github.com/dhanak/fastfill/releases/download/dev/FastFill-portable.zip
-[license-badge]: https://img.shields.io/badge/license-MIT-green
+[download-badge]: https://img.shields.io/badge/download-development_build-5865F2
+[downloads]: https://github.com/dhanak/fastfill/releases/tag/dev
+[editor-shot]: docs/screenshots/workspace.png
+[fonts]: docs/FONTS.md
 [license]: LICENSE
-[manual]: docs/USER_GUIDE.md
-[release]: https://github.com/dhanak/fastfill/releases/latest/download/FastFill-portable.zip
-[rust-download]: https://github.com/dhanak/fastfill/releases/tag/rust-dev
-[rust-guide]: rust/README.md
+[license-badge]: https://img.shields.io/badge/license-MIT-green
+[linux]: https://github.com/dhanak/fastfill/releases/download/dev/FastFill-linux-x64.tar.gz
+[linux-badge]: https://img.shields.io/badge/Linux-x64-2DA44E
+[macos]: https://github.com/dhanak/fastfill/releases/download/dev/FastFill-macos-universal.zip
+[macos-badge]: https://img.shields.io/badge/macOS-universal-6E5494
+[manual]: docs/MANUAL.md
+[plan]: docs/PLAN.md
+[releases]: https://github.com/dhanak/fastfill/releases
 [sample]: docs/samples/fastfill-camera-sample-form.pdf
-[shot-editor]: docs/screenshots/editor-shapes.png
+[web]: https://github.com/dhanak/fastfill/releases/download/dev/FastFill-web.tar.gz
+[web-guide]: docs/WEB.md
+[windows]: https://github.com/dhanak/fastfill/releases/download/dev/FastFill-windows-x64.zip
 [windows-badge]: https://img.shields.io/badge/Windows_10%2F11-x64-0078D4

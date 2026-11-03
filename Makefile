@@ -1,53 +1,33 @@
-.PHONY: assets check check-xaml clean lab preview sample-form update-goldens
+.PHONY: check check-core check-web check-container run web fmt sample-form
 
-IMAGE := fastfill-checks
-ROOT := $(CURDIR)
-RUN := docker run --rm
-XAML_EVENT_BREAK := =\r?\n[[:space:]]*"[A-Za-z][A-Za-z0-9_]*_[A-Za-z0-9_]+"
+check:
+	mise exec -- cargo fmt --all -- --check
+	mise exec -- cargo clippy --all-features --all-targets -- -D warnings
+	mise exec -- cargo test --all-features --all-targets
+	$(MAKE) check-web
 
-check: check-xaml
-	docker build --load -t $(IMAGE) .
-	$(RUN) $(IMAGE)
+check-core:
+	mise exec -- cargo test --no-default-features
 
-check-xaml:
-	@if rg -n -U '$(XAML_EVENT_BREAK)' \
-		src/FastFill.App -g '*.xaml'; then \
-		echo "XAML event values must remain on one line."; \
-		exit 1; \
-	fi
+check-web:
+	node web/download.test.mjs
+	node --test web/camera.test.mjs web/clipboard.test.mjs
+	node tools/publish-release.test.mjs
+	node tools/cache.test.mjs
 
-clean:
-	find src -type d \( -name bin -o -name obj \) -prune \
-		-exec rm -rf {} +
-	rm -rf artifacts/check-workspace \
-		artifacts/preview \
-		artifacts/scan-analysis \
-		artifacts/unsafe-workspace \
-		artifacts/unsafe.docscan
+check-container:
+	docker build --load -t fastfill-checks .
+	docker run --rm fastfill-checks
 
-preview: check
-	$(RUN) \
-		-v "$(ROOT)/artifacts:/work/artifacts" \
-		$(IMAGE)
-	@echo "Preview files: artifacts/preview"
+run:
+	mise exec -- cargo run
 
-lab:
-	docker build --load -t $(IMAGE) .
-	docker run --rm --init --network host \
-		$(IMAGE) --lab http://127.0.0.1:5077
+web:
+	mise run web
 
-update-goldens:
-	docker build --load -t $(IMAGE) .
-	$(RUN) \
-		-v "$(ROOT)/artifacts:/work/artifacts" \
-		-v "$(ROOT)/tests:/work/tests" \
-		$(IMAGE) --update-goldens
-
-assets:
-	docker build --load -t $(IMAGE) .
-	$(RUN) \
-		-v "$(ROOT)/src/FastFill.App/Assets:/assets" \
-		$(IMAGE) --make-assets /assets
+fmt:
+	mise exec -- cargo fmt --all
+	mise exec -- mdformat README.md docs
 
 sample-form:
 	mkdir -p docs/samples

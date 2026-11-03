@@ -1,0 +1,590 @@
+use fastfill::annotations::{
+    AnnotationColor, AnnotationRef, Annotations, DragModifiers, Pointer, Tool,
+};
+use fastfill::geometry::{Point, Size};
+
+const PAGE: Size = Size::new(800.0, 1_100.0);
+const MOUSE: Pointer = Pointer::Mouse;
+const PLAIN: DragModifiers = DragModifiers {
+    square: false,
+    force_move: false,
+    force_resize: false,
+};
+const CTRL: DragModifiers = DragModifiers {
+    square: true,
+    ..PLAIN
+};
+
+fn rectangles(xs: &[f32]) -> Annotations {
+    let mut annotations = Annotations::default();
+    annotations.set_tool(Tool::Rectangle);
+    for x in xs {
+        annotations.begin(MOUSE, Point::new(*x, 100.0), PAGE);
+        annotations.finish(MOUSE, Point::new(*x + 50.0, 150.0), false);
+    }
+    annotations.set_tool(Tool::Select);
+    annotations
+}
+
+fn ctrl_click(annotations: &mut Annotations, point: Point) {
+    assert!(annotations.begin_interaction(MOUSE, point, PAGE, 1.0, CTRL));
+    assert!(annotations.finish(MOUSE, point, true));
+    assert!(annotations.active_pointer().is_none());
+}
+
+fn marquee(annotations: &mut Annotations, start: Point, end: Point) {
+    assert!(annotations.begin_interaction(MOUSE, start, PAGE, 1.0, PLAIN));
+    assert!(annotations.finish(MOUSE, end, false));
+}
+
+#[test]
+fn ctrl_click_toggles_objects_without_editing_geometry() {
+    let mut annotations = rectangles(&[100.0, 200.0, 300.0]);
+    assert_eq!(annotations.selected_indices(), [2]);
+
+    ctrl_click(&mut annotations, Point::new(125.0, 125.0));
+    assert_eq!(annotations.selected_indices(), [0, 2]);
+    ctrl_click(&mut annotations, Point::new(325.0, 125.0));
+    assert_eq!(annotations.selected_indices(), [0]);
+
+    assert!(annotations.begin_interaction(
+        MOUSE,
+        Point::new(225.0, 125.0),
+        PAGE,
+        1.0,
+        PLAIN,
+    ));
+    assert!(annotations.finish(MOUSE, Point::new(225.0, 125.0), false));
+    assert_eq!(annotations.selected_indices(), [1]);
+    annotations.cancel();
+}
+
+#[test]
+fn empty_area_drag_selects_every_intersecting_object() {
+    let mut annotations = rectangles(&[100.0, 200.0, 400.0]);
+    marquee(
+        &mut annotations,
+        Point::new(80.0, 80.0),
+        Point::new(280.0, 180.0),
+    );
+
+    assert_eq!(annotations.selected_indices(), [0, 1]);
+}
+
+#[test]
+fn clicks_and_small_jitter_do_not_marquee_overlapping_line_frames() {
+    for scale in [0.25, 1.0, 4.0] {
+        for pointer in [MOUSE, Pointer::Touch(17)] {
+            let mut annotations = Annotations::default();
+            annotations.set_tool(Tool::Line);
+            for offset in [0.0, 50.0] {
+                annotations.begin(
+                    pointer,
+                    Point::new(100.0, 100.0 + offset),
+                    PAGE,
+                );
+                annotations.finish(
+                    pointer,
+                    Point::new(700.0, 700.0 + offset),
+                    false,
+                );
+            }
+            annotations.set_tool(Tool::Select);
+            let empty = Point::new(750.0, 950.0);
+            annotations.begin_interaction(pointer, empty, PAGE, scale, PLAIN);
+            annotations.finish(pointer, empty, false);
+            assert!(!annotations.has_selection());
+
+            let start = Point::new(180.0, 600.0);
+            for pixels in [0.0, 2.0] {
+                assert!(
+                    annotations
+                        .begin_interaction(pointer, start, PAGE, scale, PLAIN,)
+                );
+                let end = Point::new(start.x + pixels / scale, start.y);
+                assert!(annotations.finish(pointer, end, false));
+                assert!(
+                    !annotations.has_selection(),
+                    "a click is not a marquee: {pointer:?}, {scale}, {pixels}"
+                );
+                assert!(annotations.selection_box().is_none());
+            }
+
+            assert!(
+                annotations
+                    .begin_interaction(pointer, start, PAGE, scale, PLAIN,)
+            );
+            assert!(annotations.selection_box().is_none());
+            let end = Point::new(start.x + 12.0 / scale, start.y);
+            annotations.drag(pointer, end, false);
+            assert!(annotations.selection_box().is_some());
+            assert!(annotations.finish(pointer, end, false));
+            assert!(!annotations.has_selection());
+
+            // A real marquee must cross the strokes, not just their frames.
+            assert!(
+                annotations
+                    .begin_interaction(pointer, start, PAGE, scale, PLAIN,)
+            );
+            assert!(annotations.finish(
+                pointer,
+                Point::new(600.0, 180.0),
+                false,
+            ));
+            assert_eq!(annotations.selected_indices(), [0, 1]);
+
+            annotations.begin_interaction(pointer, empty, PAGE, scale, PLAIN);
+            annotations.finish(pointer, empty, false);
+            let stroke = Point::new(300.0, 300.0);
+            annotations.begin_interaction(pointer, stroke, PAGE, scale, PLAIN);
+            assert!(annotations.finish(pointer, stroke, false));
+            assert_eq!(annotations.selected_count(), 1);
+        }
+    }
+}
+
+#[test]
+fn moving_a_selection_is_one_undoable_change() {
+    let mut annotations = rectangles(&[100.0, 200.0, 400.0]);
+    marquee(
+        &mut annotations,
+        Point::new(80.0, 80.0),
+        Point::new(280.0, 180.0),
+    );
+    let original = annotations.shapes().cloned().collect::<Vec<_>>();
+
+    assert!(annotations.begin_interaction(
+        MOUSE,
+        Point::new(125.0, 125.0),
+        PAGE,
+        1.0,
+        PLAIN,
+    ));
+    assert!(annotations.finish(MOUSE, Point::new(175.0, 165.0), false));
+    assert_eq!(annotations.shapes().next().unwrap().bounds().x, 150.0);
+    assert_eq!(annotations.shapes().nth(1).unwrap().bounds().x, 250.0);
+    assert_eq!(annotations.shapes().nth(2).unwrap().clone(), original[2]);
+
+    assert!(annotations.undo());
+    assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), original);
+    assert_eq!(annotations.selected_indices(), [0, 1]);
+    assert!(annotations.redo());
+    assert_eq!(annotations.shapes().next().unwrap().bounds().x, 150.0);
+    assert_eq!(annotations.shapes().nth(1).unwrap().bounds().x, 250.0);
+}
+
+#[test]
+fn group_move_keeps_every_selected_object_reachable() {
+    let mut annotations = rectangles(&[100.0, 400.0]);
+    marquee(
+        &mut annotations,
+        Point::new(80.0, 80.0),
+        Point::new(480.0, 180.0),
+    );
+
+    assert!(annotations.begin_interaction(
+        MOUSE,
+        Point::new(125.0, 125.0),
+        PAGE,
+        1.0,
+        PLAIN,
+    ));
+    assert!(annotations.finish(MOUSE, Point::new(-875.0, 125.0), false));
+
+    assert_eq!(annotations.shapes().next().unwrap().bounds().x, -49.0);
+    assert_eq!(annotations.shapes().nth(1).unwrap().bounds().x, 251.0);
+}
+
+#[test]
+fn opposing_edge_slivers_keep_their_overlap_during_group_moves() {
+    let page = Size::new(144.0, 144.0);
+    for horizontal in [true, false] {
+        let point = |x, y| {
+            if horizontal {
+                Point::new(x, y)
+            } else {
+                Point::new(y, x)
+            }
+        };
+        let mut annotations = Annotations::default();
+        annotations.set_tool(Tool::Rectangle);
+        for (start, end) in [
+            (point(0.5, 10.0), point(-10.0, 30.0)),
+            (point(143.5, 40.0), point(154.0, 60.0)),
+        ] {
+            assert!(annotations.begin(MOUSE, start, page));
+            assert!(annotations.finish(MOUSE, end, false));
+        }
+        annotations.select_all();
+        let original = annotations.shapes().cloned().collect::<Vec<_>>();
+        let revision = annotations.revision();
+        let start = point(0.25, 20.0);
+        assert!(annotations.begin_interaction(MOUSE, start, page, 1.0, PLAIN,));
+        assert_eq!(annotations.geometric_previews().count(), 2);
+        assert!(annotations.finish(MOUSE, start, false));
+        assert_eq!(annotations.revision(), revision);
+        assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), original);
+
+        assert!(annotations.begin_interaction(MOUSE, start, page, 1.0, PLAIN,));
+        let end = point(50.25, 30.0);
+        annotations.drag(MOUSE, end, false);
+        assert_eq!(annotations.geometric_previews().count(), 2);
+        assert!(annotations.finish(MOUSE, end, false));
+        for (before, after) in original.iter().zip(annotations.shapes()) {
+            let before = before.bounds();
+            let after = after.bounds();
+            let expected = point(before.x, before.y);
+            let actual = point(after.x, after.y);
+            assert_eq!(actual.x, expected.x);
+            assert_eq!(actual.y, expected.y + 10.0);
+        }
+        let moved = annotations.shapes().cloned().collect::<Vec<_>>();
+        assert!(annotations.undo());
+        assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), original);
+        assert!(annotations.redo());
+        assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), moved);
+    }
+}
+
+#[test]
+fn group_moves_from_inside_a_selected_lines_frame() {
+    let mut annotations = Annotations::default();
+    annotations.set_tool(Tool::Line);
+    for offset in [0.0, 200.0] {
+        assert!(annotations.begin(
+            MOUSE,
+            Point::new(100.0 + offset, 100.0),
+            PAGE,
+        ));
+        assert!(annotations.finish(
+            MOUSE,
+            Point::new(150.0 + offset, 150.0),
+            false,
+        ));
+    }
+    annotations.set_tool(Tool::Select);
+    marquee(
+        &mut annotations,
+        Point::new(80.0, 80.0),
+        Point::new(380.0, 180.0),
+    );
+    let before: Vec<_> =
+        annotations.shapes().map(|shape| shape.bounds().x).collect();
+
+    assert!(annotations.begin_interaction(
+        MOUSE,
+        Point::new(105.0, 145.0),
+        PAGE,
+        1.0,
+        PLAIN,
+    ));
+    assert!(annotations.finish(MOUSE, Point::new(125.0, 145.0), false));
+
+    let after: Vec<_> =
+        annotations.shapes().map(|shape| shape.bounds().x).collect();
+    assert_eq!(after, before.iter().map(|x| x + 20.0).collect::<Vec<_>>());
+}
+
+#[test]
+fn bulk_styles_apply_once_and_fill_only_compatible_objects() {
+    let mut annotations = rectangles(&[100.0, 200.0]);
+    annotations.set_tool(Tool::Line);
+    annotations.begin(MOUSE, Point::new(300.0, 100.0), PAGE);
+    annotations.finish(MOUSE, Point::new(350.0, 150.0), false);
+    annotations.set_tool(Tool::Select);
+    marquee(
+        &mut annotations,
+        Point::new(80.0, 80.0),
+        Point::new(380.0, 180.0),
+    );
+
+    assert!(annotations.set_color(AnnotationColor::Red));
+    assert!(annotations.set_stroke_width(7.0, PAGE));
+    assert!(annotations.set_filled(true));
+    assert!(
+        annotations
+            .shapes()
+            .all(|shape| shape.color == AnnotationColor::Red)
+    );
+    assert!(
+        annotations
+            .shapes()
+            .all(|shape| (shape.stroke_width - 7.0).abs() < f32::EPSILON)
+    );
+    assert!(annotations.shapes().next().unwrap().filled);
+    assert!(annotations.shapes().nth(1).unwrap().filled);
+    assert!(!annotations.shapes().nth(2).unwrap().filled);
+}
+
+#[test]
+fn selected_and_all_deletion_are_single_undoable_changes() {
+    let mut annotations = rectangles(&[100.0, 200.0, 300.0]);
+    marquee(
+        &mut annotations,
+        Point::new(80.0, 80.0),
+        Point::new(280.0, 180.0),
+    );
+    assert!(annotations.delete_selected());
+    assert_eq!(annotations.shapes().count(), 1);
+    assert_eq!(annotations.selected_indices(), &[] as &[usize]);
+    assert!(annotations.undo());
+    assert_eq!(annotations.shapes().count(), 3);
+    assert_eq!(annotations.selected_indices(), [0, 1]);
+
+    assert!(annotations.delete_all());
+    assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), []);
+    assert!(annotations.undo());
+    assert_eq!(annotations.shapes().count(), 3);
+}
+
+#[test]
+fn layer_commands_keep_relative_order_and_selection_through_history() {
+    let mut annotations = rectangles(&[100.0, 200.0, 300.0, 400.0]);
+    ctrl_click(&mut annotations, Point::new(225.0, 125.0));
+    assert_eq!(annotations.selected_indices(), [1, 3]);
+    let selected = annotations.selected_ids().to_vec();
+
+    assert!(annotations.send_selected_to_back());
+    let xs = ordered_shape_xs(&annotations);
+    assert_eq!(xs, [200.0, 400.0, 100.0, 300.0]);
+    assert_eq!(annotations.selected_ids(), selected);
+
+    assert!(annotations.undo());
+    assert_eq!(annotations.selected_ids(), selected);
+    assert!(annotations.bring_selected_to_front());
+    let xs = ordered_shape_xs(&annotations);
+    assert_eq!(xs, [100.0, 300.0, 200.0, 400.0]);
+    assert_eq!(annotations.selected_ids(), selected);
+}
+
+fn ordered_shape_xs(annotations: &Annotations) -> Vec<f32> {
+    annotations
+        .ordered_annotations()
+        .filter_map(|annotation| match annotation {
+            AnnotationRef::Shape(_, shape) => Some(shape.bounds().x),
+            AnnotationRef::Text(_, _) => None,
+        })
+        .collect()
+}
+
+fn mixed() -> Annotations {
+    let mut annotations = rectangles(&[100.0, 500.0]);
+    annotations.set_tool(Tool::Text);
+    for x in [200.0, 300.0] {
+        assert!(annotations.begin_text(Point::new(x, 125.0), PAGE, 1.0));
+        annotations.update_text("Form text", Size::new(60.0, 30.0));
+        assert!(annotations.accept_text());
+    }
+    annotations.set_tool(Tool::Select);
+    annotations
+}
+
+#[test]
+fn marquee_and_ctrl_click_include_text_in_a_mixed_selection() {
+    let mut annotations = mixed();
+    marquee(
+        &mut annotations,
+        Point::new(80.0, 80.0),
+        Point::new(380.0, 180.0),
+    );
+    assert_eq!(annotations.selected_indices(), [0]);
+    assert_eq!(
+        annotations.selection_texts(),
+        annotations.texts().cloned().collect::<Vec<_>>()
+    );
+    assert!(annotations.selected_index().is_none());
+    assert!(annotations.selected_text_annotation().is_none());
+    ctrl_click(&mut annotations, Point::new(220.0, 125.0));
+    assert_eq!(
+        annotations.selection_texts(),
+        [annotations.texts().nth(1).unwrap().clone()]
+    );
+    ctrl_click(&mut annotations, Point::new(220.0, 125.0));
+    assert_eq!(
+        annotations.selection_texts(),
+        annotations.texts().cloned().collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn mixed_group_moves_cancels_and_undoes_as_one_change() {
+    let mut annotations = mixed();
+    marquee(
+        &mut annotations,
+        Point::new(80.0, 80.0),
+        Point::new(380.0, 180.0),
+    );
+    let shapes = annotations.shapes().cloned().collect::<Vec<_>>();
+    let texts = annotations.texts().cloned().collect::<Vec<_>>();
+    assert!(annotations.begin_interaction(
+        MOUSE,
+        Point::new(220.0, 125.0),
+        PAGE,
+        1.0,
+        PLAIN
+    ));
+    annotations.drag(MOUSE, Point::new(240.0, 155.0), false);
+    assert_eq!(
+        annotations
+            .geometric_previews()
+            .find_map(|a| a.text().map(|text| text.bounds.x)),
+        Some(220.0)
+    );
+    annotations.cancel();
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), texts);
+    assert!(annotations.begin_interaction(
+        MOUSE,
+        Point::new(125.0, 125.0),
+        PAGE,
+        1.0,
+        PLAIN
+    ));
+    assert!(annotations.finish(MOUSE, Point::new(145.0, 155.0), false));
+    assert_eq!(annotations.shapes().next().unwrap().bounds().x, 120.0);
+    assert_eq!(annotations.shapes().nth(1).unwrap().clone(), shapes[1]);
+    assert_eq!(annotations.texts().next().unwrap().bounds.x, 220.0);
+    assert_eq!(annotations.texts().nth(1).unwrap().bounds.x, 320.0);
+    assert!(annotations.undo());
+    assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), shapes);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), texts);
+    assert_eq!(
+        annotations.selection_texts(),
+        annotations.texts().cloned().collect::<Vec<_>>()
+    );
+    assert!(annotations.redo());
+    assert_eq!(annotations.texts().next().unwrap().bounds.x, 220.0);
+}
+
+#[test]
+fn mixed_color_layers_and_delete_preserve_membership_and_history() {
+    let mut annotations = mixed();
+    marquee(
+        &mut annotations,
+        Point::new(80.0, 80.0),
+        Point::new(380.0, 180.0),
+    );
+    assert!(annotations.set_color(AnnotationColor::Red));
+    assert_eq!(
+        annotations.shapes().next().unwrap().color,
+        AnnotationColor::Red
+    );
+    assert!(
+        annotations
+            .texts()
+            .all(|text| text.format.color == AnnotationColor::Red)
+    );
+    assert!(annotations.set_stroke_width(7.0, PAGE));
+    assert_eq!(annotations.texts().next().unwrap().format.font_size, 24.0);
+    assert!(annotations.send_selected_to_back());
+    let ids = annotations
+        .ordered_annotations()
+        .map(|a| match a {
+            AnnotationRef::Shape(_, s) => s.id,
+            AnnotationRef::Text(_, t) => t.id,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(ids.last(), Some(&annotations.shapes().nth(1).unwrap().id));
+    assert!(annotations.delete_selected());
+    assert_eq!(annotations.len(), 1);
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), []);
+    assert!(annotations.undo());
+    assert_eq!(annotations.len(), 4);
+    assert_eq!(
+        annotations.selection_texts(),
+        annotations.texts().cloned().collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn bulk_text_formatting_is_one_validated_undoable_change() {
+    let mut annotations = mixed();
+    marquee(
+        &mut annotations,
+        Point::new(80.0, 80.0),
+        Point::new(380.0, 180.0),
+    );
+    let texts = annotations.texts().cloned().collect::<Vec<_>>();
+    let shapes = annotations.shapes().cloned().collect::<Vec<_>>();
+    assert!(annotations.update_selected_text_formats(PAGE, |text| {
+        let mut format = text.format;
+        format.bold = true;
+        format.font_size = 32.0;
+        (format, Size::new(90.0, 42.0))
+    }));
+    assert!(
+        annotations.texts().all(|text| text.format.bold
+            && (text.format.font_size - 32.0).abs() < 0.01)
+    );
+    assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), shapes);
+    assert_eq!(
+        annotations.texts().next().unwrap().bounds.x,
+        texts[0].bounds.x
+    );
+    assert_eq!(annotations.texts().next().unwrap().id, texts[0].id);
+    assert!(annotations.undo());
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), texts);
+    assert_eq!(
+        annotations.selection_texts(),
+        annotations.texts().cloned().collect::<Vec<_>>()
+    );
+    assert!(annotations.redo());
+    let before = annotations.texts().cloned().collect::<Vec<_>>();
+    let revision = annotations.revision();
+    let last = before[1].id;
+    assert!(!annotations.update_selected_text_formats(PAGE, |text| {
+        let mut format = text.format;
+        format.font_size = if text.id == last { f32::NAN } else { 48.0 };
+        (format, Size::new(100.0, 50.0))
+    }));
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), before);
+    assert_eq!(annotations.revision(), revision);
+    assert!(!annotations.update_selected_text_formats(PAGE, |text| (
+        text.format,
+        Size::new(f32::INFINITY, 50.0)
+    )));
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), before);
+    assert!(annotations.begin_interaction(
+        MOUSE,
+        Point::new(220.0, 125.0),
+        PAGE,
+        1.0,
+        PLAIN
+    ));
+    assert!(!annotations.update_selected_text_formats(PAGE, |_| {
+        panic!("active drag must block formatting before calling the updater")
+    }));
+    annotations.cancel();
+    assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), before);
+}
+
+#[test]
+fn text_only_group_keeps_each_member_reachable_and_restores_selection() {
+    let mut annotations = mixed();
+    marquee(
+        &mut annotations,
+        Point::new(180.0, 80.0),
+        Point::new(380.0, 180.0),
+    );
+    assert_eq!(annotations.selected_indices(), &[] as &[usize]);
+    assert_eq!(
+        annotations.selection_texts(),
+        annotations.texts().cloned().collect::<Vec<_>>()
+    );
+    assert!(annotations.current_text_format().is_some());
+    assert!(annotations.current_style().is_some());
+    assert!(annotations.begin_interaction(
+        MOUSE,
+        Point::new(220.0, 125.0),
+        PAGE,
+        1.0,
+        PLAIN
+    ));
+    assert!(annotations.finish(MOUSE, Point::new(-1_000.0, 125.0), false));
+    assert_eq!(annotations.texts().next().unwrap().bounds.x, -59.0);
+    assert_eq!(annotations.texts().nth(1).unwrap().bounds.x, 41.0);
+    assert!(annotations.undo());
+    assert_eq!(
+        annotations.selection_texts(),
+        annotations.texts().cloned().collect::<Vec<_>>()
+    );
+}

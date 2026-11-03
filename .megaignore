@@ -1,21 +1,11 @@
-# Rust compiler output. Path is relative to this sync root.
--dp:rust/target
+# Compiler and browser output, including old local build directories.
+-d:target
+-d:dist
 
-# C# and Visual Studio build output.
--d:bin
--d:obj
--d:.vs
--d:AppPackages
--d:TestResults
--f:*.user
--f:*.suo
+# Private signing material and local configuration.
 -f:*.pfx
 -f:*.cer
+-f:mise.codex.toml
 
-# Generated C# check and packaging artifacts. Keep artifacts/reviews synced.
--dp:artifacts/check-workspace
--dp:artifacts/preview
--dp:artifacts/scan-analysis
+# Keep review samples synced, but never private signing material.
 -dp:artifacts/signing
--dp:artifacts/unsafe-workspace
--fp:artifacts/unsafe.docscan

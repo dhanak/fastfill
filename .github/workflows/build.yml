@@ -1,0 +1,385 @@
+name: FastFill
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v[0-9]*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fastfill-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  # Keep caches small; local debug builds and test assertions stay unchanged.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
+jobs:
+  test-native:
+    name: Native tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install toolchain
+        run: >-
+          rustup toolchain install 1.99.0
+          --profile minimal
+          --component clippy,rustfmt
+      - name: Cache native dependencies and compiled tests
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: >-
+            native-${{ runner.os }}-${{ runner.arch }}-toolchain199-lean-v2-${{
+            hashFiles('Cargo.toml', 'Cargo.lock') }}
+          restore-keys: |
+            native-${{ runner.os }}-${{ runner.arch }}-toolchain199-lean-v2-
+      - name: Check formatting
+        run: cargo +1.99.0 fmt --check
+      - name: Test platform-independent logic
+        run: cargo +1.99.0 test --no-default-features
+      - name: Test application state and GUI input
+        run: cargo +1.99.0 test --all-features --all-targets
+      - name: Lint
+        if: runner.os == 'Linux'
+        run: >-
+          cargo +1.99.0 clippy
+          --all-targets --all-features -- -D warnings
+      - name: Test browser download adapter
+        if: runner.os == 'Linux'
+        run: node web/download.test.mjs
+      - name: Test browser camera and clipboard adapters
+        if: runner.os == 'Linux'
+        run: node --test web/camera.test.mjs web/clipboard.test.mjs
+      - name: Test release automation
+        if: runner.os == 'Linux'
+        run: node tools/publish-release.test.mjs
+      - name: Test CI cache configuration
+        if: runner.os == 'Linux'
+        run: node tools/cache.test.mjs
+
+  package-web:
+    name: Browser static archive
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: 1.99.0
+      NO_COLOR: "true"
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure output
+        run: >-
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/fastfill-web-target"
+          >> "$GITHUB_ENV"
+      - name: Install toolchain and WASM target
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal
+          rustup target add --toolchain 1.99.0 wasm32-unknown-unknown
+      - name: Cache browser dependencies and compiled outputs
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cache/trunk
+            ${{ runner.temp }}/fastfill-web-target
+          key: >-
+            web-${{ runner.os }}-${{ runner.arch }}-toolchain199-tr02114-v2-${{
+            hashFiles('Cargo.toml', 'Cargo.lock') }}
+          restore-keys: |
+            web-${{ runner.os }}-${{ runner.arch }}-toolchain199-tr02114-v2-
+      - name: Fetch pinned Trunk binary
+        run: |
+          archive="$RUNNER_TEMP/trunk.tar.gz"
+          url=https://github.com/trunk-rs/trunk/releases/download/v0.21.14
+          curl --fail --location --silent --show-error \
+            "$url/trunk-x86_64-unknown-linux-gnu.tar.gz" -o "$archive"
+          printf '%s  %s\n' \
+            f2b4680cd239693a646a2795e4633c625328d7b2a044fbe749fa3a2fe9e7036b \
+            "$archive" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP" trunk
+      - name: Build optimized browser app
+        run: >-
+          "$RUNNER_TEMP/trunk" build --release --locked --all-features
+          --public-url ./ --dist "$RUNNER_TEMP/fastfill-web-dist"
+      - name: Package and smoke-test extracted browser app
+        run: node tools/package-web.mjs
+      - name: Upload deployable browser archive
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ runner.temp }}/FastFill-web.tar.gz
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+  package-windows:
+    name: Windows portable archive
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: >-
+        -C target-feature=+crt-static -D warnings
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure output and check package script syntax
+        run: |
+          $targetDir = Join-Path $env:RUNNER_TEMP "fastfill-target"
+          "CARGO_TARGET_DIR=$targetDir" >> $env:GITHUB_ENV
+          $script = Get-Content ./tools/package-windows.ps1 -Raw
+          [ScriptBlock]::Create($script) | Out-Null
+      - name: Install release toolchain
+        run: rustup toolchain install 1.99.0 --profile minimal
+      - name: Cache release dependencies
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ runner.temp }}/fastfill-target
+          key: >-
+            win-toolchain199-static-v2-${{
+            hashFiles('Cargo.toml', 'Cargo.lock') }}
+          restore-keys: |
+            win-toolchain199-static-v2-
+      - name: Build optimized standalone Windows app
+        run: >-
+          cargo +1.99.0 build --locked --release --all-features
+          --target x86_64-pc-windows-msvc --bin fastfill
+      - name: Sign Windows app
+        if: >-
+          github.event_name != 'pull_request' &&
+          (github.ref == 'refs/heads/master' ||
+          startsWith(github.ref, 'refs/tags/v'))
+        env:
+          CERTIFICATE_BASE64: >-
+            ${{ secrets.FASTFILL_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: >-
+            ${{ secrets.FASTFILL_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:CERTIFICATE_BASE64 -or
+              -not $env:CERTIFICATE_PASSWORD) {
+            throw "Existing FastFill signing certificate is not configured."
+          }
+          $executable = Join-Path $env:CARGO_TARGET_DIR `
+            "x86_64-pc-windows-msvc/release/fastfill.exe"
+          $pfxPath = Join-Path $env:RUNNER_TEMP "FastFill.pfx"
+          try {
+            [IO.File]::WriteAllBytes(
+              $pfxPath,
+              [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
+            $sdkBin = Join-Path `
+              ${env:ProgramFiles(x86)} "Windows Kits\10\bin"
+            $signTool = Get-ChildItem `
+              (Join-Path $sdkBin "*\x64\signtool.exe") |
+              Sort-Object { [version]$_.Directory.Parent.Name } |
+              Select-Object -Last 1
+            if (-not $signTool) { throw "SignTool was not found." }
+            & $signTool.FullName sign `
+              /fd SHA256 `
+              /f $pfxPath `
+              /p $env:CERTIFICATE_PASSWORD `
+              /tr http://timestamp.digicert.com `
+              /td SHA256 `
+              $executable
+            if ($LASTEXITCODE -ne 0) {
+              throw "Authenticode signing failed."
+            }
+            $signature = Get-AuthenticodeSignature `
+              -LiteralPath $executable
+            if (-not $signature.SignerCertificate) {
+              throw "Signed executable has no signer certificate."
+            }
+            $cerPath = Join-Path $env:RUNNER_TEMP "FastFill.cer"
+            $contentType =
+              [Security.Cryptography.X509Certificates.X509ContentType]
+            [IO.File]::WriteAllBytes($cerPath,
+              $signature.SignerCertificate.Export($contentType::Cert))
+          }
+          finally {
+            Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
+          }
+      - name: Package and smoke-test extracted app
+        run: ./tools/package-windows.ps1
+      - name: Upload portable Windows ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ runner.temp }}/FastFill-windows-x64.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+  package-linux:
+    name: Linux portable archive
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure output
+        run: >-
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/fastfill-linux-target"
+          >> "$GITHUB_ENV"
+      - name: Install release toolchain
+        run: rustup toolchain install 1.99.0 --profile minimal
+      - name: Cache release dependencies
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ runner.temp }}/fastfill-linux-target
+          key: >-
+            linux-${{ runner.os }}-${{ runner.arch }}-toolchain199-v2-${{
+            hashFiles('Cargo.toml', 'Cargo.lock') }}
+          restore-keys: |
+            linux-${{ runner.os }}-${{ runner.arch }}-toolchain199-v2-
+      - name: Build optimized Linux app
+        run: >-
+          cargo +1.99.0 build --locked --release --all-features
+          --bin fastfill
+      - name: Package and smoke-test extracted app
+        run: bash ./tools/package-linux.sh
+      - name: Upload portable Linux archive
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ runner.temp }}/FastFill-linux-x64.tar.gz
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+  package-macos:
+    name: macOS universal archive
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure output
+        run: >-
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/fastfill-macos-target"
+          >> "$GITHUB_ENV"
+      - name: Install toolchain and both macOS targets
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal \
+            --component clippy,rustfmt
+          rustup target add --toolchain 1.99.0 \
+            x86_64-apple-darwin aarch64-apple-darwin
+      - name: Cache macOS dependencies and compiled outputs
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ runner.temp }}/fastfill-macos-target
+          key: >-
+            macos-${{ runner.os }}-${{ runner.arch }}-toolchain199-v2-${{
+            hashFiles('Cargo.toml', 'Cargo.lock') }}
+          restore-keys: |
+            macos-${{ runner.os }}-${{ runner.arch }}-toolchain199-v2-
+      - name: Check formatting
+        run: cargo +1.99.0 fmt --check
+      - name: Test platform-independent logic
+        run: cargo +1.99.0 test --no-default-features
+      - name: Test application state and GUI input
+        run: cargo +1.99.0 test --all-features --all-targets
+      - name: Build Intel and Apple Silicon apps
+        run: |
+          cargo +1.99.0 build --locked --release --all-features \
+            --target x86_64-apple-darwin --bin fastfill
+          cargo +1.99.0 build --locked --release --all-features \
+            --target aarch64-apple-darwin --bin fastfill
+      - name: Package and smoke-test extracted macOS app
+        run: bash ./tools/package-macos.sh
+      - name: Upload portable macOS ZIP
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ runner.temp }}/FastFill-macos-universal.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
+  # A shared publication gate keeps every platform on the same source revision.
+  publish:
+    name: Publish release
+    if: >-
+      github.event_name != 'pull_request' &&
+      (github.ref == 'refs/heads/master' ||
+      startsWith(github.ref, 'refs/tags/v'))
+    needs: [test-native, package-web, package-windows, package-linux,
+            package-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download tested Windows ZIP
+        uses: actions/download-artifact@v8
+        with:
+          name: FastFill-windows-x64.zip
+          skip-decompress: true
+      - name: Download tested Linux archive
+        uses: actions/download-artifact@v8
+        with:
+          name: FastFill-linux-x64.tar.gz
+          skip-decompress: true
+      - name: Download tested macOS ZIP
+        uses: actions/download-artifact@v8
+        with:
+          name: FastFill-macos-universal.zip
+          skip-decompress: true
+      - name: Download tested browser archive
+        uses: actions/download-artifact@v8
+        with:
+          name: FastFill-web.tar.gz
+          skip-decompress: true
+      - name: Publish tested archives
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/publish-release.sh
+
+  deploy-pages:
+    name: Publish tagged browser site
+    if: >-
+      github.event_name != 'pull_request' &&
+      startsWith(github.ref, 'refs/tags/v')
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download tested browser archive
+        uses: actions/download-artifact@v8
+        with:
+          name: FastFill-web.tar.gz
+          skip-decompress: true
+      - name: Extract browser site
+        run: |
+          mkdir site
+          tar -xzf FastFill-web.tar.gz -C site
+          test -s site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+      - name: Deploy browser site
+        id: deployment
+        uses: actions/deploy-pages@v4

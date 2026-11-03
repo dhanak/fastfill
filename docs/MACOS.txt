@@ -1,0 +1,17 @@
+FastFill - macOS universal (Intel and Apple Silicon)
+
+Extract this ZIP. Open FastFill.app from the extracted folder, or move it
+to Applications. No compiler, managed runtime or installer is needed.
+
+The app is ad-hoc signed, without a Developer ID or notarization. If you
+trust the download, try opening it once, then approve it in System Settings
+> Privacy & Security > Open Anyway if Gatekeeper blocks it.
+
+Open images, PDFs and .docscan projects in the app. Print sample-form.pdf
+at actual size for form checks. Camera capture is not supported on macOS.
+Use F1 for shortcuts. For startup diagnostics, launch from Terminal:
+FastFill.app/Contents/MacOS/FastFill
+
+See BUILD.txt for the exact source revision and workflow run.
+Documentation: https://github.com/dhanak/fastfill/blob/master/README.md
+Downloads: https://github.com/dhanak/fastfill/releases
