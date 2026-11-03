@@ -4481,6 +4481,29 @@ Windows retest after the next CI ZIP:
   the stored project title, and use the new filename for future project and PDF
   downloads. Browser interaction awaits a manual check.
 
+### 2026-11-03 — Review fixes and bounded PDF import
+
+- Fix group-drag limits for opposing edge slivers. Keep visible strokes
+  serializable, and keep annotations reachable after rotation and text edits.
+- Clip rendered output to the paper boundary, preserving visible stroke parts.
+- Bound raw ZIP metadata before construction and reject duplicate headers.
+  Normalize standalone EXIF images without changing legacy project geometry.
+- Match browser command shortcuts to the host platform and preserve the frozen
+  capture frame across tab visibility changes.
+- Lower PDF import DPI when needed to fit the memory budget, reporting a
+  warning. Keep cancellation busy until the worker acknowledges it.
+- Show errors once, with manual dismissal and a ten-second timeout shared by
+  warnings.
+- Automated checks: native all-features/all-targets tests, archive round-trip
+  and malformed-metadata regressions, browser adapter tests, and native/WASM
+  strict Clippy pass.
+- Linux native PDF import and notice timeout/manual dismissal confirmed.
+- Browser PDF import and page numbers confirmed. Use fallback-aware canvas text
+  for rail page numbers and the drop caption so bundled fonts work without
+  system fonts.
+- Manual checks pending: browser notice dismissal/timeout; Cmd shortcuts in a
+  Mac browser; captured outline after switching browser tabs.
+
 ## References
 
 - [iced 0.14 documentation](https://docs.rs/iced/0.14.0/iced/)

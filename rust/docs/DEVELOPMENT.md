@@ -29,9 +29,9 @@ prompt.
 Help opens only while the main editor is idle, not over a confirmation, file
 operation, page correction, camera screen or annotation/page drag. Browser/OS
 shortcuts can take priority over F1; use the button instead. Project/history
-shortcuts show Ctrl or Cmd for the compiled platform; geometry always uses
-literal Ctrl. The table lists the exact shortcuts, without a separate modifier
-legend.
+shortcuts show Ctrl or Cmd for the native platform or browser host; geometry
+always uses literal Ctrl. The table lists the exact shortcuts, without a
+separate modifier legend.
 
 Use **Commands** (magnifying-glass icon), or press **Ctrl+.** on Windows/Linux
 or **Cmd+.** on macOS, to search and run actions. The compact **More** menu also
@@ -53,8 +53,9 @@ The main editor uses one compact header. The project-name menu contains New,
 Open and (on desktop) Save as. Undo, Redo, zoom out/in, 1:1, Fit, Save, Export
 PDF, Commands and Shortcuts follow it; narrow windows move less-used commands
 into the menu button. Status appears in the header; errors and progress appear
-over the editor without shifting the page. The page rail has icon buttons for
-Add image, Import PDF, Camera (supported native and browser builds), Replace
+over the editor without shifting the page. Errors appear only in a dismissible
+banner; errors and warnings expire after ten seconds. The page rail has buttons
+for Add image, Import PDF, Camera (supported native and browser builds), Replace
 image, Edit page and Delete page; hover for labels. Replace image uses an
 image-up glyph. Its menu button moves the current page earlier or later. Choose
 pages from thumbnails; there is no page-number dropdown.
@@ -851,18 +852,21 @@ Checkpoint 5E adds **Import PDF** in the page rail:
 - Import all pages after the active page, in their original order. An empty
   starter page is replaced; an annotated starter stays. Existing annotations and
   history are preserved. The result becomes an unsaved project change.
-- Pages become 300-DPI PNG backgrounds with white paper, respecting PDF crop
-  boxes and page rotation. Printed text, PDF annotations, and form fields are
-  flattened, not editable PDF objects. Add FastFill annotations normally, then
-  save/reopen as `.docscan`. The original PDF is not retained or modified.
+- Pages become PNG backgrounds at up to 300 DPI with white paper, respecting PDF
+  crop boxes and page rotation. Import selects the highest whole-number DPI from
+  72 to 300 that fits the per-page and remaining project pixel budgets. A
+  dismissible warning reports any reduction. Printed text, PDF annotations, and
+  form fields are flattened, not editable PDF objects. Add FastFill annotations
+  normally, then save/reopen as `.docscan`. The original PDF is not retained or
+  modified.
 - Imports are all-or-nothing. Invalid/unsupported pages, limits, errors, or
   cancellation leave existing pages intact. Limits: 100 MiB input, 20 project
   pages, 50 megapixels/page, 200 megapixels/batch, and 600 MiB encoded output.
 - Native rendering runs on a worker thread with parsing, interpreting,
   rendering, and compression stages plus a progress bar. The bar counts work
   stages, not elapsed time. Cancel stops at stage boundaries and discards the
-  entire pending batch; it cannot interrupt a stage already running. Late
-  results are ignored.
+  entire pending batch; it cannot interrupt a stage already running. Another
+  import cannot start until cancellation is acknowledged, bounding active work.
 - Image/PDF pickers share their last successful native folder during the run.
   Browser PDF uploads work, but rasterization blocks the browser event thread;
   progress/cancellation cannot respond while rendering. Test large PDFs in the
@@ -1108,9 +1112,13 @@ actions and no redundant tool-name label; scrollbars below the button targets.
 
 Save projects explicitly; native recovery is a safety net, not a saved file.
 Schema-v1 archive load/save APIs are covered by automated compatibility tests.
-Minimal Linux or WASM environments without requested generic or italic fonts
-fall back to bundled Fira Sans. Android browser rendering is currently slow;
-native touchscreen performance still needs hardware testing.
+Archive loading bounds physical size and raw ZIP directory metadata before ZIP
+construction, then rejects duplicate or inconsistent headers. Standalone image
+imports apply EXIF orientation once and save normalized PNG pixels when needed;
+existing project assets retain their original coordinate system. Minimal Linux
+or WASM environments without requested generic or italic fonts fall back to
+bundled Fira Sans. Android browser rendering is currently slow; native
+touchscreen performance still needs hardware testing.
 
 [adaptive threshold reference]: https://docs.opencv.org/4.x/d7/d4d/tutorial_py_thresholding.html
 [clahe reference]: https://docs.opencv.org/4.x/d5/daf/tutorial_py_histogram_equalization.html

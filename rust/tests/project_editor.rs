@@ -733,3 +733,187 @@ fn pending_text_formats_cancel_or_accept_without_changing_other_layers() {
     assert!(editor.redo());
     assert_eq!(encode_editor_page(&source, &editor).unwrap(), changed);
 }
+
+#[test]
+fn partly_visible_strokes_remain_editable_and_serializable() {
+    let source = blank_page();
+    let page = editor_page_size(&source).unwrap();
+    for tool in [Tool::Line, Tool::Arrow, Tool::Pen, Tool::Highlighter] {
+        let mut editor = Annotations::default();
+        editor.set_tool(tool);
+        editor.set_stroke_width(20.0);
+        assert!(editor.begin(MOUSE, Point::new(100.0, 10.0), page));
+        assert!(editor.finish(MOUSE, Point::new(200.0, 10.0), false));
+        let original = encode_editor_page(&source, &editor).unwrap();
+        editor.set_tool(Tool::Select);
+        assert!(editor.begin_interaction(
+            MOUSE,
+            Point::new(150.0, 10.0),
+            page,
+            1.0,
+            DragModifiers::default(),
+        ));
+        assert!(editor.finish(MOUSE, Point::new(150.0, -9.0), false));
+        let moved = encode_editor_page(&source, &editor).unwrap();
+        let reopened = decode_editor_page(&moved).unwrap();
+        assert_eq!(encode_editor_page(&moved, &reopened).unwrap(), moved);
+        assert!(editor.undo());
+        assert_eq!(encode_editor_page(&source, &editor).unwrap(), original);
+        assert!(editor.redo());
+        assert_eq!(encode_editor_page(&source, &editor).unwrap(), moved);
+
+        let mut invisible = moved;
+        match &mut invisible.annotations[0] {
+            ProjectAnnotation::Shape { start, end, .. } => {
+                start.y = -100.0 / page.height;
+                end.y = start.y;
+            }
+            ProjectAnnotation::Freehand { points, .. } => {
+                for point in points {
+                    point.y = -100.0 / page.height;
+                }
+            }
+            ProjectAnnotation::Text { .. } => unreachable!(),
+        }
+        assert!(decode_editor_page(&invisible).is_err(), "{tool:?}");
+    }
+}
+
+#[test]
+fn reset_rotation_preserves_visibility_and_serializable_history() {
+    for text in [false, true] {
+        for x in [611.5, 620.0] {
+            let source = rotated_edge_page(text, x, 10.0, 100.0);
+            let page = editor_page_size(&source).unwrap();
+            let mut editor = decode_editor_page(&source).unwrap();
+            editor.select_all();
+            assert!(editor.reset_rotation(page));
+            let reset = encode_editor_page(&source, &editor).unwrap();
+            let bounds = editor.selection_bounds(1.0).unwrap();
+            let expected = if x < page.width { x } else { 611.0 };
+            assert!((bounds.x - expected).abs() < 0.001);
+            assert!(bounds.x < page.width);
+            assert!(editor.undo());
+            assert_eq!(encode_editor_page(&source, &editor).unwrap(), source);
+            assert!(editor.redo());
+            assert_eq!(encode_editor_page(&source, &editor).unwrap(), reset);
+        }
+    }
+}
+
+#[test]
+fn selected_text_shrinking_retains_reachability_and_save_history() {
+    let source = rotated_edge_page(true, -100.0, 200.0, 20.0);
+    let page = editor_page_size(&source).unwrap();
+    let mut editor = decode_editor_page(&source).unwrap();
+    editor.select_all();
+    assert!(editor.update_selected_text_formats(page, |text| {
+        let mut format = text.format;
+        format.font_size = 12.0;
+        (format, Size::new(20.0, 20.0))
+    }));
+    let changed = encode_editor_page(&source, &editor).unwrap();
+    let bounds = editor.selection_bounds(1.0).unwrap();
+    assert!((bounds.x + bounds.width - 1.0).abs() < 0.001);
+    assert!(editor.undo());
+    assert_eq!(encode_editor_page(&source, &editor).unwrap(), source);
+    assert!(editor.redo());
+    assert_eq!(encode_editor_page(&source, &editor).unwrap(), changed);
+}
+
+#[test]
+fn pending_text_shrinking_keeps_preview_and_commit_reachable() {
+    let source = rotated_edge_page(true, -100.0, 200.0, 20.0);
+    let page = editor_page_size(&source).unwrap();
+    let mut editor = decode_editor_page(&source).unwrap();
+    editor.set_tool(Tool::Text);
+    assert!(editor.begin_text_edit(Point::new(1.0, 110.0), page, 1.0));
+    editor.update_text("Short", Size::new(20.0, 20.0));
+    let right = editor
+        .text_preview()
+        .unwrap()
+        .frame_corners()
+        .iter()
+        .map(|point| point.x)
+        .fold(f32::NEG_INFINITY, f32::max);
+    assert!((right - 1.0).abs() < 0.001);
+    assert!(editor.accept_text());
+    let changed = encode_editor_page(&source, &editor).unwrap();
+    assert!(editor.undo());
+    assert_eq!(encode_editor_page(&source, &editor).unwrap(), source);
+    assert!(editor.redo());
+    assert_eq!(encode_editor_page(&source, &editor).unwrap(), changed);
+}
+
+#[test]
+fn text_rotation_keeps_its_footprint_reachable_and_serializable() {
+    let mut source = rotated_edge_page(true, 600.0, 100.0, 10.0);
+    let ProjectAnnotation::Text { transform, .. } = &mut source.annotations[0]
+    else {
+        unreachable!();
+    };
+    *transform = AffineTransform::default();
+    let page = editor_page_size(&source).unwrap();
+    let mut editor = decode_editor_page(&source).unwrap();
+    editor.select_all();
+    let text = editor.texts().next().unwrap().clone();
+    let handle = text.rotation_handle(1.0).unwrap();
+    let center = text.bounds.center();
+    assert!(editor.begin_text_move(MOUSE, handle, page, 1.0));
+    assert!(editor.finish(
+        MOUSE,
+        Point::new(center.x + 100.0, center.y),
+        false,
+    ));
+    let changed = encode_editor_page(&source, &editor).unwrap();
+    assert!(editor.selection_bounds(1.0).unwrap().x < page.width);
+    assert!(editor.undo());
+    assert_eq!(encode_editor_page(&source, &editor).unwrap(), source);
+    assert!(editor.redo());
+    assert_eq!(encode_editor_page(&source, &editor).unwrap(), changed);
+}
+
+fn rotated_edge_page(
+    text: bool,
+    x: f32,
+    width: f32,
+    height: f32,
+) -> ProjectPage {
+    let mut source = blank_page();
+    source.source_pixel_height = source.source_pixel_width;
+    let center_x = (x + width / 2.0) / 612.0;
+    let center_y = (100.0 + height / 2.0) / 612.0;
+    let transform = AffineTransform {
+        m11: 0.0,
+        m12: 1.0,
+        m21: -1.0,
+        m22: 0.0,
+        m31: center_x + center_y,
+        m32: center_y - center_x,
+    };
+    let id = Uuid::new_v4();
+    let annotation = if text {
+        serde_json::json!({
+            "kind": "text", "id": id, "text": "Edge",
+            "bounds": {
+                "x": x / 612.0, "y": 100.0 / 612.0,
+                "width": width / 612.0, "height": height / 612.0,
+            },
+            "transform": transform,
+        })
+    } else {
+        serde_json::json!({
+            "kind": "shape", "id": id, "shape": 2,
+            "start": { "x": x / 612.0, "y": 100.0 / 612.0 },
+            "end": {
+                "x": (x + width) / 612.0,
+                "y": (100.0 + height) / 612.0,
+            },
+            "transform": transform,
+        })
+    };
+    source
+        .annotations
+        .push(serde_json::from_value(annotation).unwrap());
+    source
+}

@@ -196,6 +196,57 @@ fn group_move_keeps_every_selected_object_reachable() {
 }
 
 #[test]
+fn opposing_edge_slivers_keep_their_overlap_during_group_moves() {
+    let page = Size::new(144.0, 144.0);
+    for horizontal in [true, false] {
+        let point = |x, y| {
+            if horizontal {
+                Point::new(x, y)
+            } else {
+                Point::new(y, x)
+            }
+        };
+        let mut annotations = Annotations::default();
+        annotations.set_tool(Tool::Rectangle);
+        for (start, end) in [
+            (point(0.5, 10.0), point(-10.0, 30.0)),
+            (point(143.5, 40.0), point(154.0, 60.0)),
+        ] {
+            assert!(annotations.begin(MOUSE, start, page));
+            assert!(annotations.finish(MOUSE, end, false));
+        }
+        annotations.select_all();
+        let original = annotations.shapes().cloned().collect::<Vec<_>>();
+        let revision = annotations.revision();
+        let start = point(0.25, 20.0);
+        assert!(annotations.begin_interaction(MOUSE, start, page, 1.0, PLAIN,));
+        assert_eq!(annotations.geometric_previews().count(), 2);
+        assert!(annotations.finish(MOUSE, start, false));
+        assert_eq!(annotations.revision(), revision);
+        assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), original);
+
+        assert!(annotations.begin_interaction(MOUSE, start, page, 1.0, PLAIN,));
+        let end = point(50.25, 30.0);
+        annotations.drag(MOUSE, end, false);
+        assert_eq!(annotations.geometric_previews().count(), 2);
+        assert!(annotations.finish(MOUSE, end, false));
+        for (before, after) in original.iter().zip(annotations.shapes()) {
+            let before = before.bounds();
+            let after = after.bounds();
+            let expected = point(before.x, before.y);
+            let actual = point(after.x, after.y);
+            assert_eq!(actual.x, expected.x);
+            assert_eq!(actual.y, expected.y + 10.0);
+        }
+        let moved = annotations.shapes().cloned().collect::<Vec<_>>();
+        assert!(annotations.undo());
+        assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), original);
+        assert!(annotations.redo());
+        assert_eq!(annotations.shapes().cloned().collect::<Vec<_>>(), moved);
+    }
+}
+
+#[test]
 fn group_moves_from_inside_a_selected_lines_frame() {
     let mut annotations = Annotations::default();
     annotations.set_tool(Tool::Line);
@@ -454,7 +505,7 @@ fn bulk_text_formatting_is_one_validated_undoable_change() {
     );
     let texts = annotations.texts().cloned().collect::<Vec<_>>();
     let shapes = annotations.shapes().cloned().collect::<Vec<_>>();
-    assert!(annotations.update_selected_text_formats(|text| {
+    assert!(annotations.update_selected_text_formats(PAGE, |text| {
         let mut format = text.format;
         format.bold = true;
         format.font_size = 32.0;
@@ -480,14 +531,14 @@ fn bulk_text_formatting_is_one_validated_undoable_change() {
     let before = annotations.texts().cloned().collect::<Vec<_>>();
     let revision = annotations.revision();
     let last = before[1].id;
-    assert!(!annotations.update_selected_text_formats(|text| {
+    assert!(!annotations.update_selected_text_formats(PAGE, |text| {
         let mut format = text.format;
         format.font_size = if text.id == last { f32::NAN } else { 48.0 };
         (format, Size::new(100.0, 50.0))
     }));
     assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), before);
     assert_eq!(annotations.revision(), revision);
-    assert!(!annotations.update_selected_text_formats(|text| (
+    assert!(!annotations.update_selected_text_formats(PAGE, |text| (
         text.format,
         Size::new(f32::INFINITY, 50.0)
     )));
@@ -499,7 +550,7 @@ fn bulk_text_formatting_is_one_validated_undoable_change() {
         1.0,
         PLAIN
     ));
-    assert!(!annotations.update_selected_text_formats(|_| {
+    assert!(!annotations.update_selected_text_formats(PAGE, |_| {
         panic!("active drag must block formatting before calling the updater")
     }));
     annotations.cancel();

@@ -4,7 +4,7 @@ use super::project::Operation;
 use super::{FastFill, ImagePicker, Message};
 use crate::picker::ImportedImage;
 use fastfill_rust::pdf_import::{
-    MAX_PDF_BYTES, PdfStage, import_pdf_with_progress_limited,
+    DEFAULT_PDF_DPI, MAX_PDF_BYTES, PdfStage, import_pdf_with_progress_limited,
     validate_pdf_length,
 };
 use iced::Task;
@@ -19,6 +19,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub(crate) struct PdfBatch {
     images: Vec<ImportedImage>,
     directory: Option<PathBuf>,
+    dpi: u16,
 }
 
 pub(super) fn update(
@@ -32,15 +33,13 @@ pub(super) fn update(
                 &state.project.operation
             {
                 cancel.store(true, Ordering::Relaxed);
-                state.project.operation = Operation::Idle;
-                state.status =
-                    "PDF import canceled; current pages kept.".into();
+                state.status = "Canceling PDF import…".into();
                 state.status_is_error = false;
             }
             Some(Task::none())
         }
         Message::PdfProgress(id, done, total) => {
-            if active(state, *id) {
+            if active(state, *id) && !canceling(state) {
                 set_progress(state, *done, *total, 0.0);
                 state.status =
                     format!("Importing PDF: {done} of {total} pages ready…");
@@ -48,7 +47,7 @@ pub(super) fn update(
             Some(Task::none())
         }
         Message::PdfStage(id, done, total, phase) => {
-            if active(state, *id) {
+            if active(state, *id) && !canceling(state) {
                 let (label, step) = match phase {
                     PdfStage::Parsing => ("Reading PDF structure", 0.0),
                     PdfStage::Interpreting => ("Interpreting", 0.0),
@@ -94,6 +93,11 @@ fn active(state: &FastFill, id: u64) -> bool {
         Operation::ImportingPdf { id: current, .. } if id == current)
 }
 
+fn canceling(state: &FastFill) -> bool {
+    matches!(&state.project.operation, Operation::ImportingPdf { cancel, .. }
+        if cancel.load(Ordering::Relaxed))
+}
+
 fn begin(state: &mut FastFill) -> Task<Message> {
     if !state.project.is_idle()
         || state.image_picker != ImagePicker::Idle
@@ -130,7 +134,13 @@ fn finish(
     state: &mut FastFill,
     result: &Result<Option<Arc<PdfBatch>>, String>,
 ) {
+    let canceled = canceling(state);
     state.project.operation = Operation::Idle;
+    if canceled {
+        state.status = "PDF import canceled; current pages kept.".into();
+        state.status_is_error = false;
+        return;
+    }
     match result {
         Ok(Some(batch)) if state.pages.import_images(&batch.images) => {
             if let Some(directory) = &batch.directory {
@@ -143,6 +153,16 @@ fn finish(
             state.status =
                 format!("Imported {} PDF pages.", batch.images.len());
             state.status_is_error = false;
+            if batch.dpi < DEFAULT_PDF_DPI {
+                super::notice::warning(
+                    state,
+                    format!(
+                        "PDF import resolution reduced from {DEFAULT_PDF_DPI} \
+                     to {} DPI to fit the project image memory budget.",
+                        batch.dpi,
+                    ),
+                );
+            }
         }
         Ok(Some(_)) => {
             state.status =
@@ -279,6 +299,7 @@ async fn pick_pdf(
         },
     )
     .map_err(|error| error.to_string())?;
+    let dpi = pages.first().map_or(DEFAULT_PDF_DPI, |page| page.dpi);
     let images = pages
         .into_iter()
         .enumerate()
@@ -293,7 +314,11 @@ async fn pick_pdf(
             image
         })
         .collect();
-    Ok(Some(Arc::new(PdfBatch { images, directory })))
+    Ok(Some(Arc::new(PdfBatch {
+        images,
+        directory,
+        dpi,
+    })))
 }
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
-use image::{ImageFormat, ImageReader, Limits};
+use image::metadata::Orientation;
+use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits};
 use std::fmt;
 use std::io::Cursor;
 
@@ -68,6 +69,7 @@ pub fn validate_image(bytes: &[u8]) -> Result<ImageInfo, ImageInputError> {
 }
 
 /// Validate an image and retain its pixels for display without decoding twice.
+/// Keep encoded pixel coordinates, including for existing project assets.
 ///
 /// # Errors
 /// Rejects the same invalid inputs and allocation limits as `validate_image`.
@@ -83,6 +85,54 @@ pub fn decode_image(
     reader.limits(decode_limits());
     let pixels = reader.decode().map_err(|_| ImageInputError::InvalidData)?;
     Ok((info, pixels))
+}
+
+/// Decode a standalone import with its EXIF orientation applied.
+/// Transformed imports become PNG assets so saved bytes and coordinates agree.
+///
+/// # Errors
+/// Rejects the same invalid inputs and limits as `validate_image`, including
+/// normalized assets whose PNG encoding exceeds the encoded size limit.
+pub fn decode_import_image(
+    mut bytes: Vec<u8>,
+) -> Result<(ImageInfo, DynamicImage, Vec<u8>), ImageInputError> {
+    let mut info = inspect_image(&bytes)?;
+    let format = match info.format {
+        ImageFormatKind::Jpeg => ImageFormat::Jpeg,
+        ImageFormatKind::Png => ImageFormat::Png,
+    };
+    let mut reader = ImageReader::with_format(Cursor::new(&bytes), format);
+    reader.limits(decode_limits());
+    let mut decoder = reader
+        .into_decoder()
+        .map_err(|_| ImageInputError::InvalidData)?;
+    let orientation = decoder
+        .orientation()
+        .map_err(|_| ImageInputError::InvalidData)?;
+    let mut limits = decode_limits();
+    limits
+        .reserve(decoder.total_bytes())
+        .map_err(|_| ImageInputError::InvalidData)?;
+    decoder
+        .set_limits(limits)
+        .map_err(|_| ImageInputError::InvalidData)?;
+    let mut pixels = DynamicImage::from_decoder(decoder)
+        .map_err(|_| ImageInputError::InvalidData)?;
+    if orientation != Orientation::NoTransforms {
+        pixels.apply_orientation(orientation);
+        let mut encoded = Cursor::new(Vec::new());
+        pixels
+            .write_to(&mut encoded, ImageFormat::Png)
+            .map_err(|_| ImageInputError::InvalidData)?;
+        bytes = encoded.into_inner();
+        validate_image_length(bytes.len())?;
+        info = ImageInfo {
+            width: pixels.width(),
+            height: pixels.height(),
+            format: ImageFormatKind::Png,
+        };
+    }
+    Ok((info, pixels, bytes))
 }
 
 /// Inspect bounded dimensions/format without claiming the pixels are valid.

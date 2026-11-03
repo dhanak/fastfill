@@ -316,7 +316,7 @@ pub fn arrowhead_points(start: Point, end: Point) -> Option<(Point, Point)> {
     ))
 }
 
-pub(super) fn linear_bounds(
+pub(crate) fn linear_bounds(
     kind: LineKind,
     start: Point,
     end: Point,
@@ -463,6 +463,22 @@ pub(super) fn keep_reachable(mut bounds: Rect, page: Size) -> Rect {
     bounds.y = bounds
         .y
         .clamp(visible_y - bounds.height, page.height - visible_y);
+    bounds
+}
+
+pub(super) fn keep_partly_visible(mut bounds: Rect, page: Size) -> Rect {
+    let axis = |start: f32, length: f32, limit: f32| {
+        let visible = 1.0_f32.min(length).min(limit);
+        if start + length <= 0.0 {
+            visible - length
+        } else if start >= limit {
+            limit - visible
+        } else {
+            start
+        }
+    };
+    bounds.x = axis(bounds.x, bounds.width, page.width);
+    bounds.y = axis(bounds.y, bounds.height, page.height);
     bounds
 }
 

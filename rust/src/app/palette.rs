@@ -48,7 +48,8 @@ pub(super) fn shortcut(
         keyboard::Key::Named(Named::ArrowDown) => Event::Move(1),
         keyboard::Key::Named(Named::ArrowUp) => Event::Move(-1),
         keyboard::Key::Character(value)
-            if (modifiers.command() || modifiers.control()) && value == "." =>
+            if (super::command::pressed(modifiers) || modifiers.control())
+                && value == "." =>
         {
             Event::Close
         }

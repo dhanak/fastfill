@@ -166,8 +166,18 @@ impl canvas::Program<Message> for PageCanvas<'_> {
             return vec![frame.into_geometry()];
         };
         let view_scale = view.page_rect().width / self.page_size.width;
+        let page = view.page_rect();
+        let clip = Rectangle::new(
+            Point::new(page.x, page.y),
+            iced::Size::new(page.width, page.height),
+        )
+        .intersection(&Rectangle::with_size(bounds.size()));
         match self.layer {
             CanvasLayer::Annotation(annotation) => {
+                let Some(clip) = clip else {
+                    return Vec::new();
+                };
+                let mut frame = canvas::Frame::with_bounds(renderer, clip);
                 match annotation {
                     AnnotationRef::Shape(index, _)
                         if !self.annotations.is_edited(index) =>
@@ -188,12 +198,19 @@ impl canvas::Program<Message> for PageCanvas<'_> {
                 return vec![frame.into_geometry()];
             }
             CanvasLayer::Overlay => {
-                self.draw_overlay(&mut frame, view, view_scale);
-                return vec![frame.into_geometry()];
+                let mut geometry = Vec::new();
+                if let Some(clip) = clip {
+                    let mut content =
+                        canvas::Frame::with_bounds(renderer, clip);
+                    self.draw_previews(&mut content, view, view_scale);
+                    geometry.push(content.into_geometry());
+                }
+                self.draw_selection_overlay(&mut frame, view, view_scale);
+                geometry.push(frame.into_geometry());
+                return geometry;
             }
             CanvasLayer::Background => {}
         }
-        let page = view.page_rect();
         let size = iced::Size::new(page.width, page.height);
         frame.fill_rectangle(
             Point::new(page.x + PAGE_SHADOW_X, page.y + PAGE_SHADOW_Y),
@@ -289,7 +306,7 @@ fn edit_cursor(hit: EditHit) -> mouse::Interaction {
 }
 
 impl PageCanvas<'_> {
-    fn draw_overlay(
+    fn draw_previews(
         self,
         frame: &mut canvas::Frame,
         view: fastfill_rust::geometry::PageView,
@@ -303,7 +320,6 @@ impl PageCanvas<'_> {
             preview.rotation = 0.0;
             draw_text_underline(frame, view, &preview, scale);
         }
-        self.draw_selection_overlay(frame, view, scale);
     }
 
     fn draw_selection_overlay(

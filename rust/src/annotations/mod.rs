@@ -10,6 +10,7 @@ mod text;
 mod tool;
 
 pub use geometry::arrowhead_points;
+pub(crate) use geometry::linear_bounds;
 use interaction::{
     Draft, EditDraft, GroupMoveDraft, SelectionDraft, ShapeDraft,
 };
@@ -122,6 +123,14 @@ impl OwnedAnnotation {
         match self {
             Self::Shape(shape) => Self::Shape(shape.translated(dx, dy)),
             Self::Text(text) => Self::Text(text.translated(dx, dy)),
+        }
+    }
+
+    fn keep_partly_visible(&mut self, page: crate::geometry::Size) {
+        let bounds = self.visible_bounds();
+        let kept = geometry::keep_partly_visible(bounds, page);
+        if kept != bounds {
+            *self = self.translated(kept.x - bounds.x, kept.y - bounds.y);
         }
     }
 

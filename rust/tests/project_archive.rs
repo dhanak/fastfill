@@ -5,11 +5,13 @@ use fastfill_rust::project::{
     load_archive_with_images, save_archive,
 };
 use serde_json::{Value, json};
+use std::cell::Cell;
 #[cfg(not(target_arch = "wasm32"))]
 use std::fs;
-use std::io::{Cursor, Write};
+use std::io::{self, Cursor, Read, Seek, SeekFrom, Write};
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
+use std::rc::Rc;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{SystemTime, UNIX_EPOCH};
 use zip::write::SimpleFileOptions;
@@ -200,6 +202,109 @@ fn rejects_unsafe_duplicate_and_unknown_archive_data() {
         archive_with_manifest(&unknown, &[("assets/page.png", PNG_1X1)]),
         "Project manifest is invalid",
     );
+}
+
+#[test]
+fn rejects_raw_duplicates_and_inconsistent_local_headers() {
+    assert_invalid(repeated_manifest_headers(2), "duplicate file names");
+    assert_invalid(repeated_manifest_headers(64), "too many files");
+
+    let mut bytes = archive_with_manifest(
+        &valid_manifest(),
+        &[("assets/page.png", PNG_1X1)],
+    );
+    bytes[30] = b'q';
+    assert_invalid(bytes, "header inconsistency");
+}
+
+#[test]
+fn bounds_metadata_before_constructing_the_zip_archive() {
+    for (count, directory_bytes, expected) in [
+        (65_u16, 0_u32, "too many files"),
+        (2, u32::MAX - 1, "directory is too large"),
+    ] {
+        let mut bytes = archive_with_manifest(
+            &valid_manifest(),
+            &[("assets/page.png", PNG_1X1)],
+        );
+        let end = bytes.len() - 22;
+        bytes[end + 8..end + 10].copy_from_slice(&count.to_le_bytes());
+        bytes[end + 10..end + 12].copy_from_slice(&count.to_le_bytes());
+        bytes[end + 12..end + 16]
+            .copy_from_slice(&directory_bytes.to_le_bytes());
+        let reads = Rc::new(Cell::new(0));
+        let reader = ObservedReader {
+            inner: Cursor::new(bytes),
+            reads: reads.clone(),
+            length: None,
+        };
+        let error = load_archive(reader).unwrap_err();
+        assert!(error.to_string().contains(expected), "{error}");
+        assert_eq!(reads.get(), 1, "must reject after bounded footer read");
+    }
+
+    let reads = Rc::new(Cell::new(0));
+    let reader = ObservedReader {
+        inner: Cursor::new(Vec::new()),
+        reads: reads.clone(),
+        length: Some(616 * 1024 * 1024 + 1),
+    };
+    let error = load_archive(reader).unwrap_err();
+    assert!(error.to_string().contains("archive is too large"));
+    assert_eq!(reads.get(), 0, "must reject physical size before reading");
+}
+
+#[test]
+fn accepts_bounded_zip64_and_rejects_excessive_zip64_metadata() {
+    let bytes = zip64_archive(2);
+    assert!(load_archive(Cursor::new(bytes)).is_ok());
+    assert_invalid(zip64_archive(65), "too many files");
+    assert_invalid(zip64_archive(u64::MAX), "too many files");
+
+    let mut bytes = zip64_archive(2);
+    let footer = bytes.len() - 98;
+    bytes[footer + 4..footer + 12].copy_from_slice(&u64::MAX.to_le_bytes());
+    assert_invalid(bytes, "ZIP64 footer is invalid");
+}
+
+#[test]
+fn rejects_inconsistent_raw_counts_and_ambiguous_footers() {
+    let mut bytes = repeated_manifest_headers(2);
+    let end = bytes.len() - 22;
+    bytes[end + 8..end + 10].copy_from_slice(&2_u16.to_le_bytes());
+    bytes[end + 10..end + 12].copy_from_slice(&2_u16.to_le_bytes());
+    assert_invalid(bytes, "file count is inconsistent");
+
+    let bytes = archive_with_manifest(
+        &valid_manifest(),
+        &[("assets/page.png", PNG_1X1)],
+    );
+    for comment in [false, true] {
+        let mut bytes = bytes.clone();
+        let end = bytes.len() - 22;
+        let alternate = bytes[end..].to_vec();
+        if comment {
+            bytes[end + 20..end + 22].copy_from_slice(&22_u16.to_le_bytes());
+        }
+        bytes.extend_from_slice(&alternate);
+        assert_invalid(bytes, "footer is ambiguous");
+    }
+}
+
+#[test]
+fn footer_magic_in_image_payload_or_comments_is_not_a_second_directory() {
+    let mut png = PNG_1X1.to_vec();
+    png.extend_from_slice(b"PK\x05\x06");
+    png.extend_from_slice(&[0; 22]);
+    let mut bytes =
+        archive_with_manifest(&valid_manifest(), &[("assets/page.png", &png)]);
+    let end = bytes.len() - 22;
+    bytes[end + 20..end + 22].copy_from_slice(&4_u16.to_le_bytes());
+    bytes.extend_from_slice(b"PK\x05\x06");
+    let loaded = load_archive(Cursor::new(bytes)).unwrap();
+    assert_eq!(loaded.assets["page.png"].bytes, png);
+    let saved = save_archive(&loaded, Cursor::new(Vec::new())).unwrap();
+    assert!(load_archive(Cursor::new(saved.into_inner())).is_ok());
 }
 
 #[test]
@@ -394,6 +499,93 @@ fn archive_with_entries(entries: &[(&str, Vec<u8>)]) -> Vec<u8> {
         writer.write_all(bytes).unwrap();
     }
     writer.finish().unwrap().into_inner()
+}
+
+fn repeated_manifest_headers(count: u16) -> Vec<u8> {
+    let bytes = archive_with_manifest(
+        &valid_manifest(),
+        &[("assets/page.png", PNG_1X1)],
+    );
+    let end = bytes.len() - 22;
+    let directory =
+        u32::from_le_bytes(bytes[end + 16..end + 20].try_into().unwrap())
+            as usize;
+    let header_size = 46
+        + [28, 30, 32]
+            .map(|offset| {
+                usize::from(u16::from_le_bytes(
+                    bytes[directory + offset..directory + offset + 2]
+                        .try_into()
+                        .unwrap(),
+                ))
+            })
+            .iter()
+            .sum::<usize>();
+    let mut output = bytes[..directory].to_vec();
+    for _ in 0..count {
+        output.extend_from_slice(&bytes[directory..directory + header_size]);
+    }
+    output.extend_from_slice(&bytes[directory + header_size..end]);
+    let directory_size = u32::try_from(output.len() - directory).unwrap();
+    let mut footer = bytes[end..].to_vec();
+    footer[8..10].copy_from_slice(&(count + 1).to_le_bytes());
+    footer[10..12].copy_from_slice(&(count + 1).to_le_bytes());
+    footer[12..16].copy_from_slice(&directory_size.to_le_bytes());
+    output.extend_from_slice(&footer);
+    output
+}
+
+fn zip64_archive(count: u64) -> Vec<u8> {
+    let mut bytes = archive_with_manifest(
+        &valid_manifest(),
+        &[("assets/page.png", PNG_1X1)],
+    );
+    let end = bytes.len() - 22;
+    let mut footer = bytes.split_off(end);
+    let directory_size = u32::from_le_bytes(footer[12..16].try_into().unwrap());
+    let directory = u32::from_le_bytes(footer[16..20].try_into().unwrap());
+    bytes.extend_from_slice(b"PK\x06\x06");
+    bytes.extend_from_slice(&44_u64.to_le_bytes());
+    bytes.extend_from_slice(&45_u16.to_le_bytes());
+    bytes.extend_from_slice(&45_u16.to_le_bytes());
+    bytes.extend_from_slice(&0_u32.to_le_bytes());
+    bytes.extend_from_slice(&0_u32.to_le_bytes());
+    bytes.extend_from_slice(&count.to_le_bytes());
+    bytes.extend_from_slice(&count.to_le_bytes());
+    bytes.extend_from_slice(&u64::from(directory_size).to_le_bytes());
+    bytes.extend_from_slice(&u64::from(directory).to_le_bytes());
+    bytes.extend_from_slice(b"PK\x06\x07");
+    bytes.extend_from_slice(&0_u32.to_le_bytes());
+    bytes.extend_from_slice(&u64::try_from(end).unwrap().to_le_bytes());
+    bytes.extend_from_slice(&1_u32.to_le_bytes());
+    footer[8..12].fill(0xff);
+    footer[12..20].fill(0xff);
+    bytes.extend_from_slice(&footer);
+    bytes
+}
+
+struct ObservedReader {
+    inner: Cursor<Vec<u8>>,
+    reads: Rc<Cell<usize>>,
+    length: Option<u64>,
+}
+
+impl Read for ObservedReader {
+    fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+        self.reads.set(self.reads.get() + 1);
+        self.inner.read(bytes)
+    }
+}
+
+impl Seek for ObservedReader {
+    fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        if position == SeekFrom::End(0)
+            && let Some(length) = self.length
+        {
+            return Ok(length);
+        }
+        self.inner.seek(position)
+    }
 }
 
 fn manifest_bytes(manifest: &Value) -> Vec<u8> {

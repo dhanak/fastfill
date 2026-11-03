@@ -30,14 +30,7 @@ pub(super) fn overlay(state: &FastFill, size: Size) -> Element<'_, Message> {
             } else if shortcut == "F1" || shortcut == "Delete" {
                 shortcut.to_owned()
             } else {
-                format!(
-                    "{}+{shortcut}",
-                    if cfg!(target_os = "macos") {
-                        "Cmd"
-                    } else {
-                        "Ctrl"
-                    }
-                )
+                format!("{}+{shortcut}", super::super::command::label())
             };
             let mut content = row![
                 icons::view::<Message>(command.glyph(), selected, available),

@@ -119,6 +119,13 @@ impl TextAnnotation {
     pub(super) fn visible_bounds(&self) -> Rect {
         point_bounds(&self.frame_corners())
     }
+
+    fn keep_partly_visible(&mut self, page: Size) {
+        let bounds = self.visible_bounds();
+        let kept = super::geometry::keep_partly_visible(bounds, page);
+        self.bounds.x += kept.x - bounds.x;
+        self.bounds.y += kept.y - bounds.y;
+    }
 }
 
 #[derive(Debug)]
@@ -126,6 +133,7 @@ pub(super) struct TextDraft {
     annotation: TextAnnotation,
     index: Option<usize>,
     scale: f32,
+    page: Size,
     bottom_anchor: Option<f32>,
 }
 
@@ -173,6 +181,7 @@ impl TextMoveDraft {
         }
         let mut annotation = self.original.clone();
         annotation.rotation = rotation;
+        annotation.keep_partly_visible(self.page);
         annotation
     }
 }
@@ -341,11 +350,12 @@ impl Annotations {
         &mut self,
         format: TextFormat,
         size: Size,
+        page: Size,
     ) -> bool {
         if self.selected_text_index().is_none() {
             return false;
         }
-        self.update_selected_text_formats(|_| (format, size))
+        self.update_selected_text_formats(page, |_| (format, size))
     }
 
     /// Apply measured text formats atomically, preserving every shape and
@@ -353,9 +363,10 @@ impl Annotations {
     /// All selected texts form one undo step, not one step per object.
     pub fn update_selected_text_formats(
         &mut self,
+        page: Size,
         mut update: impl FnMut(&TextAnnotation) -> (TextFormat, Size),
     ) -> bool {
-        if self.has_pending_edit() {
+        if self.has_pending_edit() || !valid_text_size(page) {
             return false;
         }
         let mut updates = Vec::new();
@@ -372,7 +383,9 @@ impl Annotations {
             annotation.format = format;
             annotation.bounds.width = size.width;
             annotation.bounds.height = size.height;
-            updates.push((Some(index), OwnedAnnotation::Text(annotation)));
+            let mut annotation = OwnedAnnotation::Text(annotation);
+            annotation.keep_partly_visible(page);
+            updates.push((Some(index), annotation));
             last_format = format;
         }
         if !self.commit_content(updates) {
@@ -409,6 +422,7 @@ impl Annotations {
             },
             index: None,
             scale,
+            page,
             bottom_anchor: None,
         });
         true
@@ -446,7 +460,7 @@ impl Annotations {
         let Some(index) = self.text_hit(point) else {
             return false;
         };
-        self.begin_existing_text(index, scale)
+        self.begin_existing_text(index, page, scale)
     }
 
     /// Reopen the topmost text at a rule's left/bottom anchor, not its overlap.
@@ -473,7 +487,7 @@ impl Annotations {
                         && (bounds.y + bounds.height - anchor.y).abs() <= 1.0)
                         .then_some(index)
                 });
-        index.is_some_and(|index| self.begin_existing_text(index, scale))
+        index.is_some_and(|index| self.begin_existing_text(index, page, scale))
     }
 
     pub fn begin_text_move(
@@ -487,6 +501,7 @@ impl Annotations {
             || self.has_pending_edit()
             || !valid(point)
             || !valid_scale(scale)
+            || !valid_text_size(page)
         {
             return false;
         }
@@ -531,6 +546,7 @@ impl Annotations {
             if let Some(bottom) = draft.bottom_anchor {
                 draft.annotation.bounds.y = bottom - size.height;
             }
+            draft.annotation.keep_partly_visible(draft.page);
         }
     }
 
@@ -574,7 +590,12 @@ impl Annotations {
             && point.y < page.height
     }
 
-    fn begin_existing_text(&mut self, index: usize, scale: f32) -> bool {
+    fn begin_existing_text(
+        &mut self,
+        index: usize,
+        page: Size,
+        scale: f32,
+    ) -> bool {
         let Some(annotation) = self.text(index).cloned() else {
             return false;
         };
@@ -583,6 +604,7 @@ impl Annotations {
             annotation,
             index: Some(index),
             scale,
+            page,
             bottom_anchor: None,
         });
         true

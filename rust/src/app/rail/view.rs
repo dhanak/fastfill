@@ -164,6 +164,7 @@ pub(super) fn draw(
             align_y: iced::alignment::Vertical::Center,
             size: 12.0.into(),
             color: theme.palette().text,
+            shaping: iced::widget::text::Shaping::Advanced,
             ..canvas::Text::default()
         });
     }
@@ -266,6 +267,7 @@ fn draw_card(
                 .opacity(opacity),
         );
     }
+    // Basic shaping may pick the icon font when no system fonts are present.
     frame.fill_text(canvas::Text {
         content: number.to_string(),
         position: number_position(card),
@@ -273,27 +275,30 @@ fn draw_card(
         align_y: iced::alignment::Vertical::Top,
         size: 13.0.into(),
         color: pair.text.scale_alpha(opacity),
+        shaping: iced::widget::text::Shaping::Advanced,
         ..canvas::Text::default()
     });
 }
 
 fn draw_card_annotations(
-    frame: &mut canvas::Frame,
+    renderer: &Renderer,
     page: &EditorPage,
     card: Rectangle,
-) {
+    viewport: Rectangle,
+) -> Option<canvas::Geometry> {
     let paper = paper_bounds(card, page_size(page));
-    let Some(view) = fit_contain(
+    let clip = paper.intersection(&viewport)?;
+    let view = fit_contain(
         page.size,
         PageRect::new(paper.x, paper.y, paper.width, paper.height),
-    ) else {
-        return;
-    };
+    )?;
+    let mut frame = canvas::Frame::with_bounds(renderer, clip);
     let scale = view.page_rect().width / page.size.width;
     // One preview layer keeps thumbnails cheap; text can cover later paths.
     for annotation in page.annotations.ordered_annotations() {
-        draw_annotation(frame, view, annotation, scale);
+        draw_annotation(&mut frame, view, annotation, scale);
     }
+    Some(frame.into_geometry())
 }
 
 pub(super) struct AnnotationsLayer<'a> {
@@ -311,7 +316,7 @@ impl canvas::Program<Message> for AnnotationsLayer<'_> {
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<canvas::Geometry> {
-        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        let mut geometry = Vec::new();
         let rail = Rail { app: self.app };
         let layout = rail.layout(bounds);
         let motion = self.app.rail_motion.borrow();
@@ -330,10 +335,15 @@ impl canvas::Program<Message> for AnnotationsLayer<'_> {
             card.x -= bounds.x;
             card.y -= bounds.y;
             if card.y + card.height >= 0.0 && card.y <= bounds.height {
-                draw_card_annotations(&mut frame, page, card);
+                geometry.extend(draw_card_annotations(
+                    renderer,
+                    page,
+                    card,
+                    Rectangle::with_size(bounds.size()),
+                ));
             }
         }
-        vec![frame.into_geometry()]
+        geometry
     }
 }
 
@@ -403,10 +413,16 @@ impl canvas::Program<Message> for Floating<'_> {
                 .map_or(index + 1, |drag| drag.target + 1);
             let card = Rectangle::new(position, size);
             if self.ink {
-                draw_card_annotations(&mut frame, page, card);
-            } else {
-                draw_card(&mut frame, page, number, card, true, theme, 0.82);
+                return draw_card_annotations(
+                    renderer,
+                    page,
+                    card,
+                    Rectangle::with_size(bounds.size()),
+                )
+                .into_iter()
+                .collect();
             }
+            draw_card(&mut frame, page, number, card, true, theme, 0.82);
         }
         vec![frame.into_geometry()]
     }

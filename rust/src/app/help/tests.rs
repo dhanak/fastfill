@@ -25,6 +25,16 @@ fn f1_opens_help_even_when_a_text_field_captures_the_key() {
 }
 
 #[test]
+fn command_labels_keep_geometry_control_literal() {
+    assert_eq!(
+        shortcut_label("Mod+S"),
+        format!("{}+S", crate::app::command::label())
+    );
+    assert_eq!(shortcut_label("Ctrl+drag"), "Ctrl+drag");
+    assert_eq!(shortcut_label("Ctrl+click"), "Ctrl+click");
+}
+
+#[test]
 fn opening_help_preserves_pending_text_format_and_numeric_drafts() {
     let mut state = annotated_page();
     let _ = update(&mut state, Message::SetTool(Tool::Text));
@@ -340,11 +350,7 @@ fn table_wraps_without_horizontal_overflow_and_scrolls_in_small_windows() {
         assert!(before.texts.iter().any(|t| {
             t.0 == concat!("FastFill ", env!("CARGO_PKG_VERSION"))
         }));
-        let command = if cfg!(target_os = "macos") {
-            "Cmd"
-        } else {
-            "Ctrl"
-        };
+        let command = crate::app::command::label();
         assert!(
             !before
                 .texts

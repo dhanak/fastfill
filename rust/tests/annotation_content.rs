@@ -145,7 +145,7 @@ fn every_geometric_draft_owns_its_pointer_and_blocks_content_commands() {
         assert!(!editor.set_stroke_width(7.0), "{kind}: stroke");
         assert!(!editor.set_filled(true), "{kind}: fill");
         assert!(!editor.send_selected_to_back(), "{kind}: layers");
-        assert!(!editor.reset_rotation(), "{kind}: rotation");
+        assert!(!editor.reset_rotation(PAGE), "{kind}: rotation");
         assert!(!editor.undo());
         assert!(!editor.redo());
         assert!(!editor.begin_text(point, PAGE, 1.0));

@@ -103,8 +103,12 @@ impl Annotations {
             })
     }
 
-    pub fn reset_rotation(&mut self) -> bool {
-        if !self.can_reset_rotation() {
+    pub fn reset_rotation(&mut self, page: Size) -> bool {
+        if !self.can_reset_rotation()
+            || !valid(Point::new(page.width, page.height))
+            || page.width <= 0.0
+            || page.height <= 0.0
+        {
             return false;
         }
         self.record_change();
@@ -119,6 +123,7 @@ impl Annotations {
                     OwnedAnnotation::Text(text) => text.rotation = 0.0,
                     OwnedAnnotation::Shape(_) => {}
                 }
+                annotation.keep_partly_visible(page);
             }
         }
         true

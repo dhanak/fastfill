@@ -9,13 +9,18 @@ use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::fs::File;
-use std::io::{Read, Seek};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 use zip::ZipArchive;
+use zip::read::{ArchiveOffset, Config};
 
 pub(super) const MAXIMUM_MANIFEST_BYTES: u64 = 5 * 1024 * 1024;
 pub(super) const MAXIMUM_ARCHIVE_CONTENT_BYTES: u64 = 600 * 1024 * 1024;
 const MAXIMUM_ENTRIES: usize = 64;
+const MAXIMUM_DIRECTORY_BYTES: u64 =
+    MAXIMUM_ENTRIES as u64 * (46 + 3 * u16::MAX as u64);
+const MAXIMUM_ARCHIVE_BYTES: u64 =
+    MAXIMUM_ARCHIVE_CONTENT_BYTES + 16 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
 pub struct LoadedAsset {
@@ -100,13 +105,22 @@ where
 /// # Errors
 /// Returns the same validation and I/O errors as `load_archive`.
 pub fn load_archive_with_images<R>(
-    reader: R,
+    mut reader: R,
     mut on_image: impl FnMut(&str, image::DynamicImage),
 ) -> Result<LoadedProject, ProjectLoadError>
 where
     R: Read + Seek,
 {
-    let mut archive = ZipArchive::new(reader).map_err(|error| {
+    preflight_archive(&mut reader)?;
+    // Preflight requires absolute offsets; avoid zip's whole-file magic scan.
+    let config = Config {
+        archive_offset: ArchiveOffset::Known(0),
+    };
+    let mut archive =
+        ZipArchive::with_config(config, reader).map_err(|error| {
+            invalid(format!("Project archive is invalid: {error}"))
+        })?;
+    archive.validate_header_consistency().map_err(|error| {
         invalid(format!("Project archive is invalid: {error}"))
     })?;
     let entries = inspect_archive(&mut archive)?;
@@ -149,6 +163,182 @@ where
     }
 
     Ok(LoadedProject { project, assets })
+}
+
+fn preflight_archive<R: Read + Seek>(
+    reader: &mut R,
+) -> Result<(), ProjectLoadError> {
+    let length = reader.seek(SeekFrom::End(0))?;
+    if length > MAXIMUM_ARCHIVE_BYTES {
+        return Err(invalid("Project archive is too large."));
+    }
+    // Cover zip's footer search window, including its in-memory header size.
+    let tail_length =
+        usize::try_from(length.min(66 * 1024)).expect("ZIP footer fits usize");
+    let mut tail = vec![0; tail_length];
+    reader.seek(SeekFrom::Start(length - tail_length as u64))?;
+    reader.read_exact(&mut tail)?;
+    let mut ends = tail.windows(4).enumerate().filter_map(|(index, bytes)| {
+        (bytes == b"PK\x05\x06"
+            && tail.len() - index >= 22
+            && tail.len() - index
+                == 22 + usize::from(zip_u16(&tail[index..], 20)))
+        .then_some(index)
+    });
+    let end = ends
+        .next()
+        .ok_or_else(|| invalid("Project archive footer is missing."))?;
+    if ends.next().is_some() {
+        return Err(invalid("Project archive footer is ambiguous."));
+    }
+    reject_alternate_footers(reader, &tail, length - tail_length as u64, end)?;
+    let footer = &tail[end..];
+    if zip_u16(footer, 4) != 0 || zip_u16(footer, 6) != 0 {
+        return Err(invalid("Multi-disk projects are unsupported."));
+    }
+    let footer_offset = length - footer.len() as u64;
+    let mut directory_end = footer_offset;
+    let mut count = u64::from(zip_u16(footer, 10));
+    let mut bytes = u64::from(zip_u32(footer, 12));
+    let mut offset = u64::from(zip_u32(footer, 16));
+    if zip_u16(footer, 8) != zip_u16(footer, 10) {
+        return Err(invalid("Project archive file counts are inconsistent."));
+    }
+    if count == u64::from(u16::MAX)
+        || bytes == u64::from(u32::MAX)
+        || offset == u64::from(u32::MAX)
+    {
+        (count, bytes, offset, directory_end) =
+            preflight_zip64(reader, footer_offset)?;
+    }
+    if count > MAXIMUM_ENTRIES as u64 {
+        return Err(invalid("Project has too many files."));
+    }
+    if bytes > MAXIMUM_DIRECTORY_BYTES {
+        return Err(invalid("Project archive directory is too large."));
+    }
+    if offset.checked_add(bytes) != Some(directory_end) {
+        return Err(invalid("Project archive directory bounds are invalid."));
+    }
+    for _ in 0..count {
+        if directory_end.saturating_sub(offset) < 46 {
+            return Err(invalid("Project archive directory is truncated."));
+        }
+        let mut header = [0; 46];
+        reader.seek(SeekFrom::Start(offset))?;
+        reader.read_exact(&mut header)?;
+        if &header[..4] != b"PK\x01\x02" {
+            return Err(invalid("Project archive directory is invalid."));
+        }
+        offset += 46
+            + u64::from(zip_u16(&header, 28))
+            + u64::from(zip_u16(&header, 30))
+            + u64::from(zip_u16(&header, 32));
+        if offset > directory_end {
+            return Err(invalid("Project archive directory is truncated."));
+        }
+    }
+    if offset != directory_end {
+        return Err(invalid("Project archive file count is inconsistent."));
+    }
+    Ok(())
+}
+
+fn reject_alternate_footers<R: Read + Seek>(
+    reader: &mut R,
+    tail: &[u8],
+    tail_offset: u64,
+    checked: usize,
+) -> Result<(), ProjectLoadError> {
+    // zip retries older footers after a metadata error. Ignore harmless image
+    // bytes, but reject alternatives that could allocate unchecked metadata.
+    for (index, magic) in tail.windows(4).enumerate() {
+        if index == checked || magic != b"PK\x05\x06" {
+            continue;
+        }
+        let footer = &tail[index..];
+        if footer.len() < 22
+            || 22 + usize::from(zip_u16(footer, 20)) > footer.len()
+        {
+            continue;
+        }
+        let position = tail_offset + index as u64;
+        let count = zip_u16(footer, 10);
+        let offset = u64::from(zip_u32(footer, 16));
+        if position >= 20
+            && (count == u16::MAX
+                || zip_u32(footer, 12) == u32::MAX
+                || offset == u64::from(u32::MAX))
+        {
+            let mut locator = [0; 4];
+            reader.seek(SeekFrom::Start(position - 20))?;
+            reader.read_exact(&mut locator)?;
+            if &locator == b"PK\x06\x07" {
+                return Err(invalid("Project archive footer is ambiguous."));
+            }
+        }
+        if count > 0 && offset < position {
+            let mut directory = [0; 4];
+            reader.seek(SeekFrom::Start(offset))?;
+            reader.read_exact(&mut directory)?;
+            if &directory == b"PK\x01\x02" {
+                return Err(invalid("Project archive footer is ambiguous."));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn preflight_zip64<R: Read + Seek>(
+    reader: &mut R,
+    footer_offset: u64,
+) -> Result<(u64, u64, u64, u64), ProjectLoadError> {
+    let locator_offset = footer_offset
+        .checked_sub(20)
+        .ok_or_else(|| invalid("Project ZIP64 footer is invalid."))?;
+    let mut locator = [0; 20];
+    reader.seek(SeekFrom::Start(locator_offset))?;
+    reader.read_exact(&mut locator)?;
+    if &locator[..4] != b"PK\x06\x07"
+        || zip_u32(&locator, 4) != 0
+        || zip_u32(&locator, 16) != 1
+    {
+        return Err(invalid("Project ZIP64 locator is invalid."));
+    }
+    let directory_end = zip_u64(&locator, 8);
+    // Extensible ZIP64 metadata is unnecessary for project assets.
+    if directory_end.checked_add(56) != Some(locator_offset) {
+        return Err(invalid("Project ZIP64 footer is too large or invalid."));
+    }
+    let mut zip64 = [0; 56];
+    reader.seek(SeekFrom::Start(directory_end))?;
+    reader.read_exact(&mut zip64)?;
+    if &zip64[..4] != b"PK\x06\x06"
+        || zip_u64(&zip64, 4) != 44
+        || zip_u32(&zip64, 16) != 0
+        || zip_u32(&zip64, 20) != 0
+        || zip_u64(&zip64, 24) != zip_u64(&zip64, 32)
+    {
+        return Err(invalid("Project ZIP64 footer is invalid."));
+    }
+    Ok((
+        zip_u64(&zip64, 32),
+        zip_u64(&zip64, 40),
+        zip_u64(&zip64, 48),
+        directory_end,
+    ))
+}
+
+fn zip_u16(bytes: &[u8], offset: usize) -> u16 {
+    u16::from_le_bytes(bytes[offset..offset + 2].try_into().unwrap())
+}
+
+fn zip_u32(bytes: &[u8], offset: usize) -> u32 {
+    u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap())
+}
+
+fn zip_u64(bytes: &[u8], offset: usize) -> u64 {
+    u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap())
 }
 
 fn inspect_archive<R>(

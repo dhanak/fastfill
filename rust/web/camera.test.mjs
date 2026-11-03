@@ -43,6 +43,7 @@ function fixture(options = {}) {
   const select = { ...element(), replaceChildren() {}, value: "front" };
   const status = { textContent: "", style: {} };
   const nodes = new Map();
+  const listeners = new Map();
   const dialog = {
     ...element(),
     querySelector(query) {
@@ -76,8 +77,8 @@ function fixture(options = {}) {
     body: { append() {} },
     head: { append() {} },
     hidden: false,
-    addEventListener() {},
-    removeEventListener() {},
+    addEventListener(name, listener) { listeners.set(name, listener); },
+    removeEventListener(name) { listeners.delete(name); },
     getElementById: () => null,
     createElementNS: () => element(),
     createElement(name) {
@@ -151,6 +152,10 @@ function fixture(options = {}) {
     status,
     node: selector => nodes.get(selector),
     button: action => buttons.get(action),
+    visibility(hidden) {
+      document.hidden = hidden;
+      listeners.get("visibilitychange")?.();
+    },
     restore() {
       globalThis.document = old.document;
       if (old.navigator) {
@@ -338,6 +343,31 @@ test("auto capture reviews the exact analyzed frame and its crop", async () => {
     const accepted = await result;
     assert.deepEqual(accepted.bytes, new TextEncoder().encode("png"));
     assert.deepEqual(JSON.parse(accepted.crop), crop);
+  } finally {
+    ui.restore();
+  }
+});
+
+test("auto capture keeps its review outline after hiding the tab", async () => {
+  const ui = fixture();
+  try {
+    const analyze = () => JSON.stringify({
+      corners: crop, capture: crop, progress: 1, status: "Hold steady.",
+    });
+    const result = capturePhoto(50_000_000, analyze);
+    await new Promise(resolve => setTimeout(resolve, 160));
+    const outline = ui.node(".ff-camera-outline");
+    const points = outline.children[0].points;
+    assert.equal(outline.children.length, 5);
+    for (const hidden of [true, false]) {
+      ui.visibility(hidden);
+      assert.equal(ui.photo.hidden, false);
+      assert.equal(outline.children.length, 5);
+      assert.equal(outline.children[0].points, points);
+    }
+    assert.equal(ui.camera.requests.length, 1);
+    await ui.button("use").onclick();
+    assert.deepEqual(JSON.parse((await result).crop), crop);
   } finally {
     ui.restore();
   }

@@ -58,6 +58,9 @@ fn failure_and_cancel_leave_the_page_order_selection_and_history_unchanged() {
     assert_eq!(state.pages.identity(), identity);
     let id = begin(&mut state);
     let _ = update(&mut state, Message::CancelPdfImport);
+    assert!(active(&state, id));
+    let _ = update(&mut state, Message::ImportPdf);
+    assert!(active(&state, id));
     complete(&mut state, id, &["late"]);
     assert!(state.project.is_idle());
     assert_eq!(state.pages.identity(), identity);
@@ -227,6 +230,7 @@ fn rasterized_pdf_pages_and_annotations_survive_a_project_round_trip() {
     let batch = PdfBatch {
         images,
         directory: Some(PathBuf::from("forms")),
+        dpi: DEFAULT_PDF_DPI,
     };
     let _ = update(
         &mut state,
@@ -280,8 +284,32 @@ fn complete(state: &mut FastFill, id: u64, names: &[&str]) {
     let batch = PdfBatch {
         images: names.iter().map(|name| image(name)).collect(),
         directory: None,
+        dpi: DEFAULT_PDF_DPI,
     };
     let _ = update(state, Message::PdfImported(id, Ok(Some(Arc::new(batch)))));
+}
+
+#[test]
+fn reduced_dpi_import_warns_without_duplicating_the_success_status() {
+    let mut state = FastFill::default();
+    let id = begin(&mut state);
+    let batch = PdfBatch {
+        images: vec![image("reduced")],
+        directory: None,
+        dpi: 239,
+    };
+    let _ = update(
+        &mut state,
+        Message::PdfImported(id, Ok(Some(Arc::new(batch)))),
+    );
+    assert_eq!(state.status, "Imported 1 PDF pages.");
+    assert!(!state.status_is_error);
+    let notice = state.notice.as_ref().unwrap();
+    assert!(!notice.error);
+    assert!(notice.message.contains("239 DPI"));
+    let _ = update(&mut state, Message::DismissNotice);
+    assert!(state.notice.is_none());
+    assert_eq!(state.status, "Imported 1 PDF pages.");
 }
 
 fn image(name: &str) -> ImportedImage {

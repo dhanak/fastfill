@@ -43,7 +43,7 @@ fn rotation_handle_rotates_around_center_and_participates_in_history() {
     assert_eq!(annotations.shapes().next().unwrap().rotation, 0.0);
     assert!(annotations.redo());
     assert_eq!(annotations.shapes().next().unwrap().rotation, quarter_turn);
-    assert!(annotations.reset_rotation());
+    assert!(annotations.reset_rotation(PAGE));
     assert_eq!(annotations.shapes().next().unwrap().rotation, 0.0);
     assert!(annotations.undo());
     assert_eq!(annotations.shapes().next().unwrap().rotation, quarter_turn);
@@ -97,7 +97,7 @@ fn lines_and_arrows_do_not_offer_rotation() {
                 .rotation_handle(1.0)
                 .is_none()
         );
-        assert!(!annotations.reset_rotation());
+        assert!(!annotations.reset_rotation(PAGE));
     }
 }
 

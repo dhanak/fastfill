@@ -64,10 +64,16 @@ impl GroupMoveDraft {
                     f32::INFINITY,
                 ),
                 |(left, right, top, bottom), bounds| {
-                    let visible_x =
-                        1.0_f32.min(bounds.width).min(self.page.width);
-                    let visible_y =
-                        1.0_f32.min(bounds.height).min(self.page.height);
+                    let visible_x = 1.0_f32
+                        .min(bounds.width)
+                        .min(self.page.width)
+                        .min((bounds.x + bounds.width).max(0.0))
+                        .min((self.page.width - bounds.x).max(0.0));
+                    let visible_y = 1.0_f32
+                        .min(bounds.height)
+                        .min(self.page.height)
+                        .min((bounds.y + bounds.height).max(0.0))
+                        .min((self.page.height - bounds.y).max(0.0));
                     (
                         left.max(visible_x - bounds.width - bounds.x),
                         right.min(self.page.width - visible_x - bounds.x),
@@ -76,8 +82,16 @@ impl GroupMoveDraft {
                     )
                 },
             );
-        let dx = (self.end.x - self.start.x).clamp(left_limit, right_limit);
-        let dy = (self.end.y - self.start.y).clamp(top_limit, bottom_limit);
+        // Preserve existing slivers: opposite edges need not both gain 1 pt.
+        let clamp = |delta: f32, minimum, maximum| {
+            if minimum <= maximum {
+                delta.clamp(minimum, maximum)
+            } else {
+                0.0
+            }
+        };
+        let dx = clamp(self.end.x - self.start.x, left_limit, right_limit);
+        let dy = clamp(self.end.y - self.start.y, top_limit, bottom_limit);
         (dx, dy)
     }
 }

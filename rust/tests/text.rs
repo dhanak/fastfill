@@ -285,9 +285,11 @@ fn inactive_selected_text_format_is_immediate_and_undoable() {
     format.font_size = 40.0;
 
     assert_eq!(annotations.current_text_format(), Some(original.format));
-    assert!(
-        annotations.set_selected_text_format(format, Size::new(160.0, 52.0),)
-    );
+    assert!(annotations.set_selected_text_format(
+        format,
+        Size::new(160.0, 52.0),
+        PAGE,
+    ));
     assert_eq!(annotations.texts().next().unwrap().format, format);
     assert_eq!(annotations.texts().next().unwrap().bounds.width, 160.0);
     assert!(!annotations.has_text_edit());
@@ -390,7 +392,7 @@ fn text_rotation_uses_a_handle_ctrl_snap_and_history() {
     assert_eq!(annotations.texts().cloned().collect::<Vec<_>>(), [original]);
     assert!(annotations.redo());
     assert!(annotations.can_reset_rotation());
-    assert!(annotations.reset_rotation());
+    assert!(annotations.reset_rotation(PAGE));
     assert_eq!(annotations.texts().next().unwrap().rotation, 0.0);
 }
 

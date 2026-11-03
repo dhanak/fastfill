@@ -1,14 +1,14 @@
 use fastfill_rust::geometry::Size as PageSize;
 use fastfill_rust::image_input::ImageInfo;
 use fastfill_rust::image_input::MAX_IMAGE_BYTES;
-use fastfill_rust::image_input::{decode_image, validate_image_length};
+use fastfill_rust::image_input::decode_import_image;
 use iced::widget::image::Handle;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ImportedImage {
     pub(crate) handle: Handle,
-    // Display decoded pixels, but keep the original encoded handle for saves.
+    // Display decoded pixels; keep the matching encoded asset for saves.
     pub(crate) display: Option<Handle>,
     pub(crate) name: String,
     // Display pixel dimensions; info retains the original source dimensions.
@@ -83,10 +83,8 @@ impl ImportedImage {
         bytes: Vec<u8>,
         directory: Option<PathBuf>,
     ) -> Result<Self, String> {
-        validate_image_length(bytes.len())
-            .map_err(|error| error.to_string())?;
-        let (info, pixels) =
-            decode_image(&bytes).map_err(|error| error.to_string())?;
+        let (info, pixels, bytes) =
+            decode_import_image(bytes).map_err(|error| error.to_string())?;
         let mut image = Self::from_validated(name, bytes, info, directory);
         image.set_pixels(pixels.into_rgba8());
         Ok(image)
@@ -126,4 +124,55 @@ impl ImportedImage {
 fn page_size_from_pixels(width: u32, height: u32) -> PageSize {
     // iced uses f32 coordinates; integer precision above 16 MP is immaterial.
     PageSize::new(width as f32, height as f32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fastfill_rust::image_input::{ImageFormatKind, decode_image};
+
+    #[test]
+    fn standalone_exif_import_keeps_display_and_saved_asset_aligned() {
+        let pixels = image::RgbImage::from_pixel(3, 2, image::Rgb([120; 3]));
+        let mut bytes = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new(&mut bytes)
+            .encode_image(&pixels)
+            .unwrap();
+        bytes.splice(
+            2..2,
+            *b"\xff\xe1\0\x22Exif\0\0II\x2a\0\x08\0\0\0\x01\0\
+               \x12\x01\x03\0\x01\0\0\0\x06\0\0\0\0\0\0\0",
+        );
+        let (raw_info, _) = decode_image(&bytes).unwrap();
+        let legacy = ImportedImage::from_validated(
+            "legacy.jpg".into(),
+            bytes.clone(),
+            raw_info,
+            None,
+        );
+        assert_eq!(legacy.info, raw_info);
+        assert_eq!(legacy.size, PageSize::new(3.0, 2.0));
+
+        let imported =
+            ImportedImage::from_bytes("photo.jpg".into(), bytes, None).unwrap();
+        assert_eq!(imported.info.format, ImageFormatKind::Png);
+        assert_eq!((imported.info.width, imported.info.height), (2, 3));
+        assert_eq!(imported.size, PageSize::new(2.0, 3.0));
+        let Handle::Bytes(_, bytes) = &imported.handle else {
+            panic!("encoded asset must remain available for saving");
+        };
+        let (saved_info, saved_pixels) = decode_image(bytes).unwrap();
+        assert_eq!(saved_info, imported.info);
+        let Handle::Rgba {
+            width,
+            height,
+            pixels,
+            ..
+        } = imported.display_handle()
+        else {
+            panic!("display must use decoded pixels");
+        };
+        assert_eq!((*width, *height), (2, 3));
+        assert_eq!(pixels.as_ref(), saved_pixels.to_rgba8().as_raw());
+    }
 }

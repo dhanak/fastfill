@@ -120,6 +120,11 @@ would exceed a limit, FastFill refuses it without changing the project. Each
 page also limits annotations and retained undo history; the oldest undo steps
 are discarded when the history budget is full.
 
+PDF import starts at 300 DPI and lowers the resolution, down to 72 DPI, when
+needed to fit the remaining image budget. A warning reports the chosen DPI.
+Errors and warnings can be dismissed manually and disappear after ten seconds.
+Imported photos honor their stored orientation automatically.
+
 ## Find commands and shortcuts
 
 Open **Commands** (magnifying glass) or press **Ctrl+.** (Cmd+. on macOS).

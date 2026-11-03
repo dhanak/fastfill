@@ -87,6 +87,42 @@ fn export_uses_committed_layers_and_excludes_selection_and_drafts() {
 }
 
 #[test]
+fn page_clipping_preserves_visible_parts_of_edge_strokes() {
+    use fastfill_rust::annotations::{
+        AnnotationGeometry, LineKind, ShapeAnnotation,
+    };
+    let mut page = blank(PageSize::new(144.0, 144.0));
+    for (start, end) in [
+        (Point::new(10.0, 2.0), Point::new(130.0, 2.0)),
+        (Point::new(-2.0, 20.0), Point::new(-2.0, 100.0)),
+        (Point::new(-10.0, 120.0), Point::new(30.0, 120.0)),
+    ] {
+        page.annotations
+            .push(OwnedAnnotation::Shape(ShapeAnnotation {
+                id: uuid::Uuid::new_v4(),
+                geometry: AnnotationGeometry::Linear {
+                    kind: LineKind::Line,
+                    start,
+                    end,
+                },
+                stroke_width: 10.0,
+                color: AnnotationColor::Black,
+                filled: false,
+                rotation: 0.0,
+            }));
+    }
+    let pixels =
+        rasterize(&mut software_renderer(), &page, (600, 600)).unwrap();
+    let pixel = |x: usize, y: usize| &pixels[(y * 600 + x) * 4..][..4];
+    for (x, y) in [(200, 1), (200, 20), (1, 200), (0, 500), (100, 500)] {
+        assert_eq!(pixel(x, y), [0, 0, 0, 255], "at {x},{y}");
+    }
+    for (x, y) in [(200, 40), (20, 200), (140, 500)] {
+        assert_eq!(pixel(x, y), [255; 4], "at {x},{y}");
+    }
+}
+
+#[test]
 fn flattened_formatted_text_remains_visible_and_obeys_layer_order() {
     let size = PageSize::new(144.0, 144.0);
     let mut annotations = Annotations::default();

@@ -4,9 +4,11 @@ use super::model::{
     ProjectAnnotation, ProjectPage, ProjectShapeKind,
 };
 use crate::annotations::{
-    MAXIMUM_ANNOTATIONS_PER_PAGE, MAXIMUM_INK_POINTS, MAXIMUM_TEXT_LENGTH,
+    LineKind, MAXIMUM_ANNOTATIONS_PER_PAGE, MAXIMUM_INK_POINTS,
+    MAXIMUM_TEXT_LENGTH, linear_bounds,
 };
 use crate::correction::{PageCorrection, corrected_dimensions};
+use crate::geometry::{Point, Size};
 use std::collections::HashSet;
 
 pub(super) const MAXIMUM_IMAGE_BYTES: u64 = 100 * 1024 * 1024;
@@ -174,14 +176,79 @@ fn validate_annotation(
     validate_render_range(annotation, page, bounds, transform)?;
 
     let transformed = transformed_bounds(bounds, transform)?;
-    if transformed.right() < 0.0
-        || transformed.bottom() < 0.0
-        || transformed.x > 1.0
-        || transformed.y > 1.0
+    if outside_page(transformed)
+        && outside_page(painted_bounds(annotation, page, bounds, transform)?)
     {
         return invalid("Annotation must be at least partly on the page.");
     }
     Ok(())
+}
+
+fn outside_page(bounds: NormalizedRect) -> bool {
+    bounds.right() < 0.0
+        || bounds.bottom() < 0.0
+        || bounds.x > 1.0
+        || bounds.y > 1.0
+}
+
+fn painted_bounds(
+    annotation: &ProjectAnnotation,
+    page: &ProjectPage,
+    mut bounds: NormalizedRect,
+    transform: AffineTransform,
+) -> Result<NormalizedRect, ProjectLoadError> {
+    let (width, height) = corrected_dimensions(
+        u32::try_from(page.source_pixel_width).expect("validated width"),
+        u32::try_from(page.source_pixel_height).expect("validated height"),
+        PageCorrection::from(page),
+    )
+    .map_err(|error| ProjectLoadError::Invalid(error.to_string()))?;
+    // Strokes use editor points, independent of source resolution and crop.
+    #[allow(clippy::cast_precision_loss)]
+    let size = Size::new(612.0, 612.0 * height as f32 / width as f32);
+    let (_, stroke_width, _) = annotation.common();
+    match annotation {
+        ProjectAnnotation::Freehand { .. } => {
+            bounds.x -= stroke_width / (2.0 * size.width);
+            bounds.y -= stroke_width / (2.0 * size.height);
+            bounds.width += stroke_width / size.width;
+            bounds.height += stroke_width / size.height;
+            transformed_bounds(bounds, transform)
+        }
+        ProjectAnnotation::Shape {
+            shape, start, end, ..
+        } if matches!(
+            shape,
+            ProjectShapeKind::Line | ProjectShapeKind::Arrow
+        ) =>
+        {
+            let point = |point| {
+                let point = transform.apply(point);
+                Point::new(point.x * size.width, point.y * size.height)
+            };
+            let bounds = linear_bounds(
+                if *shape == ProjectShapeKind::Line {
+                    LineKind::Line
+                } else {
+                    LineKind::Arrow
+                },
+                point(*start),
+                point(*end),
+                stroke_width,
+            );
+            let bounds = NormalizedRect {
+                x: bounds.x / size.width,
+                y: bounds.y / size.height,
+                width: bounds.width / size.width,
+                height: bounds.height / size.height,
+            };
+            if !finite_rect(bounds) {
+                return invalid("Annotation geometry is invalid.");
+            }
+            Ok(bounds)
+        }
+        _ => transformed_bounds(bounds, transform),
+    }
 }
 
 fn validate_transform(

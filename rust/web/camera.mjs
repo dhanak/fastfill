@@ -630,8 +630,9 @@ export async function capturePhoto(pixelBudget, analyze = null) {
   }
 
   function visibilityChanged() {
+    if (captured) return;
     resetAnalysis();
-    if (!document.hidden && stream && !captured) {
+    if (!document.hidden && stream) {
       scheduleAnalysis(analysisSession, 100);
     }
   }

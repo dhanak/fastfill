@@ -18,13 +18,17 @@ pub const MAX_PDF_BYTES: usize = 100 * 1024 * 1024;
 const MAX_PAGES: usize = 20;
 const MAX_BATCH_PIXELS: u64 = 200_000_000;
 const MAX_BATCH_BYTES: usize = 600 * 1024 * 1024;
-const SCALE: f64 = 300.0 / 72.0;
+pub const DEFAULT_PDF_DPI: u16 = 300;
+const MINIMUM_PDF_DPI: u16 = 72;
+type RasterPlan = (Vec<(u32, u32, f32)>, u16);
 
 #[derive(Debug)]
 pub struct PdfPageImage {
     pub bytes: Vec<u8>,
     pub info: ImageInfo,
     pub pixels: image::RgbaImage,
+    /// Common import resolution; reduced when needed to fit the pixel budget.
+    pub dpi: u16,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -67,10 +71,18 @@ pub fn raster_size(
     width: f32,
     height: f32,
 ) -> Result<(u32, u32), PdfImportError> {
+    raster_size_at(width, height, DEFAULT_PDF_DPI)
+}
+
+fn raster_size_at(
+    width: f32,
+    height: f32,
+    dpi: u16,
+) -> Result<(u32, u32), PdfImportError> {
     // Multiply before dividing: 792 * (300 / 72) rounds just above 3300.
     let dimensions = [
-        f64::from(width) * 300.0 / 72.0,
-        f64::from(height) * 300.0 / 72.0,
+        f64::from(width) * f64::from(dpi) / 72.0,
+        f64::from(height) * f64::from(dpi) / 72.0,
     ];
     if dimensions.iter().any(|value| {
         !value.is_finite()
@@ -173,7 +185,7 @@ fn render_pdf(
             available.min(MAX_PAGES)
         )));
     }
-    let sizes = preflight(&pdf, pixel_budget.min(MAX_BATCH_PIXELS))?;
+    let (sizes, dpi) = preflight(&pdf, pixel_budget.min(MAX_BATCH_PIXELS))?;
     report(&mut progress, 0, count, PdfStage::Ready)?;
     let warning = Arc::new(AtomicBool::new(false));
     let flag = Arc::clone(&warning);
@@ -200,7 +212,7 @@ fn render_pdf(
             &settings,
             &RenderSettings::default(),
             &mut context,
-            Affine::scale(SCALE * f64::from(unit))
+            Affine::scale(f64::from(dpi) / 72.0 * f64::from(unit))
                 * page.initial_transform(true).to_kurbo(),
         );
         if warning.load(Ordering::Relaxed) {
@@ -221,7 +233,7 @@ fn render_pdf(
             },
         );
         report(&mut progress, index, count, PdfStage::Encoding)?;
-        let image = encode_page(pixmap, width, height)?;
+        let image = encode_page(pixmap, width, height, dpi)?;
         total_bytes += image.bytes.len();
         if image.bytes.len() > MAX_PDF_BYTES || total_bytes > MAX_BATCH_BYTES {
             return Err(error(
@@ -238,6 +250,7 @@ fn encode_page(
     pixmap: Pixmap,
     width: u32,
     height: u32,
+    dpi: u16,
 ) -> Result<PdfPageImage, PdfImportError> {
     let pixels = image::RgbaImage::from_raw(
         width,
@@ -256,6 +269,7 @@ fn encode_page(
     Ok(PdfPageImage {
         bytes,
         pixels,
+        dpi,
         info: ImageInfo {
             width,
             height,
@@ -280,9 +294,9 @@ fn report(
 fn preflight(
     pdf: &Pdf,
     pixel_budget: u64,
-) -> Result<Vec<(u32, u32, f32)>, PdfImportError> {
-    let mut total_pixels = 0_u64;
-    pdf.pages()
+) -> Result<RasterPlan, PdfImportError> {
+    let pages = pdf
+        .pages()
         .iter()
         .map(|page| {
             let crop = page.intersected_crop_box();
@@ -298,15 +312,10 @@ fn preflight(
             if !unit.is_finite() || unit <= 0.0 {
                 return Err(error("PDF page unit is invalid."));
             }
-            let (width, height) = raster_size(width * unit, height * unit)?;
-            total_pixels += u64::from(width) * u64::from(height);
-            if total_pixels > pixel_budget {
-                return Err(error(if pixel_budget < MAX_BATCH_PIXELS {
-                    "PDF exceeds the remaining project image budget."
-                } else {
-                    "PDF batch exceeds the 200-megapixel limit."
-                }));
-            }
+            let (width, height) = (width * unit, height * unit);
+            // Validate the minimum before searching resolutions; never render
+            // malformed or unbounded physical page dimensions.
+            raster_size_at(width, height, MINIMUM_PDF_DPI)?;
             // Missing Contents means blank paper; failed decoding does not.
             if page.raw().get::<Object<'_>>(b"Contents").is_some()
                 && page.page_stream().is_none()
@@ -315,9 +324,55 @@ fn preflight(
             }
             Ok((width, height, unit))
         })
-        .collect()
+        .collect::<Result<Vec<_>, _>>()?;
+    fit_rasters(&pages, pixel_budget)
+}
+
+fn fit_rasters(
+    pages: &[(f32, f32, f32)],
+    pixel_budget: u64,
+) -> Result<RasterPlan, PdfImportError> {
+    // Bounded search avoids rounding above the budget at the chosen DPI.
+    for dpi in (MINIMUM_PDF_DPI..=DEFAULT_PDF_DPI).rev() {
+        let sizes = pages
+            .iter()
+            .map(|&(width, height, unit)| {
+                raster_size_at(width, height, dpi).map(|(w, h)| (w, h, unit))
+            })
+            .collect::<Result<Vec<_>, _>>();
+        if let Ok(sizes) = sizes {
+            let pixels = sizes
+                .iter()
+                .map(|&(w, h, _)| u64::from(w) * u64::from(h))
+                .sum::<u64>();
+            if pixels <= pixel_budget {
+                return Ok((sizes, dpi));
+            }
+        }
+    }
+    Err(error(
+        "PDF exceeds the remaining project image budget even at 72 DPI.",
+    ))
 }
 
 fn error(message: &str) -> PdfImportError {
     PdfImportError(message.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn oversized_batches_lower_dpi_within_the_project_budget() {
+        let pages = [(1190.64, 1683.12, 1.0); 9];
+        let (sizes, dpi) = fit_rasters(&pages, MAX_BATCH_PIXELS).unwrap();
+        assert_eq!(dpi, 239);
+        let pixels = sizes
+            .iter()
+            .map(|&(w, h, _)| u64::from(w) * u64::from(h))
+            .sum::<u64>();
+        assert!(pixels <= MAX_BATCH_PIXELS);
+        assert!(fit_rasters(&pages, 1).is_err());
+    }
 }

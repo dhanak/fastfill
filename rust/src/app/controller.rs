@@ -10,6 +10,7 @@ pub(super) fn shortcut_message(
     modifiers: keyboard::Modifiers,
     status: iced::event::Status,
 ) -> Option<Message> {
+    let command = super::command::pressed(modifiers);
     // Focused text fields own Delete; Escape still cancels their numeric draft.
     if status == iced::event::Status::Captured
         && key == keyboard::Key::Named(keyboard::key::Named::Delete)
@@ -18,7 +19,7 @@ pub(super) fn shortcut_message(
     }
     match key {
         keyboard::Key::Character(value)
-            if (modifiers.command() || modifiers.control()) && value == "." =>
+            if (command || modifiers.control()) && value == "." =>
         {
             Some(Message::Palette(super::palette::Event::Toggle))
         }
@@ -26,23 +27,23 @@ pub(super) fn shortcut_message(
             Some(Message::ShowShortcuts)
         }
         keyboard::Key::Character(value)
-            if modifiers.command() && value.eq_ignore_ascii_case("a") =>
+            if command && value.eq_ignore_ascii_case("a") =>
         {
             (status == iced::event::Status::Ignored)
                 .then_some(Message::SelectAll)
         }
         keyboard::Key::Character(value)
-            if modifiers.command() && value.eq_ignore_ascii_case("n") =>
+            if command && value.eq_ignore_ascii_case("n") =>
         {
             Some(Message::NewProject)
         }
         keyboard::Key::Character(value)
-            if modifiers.command() && value.eq_ignore_ascii_case("o") =>
+            if command && value.eq_ignore_ascii_case("o") =>
         {
             Some(Message::OpenProject)
         }
         keyboard::Key::Character(value)
-            if modifiers.command() && value.eq_ignore_ascii_case("s") =>
+            if command && value.eq_ignore_ascii_case("s") =>
         {
             Some(if modifiers.shift() {
                 Message::SaveProjectAs
@@ -51,19 +52,19 @@ pub(super) fn shortcut_message(
             })
         }
         keyboard::Key::Character(value)
-            if modifiers.command()
+            if command
                 && modifiers.shift()
                 && value.eq_ignore_ascii_case("z") =>
         {
             Some(Message::Redo)
         }
         keyboard::Key::Character(value)
-            if modifiers.command() && value.eq_ignore_ascii_case("z") =>
+            if command && value.eq_ignore_ascii_case("z") =>
         {
             Some(Message::Undo)
         }
         keyboard::Key::Character(value)
-            if modifiers.command() && value.eq_ignore_ascii_case("y") =>
+            if command && value.eq_ignore_ascii_case("y") =>
         {
             Some(Message::Redo)
         }
@@ -175,7 +176,8 @@ impl FastFill {
 
     fn reset_rotation(&mut self) {
         if self.image_picker == ImagePicker::Idle {
-            self.annotations_mut().reset_rotation();
+            let size = page_size(self);
+            self.annotations_mut().reset_rotation(size);
         }
     }
 
@@ -221,6 +223,15 @@ impl FastFill {
 }
 
 pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
+    if super::notice::update(state, &message) {
+        return Task::none();
+    }
+    let task = update_inner(state, message);
+    super::notice::synchronize(state);
+    task
+}
+
+fn update_inner(state: &mut FastFill, message: Message) -> Task<Message> {
     #[cfg(not(target_arch = "wasm32"))]
     if matches!(
         message,
@@ -434,9 +445,10 @@ pub(super) fn handle_text_format(
             state.sync_text();
         }
     } else {
+        let size = page_size(state);
         state
             .annotations_mut()
-            .update_selected_text_formats(|text| {
+            .update_selected_text_formats(size, |text| {
                 let format = changed_text_format(message, text.format, current)
                     .expect("validated format command");
                 (format, measure_text(&text.text, format, 1.0))

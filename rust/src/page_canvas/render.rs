@@ -1,7 +1,3 @@
-use super::clipping::{
-    clip_polygon_to_rectangle, clipped_closed_polyline_runs,
-    clipped_polyline_runs, inset_clip, same_point,
-};
 use crate::appearance::{annotation_color, text_font};
 use fastfill_rust::annotations::{
     AnnotationRef, TEXT_LINE_HEIGHT, TextAnnotation,
@@ -15,7 +11,7 @@ use fastfill_rust::rendering::{
 use iced::advanced::graphics::text::Paragraph as GraphicsParagraph;
 use iced::advanced::text::{self, Paragraph as _, Text as ParagraphText};
 use iced::widget::canvas;
-use iced::{Color, Pixels, Point, Rectangle, Size, Vector, alignment};
+use iced::{Color, Pixels, Point, Size, Vector, alignment};
 
 pub(crate) fn draw_annotation(
     frame: &mut canvas::Frame,
@@ -59,57 +55,41 @@ fn draw_path(
     path: &ScenePath,
     scale: f32,
 ) {
-    let page = view.page_rect();
-    let page_clip = Rectangle::new(
-        Point::new(page.x, page.y),
-        iced::Size::new(page.width, page.height),
-    );
-    if let Some(fill) = path.fill {
+    let geometry = canvas::Path::new(|builder| {
         for subpath in &path.subpaths {
-            if !subpath.closed || subpath.points.len() < 3 {
+            let points = view_points(view, &subpath.points);
+            let Some(first) = points.first() else {
                 continue;
+            };
+            builder.move_to(*first);
+            for point in &points[1..] {
+                builder.line_to(*point);
             }
-            let polygon = clip_polygon_to_rectangle(
-                view_points(view, &subpath.points),
-                page_clip,
-            );
-            if polygon.len() >= 3 {
-                frame.fill(&closed_path(&polygon), scene_color(fill));
+            if subpath.closed {
+                builder.close();
             }
         }
+    });
+    // Callers clip the frame to the paper, preserving painted stroke edges.
+    if let Some(fill) = path.fill {
+        frame.fill(&geometry, scene_color(fill));
     }
-    let Some(stroke) = path.stroke else {
-        return;
-    };
-    let width = stroke.width * scale;
-    let clip = inset_clip(page_clip, width / 2.0);
-    if clip.width <= 0.0 || clip.height <= 0.0 {
-        return;
+    if let Some(stroke) = path.stroke {
+        frame.stroke(
+            &geometry,
+            canvas::Stroke::default()
+                .with_color(scene_color(stroke.paint))
+                .with_width(stroke.width * scale)
+                .with_line_cap(match stroke.cap {
+                    SceneLineCap::Butt => canvas::LineCap::Butt,
+                    SceneLineCap::Round => canvas::LineCap::Round,
+                })
+                .with_line_join(match stroke.join {
+                    SceneLineJoin::Miter => canvas::LineJoin::Miter,
+                    SceneLineJoin::Round => canvas::LineJoin::Round,
+                }),
+        );
     }
-    let mut runs = Vec::new();
-    for subpath in &path.subpaths {
-        let points = view_points(view, &subpath.points);
-        if subpath.closed {
-            runs.extend(clipped_closed_polyline_runs(&points, clip));
-        } else {
-            runs.extend(clipped_polyline_runs(&points, clip));
-        }
-    }
-    let path = path_from_runs(&runs);
-    frame.stroke(
-        &path,
-        canvas::Stroke::default()
-            .with_color(scene_color(stroke.paint))
-            .with_width(width)
-            .with_line_cap(match stroke.cap {
-                SceneLineCap::Butt => canvas::LineCap::Butt,
-                SceneLineCap::Round => canvas::LineCap::Round,
-            })
-            .with_line_join(match stroke.join {
-                SceneLineJoin::Miter => canvas::LineJoin::Miter,
-                SceneLineJoin::Round => canvas::LineJoin::Round,
-            }),
-    );
 }
 
 fn draw_text_content(
@@ -121,43 +101,32 @@ fn draw_text_content(
 ) {
     let position = view
         .page_to_view(PagePoint::new(annotation.bounds.x, annotation.bounds.y));
-    let page = view.page_rect();
-    let clip = Rectangle::new(
-        Point::new(page.x, page.y),
-        iced::Size::new(page.width, page.height),
-    );
-    let Some(clip) = clip.intersection(&Rectangle::with_size(frame.size()))
-    else {
-        return;
-    };
-    frame.with_clip(clip, |frame| {
-        let center = view.page_to_view(annotation.bounds.center());
-        frame.push_transform();
-        frame.translate(Vector::new(center.x, center.y));
-        frame.rotate(annotation.rotation);
-        frame.translate(Vector::new(-center.x, -center.y));
-        let color = annotation_color(annotation.format.color);
-        let size = Pixels(annotation.format.font_size * scale);
-        let font = text_font(annotation.format);
-        if glyphs {
-            frame.fill_text(canvas::Text {
-                content: annotation.text.clone(),
-                position: Point::new(position.x, position.y),
-                max_width: f32::INFINITY,
-                color,
-                size,
-                line_height: text::LineHeight::Relative(TEXT_LINE_HEIGHT),
-                font,
-                align_x: text::Alignment::Left,
-                align_y: alignment::Vertical::Top,
-                shaping: text::Shaping::Advanced,
-            });
-        }
-        if annotation.format.underline {
-            draw_underlines(frame, annotation, position, size, font, color);
-        }
-        frame.pop_transform();
-    });
+    let center = view.page_to_view(annotation.bounds.center());
+    frame.push_transform();
+    frame.translate(Vector::new(center.x, center.y));
+    frame.rotate(annotation.rotation);
+    frame.translate(Vector::new(-center.x, -center.y));
+    let color = annotation_color(annotation.format.color);
+    let size = Pixels(annotation.format.font_size * scale);
+    let font = text_font(annotation.format);
+    if glyphs {
+        frame.fill_text(canvas::Text {
+            content: annotation.text.clone(),
+            position: Point::new(position.x, position.y),
+            max_width: f32::INFINITY,
+            color,
+            size,
+            line_height: text::LineHeight::Relative(TEXT_LINE_HEIGHT),
+            font,
+            align_x: text::Alignment::Left,
+            align_y: alignment::Vertical::Top,
+            shaping: text::Shaping::Advanced,
+        });
+    }
+    if annotation.format.underline {
+        draw_underlines(frame, annotation, position, size, font, color);
+    }
+    frame.pop_transform();
 }
 
 fn draw_underlines(
@@ -231,25 +200,5 @@ pub(super) fn closed_path(points: &[Point]) -> canvas::Path {
             builder.line_to(*point);
         }
         builder.close();
-    })
-}
-
-fn path_from_runs(runs: &[Vec<Point>]) -> canvas::Path {
-    canvas::Path::new(|builder| {
-        for run in runs {
-            let Some(first) = run.first() else {
-                continue;
-            };
-            let closed =
-                run.last().is_some_and(|last| same_point(*first, *last));
-            builder.move_to(*first);
-            let end = run.len() - usize::from(closed);
-            for point in &run[1..end] {
-                builder.line_to(*point);
-            }
-            if closed {
-                builder.close();
-            }
-        }
     })
 }

@@ -5,7 +5,6 @@ use fastfill_rust::geometry::{Navigation, Rect as PageRect, Size as PageSize};
 use fastfill_rust::interaction::TouchNavigation;
 use iced::{Point, mouse};
 
-mod clipping;
 pub(crate) mod export;
 mod program;
 mod render;

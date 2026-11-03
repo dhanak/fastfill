@@ -115,11 +115,7 @@ fn heading(
             .push(super::project_view::export(state))
             .push(super::toolbar::icon_button(
                 Glyph::Search,
-                if cfg!(target_os = "macos") {
-                    "Commands (Cmd+.)"
-                } else {
-                    "Commands (Ctrl+.)"
-                },
+                format!("Commands ({}+.)", super::command::label()),
                 false,
                 super::palette::can_open(state)
                     .then_some(Message::Palette(super::palette::Event::Toggle)),
@@ -143,7 +139,7 @@ fn status_slot(state: &FastFill, width: f32) -> Element<'static, Message> {
     if width < 400.0 {
         return Space::new().width(Fill).into();
     }
-    let status = if state.status.is_empty() {
+    let status = if state.status.is_empty() || state.status_is_error {
         if state.image().is_some() {
             "Ready".to_owned()
         } else {
@@ -170,12 +166,23 @@ fn status_slot(state: &FastFill, width: f32) -> Element<'static, Message> {
 
 fn notifications(state: &FastFill) -> Option<Element<'_, Message>> {
     let mut notices: Vec<Element<'_, Message>> = Vec::new();
-    if state.status_is_error && !state.status.is_empty() {
+    if let Some(notice) = &state.notice {
         notices.push(
-            container(text(format!("⚠ {}", state.status)).size(14))
-                .style(container::danger)
-                .padding([6, 10])
-                .into(),
+            container(
+                row![
+                    text(format!("⚠ {}", notice.message)).size(14).width(Fill),
+                    action_button("Dismiss", Some(Message::DismissNotice)),
+                ]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
+            )
+            .style(if notice.error {
+                container::danger
+            } else {
+                container::warning
+            })
+            .padding([6, 10])
+            .into(),
         );
     }
     if let Some(warning) = super::page_edit::warning(state) {
@@ -186,10 +193,13 @@ fn notifications(state: &FastFill) -> Option<Element<'_, Message>> {
         notices.push(banner);
     }
     let pdf_progress = match &state.project.operation {
-        super::project::Operation::ImportingPdf { progress, .. } => Some((
+        super::project::Operation::ImportingPdf {
+            progress, cancel, ..
+        } => Some((
             *progress,
             "Cancel PDF import",
-            Some(Message::CancelPdfImport),
+            (!cancel.load(std::sync::atomic::Ordering::Relaxed))
+                .then_some(Message::CancelPdfImport),
         )),
         super::project::Operation::ExportingPdf {
             progress, cancel, ..
@@ -390,6 +400,13 @@ fn inline_text_style(
 fn text_key_binding(
     key: text_editor::KeyPress,
 ) -> Option<text_editor::Binding<Message>> {
+    #[cfg(target_arch = "wasm32")]
+    if matches!(key.status, text_editor::Status::Focused { .. })
+        && super::command::pressed(key.modifiers)
+        && key.key.to_latin(key.physical_key) == Some('a')
+    {
+        return Some(text_editor::Binding::SelectAll);
+    }
     if accepts_text(&key.key, key.modifiers) {
         Some(text_editor::Binding::Custom(Message::AcceptText))
     } else {

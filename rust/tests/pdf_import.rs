@@ -77,11 +77,25 @@ fn remaining_project_budget_is_checked_before_rasterization() {
     let error = import_pdf_with_progress_limited(
         pdf(&[(72.0, 72.0, "", "")]),
         20,
-        89_999,
+        5_000,
         |_, _, _| true,
     )
     .unwrap_err();
     assert!(error.to_string().contains("remaining project image budget"));
+}
+
+#[test]
+fn lowered_resolution_is_reported_and_used_for_rendering() {
+    let pages = import_pdf_with_progress_limited(
+        pdf(&[(72.0, 72.0, "", "1 0 0 rg 0 0 72 72 re f")]),
+        20,
+        40_000,
+        |_, _, _| true,
+    )
+    .unwrap();
+    assert_eq!(pages[0].dpi, 200);
+    assert_eq!(pages[0].pixels.dimensions(), (200, 200));
+    assert_eq!(pages[0].pixels.get_pixel(190, 190).0, [255, 0, 0, 255]);
 }
 
 #[test]
@@ -136,11 +150,12 @@ fn preflights_all_dimensions_before_rendering_any_page() {
     );
     assert!(result.is_err());
     assert_eq!(progress, []);
-    let result =
-        import_pdf(pdf(&[(1_000.0, 1_000.0, "", ""); 12]), 20, |_, _| {
-            panic!("over-budget batch must not begin rendering")
-        });
-    assert!(result.unwrap_err().to_string().contains("200-megapixel"));
+    let result = import_pdf_with_progress(
+        pdf(&[(1_000.0, 1_000.0, "", ""); 12]),
+        20,
+        |_, _, stage| stage != PdfStage::Ready,
+    );
+    assert!(result.unwrap_err().to_string().contains("canceled"));
 }
 
 #[test]

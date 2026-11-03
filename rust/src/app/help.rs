@@ -10,12 +10,6 @@ use iced::widget::{
 };
 use iced::{Element, Fill, FillPortion, Font, Task};
 
-const COMMAND: &str = if cfg!(target_os = "macos") {
-    "Cmd"
-} else {
-    "Ctrl"
-};
-
 pub(super) fn can_open(state: &FastFill) -> bool {
     #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
     if state.camera.is_open() {
@@ -169,7 +163,7 @@ pub(super) fn view(state: &FastFill) -> Option<Element<'static, Message>> {
 }
 
 fn shortcut_label(shortcut: &str) -> String {
-    shortcut.replace("Mod", COMMAND)
+    shortcut.replace("Mod", super::command::label())
 }
 
 type Entry = (&'static str, &'static str, &'static str);

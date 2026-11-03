@@ -1,5 +1,6 @@
 #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
 mod camera;
+mod command;
 mod confirmation;
 mod controller;
 mod export;
@@ -8,6 +9,7 @@ mod help;
 #[cfg(test)]
 mod interaction_tests;
 mod menu;
+mod notice;
 mod page_edit;
 mod pages;
 mod palette;
@@ -77,6 +79,7 @@ struct FastFill {
     image_picker: ImagePicker,
     status: String,
     status_is_error: bool,
+    notice: Option<notice::Notice>,
     confirm_delete_all: bool,
     confirm_delete_page: bool,
     show_shortcuts: bool,
@@ -134,6 +137,8 @@ enum ImagePicker {
 #[derive(Clone, Debug)]
 pub(crate) enum Message {
     SystemThemeChanged(iced::theme::Mode),
+    DismissNotice,
+    NoticeTick(iced::time::Instant),
     #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
     Camera(camera::Event),
     #[cfg(target_arch = "wasm32")]
@@ -272,6 +277,10 @@ pub(crate) fn run(startup_path: Option<std::path::PathBuf>) -> iced::Result {
                     iced::event::listen_with(normal_event)
                 },
             ];
+            if state.notice.is_some() {
+                subscriptions
+                    .push(iced::window::frames().map(Message::NoticeTick));
+            }
             #[cfg(not(target_arch = "wasm32"))]
             if std::env::var_os("FASTFILL_TOUCH_LOG").is_some() {
                 subscriptions.push(iced::event::listen_with(
