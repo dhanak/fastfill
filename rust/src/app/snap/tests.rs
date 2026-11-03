@@ -91,7 +91,8 @@ fn clicked_marks_snap_to_inset_boxes_independently_of_zoom() {
             for pointer in [Pointer::Mouse, Pointer::Touch(9)] {
                 let mut state = fixture(tool);
                 state.annotations_mut().set_color(AnnotationColor::Green);
-                state.annotations_mut().set_stroke_width(2.0);
+                let page = super::super::page_size(&state);
+                state.annotations_mut().set_stroke_width(2.0, page);
                 send(&mut state, Event::Toggle);
                 settle(&mut state);
                 click(&mut state, pointer, 145.0, 120.0, scale);

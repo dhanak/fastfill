@@ -3,6 +3,38 @@ use super::tests::paste_text;
 use super::*;
 
 #[test]
+fn resizing_accepts_new_and_existing_text_and_cancels_pointer_drafts() {
+    let mut state = FastFill::default();
+    let point = PagePoint::new(100.0, 100.0);
+    let _ = update(&mut state, Message::SetTool(Tool::Text));
+    for content in ["First", "Second"] {
+        let _ = update(
+            &mut state,
+            Message::DrawPressed(Pointer::Mouse, point, 1.0),
+        );
+        paste_text(&mut state, content);
+        let _ = update(&mut state, Message::ViewportResized);
+        assert!(!state.annotations().has_text_edit());
+        assert_eq!(state.annotations().len(), 1);
+        assert!(
+            state
+                .annotations()
+                .texts()
+                .next()
+                .unwrap()
+                .text
+                .contains(content)
+        );
+    }
+    let _ = update(&mut state, Message::SetTool(Tool::Rectangle));
+    let _ =
+        update(&mut state, Message::DrawPressed(Pointer::Mouse, point, 1.0));
+    let _ = update(&mut state, Message::ViewportResized);
+    assert!(state.annotations().active_pointer().is_none());
+    assert_eq!(state.annotations().len(), 1);
+}
+
+#[test]
 fn first_text_tool_click_places_the_caret_under_the_pointer() {
     for scale in [0.5, 1.0, 3.0] {
         let mut state = FastFill::default();

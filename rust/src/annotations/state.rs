@@ -6,6 +6,15 @@ use super::{
 use crate::geometry::{Point, Rect, Size};
 
 impl Annotations {
+    /// Reserve enough serialized space for every retained undo/redo state.
+    #[must_use]
+    pub fn reserved_storage_bytes(&self) -> u64 {
+        self.undo.iter().chain(&self.redo).fold(
+            self.storage.as_ref().map_or(0, |storage| storage.bytes),
+            |largest, snapshot| largest.max(snapshot.storage_bytes),
+        )
+    }
+
     pub(crate) fn from_ordered(
         annotations: impl IntoIterator<Item = OwnedAnnotation>,
     ) -> Self {
@@ -301,7 +310,11 @@ impl Annotations {
         let inserted = updates
             .first()
             .and_then(|(index, a)| index.is_none().then_some(a.id()));
-        self.commit_content(updates);
+        if !self.commit_content(updates)
+            && self.storage.as_ref().is_some_and(|s| s.rejected)
+        {
+            return false;
+        }
         if let Some(id) = inserted {
             self.selected = vec![id];
         }
@@ -330,12 +343,28 @@ impl Annotations {
         }) {
             return false;
         }
-        self.record_change();
+        let mut staged = Self::from_ordered(self.content.clone());
         for (index, annotation) in updates {
             match index {
-                Some(index) => self.content[index] = annotation,
-                None => self.content.push(annotation),
+                Some(index) => staged.content[index] = annotation,
+                None => staged.content.push(annotation),
             }
+        }
+        let bytes = if let Some(storage) = &mut self.storage {
+            let bytes = storage.content_size(&staged);
+            if bytes.is_none_or(|bytes| bytes > storage.limit) {
+                storage.rejected = true;
+                return false;
+            }
+            bytes
+        } else {
+            None
+        };
+        self.record_change();
+        self.content = staged.content;
+        if let (Some(storage), Some(bytes)) = (&mut self.storage, bytes) {
+            storage.bytes = bytes;
+            storage.revision = self.revision;
         }
         true
     }
@@ -346,6 +375,7 @@ impl Annotations {
             page_context: self.page_context,
             content: self.content.clone(),
             selected: self.selected.clone(),
+            storage_bytes: self.storage.as_ref().map_or(0, |s| s.bytes),
         }
     }
 
@@ -354,6 +384,9 @@ impl Annotations {
         self.page_context = snapshot.page_context;
         self.content = snapshot.content;
         self.selected = snapshot.selected;
+        if let Some(storage) = &mut self.storage {
+            storage.bytes = snapshot.storage_bytes;
+        }
     }
 
     pub(super) fn record_change(&mut self) {

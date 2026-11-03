@@ -400,18 +400,51 @@ fn inline_text_style(
 fn text_key_binding(
     key: text_editor::KeyPress,
 ) -> Option<text_editor::Binding<Message>> {
-    #[cfg(target_arch = "wasm32")]
-    if matches!(key.status, text_editor::Status::Focused { .. })
-        && super::command::pressed(key.modifiers)
-        && key.key.to_latin(key.physical_key) == Some('a')
-    {
-        return Some(text_editor::Binding::SelectAll);
-    }
     if accepts_text(&key.key, key.modifiers) {
-        Some(text_editor::Binding::Custom(Message::AcceptText))
-    } else {
-        text_editor::Binding::from_key_press(key)
+        return Some(text_editor::Binding::Custom(Message::AcceptText));
     }
+    #[cfg(target_arch = "wasm32")]
+    {
+        use super::web_clipboard::{Event, Kind};
+        let command = super::command::pressed(key.modifiers);
+        let binding = browser_key_binding(key, command)?;
+        let kind = match binding {
+            text_editor::Binding::Copy => Kind::Copy,
+            text_editor::Binding::Cut => Kind::Cut,
+            text_editor::Binding::Paste => Kind::Paste,
+            other => return Some(other),
+        };
+        Some(text_editor::Binding::Custom(Message::BrowserClipboard(
+            Event::Request(kind),
+        )))
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    text_editor::Binding::from_key_press(key)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn browser_key_binding<Message>(
+    mut key: text_editor::KeyPress,
+    command: bool,
+) -> Option<text_editor::Binding<Message>> {
+    use text_editor::Binding;
+    if matches!(key.status, text_editor::Status::Focused { .. })
+        && command
+        && !key.modifiers.alt()
+    {
+        match key.key.to_latin(key.physical_key) {
+            Some('a') => return Some(Binding::SelectAll),
+            Some('c') => return Some(Binding::Copy),
+            Some('x') => return Some(Binding::Cut),
+            Some('v') => return Some(Binding::Paste),
+            Some(_) => return None, // Application commands cannot insert text.
+            None => key.text = None,
+        }
+    } else if key.modifiers.control() && key.modifiers.alt() {
+        // AltGr is text input, including AltGr+C on some layouts.
+        key.modifiers.remove(keyboard::Modifiers::CTRL);
+    }
+    Binding::from_key_press(key)
 }
 
 fn accepts_text(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> bool {
@@ -423,8 +456,47 @@ fn accepts_text(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::accepts_text;
+    use super::{accepts_text, browser_key_binding};
     use iced::keyboard;
+    use iced::widget::text_editor::{Binding, KeyPress, Status};
+
+    #[test]
+    fn browser_command_letters_do_not_type_but_clipboard_and_altgr_work() {
+        use keyboard::{Key, Modifiers, key};
+        let event = |letter: &str, modifiers| KeyPress {
+            key: Key::Character(letter.into()),
+            modified_key: Key::Character(letter.into()),
+            physical_key: key::Physical::Code(key::Code::KeyC),
+            modifiers,
+            text: Some(letter.into()),
+            status: Status::Focused { is_hovered: false },
+        };
+        for modifiers in [Modifiers::CTRL, Modifiers::LOGO] {
+            for letter in ["s", "o", "n", "z", "S"] {
+                assert!(
+                    browser_key_binding::<()>(event(letter, modifiers), true)
+                        .is_none()
+                );
+            }
+            for (letter, expected) in [
+                ("a", Binding::SelectAll),
+                ("c", Binding::Copy),
+                ("x", Binding::Cut),
+                ("v", Binding::Paste),
+            ] {
+                assert_eq!(
+                    browser_key_binding::<()>(event(letter, modifiers), true),
+                    Some(expected)
+                );
+            }
+        }
+        let mut altgr = event("c", Modifiers::CTRL | Modifiers::ALT);
+        altgr.text = Some("ć".into());
+        assert_eq!(
+            browser_key_binding::<()>(altgr, true),
+            Some(Binding::Insert('ć'))
+        );
+    }
 
     #[test]
     fn plain_enter_accepts_but_shift_enter_does_not() {

@@ -270,12 +270,7 @@ fn finish(
             return super::page_edit::begin(state, *crop);
         }
         Ok(Some(_)) => {
-            state.status = if state.pages.can_add() {
-                "Project images exceed the 200 MP memory limit."
-            } else {
-                "A project may contain at most 20 pages."
-            }
-            .into();
+            state.status = state.pages.import_error().into();
             state.status_is_error = true;
         }
     }

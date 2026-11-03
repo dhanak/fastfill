@@ -14,7 +14,7 @@ fn snapped_marks_preview_and_commit_as_one_styled_undoable_creation() {
         let mut annotations = Annotations::default();
         annotations.set_tool(tool);
         annotations.set_color(AnnotationColor::Green);
-        annotations.set_stroke_width(2.0);
+        annotations.set_stroke_width(2.0, PAGE);
         assert!(annotations.begin(MOUSE, CLICK, PAGE));
         assert!(annotations.set_mark_snap(MOUSE, TARGET, 8.0));
         assert_eq!(annotations.preview().unwrap().bounds(), TARGET);

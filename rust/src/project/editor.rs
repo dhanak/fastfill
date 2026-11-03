@@ -24,6 +24,104 @@ impl fmt::Display for ProjectEditError {
 
 impl std::error::Error for ProjectEditError {}
 
+/// Compact JSON size without allocating a second copy of the manifest.
+///
+/// # Errors
+/// Returns an error if serialization fails.
+pub fn manifest_size(
+    project: &super::Project,
+) -> Result<u64, serde_json::Error> {
+    serialized_size(project)
+}
+
+pub(crate) fn serialized_size(
+    value: &impl serde::Serialize,
+) -> Result<u64, serde_json::Error> {
+    struct Counter(u64);
+    impl std::io::Write for Counter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0 += bytes.len() as u64;
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut counter = Counter(0);
+    serde_json::to_writer(&mut counter, value)?;
+    Ok(counter.0)
+}
+
+#[derive(Debug)]
+pub(crate) struct EditorStorage {
+    original: ProjectPage,
+    pub(crate) revision: u64,
+    context: u64,
+    pub(crate) limit: u64,
+    pub(crate) bytes: u64,
+    pub(crate) rejected: bool,
+}
+
+impl EditorStorage {
+    pub(crate) fn content_size(&self, editor: &Annotations) -> Option<u64> {
+        let page = encode_editor_page(&self.original, editor).ok()?;
+        serialized_size(&page).ok()
+    }
+}
+
+impl Annotations {
+    /// Configure a page's share of the project manifest/archive budget.
+    ///
+    /// # Errors
+    /// Returns an error if committed annotations cannot be encoded.
+    pub fn set_storage_budget(
+        &mut self,
+        original: &ProjectPage,
+        limit: u64,
+    ) -> Result<(), ProjectEditError> {
+        let context = self.page_context();
+        let revision = self.revision();
+        if let Some(storage) = &mut self.storage
+            && storage.original.id == original.id
+            && storage.context == context
+            && storage.revision == revision
+        {
+            storage.limit = limit;
+            return Ok(());
+        }
+        // Encode committed content only; pointer/text drafts are transient.
+        let committed =
+            Self::from_ordered(self.ordered_annotations().map(Into::into));
+        let page = encode_editor_page(original, &committed)?;
+        let bytes = serialized_size(&page)
+            .map_err(|error| ProjectEditError(error.to_string()))?;
+        self.storage = Some(EditorStorage {
+            original: original.clone(),
+            revision: self.revision(),
+            context: self.page_context(),
+            limit,
+            bytes,
+            rejected: false,
+        });
+        Ok(())
+    }
+
+    pub fn take_storage_rejection(&mut self) -> bool {
+        self.storage
+            .as_mut()
+            .is_some_and(|storage| std::mem::take(&mut storage.rejected))
+    }
+
+    pub fn fits_storage_page(&mut self, page: &ProjectPage) -> bool {
+        self.storage.as_mut().is_none_or(|storage| {
+            let fits =
+                serialized_size(page).is_ok_and(|bytes| bytes <= storage.limit);
+            storage.rejected |= !fits;
+            fits
+        })
+    }
+}
+
 /// Preview/export uses a 612-point page width and corrected image aspect.
 ///
 /// # Errors

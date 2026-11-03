@@ -1,9 +1,12 @@
 use fastfill_rust::annotations::{AnnotationColor, TextFormat, TextTypeface};
+use iced::advanced::graphics::text::cosmic_text::fontdb::Database;
 use iced::font::{Family, Style, Weight};
 use iced::{Color, Font};
 use std::sync::{Once, OnceLock};
 
 mod buttons;
+#[cfg(any(target_arch = "wasm32", test))]
+mod fonts;
 pub(crate) use buttons::{
     action_button, destructive_action, primary_action, secondary_action,
 };
@@ -152,7 +155,7 @@ pub(crate) fn annotation_color(color: AnnotationColor) -> Color {
 }
 
 pub(crate) fn text_font(format: TextFormat) -> Font {
-    ensure_generic_font_fallbacks();
+    initialize_fonts();
     Font {
         family: match format.typeface {
             TextTypeface::Sans => Family::SansSerif,
@@ -202,64 +205,69 @@ fn italic_face_available(typeface: TextTypeface) -> bool {
     }]
 }
 
-fn ensure_generic_font_fallbacks() {
+pub(crate) fn initialize_fonts() {
     static INIT: Once = Once::new();
     INIT.call_once(|| {
-        use iced::advanced::graphics::text::cosmic_text::fontdb;
-
         let mut system = iced::advanced::graphics::text::font_system()
             .write()
             .expect("font system lock");
         let database = system.raw().db_mut();
-        let sans = database.family_name(&fontdb::Family::SansSerif).to_owned();
-        if !font_family_exists(database, &sans) {
-            let family = first_font_family(
-                database,
-                &[
-                    "Segoe UI",
-                    "Arial",
-                    "Helvetica",
-                    "DejaVu Sans",
-                    "Liberation Sans",
-                    "Noto Sans",
-                    "Fira Sans",
-                ],
-            );
-            database.set_sans_serif_family(family);
-        }
-        let serif = database.family_name(&fontdb::Family::Serif).to_owned();
-        if !font_family_exists(database, &serif) {
-            let family = first_font_family(
-                database,
-                &[
-                    "Times New Roman",
-                    "DejaVu Serif",
-                    "Liberation Serif",
-                    "Noto Serif",
-                    "Georgia",
-                    "Fira Sans",
-                ],
-            );
-            database.set_serif_family(family);
-        }
-        let monospace =
-            database.family_name(&fontdb::Family::Monospace).to_owned();
-        if !font_family_exists(database, &monospace) {
-            let family = first_font_family(
-                database,
-                &[
-                    "Consolas",
-                    "Menlo",
-                    "DejaVu Sans Mono",
-                    "Liberation Mono",
-                    "Noto Sans Mono",
-                    "Courier New",
-                    "Fira Sans",
-                ],
-            );
-            database.set_monospace_family(family);
-        }
+        #[cfg(target_arch = "wasm32")]
+        fonts::load(database);
+        configure_font_fallbacks(database);
     });
+}
+
+fn configure_font_fallbacks(database: &mut Database) {
+    use iced::advanced::graphics::text::cosmic_text::fontdb;
+
+    let sans = database.family_name(&fontdb::Family::SansSerif).to_owned();
+    if !font_family_exists(database, &sans) {
+        let family = first_font_family(
+            database,
+            &[
+                "Segoe UI",
+                "Arial",
+                "Helvetica",
+                "DejaVu Sans",
+                "Liberation Sans",
+                "Noto Sans",
+                "Fira Sans",
+            ],
+        );
+        database.set_sans_serif_family(family);
+    }
+    let serif = database.family_name(&fontdb::Family::Serif).to_owned();
+    if !font_family_exists(database, &serif) {
+        let family = first_font_family(
+            database,
+            &[
+                "Times New Roman",
+                "DejaVu Serif",
+                "Liberation Serif",
+                "Noto Serif",
+                "Georgia",
+                "Fira Sans",
+            ],
+        );
+        database.set_serif_family(family);
+    }
+    let monospace = database.family_name(&fontdb::Family::Monospace).to_owned();
+    if !font_family_exists(database, &monospace) {
+        let family = first_font_family(
+            database,
+            &[
+                "Consolas",
+                "Menlo",
+                "DejaVu Sans Mono",
+                "Liberation Mono",
+                "Noto Sans Mono",
+                "Courier New",
+                "Fira Sans",
+            ],
+        );
+        database.set_monospace_family(family);
+    }
 }
 
 fn first_font_family(
@@ -282,4 +290,85 @@ fn font_family_exists(
             .iter()
             .any(|family| family.0.eq_ignore_ascii_case(name))
     })
+}
+
+#[cfg(test)]
+mod font_tests {
+    use super::*;
+    use iced::advanced::graphics::text::{self, cosmic_text};
+
+    #[test]
+    fn text_controls_shape_with_only_the_bundled_font() {
+        let mut database = cosmic_text::fontdb::Database::new();
+        database.load_font_data(text::FIRA_SANS_REGULAR.to_vec());
+        configure_font_fallbacks(&mut database);
+        let mut fonts = cosmic_text::FontSystem::new_with_locale_and_db(
+            "en-US".into(),
+            database,
+        );
+        let mut cache = text::Cache::new();
+        for font in [
+            Font::DEFAULT,
+            Font {
+                weight: Weight::Bold,
+                ..Font::DEFAULT
+            },
+            Font {
+                style: Style::Italic,
+                ..Font::DEFAULT
+            },
+        ] {
+            let (_, entry) = cache.allocate(
+                &mut fonts,
+                text::cache::Key {
+                    content: "BIU",
+                    size: 16.0,
+                    line_height: 20.0,
+                    font,
+                    align_x: iced::advanced::text::Alignment::Left,
+                    bounds: iced::Size::new(40.0, 40.0),
+                    shaping: iced::advanced::text::Shaping::Basic,
+                },
+            );
+            let glyphs: Vec<_> = entry
+                .buffer
+                .layout_runs()
+                .flat_map(|run| run.glyphs.iter())
+                .collect();
+            assert_eq!(glyphs.len(), 3);
+            assert!(glyphs.iter().all(|glyph| glyph.glyph_id != 0));
+        }
+    }
+
+    #[test]
+    fn browser_families_have_distinct_regular_bold_and_italic_faces() {
+        use cosmic_text::fontdb::{Family, Query, Style, Weight};
+        let mut database = cosmic_text::fontdb::Database::new();
+        fonts::load(&mut database);
+        configure_font_fallbacks(&mut database);
+        let mut ids = Vec::new();
+        for family in [Family::SansSerif, Family::Serif, Family::Monospace] {
+            for (weight, style) in [
+                (Weight::NORMAL, Style::Normal),
+                (Weight::BOLD, Style::Normal),
+                (Weight::NORMAL, Style::Italic),
+                (Weight::BOLD, Style::Italic),
+            ] {
+                let id = database
+                    .query(&Query {
+                        families: &[family],
+                        weight,
+                        style,
+                        ..Query::default()
+                    })
+                    .expect("bundled browser font");
+                let face = database.face(id).unwrap();
+                assert_eq!(face.weight, weight);
+                assert_eq!(face.style, style);
+                assert!(!ids.contains(&id));
+                ids.push(id);
+            }
+        }
+        assert_eq!(ids.len(), 12);
+    }
 }

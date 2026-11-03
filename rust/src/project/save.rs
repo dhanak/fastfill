@@ -132,10 +132,9 @@ fn validate_contents(
     loaded: &LoadedProject,
 ) -> Result<ArchiveContents<'_>, ProjectSaveError> {
     validate_project(&loaded.project)?;
-    let manifest =
-        serde_json::to_vec_pretty(&loaded.project).map_err(|error| {
-            invalid(format!("Could not serialize project manifest: {error}"))
-        })?;
+    let manifest = serde_json::to_vec(&loaded.project).map_err(|error| {
+        invalid(format!("Could not serialize project manifest: {error}"))
+    })?;
     if manifest.len() as u64 > MAXIMUM_MANIFEST_BYTES {
         return Err(invalid("Project manifest is too large."));
     }
@@ -207,7 +206,7 @@ fn verify_read_back<R: Read + Seek>(
     if archive.len() != names.len() + 1 {
         return Err(invalid("Saved project failed read-back validation."));
     }
-    let manifest = serde_json::to_vec_pretty(&expected.project)
+    let manifest = serde_json::to_vec(&expected.project)
         .map_err(|error| invalid(error.to_string()))?;
     verify_entry(&mut archive, "project.json", &manifest)?;
     // Input pixels were fully validated before writing. Byte equality plus

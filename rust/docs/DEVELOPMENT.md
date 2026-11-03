@@ -13,8 +13,12 @@ correction past the project limit leaves the document unchanged. Text boxes
 allow 10,000 UTF-16 units, including pasted text. Each page allows 10,000
 annotations; pen/highlighter strokes retain at most 100,000 samples. Each page
 keeps a 64 MiB undo/redo history budget; oldest steps disappear first when full.
-These budgets bound retained project data, not renderer or temporary preview
-memory.
+Admission reserves each page's largest retained display size, including undo and
+redo states. Compact JSON manifests have a 5 MiB budget; encoded images plus the
+manifest have a 600 MiB budget. Edits, imports and replacements are checked
+before committing, including normalized image bytes. Retained history also
+reserves manifest capacity so undo/redo cannot invalidate a save. These budgets
+bound retained project data, not renderer or temporary preview memory.
 
 ## In-app shortcuts
 
@@ -42,6 +46,13 @@ separate for shortcuts and gestures; F1 opens it from the palette too.
 In the main editor, **Ctrl+A** (or **Cmd+A** on macOS) selects all annotations
 on the current page. Focused text and search fields keep their normal Select All
 behavior.
+
+Resizing the window accepts active annotation text, then cancels unfinished
+pointer gestures. In browsers, Ctrl/Cmd combinations never insert their command
+letter into the annotation editor. Copy/cut/paste use the browser clipboard API
+on HTTPS or localhost; denied access leaves the selection unchanged. Browser
+reserved Ctrl/Cmd+N is not advertised; use New project in the menu or palette.
+See [browser font assets and license](FONTS.md) for bundled families/styles.
 
 Main-editor actions use neutral outlined buttons, accented Save/Camera entries
 and red destructive actions. Formatting toggles retain their accent when
@@ -194,6 +205,7 @@ The browser download and camera adapters have dependency-free checks (Node.js
 ```sh
 node web/download.test.mjs
 node --test web/camera.test.mjs
+node --test web/clipboard.test.mjs
 ```
 
 On Linux/macOS, check publication gates and release creation/update/failure

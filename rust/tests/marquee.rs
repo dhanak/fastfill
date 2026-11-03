@@ -67,7 +67,7 @@ fn arrowhead_and_thick_stroke_edges_are_selectable() {
         Point::new(450.0, 340.0),
         Point::new(478.0, 309.0),
     ));
-    assert!(annotations.set_stroke_width(20.0));
+    assert!(annotations.set_stroke_width(20.0, PAGE));
     assert!(select(
         &mut annotations,
         Point::new(200.0, 330.0),
@@ -88,7 +88,7 @@ fn high_zoom_clicks_can_pick_the_full_visible_line_width() {
             &[Point::new(100.0, 300.0), Point::new(500.0, 300.0)],
             false,
         );
-        assert!(annotations.set_stroke_width(20.0));
+        assert!(annotations.set_stroke_width(20.0, PAGE));
         assert!(!select(
             &mut annotations,
             Point::new(600.0, 500.0),
@@ -114,7 +114,7 @@ fn diagonal_stroke_padding_does_not_grow_toward_frame_corners() {
         &[Point::new(100.0, 100.0), Point::new(500.0, 500.0)],
         false,
     );
-    assert!(annotations.set_stroke_width(20.0));
+    assert!(annotations.set_stroke_width(20.0, PAGE));
     assert!(!select(
         &mut annotations,
         Point::new(250.0, 270.0),

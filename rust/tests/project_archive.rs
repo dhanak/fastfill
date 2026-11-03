@@ -25,6 +25,43 @@ const PNG_1X1: &[u8] = &[
 ];
 
 #[test]
+fn compact_ink_manifest_round_trips_when_pretty_json_would_exceed_limit() {
+    use fastfill_rust::project::{
+        AffineTransform, MAXIMUM_MANIFEST_BYTES, NormalizedPoint,
+    };
+    let mut loaded = load_archive(Cursor::new(archive_with_manifest(
+        &valid_manifest(),
+        &[("assets/page.png", PNG_1X1)],
+    )))
+    .unwrap();
+    loaded.project.pages[0].annotations = vec![ProjectAnnotation::Freehand {
+        id: uuid::Uuid::new_v4(),
+        points: [
+            NormalizedPoint { x: 0.1, y: 0.1 },
+            NormalizedPoint { x: 0.9, y: 0.9 },
+        ]
+        .into_iter()
+        .cycle()
+        .take(100_000)
+        .collect(),
+        is_highlighter: false,
+        filled: false,
+        color_argb: 0xff00_0000,
+        stroke_width: 3.0,
+        transform: AffineTransform::default(),
+    }];
+    assert!(
+        serde_json::to_vec_pretty(&loaded.project).unwrap().len() as u64
+            > MAXIMUM_MANIFEST_BYTES
+    );
+    let mut output = Cursor::new(Vec::new());
+    save_archive(&loaded, &mut output).unwrap();
+    output.set_position(0);
+    let reopened = load_archive(output).unwrap();
+    assert_eq!(reopened.project, loaded.project);
+}
+
+#[test]
 fn staged_display_reuses_the_validated_pixels_and_preserves_source_bytes() {
     let bytes = archive_with_manifest(
         &valid_manifest(),

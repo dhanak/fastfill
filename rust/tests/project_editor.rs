@@ -572,7 +572,7 @@ fn mixed_history_matches_schema_oracle_without_storage_indices() {
                 }
             }
             1 => {
-                assert!(editor.set_stroke_width(7.0));
+                assert!(editor.set_stroke_width(7.0, size));
                 let ProjectAnnotation::Shape { stroke_width, .. } =
                     &mut expected.annotations[0]
                 else {
@@ -741,7 +741,7 @@ fn partly_visible_strokes_remain_editable_and_serializable() {
     for tool in [Tool::Line, Tool::Arrow, Tool::Pen, Tool::Highlighter] {
         let mut editor = Annotations::default();
         editor.set_tool(tool);
-        editor.set_stroke_width(20.0);
+        editor.set_stroke_width(20.0, page);
         assert!(editor.begin(MOUSE, Point::new(100.0, 10.0), page));
         assert!(editor.finish(MOUSE, Point::new(200.0, 10.0), false));
         let original = encode_editor_page(&source, &editor).unwrap();
@@ -761,6 +761,15 @@ fn partly_visible_strokes_remain_editable_and_serializable() {
         assert_eq!(encode_editor_page(&source, &editor).unwrap(), original);
         assert!(editor.redo());
         assert_eq!(encode_editor_page(&source, &editor).unwrap(), moved);
+
+        assert!(editor.set_stroke_width(1.0, page));
+        let thinned = encode_editor_page(&source, &editor).unwrap();
+        let reopened = decode_editor_page(&thinned).unwrap();
+        assert_eq!(encode_editor_page(&thinned, &reopened).unwrap(), thinned);
+        assert!(editor.undo());
+        assert_eq!(encode_editor_page(&source, &editor).unwrap(), moved);
+        assert!(editor.redo());
+        assert_eq!(encode_editor_page(&source, &editor).unwrap(), thinned);
 
         let mut invisible = moved;
         match &mut invisible.annotations[0] {

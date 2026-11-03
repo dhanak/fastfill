@@ -12,6 +12,8 @@ mod page_canvas;
 mod picker;
 
 fn main() -> iced::Result {
+    #[cfg(target_arch = "wasm32")]
+    report_browser_panics();
     #[cfg(not(target_arch = "wasm32"))]
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
     #[cfg(all(feature = "native-camera", not(target_arch = "wasm32")))]
@@ -34,6 +36,18 @@ fn main() -> iced::Result {
     return app::run(project_argument(&args));
     #[cfg(target_arch = "wasm32")]
     app::run(None)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn report_browser_panics() {
+    #[wasm_bindgen::prelude::wasm_bindgen]
+    extern "C" {
+        #[wasm_bindgen(js_namespace = console, js_name = error)]
+        fn console_error(message: &str);
+    }
+    std::panic::set_hook(Box::new(|panic| {
+        console_error(&panic.to_string());
+    }));
 }
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -6,8 +6,9 @@ use fastfill_rust::correction::{PageCorrection, corrected_dimensions};
 use fastfill_rust::geometry::Size;
 use fastfill_rust::image_input::ImageFormatKind;
 use fastfill_rust::project::{
-    CropQuad, MAXIMUM_PROJECT_PIXELS, PageFilterSettings, ProjectPage,
-    decode_editor_page, editor_page_size,
+    CropQuad, MAXIMUM_ARCHIVE_CONTENT_BYTES, MAXIMUM_MANIFEST_BYTES,
+    MAXIMUM_PROJECT_PIXELS, PageFilterSettings, Project, ProjectPage,
+    decode_editor_page, editor_page_size, manifest_size,
 };
 use iced::Task;
 use std::collections::BTreeMap;
@@ -27,6 +28,7 @@ pub(super) struct EditorPage {
     pub(super) metadata: ProjectPage,
     pub(super) size: Size,
     versions: BTreeMap<u64, correction::PageVersion>,
+    asset_bytes: std::cell::OnceCell<u64>,
 }
 
 impl Default for EditorPage {
@@ -37,6 +39,7 @@ impl Default for EditorPage {
             metadata: page_metadata(794, 1_123, "png"),
             size: super::DEFAULT_PAGE,
             versions: BTreeMap::new(),
+            asset_bytes: std::cell::OnceCell::new(),
         }
     }
 }
@@ -56,7 +59,24 @@ impl EditorPage {
             metadata,
             size,
             versions: BTreeMap::new(),
+            asset_bytes: std::cell::OnceCell::new(),
         }
+    }
+
+    fn encoded_bytes(&self) -> u64 {
+        *self.asset_bytes.get_or_init(|| {
+            if let Some(image) = &self.image
+                && let iced::widget::image::Handle::Bytes(_, bytes) =
+                    &image.handle
+            {
+                return bytes.len() as u64;
+            }
+            super::project_io::encode_page_image(
+                &self.metadata,
+                self.image.as_ref().map(|image| &image.handle),
+            )
+            .map_or(u64::MAX, |bytes| bytes.len() as u64)
+        })
     }
 }
 
@@ -76,10 +96,21 @@ fn page_metadata(width: u32, height: u32, extension: &str) -> ProjectPage {
     }
 }
 
+fn display_pixels(metadata: &ProjectPage) -> u64 {
+    let width = u32::try_from(metadata.source_pixel_width).unwrap();
+    let height = u32::try_from(metadata.source_pixel_height).unwrap();
+    let shown =
+        corrected_dimensions(width, height, PageCorrection::from(metadata))
+            .expect("validated page correction");
+    u64::from(shown.0) * u64::from(shown.1)
+}
+
 #[derive(Debug)]
 pub(super) struct Pages {
     items: Vec<EditorPage>,
     active: usize,
+    header_bytes: u64,
+    import_error: &'static str,
 }
 
 impl Default for Pages {
@@ -87,6 +118,9 @@ impl Default for Pages {
         Self {
             items: vec![EditorPage::default()],
             active: 0,
+            // Controller supplies the actual header before processing input.
+            header_bytes: 512,
+            import_error: "Project limits exceeded.",
         }
     }
 }
@@ -119,13 +153,17 @@ impl Pages {
                         .map_err(|error| error.to_string())?,
                     metadata: metadata.clone(),
                     versions: BTreeMap::new(),
+                    asset_bytes: std::cell::OnceCell::new(),
                 })
             })
             .collect::<Result<Vec<_>, String>>()?;
         if items.is_empty() {
             return Ok(Self::default());
         }
-        Ok(Self { items, active: 0 })
+        Ok(Self {
+            items,
+            ..Self::default()
+        })
     }
     pub(super) fn iter(&self) -> impl Iterator<Item = &EditorPage> {
         self.items.iter()
@@ -170,31 +208,130 @@ impl Pages {
                 let width = u32::try_from(metadata.source_pixel_width).unwrap();
                 let height =
                     u32::try_from(metadata.source_pixel_height).unwrap();
-                let shown = corrected_dimensions(
-                    width,
-                    height,
-                    PageCorrection::from(metadata),
-                )
-                .expect("validated page correction");
                 (
                     source + u64::from(width) * u64::from(height),
-                    display + u64::from(shown.0) * u64::from(shown.1),
+                    display + page.reserved_pixels(),
                 )
             })
     }
 
-    fn fits_images(
+    fn check_images(
         &self,
-        images: &[ImportedImage],
+        pages: &[EditorPage],
         replacing_current: bool,
-    ) -> bool {
-        let added = images
+    ) -> Result<(), &'static str> {
+        let added = pages
             .iter()
-            .map(|image| {
+            .map(|page| {
+                let image = page.image.as_ref().unwrap();
                 u64::from(image.info.width) * u64::from(image.info.height)
             })
             .sum::<u64>();
-        added <= self.remaining_pixel_budget(replacing_current)
+        if added > self.remaining_pixel_budget(replacing_current) {
+            return Err("Project images exceed the 200 MP memory limit.");
+        }
+        let kept = self
+            .items
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !replacing_current || *i != self.active)
+            .map(|(_, page)| page);
+        let mut manifest = self.header_bytes;
+        let mut assets = 0_u64;
+        for page in kept.chain(pages) {
+            let bytes = if page.annotations.reserved_storage_bytes() == 0 {
+                serde_json::to_vec(&page.metadata)
+                    .map_err(|_| "Could not measure project metadata.")?
+                    .len() as u64
+            } else {
+                page.annotations.reserved_storage_bytes()
+            };
+            // Reserve one comma per page, including the first, conservatively.
+            manifest = manifest.saturating_add(bytes + 1);
+            assets = assets.saturating_add(page.encoded_bytes());
+        }
+        if manifest > MAXIMUM_MANIFEST_BYTES {
+            return Err("Project manifest exceeds the 5 MiB limit.");
+        }
+        if manifest.saturating_add(assets) > MAXIMUM_ARCHIVE_CONTENT_BYTES {
+            return Err(
+                "Project images and metadata exceed the 600 MiB storage limit.",
+            );
+        }
+        Ok(())
+    }
+
+    pub(super) fn import_error(&self) -> &'static str {
+        self.import_error
+    }
+
+    pub(super) fn check_header(
+        &self,
+        header: &Project,
+    ) -> Result<(), &'static str> {
+        let manifest = manifest_size(header)
+            .map_err(|_| "Could not measure project metadata.")?
+            + 32
+            + self
+                .items
+                .iter()
+                .map(|page| page.annotations.reserved_storage_bytes() + 1)
+                .sum::<u64>();
+        if manifest > MAXIMUM_MANIFEST_BYTES {
+            return Err("Project manifest exceeds the 5 MiB limit.");
+        }
+        let assets = self.items.iter().fold(0_u64, |total, page| {
+            total.saturating_add(page.encoded_bytes())
+        });
+        if manifest.saturating_add(assets) > MAXIMUM_ARCHIVE_CONTENT_BYTES {
+            return Err("Project exceeds the 600 MiB storage limit.");
+        }
+        Ok(())
+    }
+
+    pub(super) fn synchronize_storage(
+        &mut self,
+        header: &Project,
+    ) -> Result<(), String> {
+        // Save updates the timestamp; reserve its maximum fractional precision.
+        self.header_bytes = manifest_size(header)
+            .map_err(|error| error.to_string())?
+            .saturating_add(32);
+        for page in &mut self.items {
+            page.annotations
+                .set_storage_budget(&page.metadata, MAXIMUM_MANIFEST_BYTES)
+                .map_err(|error| error.to_string())?;
+        }
+        let reserved: u64 = self
+            .items
+            .iter()
+            .map(|page| page.annotations.reserved_storage_bytes() + 1)
+            .sum();
+        let assets = self.items.iter().fold(0_u64, |total, page| {
+            total.saturating_add(page.encoded_bytes())
+        });
+        let available = MAXIMUM_MANIFEST_BYTES
+            .min(MAXIMUM_ARCHIVE_CONTENT_BYTES.saturating_sub(assets))
+            .saturating_sub(self.header_bytes);
+        for page in &mut self.items {
+            let other = reserved - page.annotations.reserved_storage_bytes();
+            page.annotations
+                .set_storage_budget(
+                    &page.metadata,
+                    available.saturating_sub(other),
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn take_storage_rejection(&mut self) -> bool {
+        // Visit every page even if an earlier page reports a rejection.
+        let mut rejected = false;
+        for page in &mut self.items {
+            rejected |= page.annotations.take_storage_rejection();
+        }
+        rejected
     }
 
     pub(super) fn remaining_pixel_budget(
@@ -207,14 +344,14 @@ impl Pages {
 
     pub(super) fn fits_correction(&self, width: u32, height: u32) -> bool {
         let (_, display) = self.pixel_totals(true);
-        display + u64::from(width) * u64::from(height) <= MAXIMUM_PROJECT_PIXELS
+        let reserved = self.current().reserved_pixels();
+        display + reserved.max(u64::from(width) * u64::from(height))
+            <= MAXIMUM_PROJECT_PIXELS
     }
 
     pub(super) fn import_images(&mut self, images: &[ImportedImage]) -> bool {
-        if images.is_empty()
-            || images.len() > self.pdf_capacity()
-            || !self.fits_images(images, self.empty_starter())
-        {
+        if images.is_empty() || images.len() > self.pdf_capacity() {
+            self.import_error = "A project may contain at most 20 pages.";
             return false;
         }
         let settings = self.current().annotations.settings();
@@ -225,6 +362,10 @@ impl Pages {
         });
         // Stage before changing the document; preserve every existing page.
         let pages = pages.collect::<Vec<_>>();
+        if let Err(error) = self.check_images(&pages, self.empty_starter()) {
+            self.import_error = error;
+            return false;
+        }
         if self.empty_starter() {
             self.items = pages;
             self.active = 0;
@@ -236,10 +377,8 @@ impl Pages {
     }
 
     pub(super) fn add_image(&mut self, image: ImportedImage) -> bool {
-        if !self.can_add()
-            || !self
-                .fits_images(std::slice::from_ref(&image), self.empty_starter())
-        {
+        if !self.can_add() {
+            self.import_error = "A project may contain at most 20 pages.";
             return false;
         }
         if self.empty_starter() {
@@ -249,18 +388,26 @@ impl Pages {
         let settings = self.current().annotations.settings();
         let mut page = EditorPage::from_image(image);
         page.annotations.apply_settings(&settings);
+        if let Err(error) =
+            self.check_images(std::slice::from_ref(&page), false)
+        {
+            self.import_error = error;
+            return false;
+        }
         self.active += 1;
         self.items.insert(self.active, page);
         true
     }
 
     pub(super) fn replace_image(&mut self, image: ImportedImage) -> bool {
-        if !self.fits_images(std::slice::from_ref(&image), true) {
-            return false;
-        }
         let settings = self.current().annotations.settings();
         let mut page = EditorPage::from_image(image);
         page.annotations.apply_settings(&settings);
+        if let Err(error) = self.check_images(std::slice::from_ref(&page), true)
+        {
+            self.import_error = error;
+            return false;
+        }
         self.items[self.active] = page;
         true
     }
@@ -368,14 +515,7 @@ impl FastFill {
                     self.input_epoch = self.input_epoch.wrapping_add(1);
                     self.status_is_error = false;
                 } else {
-                    self.status = if purpose == PickPurpose::Add
-                        && !self.pages.can_add()
-                    {
-                        "A project may contain at most 20 pages."
-                    } else {
-                        "Project images exceed the 200 MP memory limit."
-                    }
-                    .into();
+                    self.status = self.pages.import_error().into();
                     self.status_is_error = true;
                 }
             }

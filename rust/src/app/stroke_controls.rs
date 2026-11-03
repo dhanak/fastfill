@@ -87,14 +87,16 @@ pub(super) fn update(
             let current = input_width(state, style.stroke_width);
             let width = spinner::step(current, *direction, 1.0, 20.0);
             state.clear_stroke_width_input();
-            state.annotations_mut().set_stroke_width(width);
+            let page = super::page_size(state);
+            state.annotations_mut().set_stroke_width(width, page);
         }
         Event::Scroll(delta) => {
             let current = input_width(state, style.stroke_width);
             let width = spinner::scroll(current, *delta, 1.0, 20.0);
             if (width - current).abs() >= f32::EPSILON {
                 state.clear_stroke_width_input();
-                state.annotations_mut().set_stroke_width(width);
+                let page = super::page_size(state);
+                state.annotations_mut().set_stroke_width(width, page);
             }
         }
     }
@@ -107,7 +109,8 @@ impl FastFill {
             return;
         };
         if let Some(width) = parse_width(&value) {
-            self.annotations_mut().set_stroke_width(width);
+            let page = super::page_size(self);
+            self.annotations_mut().set_stroke_width(width, page);
         } else {
             self.stroke_width_error();
         }

@@ -10,7 +10,7 @@ pub(super) fn shortcut_message(
     modifiers: keyboard::Modifiers,
     status: iced::event::Status,
 ) -> Option<Message> {
-    let command = super::command::pressed(modifiers);
+    let command = super::command::pressed(modifiers) && !modifiers.alt();
     // Focused text fields own Delete; Escape still cancels their numeric draft.
     if status == iced::event::Status::Captured
         && key == keyboard::Key::Named(keyboard::key::Named::Delete)
@@ -33,7 +33,9 @@ pub(super) fn shortcut_message(
                 .then_some(Message::SelectAll)
         }
         keyboard::Key::Character(value)
-            if command && value.eq_ignore_ascii_case("n") =>
+            if !cfg!(target_arch = "wasm32")
+                && command
+                && value.eq_ignore_ascii_case("n") =>
         {
             Some(Message::NewProject)
         }
@@ -96,13 +98,13 @@ impl FastFill {
         }
     }
 
-    fn sync_text(&mut self) {
+    fn sync_text(&mut self) -> bool {
         let Some((_, _, format, scale)) = self.annotations().text_edit() else {
-            return;
+            return true;
         };
         let content = self.text_content.text();
         let size = measure_text(&content, format, scale);
-        self.annotations_mut().update_text(content, size);
+        self.annotations_mut().update_text(content, size)
     }
 
     fn start_text_editor(
@@ -129,21 +131,24 @@ impl FastFill {
         iced::widget::operation::focus(TEXT_EDITOR_ID)
     }
 
-    fn edit_text(&mut self, action: text_editor::Action) {
+    pub(super) fn edit_text(&mut self, action: text_editor::Action) {
         self.finish_font_size_input();
         let before = self.text_content.text();
         let cursor = self.text_content.cursor();
         self.text_content.perform(action);
-        if self.text_content.text().encode_utf16().count()
-            > fastfill_rust::annotations::MAXIMUM_TEXT_LENGTH
-        {
+        let too_long = self.text_content.text().encode_utf16().count()
+            > fastfill_rust::annotations::MAXIMUM_TEXT_LENGTH;
+        if too_long || !self.sync_text() {
             self.text_content = text_editor::Content::with_text(&before);
             self.text_content.move_to(cursor);
-            self.status = "Text box limit is 10,000 characters.".into();
+            self.status = if too_long {
+                "Text box limit is 10,000 characters."
+            } else {
+                "Text exceeds the project storage budget."
+            }
+            .into();
             self.status_is_error = true;
-            return;
         }
-        self.sync_text();
     }
 
     fn undo(&mut self) {
@@ -226,7 +231,24 @@ pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
     if super::notice::update(state, &message) {
         return Task::none();
     }
+    if let Err(error) = state.pages.synchronize_storage(&state.project.header) {
+        state.status = error;
+        state.status_is_error = true;
+        super::notice::synchronize(state);
+        return Task::none();
+    }
     let task = update_inner(state, message);
+    let rejected = state.pages.take_storage_rejection();
+    if let Err(error) = state.pages.synchronize_storage(&state.project.header) {
+        state.status = error;
+        state.status_is_error = true;
+    }
+    if rejected {
+        state.status =
+            "Edit exceeds the project storage budget; previous content kept."
+                .into();
+        state.status_is_error = true;
+    }
     super::notice::synchronize(state);
     task
 }
@@ -318,6 +340,10 @@ fn update_editor(state: &mut FastFill, message: Message) -> Task<Message> {
     if let Some(task) = super::pages::update(state, &message) {
         return task;
     }
+    #[cfg(target_arch = "wasm32")]
+    if let Message::BrowserClipboard(event) = message {
+        return super::web_clipboard::update(state, event);
+    }
     if handle_delete_confirmation(state, &message) {
         return Task::none();
     }
@@ -376,9 +402,8 @@ fn update_editor(state: &mut FastFill, message: Message) -> Task<Message> {
             state.modifiers = modifiers;
             state.annotations_mut().constrain_square(modifiers.square);
         }
-        Message::CancelInteraction | Message::ViewportResized => {
-            let deselect = matches!(message, Message::CancelInteraction)
-                && state.annotations().active_pointer().is_none()
+        Message::CancelInteraction => {
+            let deselect = state.annotations().active_pointer().is_none()
                 && !state.annotations().has_text_edit()
                 && state.dragged_page.is_none();
             state.cancel_interaction();
@@ -441,7 +466,9 @@ pub(super) fn handle_text_format(
     if state.annotations().has_text_edit()
         || state.annotations().selected_text_indices().is_empty()
     {
-        if state.annotations_mut().set_text_format(format) {
+        if state.annotations_mut().set_text_format(format) && !state.sync_text()
+        {
+            state.annotations_mut().set_text_format(current);
             state.sync_text();
         }
     } else {
@@ -521,6 +548,10 @@ fn handle_delete_confirmation(state: &mut FastFill, message: &Message) -> bool {
 
 fn handle_navigation(state: &mut FastFill, message: &Message) -> bool {
     match message {
+        Message::ViewportResized => {
+            state.accept_text();
+            state.cancel_interaction();
+        }
         Message::Fit => {
             state.accept_text();
             state.cancel_interaction();

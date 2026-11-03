@@ -6,12 +6,14 @@ mod save;
 mod validate;
 
 pub use archive::{
-    LoadedAsset, LoadedProject, ProjectLoadError, load_archive,
-    load_archive_file, load_archive_with_images,
+    LoadedAsset, LoadedProject, MAXIMUM_ARCHIVE_CONTENT_BYTES,
+    MAXIMUM_MANIFEST_BYTES, ProjectLoadError, load_archive, load_archive_file,
+    load_archive_with_images,
 };
+pub(crate) use editor::EditorStorage;
 pub use editor::{
     ProjectEditError, decode_editor_page, editor_page_size,
-    encode_corrected_editor_page, encode_editor_page,
+    encode_corrected_editor_page, encode_editor_page, manifest_size,
 };
 pub use model::{
     AffineTransform, CropQuad, NormalizedPoint, NormalizedRect, PageFilterMode,

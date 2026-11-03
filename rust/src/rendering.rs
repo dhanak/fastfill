@@ -131,9 +131,8 @@ fn layout_mark(
     bounds: Rect,
     width: f32,
 ) -> Vec<ScenePath> {
-    if bounds.width <= width || bounds.height <= width {
-        return Vec::new();
-    }
+    // Leave room for the arms; excessive inset makes thicker marks shrink.
+    let width = width.min(bounds.width.min(bounds.height) / 3.0);
     let mark = Rect::new(
         bounds.x + width / 2.0,
         bounds.y + width / 2.0,

@@ -14,8 +14,8 @@ use std::path::Path;
 use zip::ZipArchive;
 use zip::read::{ArchiveOffset, Config};
 
-pub(super) const MAXIMUM_MANIFEST_BYTES: u64 = 5 * 1024 * 1024;
-pub(super) const MAXIMUM_ARCHIVE_CONTENT_BYTES: u64 = 600 * 1024 * 1024;
+pub const MAXIMUM_MANIFEST_BYTES: u64 = 5 * 1024 * 1024;
+pub const MAXIMUM_ARCHIVE_CONTENT_BYTES: u64 = 600 * 1024 * 1024;
 const MAXIMUM_ENTRIES: usize = 64;
 const MAXIMUM_DIRECTORY_BYTES: u64 =
     MAXIMUM_ENTRIES as u64 * (46 + 3 * u16::MAX as u64);

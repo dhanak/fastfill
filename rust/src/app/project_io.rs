@@ -205,41 +205,7 @@ pub(super) fn encode_snapshot(
         if assets.contains_key(&page.source_asset) {
             continue;
         }
-        let bytes = match handle {
-            Some(Handle::Bytes(_, bytes)) => bytes.as_ref().to_vec(),
-            Some(Handle::Rgba {
-                width,
-                height,
-                pixels,
-                ..
-            }) => {
-                let image = image::RgbaImage::from_raw(
-                    width,
-                    height,
-                    pixels.as_ref().to_vec(),
-                )
-                .ok_or_else(|| "Page pixels are invalid.".to_string())?;
-                encode_png(&image::DynamicImage::ImageRgba8(image))?
-            }
-            Some(Handle::Path(_, _)) => {
-                return Err(
-                    "Page image data must be loaded before saving.".into()
-                );
-            }
-            None => {
-                let width = u32::try_from(page.source_pixel_width)
-                    .map_err(|error| error.to_string())?;
-                let height = u32::try_from(page.source_pixel_height)
-                    .map_err(|error| error.to_string())?;
-                encode_png(&image::DynamicImage::ImageRgb8(
-                    image::RgbImage::from_pixel(
-                        width,
-                        height,
-                        image::Rgb([255, 255, 255]),
-                    ),
-                ))?
-            }
-        };
+        let bytes = encode_page_image(page, handle.as_ref())?;
         // The archive writer performs full validation before any file commit.
         let info = fastfill_rust::image_input::inspect_image(&bytes)
             .map_err(|error| error.to_string())?;
@@ -249,6 +215,45 @@ pub(super) fn encode_snapshot(
         project: snapshot.project,
         assets,
     })
+}
+
+pub(super) fn encode_page_image(
+    page: &fastfill_rust::project::ProjectPage,
+    handle: Option<&Handle>,
+) -> Result<Vec<u8>, String> {
+    match handle {
+        Some(Handle::Bytes(_, bytes)) => Ok(bytes.as_ref().to_vec()),
+        Some(Handle::Rgba {
+            width,
+            height,
+            pixels,
+            ..
+        }) => {
+            let image = image::RgbaImage::from_raw(
+                *width,
+                *height,
+                pixels.as_ref().to_vec(),
+            )
+            .ok_or_else(|| "Page pixels are invalid.".to_string())?;
+            encode_png(&image::DynamicImage::ImageRgba8(image))
+        }
+        Some(Handle::Path(_, _)) => {
+            Err("Page image data must be loaded before saving.".into())
+        }
+        None => {
+            let width = u32::try_from(page.source_pixel_width)
+                .map_err(|error| error.to_string())?;
+            let height = u32::try_from(page.source_pixel_height)
+                .map_err(|error| error.to_string())?;
+            encode_png(&image::DynamicImage::ImageRgb8(
+                image::RgbImage::from_pixel(
+                    width,
+                    height,
+                    image::Rgb([255, 255, 255]),
+                ),
+            ))
+        }
+    }
 }
 
 fn encode_png(image: &image::DynamicImage) -> Result<Vec<u8>, String> {

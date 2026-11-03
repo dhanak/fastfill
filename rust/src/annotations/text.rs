@@ -527,37 +527,64 @@ impl Annotations {
         true
     }
 
-    pub fn update_text(&mut self, text: impl Into<String>, size: Size) {
+    pub fn update_text(&mut self, text: impl Into<String>, size: Size) -> bool {
         if !size.width.is_finite()
             || !size.height.is_finite()
             || size.width <= 0.0
             || size.height <= 0.0
         {
-            return;
+            return false;
         }
         let text = text.into();
         if text.encode_utf16().count() > MAXIMUM_TEXT_LENGTH {
-            return;
+            return false;
         }
-        if let Some(draft) = &mut self.text_draft {
-            draft.annotation.text = text;
-            draft.annotation.bounds.width = size.width;
-            draft.annotation.bounds.height = size.height;
+        if let Some(draft) = &self.text_draft {
+            let mut annotation = draft.annotation.clone();
+            annotation.text = text;
+            annotation.bounds.width = size.width;
+            annotation.bounds.height = size.height;
             if let Some(bottom) = draft.bottom_anchor {
-                draft.annotation.bounds.y = bottom - size.height;
+                annotation.bounds.y = bottom - size.height;
             }
-            draft.annotation.keep_partly_visible(draft.page);
+            annotation.keep_partly_visible(draft.page);
+            if let Some(storage) = &mut self.storage {
+                let mut staged = Self::from_ordered(self.content.clone());
+                match draft.index {
+                    Some(index) => {
+                        staged.content[index] =
+                            OwnedAnnotation::Text(annotation.clone());
+                    }
+                    None => staged
+                        .content
+                        .push(OwnedAnnotation::Text(annotation.clone())),
+                }
+                if storage
+                    .content_size(&staged)
+                    .is_none_or(|bytes| bytes > storage.limit)
+                {
+                    storage.rejected = true;
+                    return false;
+                }
+            }
+            if let Some(draft) = &mut self.text_draft {
+                draft.annotation = annotation;
+                return true;
+            }
         }
+        false
     }
 
     pub fn accept_text(&mut self) -> bool {
-        let Some(mut draft) = self.text_draft.take() else {
+        let Some(draft) = &mut self.text_draft else {
             return false;
         };
         let text = draft.annotation.text.trim().to_owned();
         draft.annotation.text = text;
         if draft.annotation.text.is_empty() {
-            if let Some(index) = draft.index {
+            let index = draft.index;
+            self.text_draft = None;
+            if let Some(index) = index {
                 self.record_change();
                 self.content.remove(index);
                 self.selected.clear();
@@ -566,10 +593,15 @@ impl Annotations {
         }
         let format = draft.annotation.format;
         let id = draft.annotation.id;
-        self.commit_content(vec![(
-            draft.index,
-            OwnedAnnotation::Text(draft.annotation),
-        )]);
+        let index = draft.index;
+        let annotation = draft.annotation.clone();
+        if !self
+            .commit_content(vec![(index, OwnedAnnotation::Text(annotation))])
+            && self.storage.as_ref().is_some_and(|s| s.rejected)
+        {
+            return false;
+        }
+        self.text_draft = None;
         self.selected = vec![id];
         self.text_format = format;
         true

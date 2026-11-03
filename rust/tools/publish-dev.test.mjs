@@ -45,11 +45,14 @@ await init({ module_or_path: './app.wasm' });
     writeFileSync(join(dist, "AppIcon.png"), "favicon");
     cpSync(fileURLToPath(new URL("../assets/icons/lucide",
       import.meta.url)), join(dist, "icons"), { recursive: true });
+    cpSync(new URL("../assets/fonts/license", import.meta.url),
+      join(dist, "licenses", "liberation"), { recursive: true });
     const run = () => spawnSync(process.execPath, [webPackage], {
       env: { ...process.env, RUNNER_TEMP: directory },
       encoding: "utf8",
     });
-    assert.equal(run().status, 0);
+    const result = run();
+    assert.equal(result.status, 0, result.stderr);
     const archive = join(directory, "FastFill-Rust-web.tar.gz");
     const contents = spawnSync("tar", ["-tzf", archive], {
       encoding: "utf8",
@@ -58,6 +61,7 @@ await init({ module_or_path: './app.wasm' });
     assert.match(contents.stdout, /\.\/index\.html/);
     assert.match(contents.stdout, /\.\/AppIcon\.png/);
     assert.match(contents.stdout, /\.\/icons\/camera\.svg/);
+    assert.match(contents.stdout, /\.\/licenses\/liberation\/LICENSE/);
     assert.doesNotMatch(contents.stdout, /dist\/index\.html/);
     writeFileSync(join(dist, "index.html"),
       `<link rel="icon" href="./AppIcon.png">

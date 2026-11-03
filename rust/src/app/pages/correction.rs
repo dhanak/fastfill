@@ -59,6 +59,13 @@ impl PageVersion {
 }
 
 impl EditorPage {
+    pub(super) fn reserved_pixels(&self) -> u64 {
+        let current = crate::app::pages::display_pixels(&self.metadata);
+        self.versions.values().fold(current, |largest, version| {
+            largest.max(crate::app::pages::display_pixels(&version.metadata))
+        })
+    }
+
     fn version(&self) -> PageVersion {
         PageVersion::new(
             self.metadata.clone(),
@@ -116,6 +123,9 @@ impl EditorPage {
             correction,
         )
         .map_err(|error| error.to_string())?;
+        if !self.annotations.fits_storage_page(&metadata) {
+            return Err("Page edit exceeds the project storage budget.".into());
+        }
         let old = self.version();
         let old_context = self.annotations.page_context();
         let context =

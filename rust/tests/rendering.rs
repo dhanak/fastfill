@@ -110,6 +110,47 @@ fn mark_layout_fills_its_inset_frame() {
 }
 
 #[test]
+fn thick_marks_stop_growing_before_their_arms_collapse() {
+    for kind in [ShapeKind::Checkmark, ShapeKind::Cross] {
+        for side in [1.0, 6.0, 19.125, 80.0] {
+            let mut shape = bounded_shape(kind, false);
+            shape.geometry = AnnotationGeometry::Bounded {
+                kind,
+                bounds: Rect::new(10.0, 20.0, side, side),
+            };
+            let mut previous_width = 0.0;
+            let mut previous = None;
+            for requested in 1_u16..=20 {
+                shape.stroke_width = f32::from(requested);
+                let RenderAnnotation::Paths(paths) =
+                    layout_annotation(AnnotationRef::Shape(0, &shape))
+                else {
+                    panic!("mark must produce paths");
+                };
+                assert_eq!(paths.len(), 1);
+                let width = paths[0].stroke.unwrap().width;
+                assert!(width >= previous_width);
+                assert!(width <= side / 3.0);
+                for path in &paths[0].subpaths {
+                    assert!(path.points.len() >= 2);
+                    for point in &path.points {
+                        assert!(point.x >= 10.0 + width / 2.0 - 0.0001);
+                        assert!(point.x <= 10.0 + side - width / 2.0 + 0.0001);
+                        assert!(point.y >= 20.0 + width / 2.0 - 0.0001);
+                        assert!(point.y <= 20.0 + side - width / 2.0 + 0.0001);
+                    }
+                }
+                if (width - previous_width).abs() < f32::EPSILON {
+                    assert_eq!(Some(&paths), previous.as_ref());
+                }
+                previous_width = width;
+                previous = Some(paths);
+            }
+        }
+    }
+}
+
+#[test]
 fn text_layout_preserves_the_measured_model_object() {
     let text = TextAnnotation {
         id: uuid::Uuid::new_v4(),

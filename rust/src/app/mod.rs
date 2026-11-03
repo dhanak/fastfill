@@ -30,6 +30,8 @@ mod touch_cursor;
 mod view;
 #[cfg(target_arch = "wasm32")]
 mod web_camera;
+#[cfg(target_arch = "wasm32")]
+mod web_clipboard;
 
 #[cfg(test)]
 use crate::page_canvas::CanvasState;
@@ -136,6 +138,8 @@ enum ImagePicker {
 
 #[derive(Clone, Debug)]
 pub(crate) enum Message {
+    #[cfg(target_arch = "wasm32")]
+    BrowserClipboard(web_clipboard::Event),
     SystemThemeChanged(iced::theme::Mode),
     DismissNotice,
     NoticeTick(iced::time::Instant),
@@ -242,6 +246,8 @@ pub(crate) enum Message {
 }
 
 pub(crate) fn run(startup_path: Option<std::path::PathBuf>) -> iced::Result {
+    // Set aliases before layout requests bold/italic UI fonts in the browser.
+    crate::appearance::initialize_fonts();
     let window = iced::window::Settings {
         maximized: true,
         ..iced::window::Settings::default()

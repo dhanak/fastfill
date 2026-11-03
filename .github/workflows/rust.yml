@@ -76,9 +76,9 @@ jobs:
       - name: Test browser download adapter
         if: runner.os == 'Linux'
         run: node web/download.test.mjs
-      - name: Test browser camera adapter
+      - name: Test browser camera and clipboard adapters
         if: runner.os == 'Linux'
-        run: node --test web/camera.test.mjs
+        run: node --test web/camera.test.mjs web/clipboard.test.mjs
       - name: Test development release automation
         if: runner.os == 'Linux'
         run: node tools/publish-dev.test.mjs

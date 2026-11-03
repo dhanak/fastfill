@@ -39,7 +39,7 @@ fn tool_capabilities_agree_with_creation_and_option_availability() {
             assert_eq!(shape.frame_corners().is_none(), endpoints, "{tool:?}");
             assert_eq!(editor.set_filled(true), fill, "{tool:?}");
             assert!(editor.set_color(AnnotationColor::Green));
-            assert!(editor.set_stroke_width(5.0));
+            assert!(editor.set_stroke_width(5.0, PAGE));
         }
     }
 }
@@ -49,7 +49,7 @@ fn style_no_ops_and_tool_defaults_preserve_history_and_redo() {
     let mut editor = Annotations::default();
     editor.set_tool(Tool::Rectangle);
     assert!(editor.set_color(AnnotationColor::Green));
-    assert!(editor.set_stroke_width(5.0));
+    assert!(editor.set_stroke_width(5.0, PAGE));
     assert!(editor.set_filled(true));
     assert_eq!(editor.revision(), 0);
     assert!(editor.begin(MOUSE, Point::new(100.0, 100.0), PAGE));
@@ -57,7 +57,7 @@ fn style_no_ops_and_tool_defaults_preserve_history_and_redo() {
     let created = editor.shapes().next().unwrap().clone();
     let revision = editor.revision();
     assert!(!editor.set_color(AnnotationColor::Green));
-    assert!(!editor.set_stroke_width(5.0));
+    assert!(!editor.set_stroke_width(5.0, PAGE));
     assert!(!editor.set_filled(true));
     assert_eq!(editor.revision(), revision);
     assert!(editor.undo());
@@ -83,7 +83,7 @@ fn drawing_tools_remember_independent_compatible_styles() {
         }),
     );
     assert!(annotations.set_color(AnnotationColor::Blue));
-    assert!(annotations.set_stroke_width(7.0));
+    assert!(annotations.set_stroke_width(7.0, PAGE));
     assert!(annotations.set_filled(true));
 
     annotations.set_tool(Tool::Line);
@@ -107,12 +107,12 @@ fn newly_created_shape_remains_the_style_target() {
     let mut annotations = Annotations::default();
     annotations.set_tool(Tool::Oval);
     annotations.set_color(AnnotationColor::Green);
-    annotations.set_stroke_width(5.0);
+    annotations.set_stroke_width(5.0, PAGE);
     annotations.set_filled(true);
     annotations.begin(MOUSE, Point::new(100.0, 100.0), PAGE);
     annotations.finish(MOUSE, Point::new(200.0, 150.0), false);
     assert!(annotations.set_color(AnnotationColor::Yellow));
-    assert!(annotations.set_stroke_width(8.0));
+    assert!(annotations.set_stroke_width(8.0, PAGE));
     assert!(annotations.set_filled(false));
     assert_eq!(
         annotations.shapes().next().unwrap().color,
@@ -146,8 +146,16 @@ fn selected_style_changes_are_undoable_and_validate_thickness() {
     assert!(annotations.undo());
     assert_eq!(annotations.shapes().next().unwrap().clone(), original);
 
-    assert!(!annotations.set_stroke_width(0.0));
-    assert!(!annotations.set_stroke_width(21.0));
-    assert!(!annotations.set_stroke_width(f32::NAN));
+    assert!(!annotations.set_stroke_width(0.0, PAGE));
+    assert!(!annotations.set_stroke_width(21.0, PAGE));
+    assert!(!annotations.set_stroke_width(f32::NAN, PAGE));
+    for page in [
+        Size::new(0.0, 100.0),
+        Size::new(100.0, -1.0),
+        Size::new(f32::NAN, 100.0),
+        Size::new(100.0, f32::INFINITY),
+    ] {
+        assert!(!annotations.set_stroke_width(5.0, page));
+    }
     assert_eq!(annotations.shapes().next().unwrap().clone(), original);
 }

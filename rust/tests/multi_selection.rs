@@ -299,7 +299,7 @@ fn bulk_styles_apply_once_and_fill_only_compatible_objects() {
     );
 
     assert!(annotations.set_color(AnnotationColor::Red));
-    assert!(annotations.set_stroke_width(7.0));
+    assert!(annotations.set_stroke_width(7.0, PAGE));
     assert!(annotations.set_filled(true));
     assert!(
         annotations
@@ -473,7 +473,7 @@ fn mixed_color_layers_and_delete_preserve_membership_and_history() {
             .texts()
             .all(|text| text.format.color == AnnotationColor::Red)
     );
-    assert!(annotations.set_stroke_width(7.0));
+    assert!(annotations.set_stroke_width(7.0, PAGE));
     assert_eq!(annotations.texts().next().unwrap().format.font_size, 24.0);
     assert!(annotations.send_selected_to_back());
     let ids = annotations

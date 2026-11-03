@@ -3,7 +3,6 @@
 use super::{FastFill, ImagePicker, Message, TEXT_EDITOR_ID};
 use crate::appearance::{self, action_button};
 use fastfill_rust::annotations::DragModifiers;
-#[cfg(not(target_arch = "wasm32"))]
 use iced::font;
 use iced::widget::{
     column, container, mouse_area, opaque, row, scrollable, table, text,
@@ -88,10 +87,6 @@ pub(super) fn view(state: &FastFill) -> Option<Element<'static, Message>> {
     if !state.show_shortcuts {
         return None;
     }
-    // Web embeds regular Fira Sans, but has no generic bold font to draw.
-    #[cfg(target_arch = "wasm32")]
-    let bold = Font::with_name("Fira Sans");
-    #[cfg(not(target_arch = "wasm32"))]
     let bold = Font {
         weight: font::Weight::Bold,
         ..Font::DEFAULT
@@ -163,6 +158,9 @@ pub(super) fn view(state: &FastFill) -> Option<Element<'static, Message>> {
 }
 
 fn shortcut_label(shortcut: &str) -> String {
+    if cfg!(target_arch = "wasm32") && shortcut == "Mod+N" {
+        return "Project menu".into();
+    }
     shortcut.replace("Mod", super::command::label())
 }
 

@@ -165,8 +165,7 @@ fn finish(
             }
         }
         Ok(Some(_)) => {
-            state.status =
-                "PDF batch exceeds the 20-page or 200 MP project limit.".into();
+            state.status = state.pages.import_error().into();
             state.status_is_error = true;
         }
         Ok(None) => {

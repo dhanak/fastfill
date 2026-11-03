@@ -2,6 +2,7 @@ use super::{
     AnnotationColor, AnnotationStyle, Annotations, OwnedAnnotation,
     ShapeAnnotation, Tool,
 };
+use crate::geometry::Size;
 
 impl ShapeAnnotation {
     #[must_use]
@@ -55,14 +56,20 @@ impl Annotations {
     }
 
     pub fn set_color(&mut self, color: AnnotationColor) -> bool {
-        self.update_style(|_| true, |style| style.color = color)
+        self.update_style(None, |_| true, |style| style.color = color)
     }
 
-    pub fn set_stroke_width(&mut self, stroke_width: f32) -> bool {
-        if !stroke_width.is_finite() || !(1.0..=20.0).contains(&stroke_width) {
+    pub fn set_stroke_width(&mut self, stroke_width: f32, page: Size) -> bool {
+        if !stroke_width.is_finite()
+            || !(1.0..=20.0).contains(&stroke_width)
+            || !page.width.is_finite()
+            || !page.height.is_finite()
+            || page.width <= 0.0
+            || page.height <= 0.0
+        {
             return false;
         }
-        self.update_style(Tool::supports_stroke_width, |style| {
+        self.update_style(Some(page), Tool::supports_stroke_width, |style| {
             if (style.stroke_width - stroke_width).abs() > f32::EPSILON {
                 style.stroke_width = stroke_width;
             }
@@ -70,11 +77,14 @@ impl Annotations {
     }
 
     pub fn set_filled(&mut self, filled: bool) -> bool {
-        self.update_style(Tool::supports_fill, |style| style.filled = filled)
+        self.update_style(None, Tool::supports_fill, |style| {
+            style.filled = filled;
+        })
     }
 
     fn update_style(
         &mut self,
+        page: Option<Size>,
         supports: fn(Tool) -> bool,
         update: impl Fn(&mut AnnotationStyle),
     ) -> bool {
@@ -93,6 +103,9 @@ impl Annotations {
                 }
                 let mut annotation = original.clone();
                 annotation.set_style(style);
+                if let Some(page) = page {
+                    annotation.keep_partly_visible(page);
+                }
                 Some((Some(index), annotation))
             })
             .collect();

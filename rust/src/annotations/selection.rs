@@ -111,10 +111,11 @@ impl Annotations {
         {
             return false;
         }
-        self.record_change();
-        for annotation in &mut self.content {
-            if self.selected.contains(&annotation.id()) {
-                match annotation {
+        let updates = self
+            .selected_content()
+            .map(|(index, original)| {
+                let mut annotation = original.clone();
+                match &mut annotation {
                     OwnedAnnotation::Shape(shape)
                         if shape.supports_rotation() =>
                     {
@@ -124,9 +125,10 @@ impl Annotations {
                     OwnedAnnotation::Shape(_) => {}
                 }
                 annotation.keep_partly_visible(page);
-            }
-        }
-        true
+                (Some(index), annotation)
+            })
+            .collect();
+        self.commit_content(updates)
     }
 
     #[must_use]

@@ -4504,6 +4504,44 @@ Windows retest after the next CI ZIP:
 - Manual checks pending: browser notice dismissal/timeout; Cmd shortcuts in a
   Mac browser; captured outline after switching browser tabs.
 
+### 2026-11-03 — Second review decisions and text-tool crash
+
+- Initialize generic font aliases at startup, before the Text toolbar requests
+  bold/italic faces. Test shaping with only the bundled font; report browser
+  panics to the console with their source location.
+- Keep partly visible annotations reachable when reducing stroke width. Store
+  any required translation in the same undo entry as the style change.
+- Cap Check/Cross rendering width at one third of the smaller frame dimension,
+  retaining the requested width for subsequent resizing.
+- Accept active text before canceling pointer gestures on window resize. User
+  confirmed WASM previously canceled text, unlike native focus-loss behavior.
+- Accept two limitations: damaged PDF content arrays can lose undecodable
+  streams, and densely sampled ink can be rejected at release.
+- Suppress command-modified letter insertion in the browser annotation editor.
+  Connect copy/cut/paste to browser clipboard APIs, keeping failed cuts and
+  rejected pastes intact and ignoring replies after text/caret/session changes.
+  Remove the browser-owned New shortcut from WASM help and the command palette.
+- Serialize compact manifest JSON to avoid whitespace alone exceeding 5 MiB.
+  Check aggregate manifest capacity before accepting content changes and pastes;
+  preserve history on rejection and reserve room for retained undo/redo content.
+- Reserve the largest display pixel count reachable in each page's retained
+  history during admission checks. This preserves undo/redo within the
+  200-megapixel budget; new imports may fit at a lower DPI or be refused sooner.
+- Enforce the 600 MiB expanded archive budget before installing imports,
+  counting final normalized image bytes and the manifest, and excluding replaced
+  assets. Keep a rejected import transactional.
+- Bundle regular/bold/italic/bold italic Liberation Sans, Serif and Mono faces
+  in WASM, including their license in the web distribution. Native builds keep
+  system-font selection. Test all twelve family/style combinations.
+- Automated checks: bundled-font shaping, stroke reachability/save round trips,
+  mark geometry and native/WASM strict Clippy pass.
+- User confirms WASM behavior on 2026-11-03: resizing accepts text, Save/Open
+  shortcuts do not insert letters, clipboard actions work, and font family/B/I
+  changes render correctly, including PDF output. Mark browser checks accepted.
+- Clipboard refusal and paste limits have automated coverage. Keep physical Mac
+  Cmd-key validation separate from the confirmed browser-host checks.
+- Manual checks pending: edge-sliver thinning; thick small Check/Cross marks.
+
 ## References
 
 - [iced 0.14 documentation](https://docs.rs/iced/0.14.0/iced/)

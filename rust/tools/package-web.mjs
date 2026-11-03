@@ -13,6 +13,8 @@ const archive = join(temp, "FastFill-Rust-web.tar.gz");
 
 function checkSite(root) {
   const html = readFileSync(join(root, "index.html"), "utf8");
+  assert.ok(statSync(join(root, "licenses/liberation/LICENSE")).isFile(),
+    "Missing bundled-font license");
   const icon = html.match(/<link\b[^>]*\brel="icon"[^>]*\bhref="([^"]+)"/);
   assert.ok(icon, "Missing favicon");
   assert.ok(icon[1].startsWith("./"), "Favicon URL is not relative");

@@ -120,6 +120,9 @@ would exceed a limit, FastFill refuses it without changing the project. Each
 page also limits annotations and retained undo history; the oldest undo steps
 are discarded when the history budget is full.
 
+Memory and storage budgets reserve room for retained undo/redo states. Project
+metadata is limited to 5 MiB; encoded page images plus metadata to 600 MiB.
+
 PDF import starts at 300 DPI and lowers the resolution, down to 72 DPI, when
 needed to fit the remaining image budget. A warning reports the chosen DPI.
 Errors and warnings can be dismissed manually and disappear after ten seconds.
@@ -134,3 +137,7 @@ platform-specific modifier reference. The app version appears below the title.
 F1 also works while Commands is open. The browser or operating system may
 intercept F1; use the button in that case. In the browser build, **F11** toggles
 browser full screen.
+
+Resizing accepts active text. Browser text editing supports Ctrl/Cmd+A, C, X and
+V; clipboard access needs HTTPS or localhost and browser permission. New project
+is available from the project menu or Commands; the browser owns Ctrl/Cmd+N.

@@ -281,10 +281,7 @@ fn prepared(
     result: &Result<ImportedImage, String>,
 ) -> Task<Message> {
     match result {
-        Ok(image)
-            if state.pages.can_add()
-                && state.pages.add_image(image.clone()) =>
-        {
+        Ok(image) if state.pages.add_image(image.clone()) => {
             let crop = state.camera.draft.as_ref().unwrap().crop;
             state.camera.draft = None;
             state.navigation.fit();
@@ -300,12 +297,7 @@ fn prepared(
             draft.saving = false;
             draft.error = Some(match result {
                 Err(error) => error.clone(),
-                Ok(_) if !state.pages.can_add() => {
-                    "A project may contain at most 20 pages.".into()
-                }
-                Ok(_) => {
-                    "Project images exceed the 200 MP memory limit.".into()
-                }
+                Ok(_) => state.pages.import_error().into(),
             });
             Task::none()
         }

@@ -206,6 +206,148 @@ fn test_image(name: &str) -> ImportedImage {
     }
 }
 
+#[test]
+fn imports_reserve_corrected_pixels_reachable_through_redo() {
+    use fastfill_rust::project::{CropQuad, NormalizedPoint};
+    let mut pages = Pages::default();
+    let mut image = test_image("source");
+    image.info.width = 10_000;
+    image.info.height = 1_000;
+    assert!(pages.add_image(image.clone()));
+    let correction = PageCorrection {
+        crop: CropQuad {
+            top_left: NormalizedPoint { x: 0.0, y: 0.0 },
+            top_right: NormalizedPoint { x: 0.9, y: 0.0 },
+            bottom_right: NormalizedPoint { x: 1.0, y: 1.0 },
+            bottom_left: NormalizedPoint { x: 0.1, y: 1.0 },
+        },
+        ..PageCorrection::default()
+    };
+    let (width, height) =
+        corrected_dimensions(10_000, 1_000, correction).unwrap();
+    // Test admission dimensions without allocating or rendering large pixels.
+    pages
+        .current_mut()
+        .accept_correction(
+            correction,
+            Handle::from_rgba(width, height, vec![255; 4]),
+        )
+        .unwrap();
+    assert!(pages.current_mut().history(false).unwrap());
+    for _ in 0..18 {
+        assert!(pages.add_image(image.clone()));
+    }
+    assert_eq!(
+        pages.remaining_pixel_budget(false),
+        20_000_000 - u64::from(width) * u64::from(height)
+    );
+    assert!(!pages.add_image(image.clone()));
+    pages.select(0);
+    assert!(pages.current_mut().history(true).unwrap());
+    assert!(pages.current_mut().history(false).unwrap());
+    pages
+        .current_mut()
+        .annotations
+        .trim_history(64 * 1024 * 1024);
+    pages.current_mut().prune_versions();
+    assert_eq!(pages.remaining_pixel_budget(false), 10_000_000);
+    assert!(pages.add_image(image));
+}
+
+#[test]
+fn imports_check_encoded_bytes_and_metadata_before_changing_pages() {
+    let mut pages = Pages::default();
+    assert!(pages.add_image(test_image("original")));
+    let page_bytes =
+        serde_json::to_vec(&pages.current().metadata).unwrap().len() as u64;
+    // Simulate a nearly full archive without allocating hundreds of MiB.
+    let near_limit =
+        MAXIMUM_ARCHIVE_CONTENT_BYTES - pages.header_bytes - page_bytes - 100;
+    pages.current_mut().asset_bytes.take();
+    pages.current_mut().asset_bytes.set(near_limit).unwrap();
+    let identity = pages.identity();
+    assert!(!pages.import_images(&[test_image("two"), test_image("three")]));
+    assert!(pages.import_error().contains("600 MiB"));
+    assert_eq!(pages.identity(), identity);
+    assert!(!pages.add_image(test_image("two")));
+    assert!(pages.import_error().contains("600 MiB"));
+    assert_eq!(pages.names(), ["original.png"]);
+    assert!(pages.replace_image(test_image("replacement")));
+    assert_eq!(pages.names(), ["replacement.png"]);
+
+    pages.header_bytes = MAXIMUM_MANIFEST_BYTES - page_bytes;
+    assert!(!pages.add_image(test_image("two")));
+    assert!(pages.import_error().contains("5 MiB"));
+    assert_eq!(pages.names(), ["replacement.png"]);
+}
+
+#[test]
+fn rejected_text_and_shape_edits_keep_content_and_redo() {
+    let mut page = EditorPage::default();
+    let empty_bytes = serde_json::to_vec(&page.metadata).unwrap().len() as u64;
+    page.annotations
+        .set_storage_budget(&page.metadata, empty_bytes + 1_000)
+        .unwrap();
+    let point = PagePoint::new(100.0, 100.0);
+    page.annotations.set_tool(Tool::Text);
+    assert!(page.annotations.begin_text(point, page.size, 1.0));
+    assert!(
+        page.annotations
+            .update_text("Safe", PageSize::new(60.0, 30.0))
+    );
+    assert!(
+        !page
+            .annotations
+            .update_text("x".repeat(2_000), PageSize::new(100.0, 30.0))
+    );
+    assert_eq!(page.annotations.text_preview().unwrap().text, "Safe");
+    assert!(page.annotations.take_storage_rejection());
+    assert!(page.annotations.accept_text());
+    assert!(page.annotations.undo());
+    page.annotations
+        .set_storage_budget(&page.metadata, empty_bytes + 1)
+        .unwrap();
+    page.annotations.set_tool(Tool::Rectangle);
+    assert!(page.annotations.begin(Pointer::Mouse, point, page.size));
+    page.annotations.finish(
+        Pointer::Mouse,
+        PagePoint::new(150.0, 150.0),
+        false,
+    );
+    assert!(page.annotations.take_storage_rejection());
+    assert!(page.annotations.is_empty());
+    assert!(page.annotations.can_redo());
+    assert!(page.annotations.redo());
+    assert_eq!(page.annotations.texts().next().unwrap().text, "Safe");
+}
+
+#[test]
+fn paste_over_archive_budget_keeps_editor_and_draft_in_sync() {
+    let mut state = FastFill::default();
+    let _ = update(&mut state, Message::SetTool(Tool::Text));
+    let page_bytes = serde_json::to_vec(&state.pages.current().metadata)
+        .unwrap()
+        .len() as u64;
+    let bytes = MAXIMUM_ARCHIVE_CONTENT_BYTES
+        - state.pages.header_bytes
+        - page_bytes
+        - 1_000;
+    state.pages.current_mut().asset_bytes.take();
+    state.pages.current_mut().asset_bytes.set(bytes).unwrap();
+    let _ = update(
+        &mut state,
+        Message::DrawPressed(Pointer::Mouse, PagePoint::new(100.0, 100.0), 1.0),
+    );
+    paste_text(&mut state, "Safe");
+    paste_text(&mut state, &"x".repeat(2_000));
+    assert_eq!(state.text_content.text(), "Safe");
+    assert_eq!(state.annotations().text_preview().unwrap().text, "Safe");
+    assert!(state.status_is_error);
+    let _ = update(&mut state, Message::ViewportResized);
+    assert!(!state.annotations().has_text_edit());
+    assert_eq!(state.annotations().texts().next().unwrap().text, "Safe");
+}
+
 fn annotated_image_page() -> FastFill {
     let mut state = annotated_page();
     state.pages.current_mut().image = Some(test_image("one"));

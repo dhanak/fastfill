@@ -222,6 +222,13 @@ pub(super) fn rename_update(
                 .as_deref()
                 .and_then(|draft| validated_name(draft).ok())
             {
+                let mut header = state.project.header.clone();
+                header.title.clone_from(&title);
+                if let Err(error) = state.pages.check_header(&header) {
+                    state.status = error.into();
+                    state.status_is_error = true;
+                    return Some(Task::none());
+                }
                 state.project.header.title = title;
                 state.project.name = name;
                 state.project.name_draft = None;

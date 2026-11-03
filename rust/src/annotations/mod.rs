@@ -197,6 +197,7 @@ struct Snapshot {
     page_context: u64,
     content: Vec<OwnedAnnotation>,
     selected: Vec<uuid::Uuid>,
+    storage_bytes: u64,
 }
 
 pub(crate) const HISTORY_BYTES_LIMIT: usize = 64 * 1024 * 1024;
@@ -225,6 +226,7 @@ impl Snapshot {
 
 #[derive(Debug, Default)]
 pub struct Annotations {
+    pub(crate) storage: Option<crate::project::EditorStorage>,
     revision: u64,
     next_revision: u64,
     page_context: u64,

@@ -209,7 +209,7 @@ impl Command {
     pub(super) fn shortcut(self) -> &'static str {
         use Command as C;
         match self {
-            C::New => "N",
+            C::New if !cfg!(target_arch = "wasm32") => "N",
             C::Open => "O",
             C::Save => "S",
             #[cfg(not(target_arch = "wasm32"))]

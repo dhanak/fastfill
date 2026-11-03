@@ -142,7 +142,7 @@ fn every_geometric_draft_owns_its_pointer_and_blocks_content_commands() {
         assert!(!editor.delete_all(), "{kind}: delete all");
         assert!(!editor.delete_selected(), "{kind}: delete selected");
         assert!(!editor.set_color(AnnotationColor::Red), "{kind}: color");
-        assert!(!editor.set_stroke_width(7.0), "{kind}: stroke");
+        assert!(!editor.set_stroke_width(7.0, PAGE), "{kind}: stroke");
         assert!(!editor.set_filled(true), "{kind}: fill");
         assert!(!editor.send_selected_to_back(), "{kind}: layers");
         assert!(!editor.reset_rotation(PAGE), "{kind}: rotation");
