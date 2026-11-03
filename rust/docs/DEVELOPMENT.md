@@ -145,8 +145,8 @@ display scaling on a real Mac before treating the archive as verified.
 The `package-web` CI job uses pinned Trunk to build a release-mode static site.
 It emits relative asset URLs so one archive can be extracted at a site's root or
 under a subpath. CI extracts the tarball and checks HTML, JS, WASM, and snippet
-references. See [browser deployment](WEB.md) for server setup. A real browser
-check after publication is still needed.
+references. See [browser deployment](WEB.md) for server setup. The published
+archive passed root and subpath checks on desktop and mobile browsers.
 
 Browser camera analysis samples one frame at a time at a 640-pixel longest edge.
 The existing Rust detector and steadiness gate run on that sample. If capture

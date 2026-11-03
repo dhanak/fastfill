@@ -80,6 +80,12 @@ fn items(
             ];
             if cfg!(not(target_arch = "wasm32")) {
                 items.push(("Save as", Glyph::SaveAs, Message::SaveProjectAs));
+            } else {
+                items.push((
+                    "Rename project",
+                    Glyph::RenameProject,
+                    Message::RenameProject,
+                ));
             }
             items
         }

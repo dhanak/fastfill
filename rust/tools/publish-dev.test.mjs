@@ -1,7 +1,7 @@
 // Run the workflow's actual shell block; never call GitHub or need a token.
 import assert from "node:assert/strict";
 import {
-  existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync,
+  cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -43,6 +43,8 @@ await init({ module_or_path: './app.wasm' });
     writeFileSync(join(dist, "app.wasm"),
       Buffer.from([0, 97, 115, 109, 1, 0, 0, 0]));
     writeFileSync(join(dist, "AppIcon.png"), "favicon");
+    cpSync(fileURLToPath(new URL("../assets/icons/lucide",
+      import.meta.url)), join(dist, "icons"), { recursive: true });
     const run = () => spawnSync(process.execPath, [webPackage], {
       env: { ...process.env, RUNNER_TEMP: directory },
       encoding: "utf8",
@@ -55,6 +57,7 @@ await init({ module_or_path: './app.wasm' });
     assert.equal(contents.status, 0);
     assert.match(contents.stdout, /\.\/index\.html/);
     assert.match(contents.stdout, /\.\/AppIcon\.png/);
+    assert.match(contents.stdout, /\.\/icons\/camera\.svg/);
     assert.doesNotMatch(contents.stdout, /dist\/index\.html/);
     writeFileSync(join(dist, "index.html"),
       `<link rel="icon" href="./AppIcon.png">

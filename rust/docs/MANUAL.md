@@ -105,12 +105,14 @@ suggestion. The browser needs HTTPS or localhost for camera access.
 ## Save, export, and recover
 
 **Save** writes an editable `.docscan` project on desktop. Use **Save as** in
-the project-name menu to choose a different file. In the browser, Save downloads
-a project copy; there is no separate Save as. **Export PDF** creates a document
-for sharing, but it is not a substitute for the editable project. Save before
-closing or starting another project. Desktop builds keep an unsaved recovery
-snapshot and offer to restore it after an interrupted session; still save
-explicitly. The browser build does not provide that native recovery feature.
+the project-name menu to choose a different file. In the browser, choose
+**Rename project** from that menu to set the name used for future `.docscan` and
+PDF downloads; **Save** downloads a project copy. **Export PDF** creates a
+document for sharing, but it is not a substitute for the editable project. Save
+before closing or starting another project. Desktop builds keep an unsaved
+recovery snapshot and offer to restore it after an interrupted session; still
+save explicitly. The browser build does not provide that native recovery
+feature.
 
 Projects hold at most 20 pages. An image may be at most 50 megapixels, with a
 200-megapixel budget across source and corrected page images. If an operation
@@ -123,6 +125,7 @@ are discarded when the history budget is full.
 Open **Commands** (magnifying glass) or press **Ctrl+.** (Cmd+. on macOS).
 Search, use arrow keys to choose a result, then Enter; Escape closes it. Press
 **F1** or the **Shortcuts** button for the full mouse, touch, keyboard, and
-platform-specific modifier reference. F1 also works while Commands is open. The
-browser or operating system may intercept F1; use the button in that case. In
-the browser build, **F11** toggles browser full screen.
+platform-specific modifier reference. The app version appears below the title.
+F1 also works while Commands is open. The browser or operating system may
+intercept F1; use the button in that case. In the browser build, **F11** toggles
+browser full screen.

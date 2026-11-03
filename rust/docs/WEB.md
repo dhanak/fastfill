@@ -35,5 +35,6 @@ the page rail. The floating controls match the desktop camera layout; browser
 resolution is automatic. Hold the document steady for automatic capture, or use
 manual Capture at any time. Review the photo, then choose Use photo. Automatic
 capture suggests its detected frame in the page editor. Open and save projects
-with the app's file controls. Back up important `.docscan` files outside the
-browser.
+with the app's file controls. Use **Rename project** in the project-name menu to
+set the filename for future project and PDF downloads. Back up important
+`.docscan` files outside the browser.

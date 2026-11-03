@@ -337,6 +337,9 @@ fn table_wraps_without_horizontal_overflow_and_scrolls_in_small_windows() {
         assert!(card.bounds().x + card.bounds().width <= size.width - 16.0);
         assert!(card.bounds().y + card.bounds().height <= size.height - 16.0);
         let before = probe(&mut element, &mut tree, &node, &renderer);
+        assert!(before.texts.iter().any(|t| {
+            t.0 == concat!("FastFill ", env!("CARGO_PKG_VERSION"))
+        }));
         let command = if cfg!(target_os = "macos") {
             "Cmd"
         } else {

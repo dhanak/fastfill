@@ -241,6 +241,9 @@ pub(super) fn update(state: &mut FastFill, message: Message) -> Task<Message> {
             .then(|| <iced::Theme as iced::theme::Base>::default(*mode));
         return Task::none();
     }
+    if let Some(task) = super::project::rename_update(state, &message) {
+        return task;
+    }
     if let Some(task) = super::palette::update(state, &message) {
         return task;
     }

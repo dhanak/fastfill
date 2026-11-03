@@ -10,6 +10,10 @@ use std::sync::Arc;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+const DEFAULT_NAME: &str = "Untitled.docscan";
+const DEFAULT_TITLE: &str = "Untitled document";
+pub(super) const NAME_INPUT_ID: &str = "project-name-input";
+
 #[derive(Clone, Copy, Debug)]
 pub(super) enum LeaveAction {
     New,
@@ -45,6 +49,8 @@ pub(super) enum Operation {
     },
 }
 
+type SavedIdentity = (Vec<(Uuid, u64)>, String, String);
+
 impl Operation {
     #[cfg(test)]
     fn request_id(&self) -> Option<u64> {
@@ -61,7 +67,8 @@ pub(super) struct ProjectSession {
     pub(super) path: Option<PathBuf>,
     pub(super) directory: Option<PathBuf>,
     pub(super) operation: Operation,
-    saved: Option<Vec<(Uuid, u64)>>,
+    pub(super) name_draft: Option<String>,
+    saved: Option<SavedIdentity>,
     next_request: u64,
 }
 
@@ -72,15 +79,16 @@ impl Default for ProjectSession {
             header: Project {
                 schema_version: 1,
                 id: Uuid::new_v4(),
-                title: "Untitled document".into(),
+                title: DEFAULT_TITLE.into(),
                 created_utc: now,
                 updated_utc: now,
                 pages: Vec::new(),
             },
-            name: "Untitled.docscan".into(),
+            name: DEFAULT_NAME.into(),
             path: None,
             directory: None,
             operation: Operation::Idle,
+            name_draft: None,
             saved: None,
             next_request: 0,
         }
@@ -95,11 +103,17 @@ impl ProjectSession {
     pub(super) fn is_dirty(&self, pages: &Pages) -> bool {
         self.saved.as_ref().map_or_else(
             || {
-                pages.iter().any(|page| {
-                    page.image.is_some() || !page.annotations.is_empty()
-                })
+                self.name != DEFAULT_NAME
+                    || self.header.title != DEFAULT_TITLE
+                    || pages.iter().any(|page| {
+                        page.image.is_some() || !page.annotations.is_empty()
+                    })
             },
-            |saved| *saved != pages.identity(),
+            |(identity, title, name)| {
+                *identity != pages.identity()
+                    || *title != self.header.title
+                    || *name != self.name
+            },
         )
     }
 
@@ -107,6 +121,137 @@ impl ProjectSession {
         self.next_request += 1;
         self.next_request
     }
+}
+
+pub(super) fn validated_name(
+    draft: &str,
+) -> Result<(String, String), &'static str> {
+    let draft = draft.trim();
+    let stem = draft
+        .rsplit_once('.')
+        .filter(|(_, extension)| extension.eq_ignore_ascii_case("docscan"))
+        .map_or(draft, |(stem, _)| stem)
+        .trim();
+    if stem.is_empty() {
+        return Err("Enter a project name.");
+    }
+    if stem.chars().count() > 100 {
+        return Err("Use at most 100 characters.");
+    }
+    if stem.ends_with('.')
+        || stem.chars().any(|c| {
+            c.is_control()
+                || matches!(
+                    c,
+                    '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'
+                )
+        })
+    {
+        return Err("Remove invalid filename characters or a trailing period.");
+    }
+    let reserved = stem.split('.').next().unwrap_or("").to_ascii_uppercase();
+    if matches!(
+        reserved.as_str(),
+        "CON"
+            | "PRN"
+            | "AUX"
+            | "NUL"
+            | "COM1"
+            | "COM2"
+            | "COM3"
+            | "COM4"
+            | "COM5"
+            | "COM6"
+            | "COM7"
+            | "COM8"
+            | "COM9"
+            | "LPT1"
+            | "LPT2"
+            | "LPT3"
+            | "LPT4"
+            | "LPT5"
+            | "LPT6"
+            | "LPT7"
+            | "LPT8"
+            | "LPT9"
+    ) {
+        return Err("Choose another name; this one is reserved by Windows.");
+    }
+    Ok((stem.into(), format!("{stem}.docscan")))
+}
+
+pub(super) fn rename_update(
+    state: &mut FastFill,
+    message: &Message,
+) -> Option<Task<Message>> {
+    if matches!(message, Message::RenameProject) {
+        if !super::project_view::enabled(state)
+            || state.page_editor.is_open()
+            || state.show_shortcuts
+            || state.palette.open
+        {
+            return Some(Task::none());
+        }
+        state.accept_text();
+        state.cancel_interaction();
+        state.open_menu = None;
+        state.project.name_draft = Some(
+            state
+                .project
+                .name
+                .rsplit_once('.')
+                .filter(|(_, extension)| {
+                    extension.eq_ignore_ascii_case("docscan")
+                })
+                .map_or(state.project.name.as_str(), |(stem, _)| stem)
+                .to_owned(),
+        );
+        return Some(iced::widget::operation::focus(NAME_INPUT_ID));
+    }
+    state.project.name_draft.as_ref()?;
+    match message {
+        Message::ProjectNameChanged(value) => {
+            if value.chars().count() <= 200 {
+                state.project.name_draft = Some(value.clone());
+            }
+        }
+        Message::ConfirmProjectName => {
+            if let Some((title, name)) = state
+                .project
+                .name_draft
+                .as_deref()
+                .and_then(|draft| validated_name(draft).ok())
+            {
+                state.project.header.title = title;
+                state.project.name = name;
+                state.project.name_draft = None;
+                state.status =
+                    "Project renamed. Save to download a copy.".into();
+                state.status_is_error = false;
+            }
+        }
+        Message::CancelProjectName
+        | Message::CancelInteraction
+        | Message::ModalBackdrop => {
+            state.project.name_draft = None;
+        }
+        Message::ModifiersChanged(modifiers) => state.modifiers = *modifiers,
+        Message::FocusLost => {
+            state.modifiers = super::DragModifiers::default();
+        }
+        Message::CloseRequested(_) => {
+            state.project.name_draft = None;
+            return None;
+        }
+        Message::SmartSnap(super::snap::Event::Ready(..))
+        | Message::PageEdit(super::page_edit::Event::Ready(..)) => {
+            return None;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        Message::Recovery(_) => return None,
+        _ => {}
+    }
+    Some(Task::none())
 }
 
 impl FastFill {
@@ -269,7 +414,11 @@ impl FastFill {
                         self.project.directory = Some(directory.to_path_buf());
                         self.image_directory = Some(directory.to_path_buf());
                     }
-                    self.project.saved = Some(pages.identity());
+                    self.project.saved = Some((
+                        pages.identity(),
+                        self.project.header.title.clone(),
+                        opened.name.clone(),
+                    ));
                     self.pages = pages;
                     self.navigation.fit();
                     self.page_scroll = 0.0;
@@ -320,9 +469,13 @@ impl FastFill {
         };
         match result {
             Ok(Some(receipt)) => {
-                self.project.saved = Some(identity);
                 self.project.path.clone_from(&receipt.path);
                 self.project.name.clone_from(&receipt.name);
+                self.project.saved = Some((
+                    identity,
+                    self.project.header.title.clone(),
+                    receipt.name.clone(),
+                ));
                 self.project.header.updated_utc = updated;
                 if let Some(directory) =
                     receipt.path.as_ref().and_then(|path| path.parent())

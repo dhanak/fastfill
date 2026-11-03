@@ -132,7 +132,12 @@ pub(super) fn view(state: &FastFill) -> Option<Element<'static, Message>> {
     let card = container(
         column![
             row![
-                text("Shortcuts").size(24).width(Fill),
+                column![
+                    text("Shortcuts").size(24),
+                    text(concat!("FastFill ", env!("CARGO_PKG_VERSION")))
+                        .size(12),
+                ]
+                .width(Fill),
                 action_button("Close", Some(Message::HideShortcuts)),
             ]
             .align_y(iced::Alignment::Center),
@@ -186,9 +191,14 @@ const ENTRIES: &[Entry] = &[
         "Save project; download a copy in the browser.",
     ),
     (
+        "Browser",
+        "Project menu",
+        "Rename the project for future downloads.",
+    ),
+    (
         "Project",
         "Mod+Shift+S",
-        "Save as; download again in the browser.",
+        "Save as on desktop; download another browser copy.",
     ),
     ("History", "Mod+Z", "Undo the last edit on this page."),
     (

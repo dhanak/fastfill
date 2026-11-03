@@ -1,17 +1,67 @@
 //! Project identity and file actions in the compact application header.
 
 use super::{FastFill, ImagePicker, Message};
-use crate::appearance::{self, primary_action};
+use crate::appearance::{self, action_button, primary_action};
 use crate::icons::{self, Glyph};
-use iced::widget::{button, container, row, text};
-use iced::{Element, Length};
+use iced::widget::{
+    button, column, container, mouse_area, opaque, row, text, text_input,
+};
+use iced::{Element, Fill, Length};
 
 pub(super) fn enabled(state: &FastFill) -> bool {
     state.project.is_idle()
+        && state.project.name_draft.is_none()
         && state.image_picker == ImagePicker::Idle
         && !state.confirm_delete_all
         && !state.confirm_delete_page
         && state.dragged_page.is_none()
+}
+
+pub(super) fn rename(state: &FastFill) -> Option<Element<'_, Message>> {
+    let draft = state.project.name_draft.as_deref()?;
+    let error = super::project::validated_name(draft).err();
+    let card = container(
+        column![
+            text("Rename project").size(24),
+            text("Project name").size(14),
+            text_input("Project name", draft)
+                .id(super::project::NAME_INPUT_ID)
+                .on_input(Message::ProjectNameChanged)
+                .on_submit(Message::ConfirmProjectName)
+                .width(Fill),
+            text(
+                error.unwrap_or("Used for project and PDF download filenames.")
+            )
+            .size(13),
+            row![
+                action_button("Cancel", Some(Message::CancelProjectName),)
+                    .width(Fill),
+                action_button(
+                    "Rename",
+                    error.is_none().then_some(Message::ConfirmProjectName),
+                )
+                .width(Fill)
+                .style(appearance::primary_action),
+            ]
+            .spacing(appearance::CONTROL_GAP),
+        ]
+        .spacing(16),
+    )
+    .padding(24)
+    .width(Fill)
+    .max_width(440)
+    .style(appearance::confirmation_card);
+    Some(opaque(
+        mouse_area(
+            container(card)
+                .padding(16)
+                .center_x(Fill)
+                .center_y(Fill)
+                .style(appearance::modal_scrim),
+        )
+        .on_press(Message::CancelProjectName)
+        .on_scroll(|_| Message::ModalBackdrop),
+    ))
 }
 
 pub(super) fn menu(state: &FastFill, width: f32) -> Element<'static, Message> {

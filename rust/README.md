@@ -11,6 +11,8 @@ app supports touch and mouse, keeps editable `.docscan` projects, and runs on
 Windows, Linux, and macOS. A deployable browser build is also available. These
 are development builds; the existing C# release remains separate.
 
+**[Try FastFill in your browser][browser-demo]** without installing anything.
+
 [![FastFill editor with a sample form][editor-shot]][editor-shot]
 
 ## 🚀 Download and run
@@ -71,6 +73,7 @@ completed work and remaining hardware validation.
 
 FastFill is available under the [MIT License][license].
 
+[browser-demo]: https://dev.vidga.hu/fastfill/
 [build]: https://github.com/dhanak/fastfill/actions/workflows/rust.yml
 [build-badge]: https://github.com/dhanak/fastfill/actions/workflows/rust.yml/badge.svg
 [development]: docs/DEVELOPMENT.md

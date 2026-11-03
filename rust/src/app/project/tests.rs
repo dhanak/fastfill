@@ -7,6 +7,58 @@ use iced::widget::image::Handle;
 use std::io::Cursor;
 
 #[test]
+fn project_names_are_safe_download_filenames() {
+    assert_eq!(
+        validated_name("  Form 2026.DOCSCAN  "),
+        Ok(("Form 2026".into(), "Form 2026.docscan".into()))
+    );
+    for invalid in [
+        "",
+        "  ",
+        ".docscan",
+        "../report",
+        "a\\b",
+        "a:b",
+        "bad?name",
+        "CON",
+        "lpt1.txt",
+        "trailing.",
+    ] {
+        assert!(validated_name(invalid).is_err(), "{invalid:?}");
+    }
+    assert!(validated_name(&"x".repeat(101)).is_err());
+}
+
+#[test]
+fn renaming_updates_project_identity_and_future_save_name() {
+    let mut state = FastFill::default();
+    let _ = update(&mut state, Message::RenameProject);
+    assert_eq!(state.project.name_draft.as_deref(), Some("Untitled"));
+    let _ = update(&mut state, Message::ProjectNameChanged("bad/name".into()));
+    let _ = update(&mut state, Message::ConfirmProjectName);
+    assert!(state.project.name_draft.is_some());
+    assert_eq!(state.project.name, "Untitled.docscan");
+    let _ = update(
+        &mut state,
+        Message::ProjectNameChanged("My form.docscan".into()),
+    );
+    let _ = update(&mut state, Message::ConfirmProjectName);
+    assert!(state.project.name_draft.is_none());
+    assert_eq!(state.project.name, "My form.docscan");
+    assert_eq!(state.project.header.title, "My form");
+    assert!(state.project.is_dirty(&state.pages));
+    assert_eq!(state.project_snapshot().unwrap().project.title, "My form");
+    let _ = update(&mut state, Message::SaveProject);
+    let id = state.project.operation.request_id().unwrap();
+    let receipt = SaveReceipt {
+        path: None,
+        name: "My form.docscan".into(),
+    };
+    let _ = update(&mut state, Message::ProjectSaved(id, Ok(Some(receipt))));
+    assert!(!state.project.is_dirty(&state.pages));
+}
+
+#[test]
 fn dirty_state_ignores_defaults_selection_and_canceled_drafts() {
     let mut state = FastFill::default();
     assert!(!state.project.is_dirty(&state.pages));

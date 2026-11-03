@@ -274,6 +274,7 @@ pub(super) fn view(state: &FastFill) -> Element<'_, Message> {
     .extend(super::menu::overlay(state))
     .extend(super::palette::view(state))
     .extend(super::confirmation::view(state))
+    .extend(super::project_view::rename(state))
     .extend(super::help::view(state))
     .width(Fill)
     .height(Fill)
@@ -292,6 +293,7 @@ pub(super) fn document(state: &FastFill) -> Element<'_, Message> {
             input_epoch: state.input_epoch,
             input_enabled: state.image_picker == ImagePicker::Idle
                 && state.project.is_idle()
+                && state.project.name_draft.is_none()
                 && !state.confirm_delete_all
                 && !state.confirm_delete_page
                 && !state.show_shortcuts

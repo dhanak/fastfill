@@ -47,6 +47,7 @@ pub(crate) enum Glyph {
     NewProject,
     OpenProject,
     SaveAs,
+    RenameProject,
     Fit,
     ActualSize,
     MoveUp,
@@ -203,6 +204,9 @@ fn source(glyph: Glyph) -> &'static [u8] {
             include_bytes!("../assets/icons/lucide/folder-open.svg")
         }
         Glyph::SaveAs => include_bytes!("../assets/icons/lucide/save-all.svg"),
+        Glyph::RenameProject => {
+            include_bytes!("../assets/icons/lucide/pencil.svg")
+        }
         Glyph::Fit => {
             include_bytes!("../assets/icons/lucide/maximize-2.svg")
         }

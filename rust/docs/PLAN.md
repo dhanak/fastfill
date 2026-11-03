@@ -1128,12 +1128,13 @@ User confirms the 7H2 follow-up manual checkpoint on 2026-10-21.
   pipeline, with ad-hoc signing and extracted-app smoke checks. The macOS job
   now gates publication; its CI run and physical launch remain unverified.
 - [x] Add a deployable browser tarball to the same development release. Build
-  optimized WASM with relative asset URLs and check the extracted archive. Its
-  CI run and published browser check remain unverified.
+  optimized WASM with relative asset URLs and check the extracted archive. The
+  browser archive job passed; published-site checks are recorded below.
 - [ ] Validate the published macOS archive on a real Mac: Gatekeeper approval,
   launch, open/save/export, and display scaling. Camera capture is unsupported.
-- [ ] Validate the published browser archive on a static server at the site root
-  and under a subpath, including open/save/export on desktop and mobile.
+- [x] Validate the published browser archive on a static server at the site root
+  and under a subpath, including open/save/export on desktop and mobile. User
+  confirms these checks on 2026-11-03.
 - [ ] Decide whether to replace the C# app; no automatic migration/removal.
 
 #### Rust promotion work — defer until the replacement decision
@@ -4473,6 +4474,12 @@ Windows retest after the next CI ZIP:
   stale/slow analysis. Analyze one frame at a time; skip queued frames.
 - Automatic capture and the detected frame on the review photo were manually
   confirmed in Firefox and Chromium. Mobile camera calibration remains open.
+
+### 2026-11-03 — Browser project naming
+
+- Add **Rename project** to the browser project menu. Validate the name, update
+  the stored project title, and use the new filename for future project and PDF
+  downloads. Browser interaction awaits a manual check.
 
 ## References
 
