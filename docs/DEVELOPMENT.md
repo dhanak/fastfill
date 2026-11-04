@@ -69,6 +69,21 @@ localhost. Camera analysis, PDF rasterization and page correction run on the
 browser UI thread; their native equivalents use background workers. Timed
 browser profiling is deferred unless noticeable lag returns.
 
+### Browser console diagnostics
+
+Firefox's WebGL fallback can report `WEBGL_debug_renderer_info` deprecation from
+glow/wgpu adapter discovery. The renderer also uses partial texture uploads and
+padded rows, which can produce `texSubImage` copying and lazy-initialization
+warnings. These describe potential performance costs, not failed camera
+captures. Keep the warnings visible; investigate repeated visible stalls or
+rendering failures separately. Resolving them requires changes in the renderer
+dependencies, rather than the camera's DOM preview.
+
+FastFill does not install a `PerformanceObserver` or content scripts. Messages
+from `moz-extension` URLs belong to browser extensions; `content.js` messages
+about unsupported `longtask` entries likely do too. Recheck with extensions
+disabled when diagnosing them.
+
 ## Source layout and project limits
 
 - `src/annotations/`: geometry, selection, editing, formatting and history.

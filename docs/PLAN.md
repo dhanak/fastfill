@@ -36,7 +36,9 @@ repository transition. Earlier implementation history remains in Git.
 - [x] Run the full native suite, strict native/browser Clippy, formatting,
   browser-adapter/release/cache tests and workflow dependency checks.
 - [x] Build from the root and verify extracted Linux and browser archives.
-- [ ] Confirm the first renamed development release and tagged Pages deployment.
+- [x] Confirm the renamed development release, `v1.0.0-alpha.1` release and
+  tagged Pages deployment. User confirms success after allowing `v*` tags in the
+  `github-pages` environment on 2026-11-03.
 
 ## Remaining hardware validation
 

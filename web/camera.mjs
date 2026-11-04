@@ -113,13 +113,15 @@ const style = `
   display: grid;
   grid-template-columns: repeat(3, 40px);
 }
-.ff-camera-dock button, .ff-camera-switch, .ff-camera-settings button.icon {
+.ff-camera-dock button, .ff-camera button.ff-camera-switch,
+.ff-camera-settings button.icon {
+  box-sizing: border-box;
   display: grid;
   place-items: center;
   width: 40px;
   height: 40px;
   min-height: 40px;
-  padding: 8px;
+  padding: 0;
 }
 .ff-camera-dock .round { border-radius: 50%; }
 .ff-camera-dock [data-action="capture"] { position: relative; }
