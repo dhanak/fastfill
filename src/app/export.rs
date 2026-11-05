@@ -4,6 +4,7 @@ use super::export_io::{ExportReceipt, pick_and_export};
 use super::project::Operation;
 use super::{FastFill, ImagePicker, Message};
 use crate::page_canvas::export::ExportPage;
+use fastfill::pdf_import::PdfStage;
 use iced::Task;
 #[cfg(not(target_arch = "wasm32"))]
 use iced::futures::StreamExt;
@@ -17,7 +18,8 @@ pub(super) fn update(
     message: &Message,
 ) -> Option<Task<Message>> {
     match message {
-        Message::ExportPdf => Some(begin(state)),
+        Message::ExportPdf => Some(begin(state, false)),
+        Message::ExportPdfLossless => Some(begin(state, true)),
         Message::CancelPdfExport => {
             if let Operation::ExportingPdf { cancel, .. } =
                 &state.project.operation
@@ -28,7 +30,7 @@ pub(super) fn update(
             }
             Some(Task::none())
         }
-        Message::PdfExportProgress(id, done, total) => {
+        Message::PdfExportProgress(id, done, total, phase) => {
             if let Operation::ExportingPdf {
                 id: active,
                 progress,
@@ -39,11 +41,21 @@ pub(super) fn update(
             {
                 #[allow(clippy::cast_precision_loss)]
                 {
-                    *progress =
-                        (*done as f32 / (*total).max(1) as f32).clamp(0.0, 1.0);
+                    let step = if *phase == PdfStage::Encoding {
+                        1.0
+                    } else {
+                        0.0
+                    };
+                    *progress = ((*done as f32 * 2.0 + step)
+                        / ((*total).max(1) as f32 * 2.0))
+                        .clamp(0.0, 1.0);
                 }
                 state.status = if done == total {
                     "Finishing PDF and writing file…".into()
+                } else if *phase == PdfStage::Encoding {
+                    format!("PDF page {} of {total}: Compressing…", done + 1)
+                } else if *phase == PdfStage::Rasterizing {
+                    format!("PDF page {} of {total}: Rendering…", done + 1)
                 } else {
                     format!("Exporting PDF: {done} of {total} pages ready…")
                 };
@@ -62,7 +74,7 @@ pub(super) fn update(
     }
 }
 
-fn begin(state: &mut FastFill) -> Task<Message> {
+fn begin(state: &mut FastFill, lossless: bool) -> Task<Message> {
     if !state.project.is_idle()
         || state.image_picker != ImagePicker::Idle
         || state.confirm_delete_all
@@ -100,7 +112,14 @@ fn begin(state: &mut FastFill) -> Task<Message> {
         .clone()
         .or_else(|| state.project.directory.clone())
         .or_else(|| state.image_directory.clone());
-    export_task(id, pages, cancel, directory, state.project.name.clone())
+    export_task(
+        id,
+        pages,
+        cancel,
+        directory,
+        state.project.name.clone(),
+        lossless,
+    )
 }
 
 fn finish(
@@ -130,6 +149,7 @@ fn export_task(
     cancel: Arc<AtomicBool>,
     directory: Option<PathBuf>,
     name: String,
+    lossless: bool,
 ) -> Task<Message> {
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -148,6 +168,7 @@ fn export_task(
                                 cancel,
                                 id,
                                 completion.clone(),
+                                lossless,
                             ))
                         }),
                     )
@@ -170,12 +191,14 @@ fn export_task(
     }
     #[cfg(target_arch = "wasm32")]
     {
-        // Browser harness has no worker runtime yet, as with PDF import.
+        // Browser progress awaits repainting before rendering/compression.
         let (sender, receiver) = mpsc::unbounded();
         Task::batch([
             Task::run(receiver, std::convert::identity),
             Task::perform(
-                pick_and_export(pages, directory, name, cancel, id, sender),
+                pick_and_export(
+                    pages, directory, name, cancel, id, sender, lossless,
+                ),
                 move |result| Message::PdfExported(id, result),
             ),
         ])

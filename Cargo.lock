@@ -920,7 +920,7 @@ dependencies = [
 
 [[package]]
 name = "fastfill"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 dependencies = [
  "atomicwrites",
  "hayro",
@@ -931,6 +931,7 @@ dependencies = [
  "krilla",
  "nokhwa",
  "nokhwa-bindings-windows",
+ "pdf-writer",
  "rfd",
  "rscam",
  "serde",

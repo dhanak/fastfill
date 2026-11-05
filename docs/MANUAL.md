@@ -117,6 +117,12 @@ recovery snapshot and offer to restore it after an interrupted session; still
 save explicitly. The browser build does not provide that native recovery
 feature.
 
+PDF export flattens pages at 300 DPI. By default it uses high-quality JPEG
+(quality 95), keeping lossless compression for pages where that is smaller.
+Choose **Export lossless PDF** from the main menu or Commands to preserve every
+rendered pixel. Export does not retain original PDF image streams, text or
+vector objects, so file sizes can differ even without annotations.
+
 Projects hold at most 20 pages. An image may be at most 50 megapixels, with a
 200-megapixel budget across source and corrected page images. If an operation
 would exceed a limit, FastFill refuses it without changing the project. Each
@@ -128,6 +134,8 @@ metadata is limited to 5 MiB; encoded page images plus metadata to 600 MiB.
 
 PDF import starts at 300 DPI and lowers the resolution, down to 72 DPI, when
 needed to fit the remaining image budget. A warning reports the chosen DPI.
+Browser PDF import and export update progress between processing stages and
+handle cancellation there; a complex individual stage can still take time.
 Errors and warnings can be dismissed manually and disappear after ten seconds.
 Imported photos honor their stored orientation automatically.
 

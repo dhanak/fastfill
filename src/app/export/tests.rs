@@ -91,7 +91,10 @@ fn cancel_waits_for_worker_acknowledgment_and_ignores_stale_completions() {
         panic!("cancellation must keep edits blocked until acknowledged")
     };
     assert!(cancel.load(Ordering::Relaxed));
-    let _ = update(&mut state, Message::PdfExportProgress(id, 1, 2));
+    let _ = update(
+        &mut state,
+        Message::PdfExportProgress(id, 1, 2, PdfStage::Ready),
+    );
     assert!(state.status.contains("Canceling"));
     let _ = update(&mut state, Message::PdfExported(id + 1, Ok(None)));
     assert!(!state.project.is_idle());
@@ -113,6 +116,26 @@ fn cancel_waits_for_worker_acknowledgment_and_ignores_stale_completions() {
 }
 
 #[test]
+fn single_page_export_reports_rendering_and_compression_progress() {
+    let mut state = annotated_page();
+    let id = begin(&mut state);
+    for (done, phase, expected, label) in [
+        (0, PdfStage::Rasterizing, 0.0, "Rendering"),
+        (0, PdfStage::Encoding, 0.5, "Compressing"),
+        (1, PdfStage::Ready, 1.0, "Finishing"),
+    ] {
+        let _ =
+            update(&mut state, Message::PdfExportProgress(id, done, 1, phase));
+        let Operation::ExportingPdf { progress, .. } = state.project.operation
+        else {
+            panic!("export must stay active until completion")
+        };
+        assert_eq!(progress, expected);
+        assert!(state.status.contains(label), "{}", state.status);
+    }
+}
+
+#[test]
 fn export_blocks_edits_and_other_io_but_releases_modifiers() {
     let mut state = annotated_page();
     let identity = state.pages.identity();
@@ -130,9 +153,15 @@ fn export_blocks_edits_and_other_io_but_releases_modifiers() {
         let _ = update(&mut state, message);
     }
     assert_eq!(state.pages.identity(), identity);
-    let _ = update(&mut state, Message::PdfExportProgress(id, 1, 2));
+    let _ = update(
+        &mut state,
+        Message::PdfExportProgress(id, 1, 2, PdfStage::Ready),
+    );
     assert!(state.status.contains("1 of 2"));
-    let _ = update(&mut state, Message::PdfExportProgress(id + 1, 0, 2));
+    let _ = update(
+        &mut state,
+        Message::PdfExportProgress(id + 1, 0, 2, PdfStage::Ready),
+    );
     assert!(state.status.contains("1 of 2"));
     state.modifiers.square = true;
     let _ = update(

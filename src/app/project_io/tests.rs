@@ -207,7 +207,8 @@ fn corrected_pdf_uses_the_display_aspect_and_background_pixels() {
                 .map(|image| image.display_handle().clone()),
             &page.annotations,
         )],
-        |_, _| true,
+        true,
+        async |_, _, _| true,
     ))
     .unwrap();
     let parsed = hayro::hayro_syntax::Pdf::new(pdf.clone()).unwrap();

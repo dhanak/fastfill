@@ -7,6 +7,8 @@ mod app;
 mod appearance;
 #[cfg(target_arch = "wasm32")]
 mod browser_download;
+#[cfg(target_arch = "wasm32")]
+mod browser_progress;
 mod icons;
 mod page_canvas;
 mod picker;

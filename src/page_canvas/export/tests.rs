@@ -17,10 +17,11 @@ fn export_preflights_the_entire_document_before_rendering() {
             .map(|_| blank(PageSize::new(1_000.0, 1_000.0)))
             .collect(),
     ] {
-        let result =
-            iced::futures::executor::block_on(export_pdf(pages, |_, _| {
-                panic!("invalid document must not begin rendering")
-            }));
+        let result = iced::futures::executor::block_on(export_pdf(
+            pages,
+            true,
+            async |_, _, _| panic!("invalid document must not begin rendering"),
+        ));
         assert!(result.is_err());
     }
 }
@@ -33,13 +34,24 @@ fn export_round_trips_page_order_dimensions_and_white_background() {
     let mut progress = Vec::new();
     let pdf = iced::futures::executor::block_on(export_pdf(
         vec![first, second],
-        |done, total| {
-            progress.push((done, total));
+        true,
+        async |done, total, stage| {
+            progress.push((done, total, stage));
             true
         },
     ))
     .unwrap();
-    assert_eq!(progress, [(0, 2), (1, 2), (2, 2)]);
+    assert_eq!(
+        progress,
+        [
+            (0, 2, PdfStage::Rasterizing),
+            (0, 2, PdfStage::Encoding),
+            (1, 2, PdfStage::Ready),
+            (1, 2, PdfStage::Rasterizing),
+            (1, 2, PdfStage::Encoding),
+            (2, 2, PdfStage::Ready),
+        ]
+    );
     let parsed = hayro::hayro_syntax::Pdf::new(pdf.clone()).unwrap();
     assert_eq!(parsed.pages()[0].render_dimensions(), (72.0, 144.0));
     assert_eq!(parsed.pages()[1].render_dimensions(), (144.0, 72.0));
@@ -54,11 +66,296 @@ fn export_round_trips_page_order_dimensions_and_white_background() {
 fn export_cancellation_discards_the_result_at_every_page_boundary() {
     for cancel_at in 0..=2 {
         let pages = (0..2).map(|_| blank(PageSize::new(72.0, 72.0))).collect();
-        let result =
-            iced::futures::executor::block_on(export_pdf(pages, |done, _| {
-                done < cancel_at
-            }));
+        let result = iced::futures::executor::block_on(export_pdf(
+            pages,
+            true,
+            async |done, _, _| done < cancel_at,
+        ));
         assert!(result.unwrap_err().contains("canceled"));
+    }
+}
+
+#[test]
+fn export_waits_for_progress_and_honors_cancel_during_the_wait() {
+    use std::cell::{Cell, RefCell};
+    use std::future::{Future, poll_fn};
+    use std::task::{Context, Poll, Waker};
+
+    let checkpoints = [
+        (0, 2, PdfStage::Rasterizing),
+        (0, 2, PdfStage::Encoding),
+        (1, 2, PdfStage::Ready),
+        (1, 2, PdfStage::Rasterizing),
+        (1, 2, PdfStage::Encoding),
+        (2, 2, PdfStage::Ready),
+    ];
+    for cancel_at in 0..checkpoints.len() {
+        let canceled = Cell::new(false);
+        let observed = RefCell::new(Vec::new());
+        let pages = (0..2).map(|_| blank(PageSize::new(72.0, 72.0))).collect();
+        let future = export_pdf(pages, true, async |done, total, stage| {
+            observed.borrow_mut().push((done, total, stage));
+            let mut yielded = false;
+            poll_fn(|context| {
+                if std::mem::replace(&mut yielded, true) {
+                    Poll::Ready(())
+                } else {
+                    context.waker().wake_by_ref();
+                    Poll::Pending
+                }
+            })
+            .await;
+            !canceled.get()
+        });
+        let mut future = std::pin::pin!(future);
+        let mut context = Context::from_waker(Waker::noop());
+        loop {
+            match future.as_mut().poll(&mut context) {
+                Poll::Pending => {
+                    let count = observed.borrow().len();
+                    assert_eq!(*observed.borrow(), checkpoints[..count]);
+                    canceled.set(count == cancel_at + 1);
+                }
+                Poll::Ready(result) => {
+                    assert!(result.unwrap_err().contains("canceled"));
+                    assert_eq!(
+                        observed.borrow().last(),
+                        Some(&checkpoints[cancel_at])
+                    );
+                    assert_eq!(observed.borrow().len(), cancel_at + 1);
+                    break;
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn export_filters_scan_rows_losslessly_in_gray_and_color() {
+    for color in [false, true] {
+        let source = image::RgbaImage::from_fn(300, 400, |x, y| {
+            #[allow(clippy::cast_possible_truncation)]
+            let value =
+                (x.wrapping_mul(73) ^ (x / 7)).wrapping_add(y / 2) as u8;
+            #[allow(clippy::cast_possible_truncation)]
+            let pixel = if color {
+                [
+                    value,
+                    value.wrapping_add((y % 11) as u8),
+                    value.wrapping_add((x % 17) as u8),
+                    255,
+                ]
+            } else {
+                [value, value, value, 255]
+            };
+            image::Rgba(pixel)
+        });
+        let size = PageSize::new(72.0, 96.0);
+        let mut annotations = Annotations::default();
+        annotations.set_tool(Tool::Text);
+        annotations.begin_text(Point::new(5.0, 5.0), size, 1.0);
+        annotations.update_text("1234", PageSize::new(60.0, 30.0));
+        annotations.accept_text();
+        let page = ExportPage::new(
+            size,
+            Some(Handle::from_rgba(300, 400, source.into_raw())),
+            &annotations,
+        );
+        let expected =
+            rasterize(&mut software_renderer(), &page, (300, 400)).unwrap();
+        let previous = unfiltered_pdf(&expected, size, (300, 400));
+        let pdf = iced::futures::executor::block_on(export_pdf(
+            vec![page],
+            true,
+            async |_, _, _| true,
+        ))
+        .unwrap();
+        assert!(
+            pdf.len() * 2 < previous.len(),
+            "filtered={}, previous={}, color={color}",
+            pdf.len(),
+            previous.len(),
+        );
+        let pages =
+            fastfill::pdf_import::import_pdf(pdf, 1, |_, _| true).unwrap();
+        let error: u64 = pages[0]
+            .pixels
+            .as_raw()
+            .iter()
+            .zip(&expected)
+            .map(|(a, b)| u64::from(a.abs_diff(*b)))
+            .sum();
+        assert!(error < expected.len() as u64, "channel error={error}");
+    }
+}
+
+fn unfiltered_pdf(
+    pixels: &[u8],
+    size: PageSize,
+    (w, h): (u32, u32),
+) -> Vec<u8> {
+    let mut document = krilla::Document::new();
+    let mut page = document.start_page_with(
+        krilla::page::PageSettings::from_wh(size.width, size.height).unwrap(),
+    );
+    let mut surface = page.surface();
+    surface.draw_image(
+        krilla::image::Image::from_rgba8(pixels.to_vec(), w, h),
+        krilla::geom::Size::from_wh(size.width, size.height).unwrap(),
+    );
+    surface.finish();
+    page.finish();
+    document.finish().unwrap()
+}
+
+#[test]
+fn compact_export_uses_high_quality_jpeg_for_scans_and_png_for_line_art() {
+    let mut pixels = image::load_from_memory(include_bytes!(
+        "../../../tests/samples/datum-form.png"
+    ))
+    .unwrap()
+    .resize_exact(600, 800, image::imageops::FilterType::Triangle)
+    .into_rgba8();
+    // Deterministic scanner noise: clean line art should prefer PNG instead.
+    let mut noise = 1_u32;
+    for pixel in pixels.pixels_mut() {
+        noise = noise.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        let shade = (noise >> 28) as u8;
+        for channel in &mut pixel.0[..3] {
+            *channel = channel.saturating_sub(shade);
+        }
+    }
+    let handle = Handle::from_rgba(600, 800, pixels.into_raw());
+    let size = PageSize::new(144.0, 192.0);
+    let mut annotations = Annotations::default();
+    annotations.set_tool(Tool::Text);
+    annotations.begin_text(Point::new(5.0, 5.0), size, 1.0);
+    annotations.update_text("1234", PageSize::new(100.0, 30.0));
+    annotations.accept_text();
+    let page = || ExportPage::new(size, Some(handle.clone()), &annotations);
+    let lossless = iced::futures::executor::block_on(export_pdf(
+        vec![page()],
+        true,
+        async |_, _, _| true,
+    ))
+    .unwrap();
+    let compact = iced::futures::executor::block_on(export_pdf(
+        vec![page()],
+        false,
+        async |_, _, _| true,
+    ))
+    .unwrap();
+    assert!(compact.windows(10).any(|s| s == b"/DCTDecode"));
+    assert!(
+        compact.len() < lossless.len(),
+        "compact={}, lossless={}",
+        compact.len(),
+        lossless.len()
+    );
+    let expected =
+        fastfill::pdf_import::import_pdf(lossless, 1, |_, _| true).unwrap();
+    let actual =
+        fastfill::pdf_import::import_pdf(compact, 1, |_, _| true).unwrap();
+    assert_eq!(
+        expected[0].pixels.dimensions(),
+        actual[0].pixels.dimensions()
+    );
+    let mut error = 0_u64;
+    let mut black = 0;
+    let mut retained = 0;
+    for (expected, actual) in
+        expected[0].pixels.pixels().zip(actual[0].pixels.pixels())
+    {
+        for (a, b) in expected.0.iter().zip(actual.0) {
+            error += u64::from(a.abs_diff(b));
+        }
+        if expected.0[..3].iter().all(|v| *v < 32) {
+            black += 1;
+            retained += usize::from(actual.0[..3].iter().all(|v| *v < 64));
+        }
+    }
+    assert!(
+        error < expected[0].pixels.as_raw().len() as u64 * 2,
+        "average channel error must stay below 2: {error}"
+    );
+    assert!(
+        black > 500 && retained * 100 >= black * 99,
+        "small black text must remain legible: {retained}/{black}"
+    );
+    let (_, gray, filter) =
+        image_stream(vec![255; 64 * 64 * 4], (64, 64), false).unwrap();
+    assert!(gray && matches!(filter, Filter::FlateDecode));
+}
+
+#[test]
+#[ignore = "Explicit real-document import/export size and timing probe"]
+fn real_document_export_size_and_timing() {
+    let path = std::env::var_os("FASTFILL_PDF_INPUT").expect("PDF input path");
+    let original = std::fs::read(path).unwrap();
+    let started = std::time::Instant::now();
+    let pages =
+        fastfill::pdf_import::import_pdf(original.clone(), 20, |_, _| true)
+            .unwrap();
+    let imported = started.elapsed();
+    let pages: Vec<_> = pages
+        .into_iter()
+        .map(|page| {
+            #[allow(clippy::cast_precision_loss)]
+            let size = PageSize::new(
+                612.0,
+                612.0 * page.info.height as f32 / page.info.width as f32,
+            );
+            ExportPage::new(
+                size,
+                Some(Handle::from_rgba(
+                    page.info.width,
+                    page.info.height,
+                    page.pixels.into_raw(),
+                )),
+                &Annotations::default(),
+            )
+        })
+        .collect();
+    let compact_pages = pages
+        .iter()
+        .map(|page| ExportPage {
+            size: page.size,
+            image: page.image.clone(),
+            annotations: page.annotations.clone(),
+        })
+        .collect();
+    let started = std::time::Instant::now();
+    let lossless = iced::futures::executor::block_on(export_pdf(
+        pages,
+        true,
+        async |_, _, _| true,
+    ))
+    .unwrap();
+    let encoded = started.elapsed();
+    let started = std::time::Instant::now();
+    let pdf = iced::futures::executor::block_on(export_pdf(
+        compact_pages,
+        false,
+        async |_, _, _| true,
+    ))
+    .unwrap();
+    eprintln!(
+        "original={} lossless={} compact={} import={imported:?} \
+         lossless_time={encoded:?} compact_time={:?}",
+        original.len(),
+        lossless.len(),
+        pdf.len(),
+        started.elapsed(),
+    );
+    if let Some(path) = std::env::var_os("FASTFILL_PDF_OUTPUT") {
+        use std::io::Write as _;
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .unwrap()
+            .write_all(&pdf)
+            .unwrap();
     }
 }
 
@@ -227,9 +524,12 @@ fn lossless_pdf_round_trip_preserves_rotated_text_alpha_and_edge_clipping() {
     ];
     let expected =
         rasterize(&mut software_renderer(), &page, (600, 600)).unwrap();
-    let pdf =
-        iced::futures::executor::block_on(export_pdf(vec![page], |_, _| true))
-            .unwrap();
+    let pdf = iced::futures::executor::block_on(export_pdf(
+        vec![page],
+        true,
+        async |_, _, _| true,
+    ))
+    .unwrap();
     if let Some(path) = std::env::var_os("FASTFILL_PDF_EXPORT_SAMPLE") {
         std::fs::write(path, &pdf).unwrap();
     }

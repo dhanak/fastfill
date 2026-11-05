@@ -11,7 +11,8 @@ check-core:
 
 check-web:
 	node web/download.test.mjs
-	node --test web/camera.test.mjs web/clipboard.test.mjs
+	node --test web/camera.test.mjs web/clipboard.test.mjs \
+		web/progress.test.mjs
 	node tools/publish-release.test.mjs
 	node tools/cache.test.mjs
 

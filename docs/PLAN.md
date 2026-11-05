@@ -40,6 +40,25 @@ repository transition. Earlier implementation history remains in Git.
   tagged Pages deployment. User confirms success after allowing `v*` tags in the
   `github-pages` environment on 2026-11-03.
 
+## Browser PDF feedback — 2026-11-05
+
+- [x] Improve flattened PDF compression losslessly, with grayscale/color and
+  rendering regressions plus an opt-in real-document size probe.
+- [ ] Check output size and quality on the reported 553 KB PDF. The original
+  file has not been supplied; existing reference forms were measured.
+- [x] Await browser repainting between PDF import/export stages and recheck
+  cancellation after waiting. Include export rendering/compression progress,
+  async-boundary regressions and a hidden-tab timer fallback.
+- [x] Manually check visible browser import/export progress. User confirms
+  progress is properly reported. The Chrome lockup was not reproduced.
+- [x] Manually check browser import/export cancellation between stages. User
+  confirms both operations cancel correctly.
+- [x] Default to compact JPEG at quality 95, retaining lossless compression when
+  smaller. Keep an explicit lossless export command. User accepts this policy.
+  `test-3.pdf` embeds nine 4961×7013 JPEG scans: input 16,750,592 bytes,
+  previous export 26,023,525 bytes, improved lossless export 19,251,808 bytes.
+  User confirms compact export is now 11.2 MB.
+
 ## Remaining hardware validation
 
 - [ ] SP6 save/export, reopen and inspect the saved/exported output (7A).

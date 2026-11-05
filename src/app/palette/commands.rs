@@ -11,6 +11,7 @@ pub(crate) enum Command {
     #[cfg(not(target_arch = "wasm32"))]
     SaveAs,
     Export,
+    ExportLossless,
     Undo,
     Redo,
     Fit,
@@ -46,6 +47,7 @@ pub(super) fn all() -> Vec<Command> {
     commands.push(C::SaveAs);
     commands.extend([
         C::Export,
+        C::ExportLossless,
         C::Undo,
         C::Redo,
         C::Fit,
@@ -90,6 +92,7 @@ impl Command {
             #[cfg(not(target_arch = "wasm32"))]
             C::SaveAs => "Save project as",
             C::Export => "Export PDF",
+            C::ExportLossless => "Export lossless PDF",
             C::Undo => "Undo",
             C::Redo => "Redo",
             C::Fit => "Fit page",
@@ -122,7 +125,9 @@ impl Command {
     pub(super) fn group(self) -> &'static str {
         use Command as C;
         match self {
-            C::New | C::Open | C::Save | C::Export => "Project",
+            C::New | C::Open | C::Save | C::Export | C::ExportLossless => {
+                "Project"
+            }
             #[cfg(not(target_arch = "wasm32"))]
             C::SaveAs => "Project",
             C::Undo | C::Redo => "History",
@@ -155,6 +160,8 @@ impl Command {
     pub(super) fn aliases(self) -> &'static str {
         use Command as C;
         match self {
+            C::Export => "compact jpeg small compressed",
+            C::ExportLossless => "png lossless",
             C::ActualSize => "zoom 100%",
             C::Fit => "zoom fit",
             C::Tool(Tool::Navigate) => "hand pan",
@@ -177,7 +184,7 @@ impl Command {
             C::Save => Glyph::Save,
             #[cfg(not(target_arch = "wasm32"))]
             C::SaveAs => Glyph::SaveAs,
-            C::Export => Glyph::ExportPdf,
+            C::Export | C::ExportLossless => Glyph::ExportPdf,
             C::Undo => Glyph::Undo,
             C::Redo => Glyph::Redo,
             C::Fit => Glyph::Fit,
@@ -267,6 +274,7 @@ impl Command {
             #[cfg(not(target_arch = "wasm32"))]
             C::SaveAs => Message::SaveProjectAs,
             C::Export => Message::ExportPdf,
+            C::ExportLossless => Message::ExportPdfLossless,
             C::Undo => Message::Undo,
             C::Redo => Message::Redo,
             C::Fit => Message::Fit,

@@ -11,8 +11,10 @@ use hayro::vello_cpu::{
 use hayro::{RenderCache, RenderSettings, render_into};
 use image::ImageEncoder;
 use std::fmt;
+use std::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::task::{Context, Poll, Waker};
 
 pub const MAX_PDF_BYTES: usize = 100 * 1024 * 1024;
 const MAX_PAGES: usize = 20;
@@ -147,28 +149,61 @@ pub fn import_pdf_with_progress_limited(
     bytes: Vec<u8>,
     available: usize,
     pixel_budget: u64,
-    progress: impl FnMut(usize, usize, PdfStage) -> bool,
+    mut progress: impl FnMut(usize, usize, PdfStage) -> bool,
 ) -> Result<Vec<PdfPageImage>, PdfImportError> {
     validate_pdf_length(bytes.len())?;
+    let render = || {
+        let future = render_pdf(
+            bytes,
+            available,
+            pixel_budget,
+            async |done, total, stage| progress(done, total, stage),
+        );
+        // Synchronous callbacks are immediately ready. No executor or
+        // blocking browser primitive is needed to drive this same pipeline.
+        match std::pin::pin!(future)
+            .poll(&mut Context::from_waker(Waker::noop()))
+        {
+            Poll::Ready(result) => result,
+            Poll::Pending => unreachable!("synchronous PDF progress yielded"),
+        }
+    };
     #[cfg(not(target_arch = "wasm32"))]
     {
         // Renderer state is local to this transaction; discard it on panic.
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            render_pdf(bytes, available, pixel_budget, progress)
-        }))
-        .unwrap_or_else(|_| Err(error("PDF renderer failed; import canceled.")))
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(render))
+            .unwrap_or_else(|_| {
+                Err(error("PDF renderer failed; import canceled."))
+            })
     }
     #[cfg(target_arch = "wasm32")]
-    render_pdf(bytes, available, pixel_budget, progress)
+    render()
 }
 
-fn render_pdf(
+/// Rasterize cooperatively, awaiting progress before each processing stage.
+/// The callback can yield to a browser repaint and then recheck cancellation.
+/// No partial result is returned; individual stages remain synchronous.
+///
+/// # Errors
+/// Returns the validation, rendering and cancellation errors of
+/// `import_pdf_with_progress_limited`.
+pub async fn import_pdf_with_progress_limited_async(
     bytes: Vec<u8>,
     available: usize,
     pixel_budget: u64,
-    mut progress: impl FnMut(usize, usize, PdfStage) -> bool,
+    progress: impl AsyncFnMut(usize, usize, PdfStage) -> bool,
 ) -> Result<Vec<PdfPageImage>, PdfImportError> {
-    report(&mut progress, 0, 0, PdfStage::Parsing)?;
+    validate_pdf_length(bytes.len())?;
+    render_pdf(bytes, available, pixel_budget, progress).await
+}
+
+async fn render_pdf(
+    bytes: Vec<u8>,
+    available: usize,
+    pixel_budget: u64,
+    mut progress: impl AsyncFnMut(usize, usize, PdfStage) -> bool,
+) -> Result<Vec<PdfPageImage>, PdfImportError> {
+    report(&mut progress, 0, 0, PdfStage::Parsing).await?;
     let pdf = Pdf::new(bytes).map_err(|reason| match reason {
         LoadPdfError::Decryption(_) => {
             error("PDF needs a password or uses unsupported encryption.")
@@ -186,7 +221,7 @@ fn render_pdf(
         )));
     }
     let (sizes, dpi) = preflight(&pdf, pixel_budget.min(MAX_BATCH_PIXELS))?;
-    report(&mut progress, 0, count, PdfStage::Ready)?;
+    report(&mut progress, 0, count, PdfStage::Ready).await?;
     let warning = Arc::new(AtomicBool::new(false));
     let flag = Arc::clone(&warning);
     let settings = InterpreterSettings {
@@ -199,7 +234,7 @@ fn render_pdf(
     for (index, (page, (width, height, unit))) in
         pdf.pages().iter().zip(sizes).enumerate()
     {
-        report(&mut progress, index, count, PdfStage::Interpreting)?;
+        report(&mut progress, index, count, PdfStage::Interpreting).await?;
         // The simple render API truncates pixel dimensions. Use an explicit
         // context so fractional page sizes keep the last row/column.
         let mut context = RenderContext::new(
@@ -222,7 +257,7 @@ fn render_pdf(
             )));
         }
         context.flush();
-        report(&mut progress, index, count, PdfStage::Rasterizing)?;
+        report(&mut progress, index, count, PdfStage::Rasterizing).await?;
         let mut pixmap = Pixmap::new(context.width(), context.height());
         context.render_with(
             &mut pixmap,
@@ -232,7 +267,7 @@ fn render_pdf(
                 ..RasterizerSettings::default()
             },
         );
-        report(&mut progress, index, count, PdfStage::Encoding)?;
+        report(&mut progress, index, count, PdfStage::Encoding).await?;
         let image = encode_page(pixmap, width, height, dpi)?;
         total_bytes += image.bytes.len();
         if image.bytes.len() > MAX_PDF_BYTES || total_bytes > MAX_BATCH_BYTES {
@@ -241,7 +276,7 @@ fn render_pdf(
             ));
         }
         images.push(image);
-        report(&mut progress, index + 1, count, PdfStage::Ready)?;
+        report(&mut progress, index + 1, count, PdfStage::Ready).await?;
     }
     Ok(images)
 }
@@ -278,13 +313,13 @@ fn encode_page(
     })
 }
 
-fn report(
-    progress: &mut impl FnMut(usize, usize, PdfStage) -> bool,
+async fn report(
+    progress: &mut impl AsyncFnMut(usize, usize, PdfStage) -> bool,
     completed: usize,
     total: usize,
     stage: PdfStage,
 ) -> Result<(), PdfImportError> {
-    if progress(completed, total, stage) {
+    if progress(completed, total, stage).await {
         Ok(())
     } else {
         Err(error("PDF import canceled."))

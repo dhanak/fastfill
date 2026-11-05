@@ -3,9 +3,12 @@
 use super::project::Operation;
 use super::{FastFill, ImagePicker, Message};
 use crate::picker::ImportedImage;
+#[cfg(not(target_arch = "wasm32"))]
+use fastfill::pdf_import::import_pdf_with_progress_limited;
+#[cfg(target_arch = "wasm32")]
+use fastfill::pdf_import::import_pdf_with_progress_limited_async;
 use fastfill::pdf_import::{
-    DEFAULT_PDF_DPI, MAX_PDF_BYTES, PdfStage, import_pdf_with_progress_limited,
-    validate_pdf_length,
+    DEFAULT_PDF_DPI, MAX_PDF_BYTES, PdfStage, validate_pdf_length,
 };
 use iced::Task;
 #[cfg(not(target_arch = "wasm32"))]
@@ -219,7 +222,7 @@ fn import_task(
     }
     #[cfg(target_arch = "wasm32")]
     {
-        // Browser harness has no worker runtime yet; rasterization is blocking.
+        // Progress awaits a repaint between CPU stages on the browser thread.
         let (sender, receiver) = mpsc::unbounded();
         Task::batch([
             Task::run(receiver, std::convert::identity),
@@ -283,21 +286,37 @@ async fn pick_pdf(
     if cancel.load(Ordering::Relaxed) {
         return Ok(None);
     }
+    let notify = |done, total, stage| {
+        let message = if stage == PdfStage::Ready {
+            Message::PdfProgress(id, done, total)
+        } else {
+            Message::PdfStage(id, done, total, stage)
+        };
+        !cancel.load(Ordering::Relaxed)
+            && progress.unbounded_send(message).is_ok()
+    };
+    #[cfg(not(target_arch = "wasm32"))]
     let pages = import_pdf_with_progress_limited(
         bytes,
         available,
         pixel_budget,
-        |done, total, stage| {
-            let message = if stage == PdfStage::Ready {
-                Message::PdfProgress(id, done, total)
-            } else {
-                Message::PdfStage(id, done, total, stage)
-            };
+        notify,
+    );
+    #[cfg(target_arch = "wasm32")]
+    let pages = import_pdf_with_progress_limited_async(
+        bytes,
+        available,
+        pixel_budget,
+        async |done, total, stage| {
+            if !notify(done, total, stage) {
+                return false;
+            }
+            crate::browser_progress::yield_for_paint().await;
             !cancel.load(Ordering::Relaxed)
-                && progress.unbounded_send(message).is_ok()
         },
     )
-    .map_err(|error| error.to_string())?;
+    .await;
+    let pages = pages.map_err(|error| error.to_string())?;
     let dpi = pages.first().map_or(DEFAULT_PDF_DPI, |page| page.dpi);
     let images = pages
         .into_iter()

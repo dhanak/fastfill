@@ -20,6 +20,7 @@ pub(super) async fn pick_and_export(
     cancel: Arc<AtomicBool>,
     id: u64,
     progress: mpsc::UnboundedSender<Message>,
+    lossless: bool,
 ) -> Result<Option<ExportReceipt>, String> {
     let name = Path::new(&name)
         .with_extension("pdf")
@@ -46,11 +47,19 @@ pub(super) async fn pick_and_export(
     }
     #[cfg(not(target_arch = "wasm32"))]
     validate_destination(file.path())?;
-    let result = export_pdf(pages, |done, total| {
+    let result = export_pdf(pages, lossless, async |done, total, stage| {
+        if cancel.load(Ordering::Relaxed)
+            || progress
+                .unbounded_send(Message::PdfExportProgress(
+                    id, done, total, stage,
+                ))
+                .is_err()
+        {
+            return false;
+        }
+        #[cfg(target_arch = "wasm32")]
+        crate::browser_progress::yield_for_paint().await;
         !cancel.load(Ordering::Relaxed)
-            && progress
-                .unbounded_send(Message::PdfExportProgress(id, done, total))
-                .is_ok()
     })
     .await;
     if cancel.load(Ordering::Relaxed) {

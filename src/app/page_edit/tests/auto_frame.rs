@@ -399,11 +399,12 @@ fn auto_framed_page_exports_with_corrected_dimensions_without_mutation() {
         Some(page.image.as_ref().unwrap().display_handle().clone()),
         &page.annotations,
     );
-    let bytes =
-        iced::futures::executor::block_on(export_pdf(vec![output], |_, _| {
-            true
-        }))
-        .unwrap();
+    let bytes = iced::futures::executor::block_on(export_pdf(
+        vec![output],
+        true,
+        async |_, _, _| true,
+    ))
+    .unwrap();
     let parsed = hayro::hayro_syntax::Pdf::new(bytes).unwrap();
     let (width, height) = parsed.pages()[0].render_dimensions();
     assert!((width - size.width).abs() < 0.01);

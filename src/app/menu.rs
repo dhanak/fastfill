@@ -124,6 +124,11 @@ fn items(
                 ),
                 ("Fit page", Glyph::Fit, Message::Fit),
                 ("Export PDF", Glyph::ExportPdf, Message::ExportPdf),
+                (
+                    "Export lossless PDF",
+                    Glyph::ExportPdf,
+                    Message::ExportPdfLossless,
+                ),
             ]);
             if super::palette::can_open(state) {
                 items.push((

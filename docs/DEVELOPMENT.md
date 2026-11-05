@@ -66,8 +66,11 @@ mise exec -- trunk build --release --locked --all-features \
 Relative URLs support both site-root and subpath hosting. See [WEB.md](WEB.md)
 for nginx and GitHub Pages. Camera and clipboard access require HTTPS or
 localhost. Camera analysis, PDF rasterization and page correction run on the
-browser UI thread; their native equivalents use background workers. Timed
-browser profiling is deferred unless noticeable lag returns.
+browser UI thread; their native equivalents use background workers. PDF import
+and export await browser painting at work-stage boundaries, allowing progress
+updates and cancellation before the next stage. Individual rendering or codec
+calls remain synchronous and can still pause a complex page. A timer fallback
+keeps imports/exports moving when animation callbacks pause in hidden tabs.
 
 ### Browser console diagnostics
 
@@ -162,6 +165,26 @@ Regenerate the printable sample form with `make sample-form`. The Python
 generator uses `uv` script metadata; it needs no workspace virtual environment.
 `node tools/source-size.mjs` reports indicative production source size.
 
+PDF export uses the shared software canvas at 300 DPI. Default export compares
+JPEG quality 95 with lossless PNG image streams and keeps the smaller encoding
+per page. The lossless command always uses PNG row predictors; both paths use
+grayscale only when all pixels have equal RGB channels. Neither downsamples.
+Each page is compressed and written before rendering the next, so the document
+does not retain every uncompressed export raster. The original PDF object graph
+is not retained on import.
+
+Compare compact and lossless export sizes explicitly:
+
+```sh
+FASTFILL_PDF_INPUT=form.pdf FASTFILL_PDF_OUTPUT=/tmp/export.pdf \
+  mise exec -- cargo test --all-features --bin fastfill \
+  real_document_export_size_and_timing -- --ignored --nocapture
+```
+
+The output path is optional and must not exist; it receives compact output. The
+probe reports input, lossless and compact sizes, plus timings. Use optimized
+builds for performance measurements; the probe is excluded from normal tests.
+
 ## Native camera diagnostics
 
 With other camera apps closed:
@@ -226,8 +249,8 @@ and sign the change, then create and push the matching signed tag. For example,
 with the current package version:
 
 ```sh
-git tag -s v1.0.0-alpha.1 -m "FastFill 1.0.0-alpha.1"
-git push origin v1.0.0-alpha.1
+git tag -s v1.0.0-alpha.2 -m "FastFill 1.0.0-alpha.2"
+git push origin v1.0.0-alpha.2
 ```
 
 GitHub Pages uses the existing `github-pages` environment and account domain.

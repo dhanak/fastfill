@@ -2,7 +2,8 @@
 
 use fastfill::pdf_import::{
     MAX_PDF_BYTES, PdfStage, import_pdf, import_pdf_with_progress,
-    import_pdf_with_progress_limited, raster_size, validate_pdf_length,
+    import_pdf_with_progress_limited, import_pdf_with_progress_limited_async,
+    raster_size, validate_pdf_length,
 };
 use std::fmt::Write;
 
@@ -60,6 +61,79 @@ fn reports_work_stages_and_returns_the_pixels_used_for_encoding() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn cooperative_import_waits_at_each_stage_and_rechecks_cancellation() {
+    use std::cell::RefCell;
+    use std::future::{Future, poll_fn};
+    use std::task::{Context, Poll, Waker};
+
+    let source = pdf(&[(72.0, 72.0, "", "1 0 0 rg 0 0 36 36 re f")]);
+    let mut expected = Vec::new();
+    let original =
+        import_pdf_with_progress(source.clone(), 20, |done, total, stage| {
+            expected.push((done, total, stage));
+            true
+        })
+        .unwrap();
+    for cancel_at in [
+        None,
+        Some((0, PdfStage::Rasterizing)),
+        Some((1, PdfStage::Ready)),
+    ] {
+        let observed = RefCell::new(Vec::new());
+        let future = import_pdf_with_progress_limited_async(
+            source.clone(),
+            20,
+            200_000_000,
+            async |done, total, stage| {
+                observed.borrow_mut().push((done, total, stage));
+                let mut yielded = false;
+                poll_fn(|context| {
+                    if std::mem::replace(&mut yielded, true) {
+                        Poll::Ready(cancel_at != Some((done, stage)))
+                    } else {
+                        context.waker().wake_by_ref();
+                        Poll::Pending
+                    }
+                })
+                .await
+            },
+        );
+        let mut future = std::pin::pin!(future);
+        let mut context = Context::from_waker(Waker::noop());
+        let mut checkpoints = 0;
+        loop {
+            match future.as_mut().poll(&mut context) {
+                Poll::Pending => {
+                    checkpoints += 1;
+                    assert_eq!(observed.borrow().len(), checkpoints);
+                    assert_eq!(*observed.borrow(), expected[..checkpoints]);
+                }
+                Poll::Ready(result) => {
+                    if let Some((done, stage)) = cancel_at {
+                        assert!(
+                            result
+                                .unwrap_err()
+                                .to_string()
+                                .contains("canceled")
+                        );
+                        assert_eq!(
+                            observed.borrow().last(),
+                            Some(&(done, 1, stage))
+                        );
+                    } else {
+                        let pages = result.unwrap();
+                        assert_eq!(pages[0].pixels, original[0].pixels);
+                        assert_eq!(pages[0].bytes, original[0].bytes);
+                        assert_eq!(*observed.borrow(), expected);
+                    }
+                    break;
+                }
+            }
+        }
+    }
 }
 
 #[test]
