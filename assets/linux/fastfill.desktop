@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=FastFill
+Comment=Scan, annotate and export documents
+Exec=fastfill %f
+Icon=fastfill
+Terminal=false
+Categories=Office;Graphics;
+Keywords=PDF;scan;annotation;

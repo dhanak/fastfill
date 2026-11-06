@@ -18,7 +18,9 @@ trap 'rm -rf -- "$package_dir" "$smoke_dir"' EXIT
 
 mkdir "$package_dir/FastFill"
 package="$package_dir/FastFill"
-install -m 755 "$source" "$package/FastFill"
+install -m 755 "$source" "$package/fastfill"
+cp "$repo_root/assets/linux/fastfill.desktop" "$package/fastfill.desktop"
+cp "$repo_root/assets/AppIcon.svg" "$package/fastfill.svg"
 cp "$repo_root/docs/LINUX.txt" "$package/README.txt"
 cp "$repo_root/LICENSE" "$package/LICENSE.txt"
 cp "$repo_root/assets/icons/lucide/LICENSE" \
@@ -32,14 +34,14 @@ tar -czf "$archive" -C "$package_dir" FastFill
 
 tar -xzf "$archive" -C "$smoke_dir"
 extracted="$smoke_dir/FastFill"
-for file in FastFill README.txt LICENSE.txt LUCIDE-LICENSE.txt \
-  sample-form.pdf BUILD.txt; do
+for file in fastfill fastfill.desktop fastfill.svg README.txt LICENSE.txt \
+  LUCIDE-LICENSE.txt sample-form.pdf BUILD.txt; do
   test -f "$extracted/$file"
 done
-test -x "$extracted/FastFill"
+test -x "$extracted/fastfill"
 
 # ldd checks linked libraries; GUI drivers and portals can load at runtime.
-ldd "$extracted/FastFill" > "$smoke_dir/linked-libraries.txt"
+ldd "$extracted/fastfill" > "$smoke_dir/linked-libraries.txt"
 if grep -q 'not found' "$smoke_dir/linked-libraries.txt"; then
   printf 'Missing linked library:\n' >&2
   sed -n '/not found/p' "$smoke_dir/linked-libraries.txt" >&2
@@ -48,7 +50,7 @@ fi
 
 # Invalid helper arguments test extracted-binary startup without a display.
 set +e
-timeout 10s "$extracted/FastFill" \
+timeout 10s "$extracted/fastfill" \
   --fastfill-camera-query invalid > "$smoke_dir/stdout" \
   2> "$smoke_dir/stderr"
 status=$?

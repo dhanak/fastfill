@@ -1,7 +1,22 @@
 FastFill - Linux x64
 
-Extract this archive anywhere. Run ./FastFill from the extracted folder.
+Extract this archive anywhere. Run ./fastfill from the extracted folder.
 No compiler or installer is needed.
+
+To add FastFill to your desktop's application menu, run these commands from
+the extracted folder:
+
+install -Dm755 fastfill "$HOME/.local/bin/fastfill"
+install -Dm644 fastfill.desktop \
+  "${XDG_DATA_HOME:-$HOME/.local/share}/applications/fastfill.desktop"
+install -Dm644 fastfill.svg \
+  "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps/fastfill.svg"
+
+The launcher finds fastfill through your desktop session's PATH. Ensure
+~/.local/bin is included; you may need to log out and back in. Alternatively,
+edit Exec= in fastfill.desktop to use the full executable path before copying
+it. Quote the path if it contains spaces, and retain the trailing %f so the
+launcher can open a .docscan project.
 
 Built on Ubuntu 24.04. The executable needs compatible glibc libraries, an
 X11/Wayland session and working graphics drivers. File dialogs use the

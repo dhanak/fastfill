@@ -21,7 +21,7 @@ No installer, compiler or managed runtime is needed.
 | Platform                    | Download        | Run                            |
 | --------------------------- | --------------- | ------------------------------ |
 | Windows 10/11 x64           | [ZIP][windows]  | `FastFill\FastFill.exe`        |
-| Linux x64                   | [tar.gz][linux] | `FastFill/FastFill`            |
+| Linux x64                   | [tar.gz][linux] | `FastFill/fastfill`            |
 | macOS Intel / Apple Silicon | [ZIP][macos]    | `FastFill/FastFill.app`        |
 | Browser                     | [tar.gz][web]   | Extract into an empty web root |
 
@@ -36,6 +36,9 @@ ad-hoc signed, not notarized; Gatekeeper may require approval in System Settings
 browser; macOS camera support is pending. See each package's `README.txt` for
 platform details and the [browser deployment guide][web-guide] for static
 hosting.
+
+Linux packages include `fastfill.desktop` and an icon for optional
+[application-menu installation](docs/LINUX.txt).
 
 ## 🔏 Windows signing
 
